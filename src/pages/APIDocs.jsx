@@ -12,29 +12,37 @@ export default function APIDocs() {
 
       <Card className="border-blue-200 bg-blue-50">
         <CardHeader>
-          <CardTitle>Fixed WebSocket URL Setup</CardTitle>
+          <CardTitle>⚙️ Fixed WebSocket URL Setup</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-3">
+            <p className="text-sm font-semibold text-yellow-900 mb-1">📍 How to get YOUR Deno Deploy URL:</p>
+            <ol className="text-sm text-yellow-800 space-y-1 ml-4 list-decimal">
+              <li>Go to Base44 Dashboard → Code → Functions</li>
+              <li>Click on "streamAudio" function</li>
+              <li>Copy the "Function URL" shown at the top</li>
+              <li>It will look like: <code className="bg-white px-1">https://your-unique-id.deno.dev/api/functions/streamAudio</code></li>
+              <li>Change <code className="bg-white px-1">https://</code> to <code className="bg-white px-1">wss://</code></li>
+            </ol>
+          </div>
+          
           <div>
-            <h3 className="font-semibold mb-2">1. Get Your Deno Deploy URL</h3>
-            <p className="text-sm text-gray-600 mb-2">
-              After deploying streamAudio function, you'll get a stable URL like:
-            </p>
-            <code className="block bg-white p-3 rounded text-sm border border-blue-200 font-mono">
+            <h3 className="font-semibold mb-2">Example Format:</h3>
+            <code className="block bg-white p-3 rounded text-sm border border-blue-200 font-mono break-all">
               wss://bright-sheep-33-d6ddv4gx2w8b.deno.dev/api/functions/streamAudio
             </code>
-          </div>
-          <div>
-            <h3 className="font-semibold mb-2">2. Configure in Agent Settings</h3>
-            <p className="text-sm text-gray-600">
-              Copy this URL to each agent's WebSocket URL field. This URL remains fixed even when you update the function code.
+            <p className="text-xs text-gray-500 mt-1">
+              Your actual URL will have a different unique ID but same format
             </p>
           </div>
+          
           <div>
-            <h3 className="font-semibold mb-2">3. How It Works</h3>
-            <p className="text-sm text-gray-600">
-              System automatically appends ?call_sid=[call_id] when initiating calls to Smartflo.
-            </p>
+            <h3 className="font-semibold mb-2">✅ Important:</h3>
+            <ul className="text-sm text-gray-600 space-y-1 ml-4 list-disc">
+              <li>This URL is permanent and won't change when you update function code</li>
+              <li>Enter this URL in each agent's WebSocket URL field</li>
+              <li>System automatically adds ?call_sid parameter when calling</li>
+            </ul>
           </div>
         </CardContent>
       </Card>
