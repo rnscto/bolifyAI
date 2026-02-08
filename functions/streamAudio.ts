@@ -601,32 +601,47 @@ Deno.serve(async (req) => {
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}`);
 
         // Fetch existing CallLog by call_sid to get agent info
-        if (session.db) {
-          try {
-            const callLogs = await session.db.CallLog.filter({ call_sid: session.callSid });
-            if (callLogs.length > 0) {
-              const callLog = callLogs[0];
-              session.callLogId = callLog.id;
-              session.agentId = callLog.agent_id;
+         if (session.db) {
+           try {
+             console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
+             const callLogs = await session.db.CallLog.filter({ call_sid: session.callSid });
+             console.log(`[${reqId}] 📋 Found ${callLogs.length} call logs`);
 
-              // Fetch agent to get persona and custom system prompt
-              if (session.agentId) {
-                const agent = await session.db.Agent.get(session.agentId);
-                if (agent) {
-                  session.agentConfig = agent;
-                  // Use agent's custom system prompt if available
-                  if (agent.system_prompt && agent.system_prompt.trim()) {
-                    session.systemPrompt = agent.system_prompt;
-                    console.log(`[${reqId}] 🤖 Agent loaded: ${agent.name}`);
-                  }
-                }
-              }
-              console.log(`[${reqId}] 📝 Call log loaded: ${session.callLogId}`);
-            }
-          } catch (e) {
-            console.log(`[${reqId}] ⚠️ Call log lookup failed: ${e.message}`);
-          }
-        }
+             if (callLogs.length > 0) {
+               const callLog = callLogs[0];
+               session.callLogId = callLog.id;
+               session.agentId = callLog.agent_id;
+               console.log(`[${reqId}] 📍 Call log ID: ${session.callLogId}, Agent ID: ${session.agentId}`);
+
+               // Fetch agent to get persona and custom system prompt
+               if (session.agentId) {
+                 console.log(`[${reqId}] 🔎 Fetching agent ${session.agentId}`);
+                 const agent = await session.db.Agent.get(session.agentId);
+                 if (agent) {
+                   session.agentConfig = agent;
+                   console.log(`[${reqId}] ✅ Agent name: ${agent.name}`);
+                   console.log(`[${reqId}] 📝 System prompt length: ${agent.system_prompt?.length || 0}`);
+
+                   // Use agent's custom system prompt if available
+                   if (agent.system_prompt && agent.system_prompt.trim()) {
+                     session.systemPrompt = agent.system_prompt;
+                     console.log(`[${reqId}] ✅ Using custom system prompt for ${agent.name}`);
+                   } else {
+                     console.log(`[${reqId}] ⚠️ Agent has no custom system prompt`);
+                   }
+                 } else {
+                   console.log(`[${reqId}] ❌ Agent not found`);
+                 }
+               }
+             } else {
+               console.log(`[${reqId}] ❌ No call log found for call_sid: ${session.callSid}`);
+             }
+           } catch (e) {
+             console.error(`[${reqId}] ❌ Call log lookup failed: ${e.message}`);
+           }
+         } else {
+           console.log(`[${reqId}] ⚠️ Database not initialized`);
+         }
 
         // Send welcome
         const welcome = 'Hello! How can I help you today?';
