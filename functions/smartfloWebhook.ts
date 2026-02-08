@@ -1,66 +1,85 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
+// Map Smartflo call statuses to internal statuses
+const STATUS_MAP = {
+  'ringing': 'ringing',
+  'answered': 'answered',
+  'completed': 'completed',
+  'failed': 'failed',
+  'no_answer': 'no_answer',
+  'busy': 'failed',
+  'cancelled': 'failed'
+};
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
+    const payload = await req.json();
 
-    // Validate Smartflo signature (basic validation)
-    const smartfloSignature = req.headers.get('X-Smartflo-Signature');
-    if (!smartfloSignature) {
-      return Response.json({ error: 'Invalid signature' }, { status: 401 });
-    }
+    console.log('[smartfloWebhook] Received:', payload.status, 'Call:', payload.call_id);
 
-    const webhookData = await req.json();
-    const { call_sid, status, duration, recording_url } = webhookData;
+    const { call_id, status, duration, recording_url } = payload;
 
-    if (!call_sid) {
-      return Response.json({ error: 'Missing call_sid' }, { status: 400 });
+    if (!call_id) {
+      return Response.json({ success: false, error: 'Missing call_id' }, { status: 400 });
     }
 
     // Find call log by call_sid
-    const callLogs = await base44.asServiceRole.entities.CallLog.filter({ call_sid });
-    
+    const callLogs = await base44.asServiceRole.entities.CallLog.filter({ 
+      call_sid: call_id 
+    });
+
     if (callLogs.length === 0) {
-      return Response.json({ error: 'Call not found' }, { status: 404 });
+      console.log('[smartfloWebhook] Call log not found:', call_id);
+      return Response.json({ success: true, message: 'Call log not found, but webhook received' });
     }
 
     const callLog = callLogs[0];
-    const updateData = { status };
+    const mappedStatus = STATUS_MAP[status] || status;
 
-    // Map Smartflo status to our status
-    const statusMap = {
-      'ringing': 'ringing',
-      'in-progress': 'answered',
-      'completed': 'completed',
-      'failed': 'failed',
-      'no-answer': 'no_answer',
-      'busy': 'no_answer',
-      'canceled': 'failed'
+    // Update call log with status
+    const updateData = {
+      status: mappedStatus
     };
 
-    updateData.status = statusMap[status] || status;
+    if (duration) {
+      updateData.duration = parseInt(duration);
+    }
 
     if (status === 'completed') {
-      updateData.duration = duration;
       updateData.call_end_time = new Date().toISOString();
+    }
 
-      // If recording available, process transcript
-      if (recording_url) {
-        // Trigger async transcript processing
-        base44.asServiceRole.functions.invoke('processTranscript', {
+    await base44.asServiceRole.entities.CallLog.update(callLog.id, updateData);
+
+    // Update lead status based on call completion
+    if (status === 'answered' || status === 'completed') {
+      await base44.asServiceRole.entities.Lead.update(callLog.lead_id, {
+        status: 'interested'
+      });
+    } else if (status === 'no_answer' || status === 'failed') {
+      await base44.asServiceRole.entities.Lead.update(callLog.lead_id, {
+        status: 'callback'
+      });
+    }
+
+    // If call is completed and has recording, trigger transcript processing
+    if (status === 'completed' && recording_url) {
+      try {
+        await base44.asServiceRole.functions.invoke('processTranscript', {
           call_log_id: callLog.id,
-          recording_url
-        }).catch(err => console.error('Transcript processing error:', err));
+          recording_url: recording_url
+        });
+        console.log('[smartfloWebhook] Transcript processing triggered');
+      } catch (error) {
+        console.error('[smartfloWebhook] Error triggering transcript:', error);
       }
     }
 
-    // Update call log
-    await base44.asServiceRole.entities.CallLog.update(callLog.id, updateData);
-
-    return Response.json({ success: true });
+    return Response.json({ success: true, message: 'Webhook processed' });
 
   } catch (error) {
-    console.error('Webhook error:', error);
+    console.error('[smartfloWebhook] Error:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
