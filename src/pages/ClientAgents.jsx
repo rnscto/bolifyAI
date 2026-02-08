@@ -25,17 +25,22 @@ export default function ClientAgents() {
       if (clients.length > 0) {
         const clientData = clients[0];
         setClient(clientData);
+        console.log('Client ID:', clientData.id);
 
         const [agentsData, kbData] = await Promise.all([
           base44.entities.Agent.filter({ client_id: clientData.id }),
           base44.entities.KnowledgeBase.filter({ client_id: clientData.id })
         ]);
 
+        console.log('Agents found:', agentsData);
+
         if (agentsData.length > 0) {
           setAgent(agentsData[0]);
           setSelectedKnowledgeBases(agentsData[0].knowledge_base_ids || []);
         }
         setKnowledgeBases(kbData);
+      } else {
+        console.log('No client found for user:', user.id);
       }
     } catch (error) {
       console.error('Error loading data:', error);
