@@ -284,9 +284,17 @@ Deno.serve(async (req) => {
 
   // Return status for non-WebSocket requests
   if (!isWebSocket) {
+    const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
+    const protocol = req.headers.get('x-forwarded-proto') === 'https' ? 'wss' : 'ws';
+    const wssUrl = `${protocol}://${host}/functions/streamAudio`;
+
+    console.log(`[${reqId}] 📡 WebSocket URL: ${wssUrl}`);
+
     return new Response(JSON.stringify({
       status: 'ready',
-      version: 'v5.2-smartflo'
+      version: 'v5.2-smartflo',
+      wss_url: wssUrl,
+      info: 'Use the wss_url above to connect WebSocket from Smartflo'
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
