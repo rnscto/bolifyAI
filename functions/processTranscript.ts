@@ -22,10 +22,8 @@ Deno.serve(async (req) => {
     const formData = new FormData();
     formData.append('audio', audioBlob);
 
-    // Azure Speech to Text
-    const sttEndpoint = `https://${Deno.env.get('AZURE_SPEECH_REGION')}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=en-US`;
-    
-    const sttResponse = await fetch(sttEndpoint, {
+    // Azure Speech to Text using custom endpoint
+    const sttResponse = await fetch(Deno.env.get('AZURE_SPEECH_ENDPOINT'), {
       method: 'POST',
       headers: {
         'Ocp-Apim-Subscription-Key': Deno.env.get('AZURE_SPEECH_KEY'),

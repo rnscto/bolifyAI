@@ -34,6 +34,11 @@ Deno.serve(async (req) => {
       call_start_time: new Date().toISOString()
     });
 
+    // Get the WebSocket URL for this call (Smartflo will connect to this)
+    const wsProtocol = req.headers.get('origin')?.startsWith('https') ? 'wss' : 'ws';
+    const host = req.headers.get('host');
+    const streamUrl = `${wsProtocol}://${host}/api/functions/streamAudio?call_sid=${callLog.call_sid}`;
+
     // Initiate call via Smartflo API
     const smartfloResponse = await fetch('https://api.smartflo.ai/v1/calls', {
       method: 'POST',
@@ -45,7 +50,7 @@ Deno.serve(async (req) => {
         from: agent.assigned_did,
         to: phone_number,
         webhook_url: `${req.headers.get('origin')}/api/functions/smartfloWebhook`,
-        stream_url: agent.wss_url || `wss://your-domain.com/stream/${callLog.call_sid}`
+        stream_url: streamUrl
       })
     });
 

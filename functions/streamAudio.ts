@@ -11,9 +11,9 @@ Deno.serve(async (req) => {
     const { socket, response } = Deno.upgradeWebSocket(req);
     const base44 = createClientFromRequest(req);
 
-    // Extract call_sid from URL
+    // Extract call_sid from query params
     const url = new URL(req.url);
-    const callSid = url.pathname.split('/').pop();
+    const callSid = url.searchParams.get('call_sid');
 
     let callLog = null;
     let agent = null;
@@ -106,7 +106,7 @@ async function speechToText(audioBase64) {
   try {
     const audioBuffer = Uint8Array.from(atob(audioBase64), c => c.charCodeAt(0));
     
-    const endpoint = `https://${Deno.env.get('AZURE_SPEECH_REGION')}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=en-US`;
+    const endpoint = Deno.env.get('AZURE_SPEECH_ENDPOINT');
     
     const response = await fetch(endpoint, {
       method: 'POST',
@@ -119,7 +119,7 @@ async function speechToText(audioBase64) {
 
     if (response.ok) {
       const data = await response.json();
-      return data.DisplayText || '';
+      return data.DisplayText || data.NBest?.[0]?.Display || '';
     }
     return '';
   } catch (error) {
@@ -131,7 +131,8 @@ async function speechToText(audioBase64) {
 // Azure Text to Speech
 async function generateSpeech(text) {
   try {
-    const endpoint = `https://${Deno.env.get('AZURE_SPEECH_REGION')}.tts.speech.microsoft.com/cognitiveservices/v1`;
+    // Use the custom voice endpoint - replace recognition with synthesis
+    const endpoint = Deno.env.get('AZURE_SPEECH_ENDPOINT').replace('/cognitiveservices/v1', '/cognitiveservices/v1/synthesize');
     
     const ssml = `
       <speak version='1.0' xml:lang='en-US'>
