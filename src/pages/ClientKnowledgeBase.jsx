@@ -90,10 +90,18 @@ export default function ClientKnowledgeBase() {
 
   const handleDelete = async (id) => {
     if (!confirm('Delete this document?')) return;
-    
+
     try {
       await base44.entities.KnowledgeBase.delete(id);
-      toast.success('Document deleted');
+
+      // Remove from agent's knowledge base
+      if (agent && agent.knowledge_base_ids?.includes(id)) {
+        await base44.entities.Agent.update(agent.id, {
+          knowledge_base_ids: agent.knowledge_base_ids.filter(kbId => kbId !== id)
+        });
+      }
+
+      toast.success('Document deleted and removed from agent');
       loadData();
     } catch (error) {
       console.error('Error deleting document:', error);

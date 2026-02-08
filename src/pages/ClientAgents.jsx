@@ -146,21 +146,16 @@ export default function ClientAgents() {
 
           <Card>
             <CardHeader>
-              <CardTitle>Knowledge Base Assignment</CardTitle>
+              <CardTitle>Assigned Knowledge Base</CardTitle>
+              <p className="text-sm text-gray-500 mt-1">Documents are automatically synced when uploaded in Knowledge Base section</p>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent>
               {knowledgeBases.length === 0 ? (
                 <p className="text-sm text-gray-500">No knowledge base documents available. Upload documents in the Knowledge Base section.</p>
               ) : (
                 <div className="space-y-2">
-                  {knowledgeBases.map((kb) => (
-                    <label key={kb.id} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
-                        type="checkbox"
-                        checked={selectedKnowledgeBases.includes(kb.id)}
-                        onChange={() => toggleKnowledgeBase(kb.id)}
-                        className="rounded"
-                      />
+                  {knowledgeBases.filter(kb => selectedKnowledgeBases.includes(kb.id)).map((kb) => (
+                    <div key={kb.id} className="flex items-center gap-3 p-3 border rounded-lg bg-gray-50">
                       <div className="flex-1">
                         <p className="text-sm font-medium">{kb.title}</p>
                         <p className="text-xs text-gray-500">{kb.category || 'Uncategorized'} • {kb.file_type?.toUpperCase()}</p>
@@ -168,18 +163,13 @@ export default function ClientAgents() {
                       <Badge className={kb.status === 'ready' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}>
                         {kb.status}
                       </Badge>
-                    </label>
+                    </div>
                   ))}
+                  {knowledgeBases.filter(kb => selectedKnowledgeBases.includes(kb.id)).length === 0 && (
+                    <p className="text-sm text-gray-500">No documents assigned to this agent yet</p>
+                  )}
                 </div>
               )}
-              <div className="flex justify-end">
-                <Button 
-                  onClick={handleUpdateKnowledgeBase}
-                  className="bg-blue-600 hover:bg-blue-700"
-                >
-                  Update Knowledge Base
-                </Button>
-              </div>
             </CardContent>
           </Card>
         </>
