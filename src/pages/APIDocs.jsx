@@ -12,16 +12,28 @@ export default function APIDocs() {
 
       <Card className="border-blue-200 bg-blue-50">
         <CardHeader>
-          <CardTitle>WebSocket URL for Smartflo</CardTitle>
+          <CardTitle>Fixed WebSocket URL Setup</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <h3 className="font-semibold mb-2">Configure this URL in Smartflo Dashboard</h3>
+            <h3 className="font-semibold mb-2">1. Get Your Deno Deploy URL</h3>
+            <p className="text-sm text-gray-600 mb-2">
+              After deploying streamAudio function, you'll get a stable URL like:
+            </p>
             <code className="block bg-white p-3 rounded text-sm border border-blue-200 font-mono">
-              wss://{window.location.host}/api/functions/streamAudio
+              wss://bright-sheep-33-d6ddv4gx2w8b.deno.dev/api/functions/streamAudio
             </code>
-            <p className="text-sm text-gray-600 mt-2">
-              Note: call_sid will be automatically appended as a query parameter by our system
+          </div>
+          <div>
+            <h3 className="font-semibold mb-2">2. Configure in Agent Settings</h3>
+            <p className="text-sm text-gray-600">
+              Copy this URL to each agent's WebSocket URL field. This URL remains fixed even when you update the function code.
+            </p>
+          </div>
+          <div>
+            <h3 className="font-semibold mb-2">3. How It Works</h3>
+            <p className="text-sm text-gray-600">
+              System automatically appends ?call_sid=[call_id] when initiating calls to Smartflo.
             </p>
           </div>
         </CardContent>
