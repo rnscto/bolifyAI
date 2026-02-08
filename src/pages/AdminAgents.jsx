@@ -41,13 +41,13 @@ export default function AdminAgents() {
   const [formData, setFormData] = useState({
     name: '',
     client_id: '',
-    voice_type: 'neutral',
     tone: 'professional',
     language: 'en-US',
     system_prompt: '',
     assigned_did: '',
     wss_url: '',
-    status: 'inactive'
+    status: 'inactive',
+    industry: ''
   });
 
   useEffect(() => {
@@ -80,7 +80,7 @@ export default function AdminAgents() {
         name: formData.name,
         client_id: formData.client_id,
         persona: {
-          voice_type: formData.voice_type,
+          voice_type: 'Surbhi-English-India',
           tone: formData.tone,
           language: formData.language
         },
@@ -88,6 +88,7 @@ export default function AdminAgents() {
         assigned_did: formData.assigned_did,
         wss_url: formData.wss_url,
         status: formData.status,
+        industry: formData.industry,
         knowledge_base_ids: []
       };
 
@@ -113,13 +114,13 @@ export default function AdminAgents() {
     setFormData({
       name: '',
       client_id: '',
-      voice_type: 'neutral',
       tone: 'professional',
       language: 'en-US',
       system_prompt: '',
       assigned_did: '',
       wss_url: '',
-      status: 'inactive'
+      status: 'inactive',
+      industry: ''
     });
   };
 
@@ -128,13 +129,13 @@ export default function AdminAgents() {
     setFormData({
       name: agent.name,
       client_id: agent.client_id,
-      voice_type: agent.persona?.voice_type || 'neutral',
       tone: agent.persona?.tone || 'professional',
       language: agent.persona?.language || 'en-US',
       system_prompt: agent.system_prompt || '',
       assigned_did: agent.assigned_did || '',
       wss_url: agent.wss_url || '',
-      status: agent.status || 'inactive'
+      status: agent.status || 'inactive',
+      industry: agent.industry || ''
     });
     setDialogOpen(true);
   };
@@ -189,7 +190,7 @@ export default function AdminAgents() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="name">Agent Name</Label>
                   <Input
@@ -218,26 +219,25 @@ export default function AdminAgents() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div>
+                  <Label htmlFor="industry">Industry/Sector</Label>
+                  <Input
+                    id="industry"
+                    value={formData.industry}
+                    onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                    placeholder="e.g., Gym, Real Estate"
+                  />
+                </div>
               </div>
               
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <Label htmlFor="voice_type">Voice Type</Label>
-                  <Select 
-                    value={formData.voice_type}
-                    onValueChange={(value) => setFormData({ ...formData, voice_type: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="male">Male</SelectItem>
-                      <SelectItem value="female">Female</SelectItem>
-                      <SelectItem value="neutral">Neutral</SelectItem>
-                    </SelectContent>
-                  </Select>
+              <div>
+                <Label>Voice</Label>
+                <div className="px-3 py-2 border rounded-md bg-gray-50 text-sm text-gray-700">
+                  Surbhi-English-India (Supports Hindi & English)
                 </div>
+              </div>
 
+              <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="tone">Tone</Label>
                   <Select 
@@ -251,6 +251,8 @@ export default function AdminAgents() {
                       <SelectItem value="professional">Professional</SelectItem>
                       <SelectItem value="friendly">Friendly</SelectItem>
                       <SelectItem value="formal">Formal</SelectItem>
+                      <SelectItem value="energetic">Energetic</SelectItem>
+                      <SelectItem value="empathetic">Empathetic</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -265,10 +267,9 @@ export default function AdminAgents() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="en-US">English (US)</SelectItem>
-                      <SelectItem value="en-GB">English (UK)</SelectItem>
-                      <SelectItem value="es-ES">Spanish</SelectItem>
-                      <SelectItem value="fr-FR">French</SelectItem>
+                      <SelectItem value="en-IN">English (India)</SelectItem>
+                      <SelectItem value="hi-IN">Hindi</SelectItem>
+                      <SelectItem value="bilingual">Bilingual (Hindi + English)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -355,7 +356,8 @@ export default function AdminAgents() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Client</TableHead>
-                <TableHead>Voice/Tone</TableHead>
+                <TableHead>Industry</TableHead>
+                <TableHead>Tone/Language</TableHead>
                 <TableHead>DID</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
@@ -364,7 +366,7 @@ export default function AdminAgents() {
             <TableBody>
               {agents.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-500">
+                  <TableCell colSpan={7} className="text-center text-gray-500">
                     No agents found. Create your first agent to get started.
                   </TableCell>
                 </TableRow>
@@ -373,8 +375,9 @@ export default function AdminAgents() {
                   <TableRow key={agent.id}>
                     <TableCell className="font-medium">{agent.name}</TableCell>
                     <TableCell>{getClientName(agent.client_id)}</TableCell>
+                    <TableCell className="text-sm">{agent.industry || '-'}</TableCell>
                     <TableCell className="text-sm">
-                      {agent.persona?.voice_type || 'neutral'} / {agent.persona?.tone || 'professional'}
+                      {agent.persona?.tone || 'professional'} / {agent.persona?.language || 'en-IN'}
                     </TableCell>
                     <TableCell>{agent.assigned_did || '-'}</TableCell>
                     <TableCell>
