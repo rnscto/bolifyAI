@@ -160,70 +160,71 @@ export default function AdminDIDs() {
                 Add DID
               </Button>
             </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New DID</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <Label htmlFor="number">Phone Number</Label>
-                <Input
-                  id="number"
-                  value={formData.number}
-                  onChange={(e) => setFormData({ ...formData, number: e.target.value })}
-                  placeholder="911234567890"
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="country_code">Country Code</Label>
-                <Input
-                  id="country_code"
-                  value={formData.country_code}
-                  onChange={(e) => setFormData({ ...formData, country_code: e.target.value })}
-                  required
-                />
-              </div>
-              <div>
-                <Label htmlFor="client_id">Assign to Client (Optional)</Label>
-                <Select
-                  value={formData.client_id}
-                  onValueChange={(value) => setFormData({ ...formData, client_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select client" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={null}>Unassigned</SelectItem>
-                    {clients.map((client) => (
-                      <SelectItem key={client.id} value={client.id}>
-                        {client.company_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor="monthly_cost">Monthly Cost (₹)</Label>
-                <Input
-                  id="monthly_cost"
-                  type="number"
-                  value={formData.monthly_cost}
-                  onChange={(e) => setFormData({ ...formData, monthly_cost: parseInt(e.target.value) })}
-                  required
-                />
-              </div>
-              <div className="flex gap-3 justify-end">
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
-                  Add DID
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New DID</DialogTitle>
+              </DialogHeader>
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <Label htmlFor="number">Phone Number</Label>
+                  <Input
+                    id="number"
+                    value={formData.number}
+                    onChange={(e) => setFormData({ ...formData, number: e.target.value })}
+                    placeholder="911234567890"
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="country_code">Country Code</Label>
+                  <Input
+                    id="country_code"
+                    value={formData.country_code}
+                    onChange={(e) => setFormData({ ...formData, country_code: e.target.value })}
+                    required
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="client_id">Assign to Client (Optional)</Label>
+                  <Select
+                    value={formData.client_id}
+                    onValueChange={(value) => setFormData({ ...formData, client_id: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={null}>Unassigned</SelectItem>
+                      {clients.map((client) => (
+                        <SelectItem key={client.id} value={client.id}>
+                          {client.company_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="monthly_cost">Monthly Cost (₹)</Label>
+                  <Input
+                    id="monthly_cost"
+                    type="number"
+                    value={formData.monthly_cost}
+                    onChange={(e) => setFormData({ ...formData, monthly_cost: parseInt(e.target.value) })}
+                    required
+                  />
+                </div>
+                <div className="flex gap-3 justify-end">
+                  <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" className="bg-blue-600 hover:bg-blue-700">
+                    Add DID
+                  </Button>
+                </div>
+              </form>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
