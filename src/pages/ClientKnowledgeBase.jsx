@@ -18,6 +18,7 @@ import { toast } from 'sonner';
 export default function ClientKnowledgeBase() {
   const [documents, setDocuments] = useState([]);
   const [client, setClient] = useState(null);
+  const [agent, setAgent] = useState(null);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -40,11 +41,18 @@ export default function ClientKnowledgeBase() {
         const clientData = clients[0];
         setClient(clientData);
 
-        const docsData = await base44.entities.KnowledgeBase.filter(
-          { client_id: clientData.id },
-          '-created_date'
-        );
+        const [docsData, agentsData] = await Promise.all([
+          base44.entities.KnowledgeBase.filter(
+            { client_id: clientData.id },
+            '-created_date'
+          ),
+          base44.entities.Agent.filter({ client_id: clientData.id })
+        ]);
+
         setDocuments(docsData);
+        if (agentsData.length > 0) {
+          setAgent(agentsData[0]);
+        }
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -74,9 +82,17 @@ export default function ClientKnowledgeBase() {
         status: 'processing'
       };
 
-      await base44.entities.KnowledgeBase.create(docData);
+      const kbDoc = await base44.entities.KnowledgeBase.create(docData);
       
-      toast.success('Document uploaded successfully');
+      // Auto-sync with assigned agent
+      if (agent) {
+        const currentKbIds = agent.knowledge_base_ids || [];
+        await base44.entities.Agent.update(agent.id, {
+          knowledge_base_ids: [...currentKbIds, kbDoc.id]
+        });
+      }
+
+      toast.success('Document uploaded and synced with agent');
       setDialogOpen(false);
       setFormData({ title: '', category: '', file: null });
       loadData();
