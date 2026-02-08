@@ -9,17 +9,50 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
-    const apiKey = Deno.env.get('SMARTFLO_API_KEY');
-    if (!apiKey) {
-      return Response.json({ error: 'Smartflo API key not configured' }, { status: 500 });
+    const email = Deno.env.get('SMARTFLO_EMAIL');
+    const password = Deno.env.get('SMARTFLO_PASSWORD');
+    
+    if (!email || !password) {
+      return Response.json({ error: 'Smartflo credentials not configured' }, { status: 500 });
     }
 
-    // Fetch all DIDs from Smartflo API
+    // Step 1: Authenticate with Smartflo to get access token
+    const authResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({ email, password })
+    });
+
+    if (!authResponse.ok) {
+      const authError = await authResponse.text();
+      console.error('Smartflo authentication error:', authError);
+      return Response.json({ 
+        error: 'Failed to authenticate with Smartflo',
+        details: authError
+      }, { status: authResponse.status });
+    }
+
+    const authData = await authResponse.json();
+    
+    if (!authData.success || !authData.access_token) {
+      return Response.json({ 
+        error: 'Authentication failed',
+        details: authData.message || 'No access token received'
+      }, { status: 401 });
+    }
+
+    const accessToken = authData.access_token;
+
+    // Step 2: Fetch all DIDs from Smartflo API
     const response = await fetch('https://api-smartflo.tatateleservices.com/v1/my_number', {
       method: 'GET',
       headers: {
-        'x-api-key': apiKey,
-        'Content-Type': 'application/json'
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
       }
     });
 
