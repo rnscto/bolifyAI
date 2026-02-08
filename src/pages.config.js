@@ -55,6 +55,11 @@ import ClientAgents from './pages/ClientAgents';
 import ClientLeads from './pages/ClientLeads';
 import ClientCallLogs from './pages/ClientCallLogs';
 import ClientKnowledgeBase from './pages/ClientKnowledgeBase';
+import AdminSubscriptions from './pages/AdminSubscriptions';
+import ClientActivities from './pages/ClientActivities';
+import ClientCRM from './pages/ClientCRM';
+import ClientSubscription from './pages/ClientSubscription';
+import APIDocs from './pages/APIDocs';
 import __Layout from './Layout.jsx';
 
 
@@ -67,6 +72,11 @@ export const PAGES = {
     "ClientLeads": ClientLeads,
     "ClientCallLogs": ClientCallLogs,
     "ClientKnowledgeBase": ClientKnowledgeBase,
+    "AdminSubscriptions": AdminSubscriptions,
+    "ClientActivities": ClientActivities,
+    "ClientCRM": ClientCRM,
+    "ClientSubscription": ClientSubscription,
+    "APIDocs": APIDocs,
 }
 
 export const pagesConfig = {
