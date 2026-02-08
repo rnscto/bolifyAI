@@ -327,25 +327,26 @@ Deno.serve(async (req) => {
 
   // Session state
   const session = {
-    state: STATE.IDLE,
-    streamSid: null,
-    callSid: null,
-    agentConfig: null,
-    conversationHistory: [],
-    transcript: [],
-    db: db,
-    callLogId: null,
-    speechBuffer: [],
-    hasSpeechStarted: false,
-    consecutiveSilentChunks: 0,
-    bargeInConsecutive: 0,
-    noSpeechTimer: null,
-    noSpeechCount: 0,
-    totalMediaReceived: 0,
-    pendingMarkName: null,
-    startTime: Date.now(),
-    systemPrompt: 'You are a friendly AI voice assistant. Be professional and concise. Keep responses to 1-3 sentences. Use only plain text, no emojis or special characters.',
-    agentId: null
+  state: STATE.IDLE,
+  streamSid: null,
+  callSid: null,
+  agentConfig: null,
+  conversationHistory: [],
+  transcript: [],
+  callLogId: null,
+  speechBuffer: [],
+  hasSpeechStarted: false,
+  consecutiveSilentChunks: 0,
+  bargeInConsecutive: 0,
+  noSpeechTimer: null,
+  noSpeechCount: 0,
+  totalMediaReceived: 0,
+  pendingMarkName: null,
+  startTime: Date.now(),
+  systemPrompt: 'You are a friendly AI voice assistant. Be professional and concise. Keep responses to 1-3 sentences. Use only plain text, no emojis or special characters.',
+  agentId: null,
+  serviceToken: serviceToken,
+  appId: appId
   };
 
   function setState(newState) {
