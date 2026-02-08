@@ -45,45 +45,30 @@ Deno.serve(async (req) => {
       call_start_time: new Date().toISOString()
     });
 
-    // Get webhook URL for receiving call events
-    const webhookUrl = `${Deno.env.get('BASE44_WEBHOOK_URL') || 'https://your-app.deno.dev'}/functions/smartfloWebhook`;
-
-    // Authenticate with Smartflo
-    const authResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        email: Deno.env.get('SMARTFLO_EMAIL'),
-        password: Deno.env.get('SMARTFLO_PASSWORD')
-      })
-    });
-
-    if (!authResponse.ok) {
-      return Response.json({ success: false, error: 'Smartflo auth failed' }, { status: 500 });
-    }
-
-    const authData = await authResponse.json();
-    const smartfloToken = authData.access_token;
+    // Clean phone number (remove + and non-digits)
+    const cleanCallerID = agent.assigned_did.replace(/\D/g, '');
+    const cleanPhoneNumber = phone_number.replace(/\D/g, '');
 
     // Initiate call via Smartflo Click-to-Call API
-    const smartfloResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call', {
+    const smartfloResponse = await fetch('https://api.smartflo.in/api/v1/click_to_call', {
       method: 'POST',
       headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${smartfloToken}`
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        customer_number: phone_number,
-        caller_id: agent.assigned_did.replace('+', ''),
-        webhook_url: webhookUrl,
-        call_id: callLog.call_sid,
+        api_key: Deno.env.get('SMARTFLO_API_KEY'),
+        customer_number: cleanPhoneNumber,
+        caller_id: cleanCallerID,
         async: 1
       })
     });
 
-    if (!smartfloResponse.ok) {
-      const errorText = await smartfloResponse.text();
-      console.error('Smartflo API error:', errorText);
+    const smartfloData = await smartfloResponse.json();
+    console.log('Smartflo response:', JSON.stringify(smartfloData));
+
+    if (!smartfloResponse.ok || smartfloData.success === false) {
+      const errorMsg = smartfloData.message || 'Unknown error';
+      console.error('Smartflo API error:', errorMsg);
       
       await base44.asServiceRole.entities.CallLog.update(callLog.id, {
         status: 'failed'
@@ -91,11 +76,9 @@ Deno.serve(async (req) => {
       
       return Response.json({ 
         success: false, 
-        error: `Failed to initiate call: ${errorText}` 
-      }, { status: 500 });
+        error: `Failed to initiate call: ${errorMsg}` 
+      }, { status: 400 });
     }
-
-    const smartfloData = await smartfloResponse.json();
 
     // Update call log with Smartflo response
     await base44.asServiceRole.entities.CallLog.update(callLog.id, {
