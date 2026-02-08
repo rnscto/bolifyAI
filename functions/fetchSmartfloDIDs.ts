@@ -15,10 +15,10 @@ Deno.serve(async (req) => {
     }
 
     // Fetch DIDs from Smartflo API
-    const response = await fetch('https://api.smartflo.ai/v1/dids', {
+    const response = await fetch('https://api-smartflo.tatateleservices.com/v1/my_number', {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
+        'x-api-key': apiKey,
         'Content-Type': 'application/json'
       }
     });
@@ -31,20 +31,22 @@ Deno.serve(async (req) => {
       }, { status: response.status });
     }
 
-    const smartfloDids = await response.json();
+    const smartfloData = await response.json();
 
     // Sync DIDs to database
     const existingDids = await base44.asServiceRole.entities.DID.list();
     const existingNumbers = new Set(existingDids.map(d => d.number));
 
     const newDids = [];
-    for (const did of smartfloDids.dids || []) {
-      if (!existingNumbers.has(did.number)) {
+    const didsArray = smartfloData.data || [];
+    
+    for (const did of didsArray) {
+      if (!existingNumbers.has(did.phone_number)) {
         newDids.push({
-          number: did.number,
+          number: did.phone_number,
           country_code: did.country_code || '+91',
           status: 'available',
-          monthly_cost: did.monthly_cost || 6500
+          monthly_cost: 6500
         });
       }
     }
@@ -55,7 +57,7 @@ Deno.serve(async (req) => {
 
     return Response.json({
       success: true,
-      total_dids: smartfloDids.dids?.length || 0,
+      total_dids: didsArray.length,
       new_dids: newDids.length,
       message: `Synced ${newDids.length} new DIDs from Smartflo`
     });
