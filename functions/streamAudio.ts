@@ -74,16 +74,17 @@ Deno.serve(async (req) => {
 
   socket.onmessage = async (event) => {
     try {
+      console.log('[streamAudio] Message received:', typeof event.data, event.data?.substring?.(0, 100));
       const data = JSON.parse(event.data);
 
       if (data.event === 'connected') {
-        console.log('Stream connected');
+        console.log('[streamAudio] Connected event received');
         socket.send(JSON.stringify({ event: 'connected' }));
       }
 
       if (data.event === 'start') {
         streamSid = data.start?.streamSid;
-        console.log('Call started, streamSid:', streamSid);
+        console.log('[streamAudio] Call started, streamSid:', streamSid);
         callState = CALL_STATES.SPEAKING;
         
         // Send welcome message
