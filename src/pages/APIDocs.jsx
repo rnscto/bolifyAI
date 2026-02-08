@@ -10,15 +10,32 @@ export default function APIDocs() {
         <p className="text-gray-600 mt-1">WebSocket and REST API integration guide</p>
       </div>
 
+      <Card className="border-blue-200 bg-blue-50">
+        <CardHeader>
+          <CardTitle>WebSocket URL for Smartflo</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <h3 className="font-semibold mb-2">Configure this URL in Smartflo Dashboard</h3>
+            <code className="block bg-white p-3 rounded text-sm border border-blue-200 font-mono">
+              wss://{window.location.host}/api/functions/streamAudio
+            </code>
+            <p className="text-sm text-gray-600 mt-2">
+              Note: call_sid will be automatically appended as a query parameter by our system
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle>WebSocket Audio Streaming</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <h3 className="font-semibold mb-2">Connection URL</h3>
+            <h3 className="font-semibold mb-2">Full Connection URL Format</h3>
             <code className="block bg-gray-100 p-3 rounded text-sm">
-              wss://your-domain.com/api/functions/streamAudio/[call_sid]
+              wss://{window.location.host}/api/functions/streamAudio?call_sid=[call_sid]
             </code>
           </div>
 
