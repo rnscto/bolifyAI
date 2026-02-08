@@ -34,22 +34,44 @@ Deno.serve(async (req) => {
       call_start_time: new Date().toISOString()
     });
 
+    // Authenticate with Smartflo to get access token
+    const authResponse = await fetch('https://backoffice.smartflo.ai/api/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: Deno.env.get('SMARTFLO_EMAIL'),
+        password: Deno.env.get('SMARTFLO_PASSWORD')
+      })
+    });
+
+    if (!authResponse.ok) {
+      throw new Error('Smartflo authentication failed');
+    }
+
+    const authData = await authResponse.json();
+    const accessToken = authData.access_token || authData.token;
+
+    if (!accessToken) {
+      throw new Error('No access token received from Smartflo');
+    }
+
     // Get Deno Deploy URL for WebSocket streaming
     const denoUrl = req.headers.get('x-forwarded-host') || req.headers.get('host');
     const protocol = denoUrl?.includes('.deno.dev') ? 'wss' : 'ws';
     const streamUrl = `${protocol}://${denoUrl}/api/functions/streamAudio?call_sid=${callLog.call_sid}`;
+    const webhookUrl = `https://${denoUrl}/api/functions/smartfloWebhook`;
 
     // Initiate call via Smartflo API
-    const smartfloResponse = await fetch('https://api.smartflo.ai/v1/calls', {
+    const smartfloResponse = await fetch('https://backoffice.smartflo.ai/api/v1/calls/initiate', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${Deno.env.get('SMARTFLO_API_KEY')}`,
+        'Authorization': `Bearer ${accessToken}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         from: agent.assigned_did,
         to: phone_number,
-        webhook_url: `${req.headers.get('origin')}/api/functions/smartfloWebhook`,
+        webhook_url: webhookUrl,
         stream_url: streamUrl
       })
     });
