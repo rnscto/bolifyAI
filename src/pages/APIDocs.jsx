@@ -1,5 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { base44 } from '@/api/base44Client';
+import { Copy } from 'lucide-react';
+import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 
 export default function APIDocs() {
@@ -12,45 +15,49 @@ export default function APIDocs() {
 
       <Card className="border-blue-200 bg-blue-50">
         <CardHeader>
-          <CardTitle>⚙️ Fixed WebSocket URL Setup</CardTitle>
+          <CardTitle>⚙️ Your Fixed WebSocket URL</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-3">
-            <p className="text-sm font-semibold text-yellow-900 mb-1">📍 How to get YOUR Deno Deploy URL (ending with .deno.dev):</p>
-            <ol className="text-sm text-yellow-800 space-y-1 ml-4 list-decimal">
-              <li>Go to Base44 Dashboard → Code → Functions → streamAudio</li>
-              <li>Look for deployment logs or function details section</li>
-              <li>Find the Deno Deploy URL that ends with <code className="bg-white px-1">.deno.dev</code></li>
-              <li>Or check your Deno Deploy dashboard at <a href="https://dash.deno.com" target="_blank" className="text-blue-600 underline">dash.deno.com</a></li>
-              <li>The URL format: <code className="bg-white px-1">https://xxxxx-xxxxx-xx.deno.dev/api/functions/streamAudio</code></li>
-              <li>Change <code className="bg-white px-1">https://</code> to <code className="bg-white px-1">wss://</code></li>
+          <div className="bg-green-50 border border-green-200 rounded p-4">
+            <p className="text-sm font-semibold text-green-900 mb-2">🎯 Copy this URL for your agents:</p>
+            {loading ? (
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+                <span className="text-sm text-green-700">Fetching Deno Deploy URL...</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-white p-3 rounded text-sm border border-green-300 font-mono break-all">
+                  {denoUrl}
+                </code>
+                <button
+                  onClick={() => copyToClipboard(denoUrl)}
+                  className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1"
+                >
+                  <Copy className="w-4 h-4" />
+                  Copy
+                </button>
+              </div>
+            )}
+          </div>
+          
+          <div>
+            <h3 className="font-semibold mb-2">📋 How to use:</h3>
+            <ol className="text-sm text-gray-600 space-y-1 ml-4 list-decimal">
+              <li>Copy the URL above using the Copy button</li>
+              <li>Go to Agents page</li>
+              <li>Create or edit an agent</li>
+              <li>Paste this URL in the "WebSocket URL" field</li>
+              <li>Save the agent</li>
             </ol>
           </div>
           
           <div>
-            <h3 className="font-semibold mb-2">⚠️ Important - Use DENO.DEV URL, not Base44 URL:</h3>
-            <div className="space-y-2 text-sm">
-              <div className="bg-green-50 border border-green-200 rounded p-2">
-                <p className="font-semibold text-green-900">✅ CORRECT (ends with .deno.dev):</p>
-                <code className="block bg-white p-2 rounded mt-1 text-xs break-all">
-                  wss://bright-sheep-33-d6ddv4gx2w8b.deno.dev/api/functions/streamAudio
-                </code>
-              </div>
-              <div className="bg-red-50 border border-red-200 rounded p-2">
-                <p className="font-semibold text-red-900">❌ WRONG (base44.app URL):</p>
-                <code className="block bg-white p-2 rounded mt-1 text-xs break-all">
-                  wss://misty-aura-call-pro.base44.app/api/apps/.../functions/streamAudio
-                </code>
-              </div>
-            </div>
-          </div>
-          
-          <div>
-            <h3 className="font-semibold mb-2">✅ Why Deno Deploy URL?</h3>
+            <h3 className="font-semibold mb-2">✅ Important Notes:</h3>
             <ul className="text-sm text-gray-600 space-y-1 ml-4 list-disc">
-              <li>Direct connection to Deno Deploy is faster and more stable</li>
-              <li>This URL is permanent and won't change on function updates</li>
-              <li>System automatically adds ?call_sid parameter when calling</li>
+              <li>This is your permanent Deno Deploy URL (ends with .deno.dev)</li>
+              <li>It won't change when you update function code</li>
+              <li>System automatically adds ?call_sid parameter when initiating calls</li>
             </ul>
           </div>
         </CardContent>
