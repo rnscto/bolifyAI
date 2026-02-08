@@ -49,12 +49,16 @@
  */
 import AdminDashboard from './pages/AdminDashboard';
 import ClientDashboard from './pages/ClientDashboard';
+import AdminClients from './pages/AdminClients';
+import AdminDIDs from './pages/AdminDIDs';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
     "AdminDashboard": AdminDashboard,
     "ClientDashboard": ClientDashboard,
+    "AdminClients": AdminClients,
+    "AdminDIDs": AdminDIDs,
 }
 
 export const pagesConfig = {
