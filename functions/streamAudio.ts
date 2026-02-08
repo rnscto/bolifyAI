@@ -2,25 +2,38 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 // WebSocket handler for real-time audio streaming with Smartflo
 Deno.serve(async (req) => {
+  // Upgrade HTTP request to WebSocket
+  if (req.headers.get("upgrade") !== "websocket") {
+    return new Response("Expected WebSocket connection", { status: 426 });
+  }
+
+  const { socket, response } = Deno.upgradeWebSocket(req);
+  
+  // Extract call_sid from query params
+  const url = new URL(req.url);
+  const callSid = url.searchParams.get('call_sid');
+
+  let base44;
   try {
-    // Upgrade HTTP request to WebSocket
-    if (req.headers.get("upgrade") !== "websocket") {
-      return new Response("Expected WebSocket connection", { status: 426 });
-    }
+    base44 = createClientFromRequest(req);
+  } catch (error) {
+    console.log('Base44 client creation skipped (testing):', error.message);
+  }
 
-    const { socket, response } = Deno.upgradeWebSocket(req);
-    const base44 = createClientFromRequest(req);
+  let callLog = null;
+  let agent = null;
 
-    // Extract call_sid from query params
-    const url = new URL(req.url);
-    const callSid = url.searchParams.get('call_sid');
-
-    let callLog = null;
-    let agent = null;
-
-    socket.onopen = async () => {
-      console.log('WebSocket opened for call:', callSid);
-      
+  socket.onopen = async () => {
+    console.log('WebSocket opened for call:', callSid);
+    
+    // Send connection confirmation
+    socket.send(JSON.stringify({
+      event: 'connected',
+      message: 'WebSocket connection established',
+      call_sid: callSid
+    }));
+    
+    if (base44 && callSid) {
       try {
         // Get call details
         const callLogs = await base44.asServiceRole.entities.CallLog.filter({ call_sid: callSid });
@@ -31,7 +44,8 @@ Deno.serve(async (req) => {
       } catch (error) {
         console.error('Error loading call data:', error);
       }
-    };
+    }
+  };
 
     socket.onmessage = async (event) => {
       try {
@@ -89,16 +103,11 @@ Deno.serve(async (req) => {
       console.error('WebSocket error:', error);
     };
 
-    socket.onclose = () => {
-      console.log('WebSocket closed for call:', callSid);
-    };
+  socket.onclose = () => {
+    console.log('WebSocket closed for call:', callSid);
+  };
 
-    return response;
-
-  } catch (error) {
-    console.error('Error setting up WebSocket:', error);
-    return Response.json({ error: error.message }, { status: 500 });
-  }
+  return response;
 });
 
 // Azure Speech to Text
