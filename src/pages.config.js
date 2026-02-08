@@ -60,6 +60,7 @@ import ClientDashboard from './pages/ClientDashboard';
 import ClientKnowledgeBase from './pages/ClientKnowledgeBase';
 import ClientLeads from './pages/ClientLeads';
 import ClientSubscription from './pages/ClientSubscription';
+import AdminAgents from './pages/AdminAgents';
 import __Layout from './Layout.jsx';
 
 
@@ -77,6 +78,7 @@ export const PAGES = {
     "ClientKnowledgeBase": ClientKnowledgeBase,
     "ClientLeads": ClientLeads,
     "ClientSubscription": ClientSubscription,
+    "AdminAgents": AdminAgents,
 }
 
 export const pagesConfig = {
