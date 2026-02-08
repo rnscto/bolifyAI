@@ -49,8 +49,8 @@ Deno.serve(async (req) => {
     const cleanCallerID = agent.assigned_did.replace(/\D/g, '');
     const cleanPhoneNumber = phone_number.replace(/\D/g, '');
 
-    // Initiate call via Smartflo Click-to-Call API
-    const smartfloResponse = await fetch('https://api.smartflo.in/api/v1/click_to_call', {
+    // Initiate call via Smartflo Click-to-Call Support API
+    const smartfloResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
