@@ -46,22 +46,63 @@ Deno.serve(async (req) => {
     if (!wssUrl) {
       const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
       if (host) {
-        wssUrl = `wss://${host}/functions/streamAudio?call_sid=${callLog.call_sid}`;
+        wssUrl = `wss://${host}/functions/streamAudio`;
       }
     } else {
-      wssUrl = `${wssUrl.replace('https://', 'wss://').replace('http://', 'wss://')}/functions/streamAudio?call_sid=${callLog.call_sid}`;
+      wssUrl = `${wssUrl.replace('https://', 'wss://').replace('http://', 'wss://')}/functions/streamAudio`;
     }
 
     if (!wssUrl) {
       return Response.json({ 
         success: false,
-        error: 'Could not determine WebSocket URL. Please set DENO_DEPLOY_URL or check request headers.'
+        error: 'Could not determine WebSocket URL.'
       }, { status: 500 });
     }
 
-    console.log('WSS URL:', wssUrl);
+    console.log('WSS URL configured:', wssUrl);
+    console.log('Call SID:', callLog.call_sid);
 
-    // Initiate call via Smartflo Click-to-Call API with direct WSS callback
+    // Authenticate with Smartflo
+    const authResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: Deno.env.get('SMARTFLO_EMAIL'),
+        password: Deno.env.get('SMARTFLO_PASSWORD')
+      })
+    });
+
+    if (!authResponse.ok) {
+      return Response.json({ success: false, error: 'Smartflo auth failed' }, { status: 500 });
+    }
+
+    const authData = await authResponse.json();
+    const smartfloToken = authData.access_token;
+
+    // Create voice streaming endpoint
+    const endpointResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/voice_streaming/endpoints', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${smartfloToken}`
+      },
+      body: JSON.stringify({
+        name: `endpoint_${callLog.call_sid}`,
+        url: wssUrl,
+        type: 'voice_bot'
+      })
+    });
+
+    let endpointId = null;
+    if (endpointResponse.ok) {
+      const endpointData = await endpointResponse.json();
+      endpointId = endpointData.id || endpointData.endpoint_id;
+      console.log('Endpoint created:', endpointId);
+    } else {
+      console.log('Endpoint creation failed:', await endpointResponse.text());
+    }
+
+    // Initiate call with endpoint ID
     const smartfloResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
       method: 'POST',
       headers: {
@@ -71,7 +112,7 @@ Deno.serve(async (req) => {
         api_key: Deno.env.get('SMARTFLO_API_KEY'),
         customer_number: phone_number,
         caller_id: agent.assigned_did.replace('+', ''),
-        callback_url: wssUrl,
+        voice_streaming_endpoint_id: endpointId,
         async: 1
       })
     });
