@@ -51,7 +51,7 @@ Deno.serve(async (req) => {
       body: JSON.stringify({
         api_key: Deno.env.get('SMARTFLO_API_KEY'),
         customer_number: phone_number,
-        caller_id: agent.assigned_did,
+        caller_id: agent.assigned_did.replace('+', ''),
         async: 1
       })
     });
