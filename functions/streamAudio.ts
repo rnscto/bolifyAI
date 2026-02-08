@@ -326,7 +326,7 @@ Deno.serve(async (req) => {
 
     const base44 = createClient({
       appId: appId,
-      serviceToken: serviceRoleKey
+      serviceRoleKey: serviceRoleKey
     });
     db = base44.asServiceRole.entities;
     console.log(`[${reqId}] ✅ Base44 service role ready`);
