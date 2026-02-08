@@ -16,31 +16,40 @@ export default function APIDocs() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-3">
-            <p className="text-sm font-semibold text-yellow-900 mb-1">📍 How to get YOUR Deno Deploy URL:</p>
+            <p className="text-sm font-semibold text-yellow-900 mb-1">📍 How to get YOUR Deno Deploy URL (ending with .deno.dev):</p>
             <ol className="text-sm text-yellow-800 space-y-1 ml-4 list-decimal">
-              <li>Go to Base44 Dashboard → Code → Functions</li>
-              <li>Click on "streamAudio" function</li>
-              <li>Copy the "Function URL" shown at the top</li>
-              <li>It will look like: <code className="bg-white px-1">https://your-unique-id.deno.dev/api/functions/streamAudio</code></li>
+              <li>Go to Base44 Dashboard → Code → Functions → streamAudio</li>
+              <li>Look for deployment logs or function details section</li>
+              <li>Find the Deno Deploy URL that ends with <code className="bg-white px-1">.deno.dev</code></li>
+              <li>Or check your Deno Deploy dashboard at <a href="https://dash.deno.com" target="_blank" className="text-blue-600 underline">dash.deno.com</a></li>
+              <li>The URL format: <code className="bg-white px-1">https://xxxxx-xxxxx-xx.deno.dev/api/functions/streamAudio</code></li>
               <li>Change <code className="bg-white px-1">https://</code> to <code className="bg-white px-1">wss://</code></li>
             </ol>
           </div>
           
           <div>
-            <h3 className="font-semibold mb-2">Example Format:</h3>
-            <code className="block bg-white p-3 rounded text-sm border border-blue-200 font-mono break-all">
-              wss://bright-sheep-33-d6ddv4gx2w8b.deno.dev/api/functions/streamAudio
-            </code>
-            <p className="text-xs text-gray-500 mt-1">
-              Your actual URL will have a different unique ID but same format
-            </p>
+            <h3 className="font-semibold mb-2">⚠️ Important - Use DENO.DEV URL, not Base44 URL:</h3>
+            <div className="space-y-2 text-sm">
+              <div className="bg-green-50 border border-green-200 rounded p-2">
+                <p className="font-semibold text-green-900">✅ CORRECT (ends with .deno.dev):</p>
+                <code className="block bg-white p-2 rounded mt-1 text-xs break-all">
+                  wss://bright-sheep-33-d6ddv4gx2w8b.deno.dev/api/functions/streamAudio
+                </code>
+              </div>
+              <div className="bg-red-50 border border-red-200 rounded p-2">
+                <p className="font-semibold text-red-900">❌ WRONG (base44.app URL):</p>
+                <code className="block bg-white p-2 rounded mt-1 text-xs break-all">
+                  wss://misty-aura-call-pro.base44.app/api/apps/.../functions/streamAudio
+                </code>
+              </div>
+            </div>
           </div>
           
           <div>
-            <h3 className="font-semibold mb-2">✅ Important:</h3>
+            <h3 className="font-semibold mb-2">✅ Why Deno Deploy URL?</h3>
             <ul className="text-sm text-gray-600 space-y-1 ml-4 list-disc">
-              <li>This URL is permanent and won't change when you update function code</li>
-              <li>Enter this URL in each agent's WebSocket URL field</li>
+              <li>Direct connection to Deno Deploy is faster and more stable</li>
+              <li>This URL is permanent and won't change on function updates</li>
               <li>System automatically adds ?call_sid parameter when calling</li>
             </ul>
           </div>
