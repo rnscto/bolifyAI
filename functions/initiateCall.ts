@@ -41,6 +41,13 @@ Deno.serve(async (req) => {
       call_start_time: new Date().toISOString()
     });
 
+    // Get the WSS callback URL
+    const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+    let wssUrl = '';
+    if (host && host.includes('.deno.dev')) {
+      wssUrl = `wss://${host}/api/functions/streamAudio?call_sid=${callLog.call_sid}`;
+    }
+
     // Initiate call via Smartflo Click-to-Call API
     // Using Click-to-Call Support API with voice bot destination
     const smartfloResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
@@ -52,6 +59,7 @@ Deno.serve(async (req) => {
         api_key: Deno.env.get('SMARTFLO_API_KEY'),
         customer_number: phone_number,
         caller_id: agent.assigned_did.replace('+', ''),
+        callback_url: wssUrl,
         async: 1
       })
     });
