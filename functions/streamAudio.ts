@@ -43,18 +43,18 @@ Deno.serve(async (req) => {
   }
 
   // Call context
-  let callState = CALL_STATES.IDLE;
-  let streamSid = null;
-  let callLog = null;
-  let agent = null;
-  let lead = null;
-  let conversationHistory = [];
-  let audioBuffer = [];
-  let hasSpeechStarted = false;
-  let consecutiveSilentChunks = 0;
-  let isProcessing = false;
+      let callState = CALL_STATES.IDLE;
+      let streamSid = null;
+      let callLog = null;
+      let agent = null;
+      let lead = null;
+      let conversationHistory = [];
+      let audioBuffer = [];
+      let hasSpeechStarted = false;
+      let consecutiveSilentChunks = 0;
+      let isProcessing = false;
 
-  socket.onopen = async () => {
+      socket.onopen = async () => {
     console.log('WebSocket opened for call:', callSid);
     if (base44 && callSid) {
       try {
