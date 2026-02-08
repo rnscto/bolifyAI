@@ -173,7 +173,7 @@ Deno.serve(async (req) => {
   // Handle incoming media while speaking (detect barge-in)
   async function handleSpeakingMedia(audioPayload, socket) {
     try {
-      const muLawBytes = Uint8Array.from(atomb(audioPayload), c => c.charCodeAt(0));
+      const muLawBytes = Uint8Array.from(atob(audioPayload), c => c.charCodeAt(0));
       const pcmSamples = decodeMulaw(muLawBytes);
       const rms = getChunkRMS(pcmSamples);
 
