@@ -16,19 +16,24 @@ const VAD_CONFIG = {
 };
 
 Deno.serve(async (req) => {
-  console.log('[streamAudio] Incoming request:', req.method, req.url);
-  console.log('[streamAudio] Upgrade header:', req.headers.get("upgrade"));
-
-  if (req.headers.get("upgrade") !== "websocket") {
-    console.log('[streamAudio] Not a WebSocket request, returning 426');
-    return new Response("Expected WebSocket", { status: 426 });
+  console.log('[streamAudio] ==== NEW REQUEST ====');
+  console.log('[streamAudio] Method:', req.method);
+  console.log('[streamAudio] URL:', req.url);
+  console.log('[streamAudio] Headers:');
+  for (const [key, value] of req.headers) {
+    if (key.includes('upgrade') || key.includes('connection') || key.includes('host')) {
+      console.log(`  ${key}: ${value}`);
+    }
   }
 
-  console.log('[streamAudio] Upgrading to WebSocket...');
-  const { socket, response } = Deno.upgradeWebSocket(req);
-  const url = new URL(req.url);
-  const callSid = url.searchParams.get('call_sid');
-  console.log('[streamAudio] WebSocket upgraded successfully for call_sid:', callSid);
+  // Only upgrade if it's a WebSocket request
+  if (req.headers.get("upgrade")?.toLowerCase() === "websocket") {
+    console.log('[streamAudio] WebSocket upgrade detected, attempting upgrade...');
+    try {
+      const { socket, response } = Deno.upgradeWebSocket(req);
+      const url = new URL(req.url);
+      const callSid = url.searchParams.get('call_sid');
+      console.log('[streamAudio] ✓ WebSocket upgraded successfully for call_sid:', callSid);
 
   let base44;
   try {
