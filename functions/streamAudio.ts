@@ -310,28 +310,19 @@ Deno.serve(async (req) => {
     return new Response('WebSocket upgrade failed', { status: 500 });
   }
 
-  // Initialize Base44 client (service role for database access)
-  let db = null;
-
-  try {
-    const serviceRoleKey = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
-    const appId = Deno.env.get('BASE44_APP_ID');
-    
-    if (!serviceRoleKey) {
-      throw new Error('BASE44_SERVICE_ROLE_KEY not set');
-    }
-    if (!appId) {
-      throw new Error('BASE44_APP_ID not set');
-    }
-
-    const base44 = createClient({
-      appId: appId,
-      serviceToken: serviceRoleKey
-    });
-    db = base44.asServiceRole.entities;
-    console.log(`[${reqId}] ✅ Base44 service role ready`);
-  } catch (err) {
-    console.error(`[${reqId}] ❌ Base44 init failed: ${err.message}`);
+  // Initialize Base44 API access (direct HTTP calls)
+  const serviceToken = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
+  const appId = Deno.env.get('BASE44_APP_ID');
+  
+  if (!serviceToken) {
+    console.error(`[${reqId}] ❌ BASE44_SERVICE_ROLE_KEY not set`);
+  }
+  if (!appId) {
+    console.error(`[${reqId}] ❌ BASE44_APP_ID not set`);
+  }
+  
+  if (serviceToken && appId) {
+    console.log(`[${reqId}] ✅ Base44 API ready (direct HTTP mode)`);
   }
 
   // Session state
