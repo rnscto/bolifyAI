@@ -27,13 +27,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Phone } from 'lucide-react';
+import { Plus, Phone, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminDIDs() {
   const [dids, setDids] = useState([]);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     number: '',
@@ -98,6 +99,24 @@ export default function AdminDIDs() {
     }
   };
 
+  const handleSyncSmartflo = async () => {
+    setSyncing(true);
+    try {
+      const response = await base44.functions.invoke('fetchSmartfloDIDs', {});
+      if (response.data.success) {
+        toast.success(response.data.message);
+        loadData();
+      } else {
+        toast.error(response.data.error || 'Failed to sync DIDs');
+      }
+    } catch (error) {
+      console.error('Error syncing DIDs:', error);
+      toast.error('Failed to sync DIDs from Smartflo');
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const statusColors = {
     available: 'bg-green-100 text-green-800',
     assigned: 'bg-blue-100 text-blue-800',
@@ -124,13 +143,23 @@ export default function AdminDIDs() {
           <h1 className="text-3xl font-bold text-gray-900">DID Management</h1>
           <p className="text-gray-600 mt-1">Manage phone numbers and assignments</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Add DID
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-3">
+          <Button 
+            onClick={handleSyncSmartflo} 
+            disabled={syncing}
+            variant="outline"
+            className="border-blue-600 text-blue-600 hover:bg-blue-50"
+          >
+            <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+            {syncing ? 'Syncing...' : 'Sync from Smartflo'}
+          </Button>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="w-4 h-4 mr-2" />
+                Add DID
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add New DID</DialogTitle>

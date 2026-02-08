@@ -47,36 +47,36 @@
  *
  * The mainPage value must match a key in the PAGES object exactly.
  */
-import AdminDashboard from './pages/AdminDashboard';
-import ClientDashboard from './pages/ClientDashboard';
+import APIDocs from './pages/APIDocs';
 import AdminClients from './pages/AdminClients';
 import AdminDIDs from './pages/AdminDIDs';
-import ClientAgents from './pages/ClientAgents';
-import ClientLeads from './pages/ClientLeads';
-import ClientCallLogs from './pages/ClientCallLogs';
-import ClientKnowledgeBase from './pages/ClientKnowledgeBase';
+import AdminDashboard from './pages/AdminDashboard';
 import AdminSubscriptions from './pages/AdminSubscriptions';
 import ClientActivities from './pages/ClientActivities';
+import ClientAgents from './pages/ClientAgents';
 import ClientCRM from './pages/ClientCRM';
+import ClientCallLogs from './pages/ClientCallLogs';
+import ClientDashboard from './pages/ClientDashboard';
+import ClientKnowledgeBase from './pages/ClientKnowledgeBase';
+import ClientLeads from './pages/ClientLeads';
 import ClientSubscription from './pages/ClientSubscription';
-import APIDocs from './pages/APIDocs';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
-    "AdminDashboard": AdminDashboard,
-    "ClientDashboard": ClientDashboard,
+    "APIDocs": APIDocs,
     "AdminClients": AdminClients,
     "AdminDIDs": AdminDIDs,
-    "ClientAgents": ClientAgents,
-    "ClientLeads": ClientLeads,
-    "ClientCallLogs": ClientCallLogs,
-    "ClientKnowledgeBase": ClientKnowledgeBase,
+    "AdminDashboard": AdminDashboard,
     "AdminSubscriptions": AdminSubscriptions,
     "ClientActivities": ClientActivities,
+    "ClientAgents": ClientAgents,
     "ClientCRM": ClientCRM,
+    "ClientCallLogs": ClientCallLogs,
+    "ClientDashboard": ClientDashboard,
+    "ClientKnowledgeBase": ClientKnowledgeBase,
+    "ClientLeads": ClientLeads,
     "ClientSubscription": ClientSubscription,
-    "APIDocs": APIDocs,
 }
 
 export const pagesConfig = {
