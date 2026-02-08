@@ -1,0 +1,255 @@
+import React, { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Upload, FileText, Trash2, Loader2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+export default function ClientKnowledgeBase() {
+  const [documents, setDocuments] = useState([]);
+  const [client, setClient] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [formData, setFormData] = useState({
+    title: '',
+    category: '',
+    file: null
+  });
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const user = await base44.auth.me();
+      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      
+      if (clients.length > 0) {
+        const clientData = clients[0];
+        setClient(clientData);
+
+        const docsData = await base44.entities.KnowledgeBase.filter(
+          { client_id: clientData.id },
+          '-created_date'
+        );
+        setDocuments(docsData);
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+      toast.error('Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!formData.file) {
+      toast.error('Please select a file');
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const uploadResponse = await base44.integrations.Core.UploadFile({ file: formData.file });
+      
+      const docData = {
+        client_id: client.id,
+        title: formData.title,
+        category: formData.category,
+        file_url: uploadResponse.file_url,
+        file_type: formData.file.type.includes('pdf') ? 'pdf' : 'txt',
+        status: 'processing'
+      };
+
+      await base44.entities.KnowledgeBase.create(docData);
+      
+      toast.success('Document uploaded successfully');
+      setDialogOpen(false);
+      setFormData({ title: '', category: '', file: null });
+      loadData();
+    } catch (error) {
+      console.error('Error uploading document:', error);
+      toast.error('Failed to upload document');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!confirm('Delete this document?')) return;
+    
+    try {
+      await base44.entities.KnowledgeBase.delete(id);
+      toast.success('Document deleted');
+      loadData();
+    } catch (error) {
+      console.error('Error deleting document:', error);
+      toast.error('Failed to delete document');
+    }
+  };
+
+  const statusColors = {
+    processing: 'bg-yellow-100 text-yellow-800',
+    ready: 'bg-green-100 text-green-800',
+    failed: 'bg-red-100 text-red-800'
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Knowledge Base</h1>
+          <p className="text-gray-600 mt-1">Upload training documents for your AI agents</p>
+        </div>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-blue-600 hover:bg-blue-700">
+              <Upload className="w-4 h-4 mr-2" />
+              Upload Document
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Upload Training Document</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <Label htmlFor="title">Document Title</Label>
+                <Input
+                  id="title"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="Product FAQs"
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="category">Category</Label>
+                <Input
+                  id="category"
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  placeholder="FAQs, Product Info, Scripts, etc."
+                />
+              </div>
+              <div>
+                <Label htmlFor="file">File (PDF, TXT, DOCX)</Label>
+                <Input
+                  id="file"
+                  type="file"
+                  accept=".pdf,.txt,.docx"
+                  onChange={(e) => setFormData({ ...formData, file: e.target.files[0] })}
+                  required
+                />
+              </div>
+              <div className="flex gap-3 justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDialogOpen(false)}
+                  disabled={uploading}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-700"
+                  disabled={uploading}
+                >
+                  {uploading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : (
+                    'Upload'
+                  )}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {documents.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <FileText className="w-16 h-16 text-gray-300 mb-4" />
+            <p className="text-gray-500 mb-4">No documents uploaded yet</p>
+            <Button onClick={() => setDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700">
+              <Upload className="w-4 h-4 mr-2" />
+              Upload Your First Document
+            </Button>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {documents.map((doc) => (
+            <Card key={doc.id}>
+              <CardHeader>
+                <div className="flex items-start justify-between">
+                  <div className="flex items-start gap-3">
+                    <FileText className="w-8 h-8 text-blue-600" />
+                    <div>
+                      <CardTitle className="text-base">{doc.title}</CardTitle>
+                      {doc.category && (
+                        <p className="text-sm text-gray-500 mt-1">{doc.category}</p>
+                      )}
+                    </div>
+                  </div>
+                  <Badge className={statusColors[doc.status]}>
+                    {doc.status}
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-gray-600">
+                    {doc.file_type?.toUpperCase()}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(doc.file_url, '_blank')}
+                    >
+                      View
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleDelete(doc.id)}
+                    >
+                      <Trash2 className="w-4 h-4 text-red-600" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

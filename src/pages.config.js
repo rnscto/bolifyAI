@@ -51,6 +51,10 @@ import AdminDashboard from './pages/AdminDashboard';
 import ClientDashboard from './pages/ClientDashboard';
 import AdminClients from './pages/AdminClients';
 import AdminDIDs from './pages/AdminDIDs';
+import ClientAgents from './pages/ClientAgents';
+import ClientLeads from './pages/ClientLeads';
+import ClientCallLogs from './pages/ClientCallLogs';
+import ClientKnowledgeBase from './pages/ClientKnowledgeBase';
 import __Layout from './Layout.jsx';
 
 
@@ -59,6 +63,10 @@ export const PAGES = {
     "ClientDashboard": ClientDashboard,
     "AdminClients": AdminClients,
     "AdminDIDs": AdminDIDs,
+    "ClientAgents": ClientAgents,
+    "ClientLeads": ClientLeads,
+    "ClientCallLogs": ClientCallLogs,
+    "ClientKnowledgeBase": ClientKnowledgeBase,
 }
 
 export const pagesConfig = {
