@@ -341,7 +341,8 @@ Deno.serve(async (req) => {
     totalMediaReceived: 0,
     pendingMarkName: null,
     startTime: Date.now(),
-    systemPrompt: 'You are a friendly AI voice assistant. Be professional and concise. Keep responses to 1-3 sentences. Use only plain text, no emojis or special characters.'
+    systemPrompt: 'You are a friendly AI voice assistant. Be professional and concise. Keep responses to 1-3 sentences. Use only plain text, no emojis or special characters.',
+    agentId: null
   };
 
   function setState(newState) {
