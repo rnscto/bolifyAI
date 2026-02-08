@@ -55,14 +55,15 @@ export default function ClientAgents() {
         const clientData = clients[0];
         setClient(clientData);
 
-        const [agentsData, didsData, kbData] = await Promise.all([
+        const [agentsData, kbData] = await Promise.all([
           base44.entities.Agent.filter({ client_id: clientData.id }),
-          base44.entities.DID.filter({ client_id: clientData.id }),
           base44.entities.KnowledgeBase.filter({ client_id: clientData.id })
         ]);
 
-        setAgents(agentsData);
-        setDids(didsData);
+        if (agentsData.length > 0) {
+          setAgent(agentsData[0]);
+          setSelectedKnowledgeBases(agentsData[0].knowledge_base_ids || []);
+        }
         setKnowledgeBases(kbData);
       }
     } catch (error) {
