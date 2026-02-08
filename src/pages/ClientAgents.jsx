@@ -130,7 +130,7 @@ export default function ClientAgents() {
                 <div>
                   <h4 className="text-sm font-medium text-gray-700 mb-2">Configuration</h4>
                   <div className="space-y-1 text-sm">
-                    <p><span className="text-gray-500">WebSocket:</span> {agent.wss_url || 'Not configured'}</p>
+                    <p><span className="text-gray-500">Industry:</span> {agent.industry || 'Not specified'}</p>
                     <p><span className="text-gray-500">Knowledge Base:</span> {agent.knowledge_base_ids?.length || 0} documents</p>
                   </div>
                 </div>

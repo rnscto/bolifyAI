@@ -45,7 +45,6 @@ export default function AdminAgents() {
     language: 'en-US',
     system_prompt: '',
     assigned_did: '',
-    wss_url: '',
     status: 'inactive',
     industry: ''
   });
@@ -86,7 +85,6 @@ export default function AdminAgents() {
         },
         system_prompt: formData.system_prompt,
         assigned_did: formData.assigned_did,
-        wss_url: formData.wss_url,
         status: formData.status,
         industry: formData.industry,
         knowledge_base_ids: []
@@ -118,7 +116,6 @@ export default function AdminAgents() {
       language: 'en-US',
       system_prompt: '',
       assigned_did: '',
-      wss_url: '',
       status: 'inactive',
       industry: ''
     });
@@ -133,7 +130,6 @@ export default function AdminAgents() {
       language: agent.persona?.language || 'en-US',
       system_prompt: agent.system_prompt || '',
       assigned_did: agent.assigned_did || '',
-      wss_url: agent.wss_url || '',
       status: agent.status || 'inactive',
       industry: agent.industry || ''
     });
@@ -321,16 +317,6 @@ export default function AdminAgents() {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-
-              <div>
-                <Label htmlFor="wss_url">WebSocket URL</Label>
-                <Input
-                  id="wss_url"
-                  value={formData.wss_url}
-                  onChange={(e) => setFormData({ ...formData, wss_url: e.target.value })}
-                  placeholder="wss://..."
-                />
               </div>
 
               <div className="flex gap-3 justify-end">
