@@ -87,12 +87,17 @@ export default function ClientKnowledgeBase() {
       // Auto-sync with assigned agent
       if (agent) {
         const currentKbIds = agent.knowledge_base_ids || [];
-        await base44.entities.Agent.update(agent.id, {
-          knowledge_base_ids: [...currentKbIds, kbDoc.id]
-        });
+        if (!currentKbIds.includes(kbDoc.id)) {
+          await base44.entities.Agent.update(agent.id, {
+            knowledge_base_ids: [...currentKbIds, kbDoc.id]
+          });
+          toast.success('Document uploaded and synced with agent');
+        } else {
+          toast.success('Document uploaded');
+        }
+      } else {
+        toast.success('Document uploaded (no agent assigned yet)');
       }
-
-      toast.success('Document uploaded and synced with agent');
       setDialogOpen(false);
       setFormData({ title: '', category: '', file: null });
       loadData();

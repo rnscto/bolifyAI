@@ -12,6 +12,13 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Table,
   TableBody,
   TableCell,
@@ -28,11 +35,13 @@ export default function AdminClients() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
+  const [users, setUsers] = useState([]);
   const [formData, setFormData] = useState({
     company_name: '',
     email: '',
     phone: '',
-    total_channels: 1
+    total_channels: 1,
+    user_id: ''
   });
 
   useEffect(() => {
@@ -41,8 +50,12 @@ export default function AdminClients() {
 
   const loadClients = async () => {
     try {
-      const data = await base44.entities.Client.list('-created_date');
-      setClients(data);
+      const [clientsData, usersData] = await Promise.all([
+        base44.entities.Client.list('-created_date'),
+        base44.entities.User.list()
+      ]);
+      setClients(clientsData);
+      setUsers(usersData);
     } catch (error) {
       console.error('Error loading clients:', error);
       toast.error('Failed to load clients');
@@ -75,7 +88,7 @@ export default function AdminClients() {
 
       setDialogOpen(false);
       setEditingClient(null);
-      setFormData({ company_name: '', email: '', phone: '', total_channels: 1 });
+      setFormData({ company_name: '', email: '', phone: '', total_channels: 1, user_id: '' });
       loadClients();
     } catch (error) {
       console.error('Error saving client:', error);
@@ -89,7 +102,8 @@ export default function AdminClients() {
       company_name: client.company_name,
       email: client.email,
       phone: client.phone || '',
-      total_channels: client.total_channels
+      total_channels: client.total_channels,
+      user_id: client.user_id || ''
     });
     setDialogOpen(true);
   };
@@ -168,6 +182,27 @@ export default function AdminClients() {
                   value={formData.phone}
                   onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                 />
+              </div>
+              <div>
+                <Label htmlFor="user_id">Assign to User Account</Label>
+                <Select 
+                  value={formData.user_id}
+                  onValueChange={(value) => setFormData({ ...formData, user_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select user (optional)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {users.filter(u => u.role !== 'admin').map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.full_name} ({user.email})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-gray-500 mt-1">
+                  Link this client to a user account for portal access
+                </p>
               </div>
               <div>
                 <Label htmlFor="total_channels">Number of Channels</Label>
