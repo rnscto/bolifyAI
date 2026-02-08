@@ -41,12 +41,25 @@ Deno.serve(async (req) => {
       call_start_time: new Date().toISOString()
     });
 
-    // Get the WSS callback URL
-    const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
-    let wssUrl = '';
-    if (host && host.includes('.deno.dev')) {
-      wssUrl = `wss://${host}/api/functions/streamAudio?call_sid=${callLog.call_sid}`;
+    // Get the WSS callback URL from environment or construct it
+    let wssUrl = Deno.env.get('DENO_DEPLOY_URL');
+    if (!wssUrl) {
+      const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
+      if (host) {
+        wssUrl = `wss://${host}/functions/streamAudio?call_sid=${callLog.call_sid}`;
+      }
+    } else {
+      wssUrl = `${wssUrl.replace('https://', 'wss://').replace('http://', 'wss://')}/functions/streamAudio?call_sid=${callLog.call_sid}`;
     }
+
+    if (!wssUrl) {
+      return Response.json({ 
+        success: false,
+        error: 'Could not determine WebSocket URL. Please set DENO_DEPLOY_URL or check request headers.'
+      }, { status: 500 });
+    }
+
+    console.log('WSS URL:', wssUrl);
 
     // Initiate call via Smartflo Click-to-Call API with direct WSS callback
     const smartfloResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
