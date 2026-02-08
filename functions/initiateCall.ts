@@ -40,7 +40,7 @@ Deno.serve(async (req) => {
 
     // Initiate call via Smartflo Click-to-Call API
     // Using Click-to-Call Support API with voice bot destination
-    const smartfloResponse = await fetch('https://api.smartflo.ai/v1/support/click-to-call', {
+    const smartfloResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
