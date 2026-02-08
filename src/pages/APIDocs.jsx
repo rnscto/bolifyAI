@@ -6,6 +6,34 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 
 export default function APIDocs() {
+  const [denoUrl, setDenoUrl] = useState('Loading...');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDenoUrl();
+  }, []);
+
+  const fetchDenoUrl = async () => {
+    try {
+      const response = await base44.functions.invoke('getDenoUrl', {});
+      if (response.data?.deno_url) {
+        setDenoUrl(response.data.deno_url);
+      } else {
+        setDenoUrl(response.data?.message || 'Unable to fetch Deno Deploy URL');
+      }
+    } catch (error) {
+      console.error('Error fetching Deno URL:', error);
+      setDenoUrl('Error fetching URL - Check function deployment');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const copyToClipboard = (text) => {
+    navigator.clipboard.writeText(text);
+    toast.success('Copied to clipboard!');
+  };
+
   return (
     <div className="space-y-6 max-w-5xl">
       <div>
