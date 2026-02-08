@@ -103,6 +103,7 @@ export default function ClientLeads() {
   const resetForm = () => {
     setEditingLead(null);
     setFormData({ name: '', phone: '', email: '', company: '', notes: '' });
+    setDialogOpen(false);
   };
 
   const handleEdit = (lead) => {
@@ -184,7 +185,10 @@ export default function ClientLeads() {
         <div className="flex gap-2">
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700">
+              <Button 
+                className="bg-blue-600 hover:bg-blue-700"
+                onClick={() => resetForm()}
+              >
                 <Plus className="w-4 h-4 mr-2" />
                 Add Lead
               </Button>
