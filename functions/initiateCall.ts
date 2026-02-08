@@ -34,15 +34,10 @@ Deno.serve(async (req) => {
       call_start_time: new Date().toISOString()
     });
 
-    // Use the fixed WebSocket URL configured in agent settings
-    if (!agent.wss_url) {
-      return Response.json({ 
-        success: false, 
-        error: 'Agent WSS URL not configured. Please set the WebSocket URL in agent settings.' 
-      }, { status: 400 });
-    }
-
-    const streamUrl = `${agent.wss_url}?call_sid=${callLog.call_sid}`;
+    // Get Deno Deploy URL for WebSocket streaming
+    const denoUrl = req.headers.get('x-forwarded-host') || req.headers.get('host');
+    const protocol = denoUrl?.includes('.deno.dev') ? 'wss' : 'ws';
+    const streamUrl = `${protocol}://${denoUrl}/api/functions/streamAudio?call_sid=${callLog.call_sid}`;
 
     // Initiate call via Smartflo API
     const smartfloResponse = await fetch('https://api.smartflo.ai/v1/calls', {
