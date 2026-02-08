@@ -310,14 +310,16 @@ Deno.serve(async (req) => {
     return new Response('WebSocket upgrade failed', { status: 500 });
   }
 
-  // Initialize Base44 client
-  let base44Client = null;
+  // Initialize Base44 client (service role for database access)
   let db = null;
 
   try {
-    base44Client = createClientFromRequest(req);
-    db = base44Client.asServiceRole?.entities || base44Client.entities;
-    console.log(`[${reqId}] ✅ Base44 client ready`);
+    const base44 = createClient({
+      appId: Deno.env.get('BASE44_APP_ID'),
+      serviceRoleKey: Deno.env.get('BASE44_SERVICE_ROLE_KEY')
+    });
+    db = base44.asServiceRole.entities;
+    console.log(`[${reqId}] ✅ Base44 service role ready`);
   } catch (err) {
     console.log(`[${reqId}] ⚠️ Base44 init failed: ${err.message}`);
   }
