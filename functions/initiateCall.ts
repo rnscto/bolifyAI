@@ -15,8 +15,12 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    // Get agent details
-    const agent = await base44.asServiceRole.entities.Agent.get(agent_id);
+    // Get agent and lead details
+    const [agent, lead] = await Promise.all([
+      base44.asServiceRole.entities.Agent.get(agent_id),
+      base44.asServiceRole.entities.Lead.get(lead_id)
+    ]);
+
     if (!agent) {
       return Response.json({ error: 'Agent not found' }, { status: 404 });
     }
@@ -41,26 +45,8 @@ Deno.serve(async (req) => {
       call_start_time: new Date().toISOString()
     });
 
-    // Get the WSS callback URL from environment or construct it
-    let wssUrl = Deno.env.get('DENO_DEPLOY_URL');
-    if (!wssUrl) {
-      const host = req.headers.get('x-forwarded-host') || req.headers.get('host');
-      if (host) {
-        wssUrl = `wss://${host}/functions/streamAudio`;
-      }
-    } else {
-      wssUrl = `${wssUrl.replace('https://', 'wss://').replace('http://', 'wss://')}/functions/streamAudio`;
-    }
-
-    if (!wssUrl) {
-      return Response.json({ 
-        success: false,
-        error: 'Could not determine WebSocket URL.'
-      }, { status: 500 });
-    }
-
-    console.log('WSS URL configured:', wssUrl);
-    console.log('Call SID:', callLog.call_sid);
+    // Get webhook URL for receiving call events
+    const webhookUrl = `${Deno.env.get('BASE44_WEBHOOK_URL') || 'https://your-app.deno.dev'}/functions/smartfloWebhook`;
 
     // Authenticate with Smartflo
     const authResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
@@ -79,40 +65,18 @@ Deno.serve(async (req) => {
     const authData = await authResponse.json();
     const smartfloToken = authData.access_token;
 
-    // Create voice streaming endpoint
-    const endpointResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/voice_streaming/endpoints', {
+    // Initiate call via Smartflo Click-to-Call API
+    const smartfloResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${smartfloToken}`
       },
       body: JSON.stringify({
-        name: `endpoint_${callLog.call_sid}`,
-        url: wssUrl,
-        type: 'voice_bot'
-      })
-    });
-
-    let endpointId = null;
-    if (endpointResponse.ok) {
-      const endpointData = await endpointResponse.json();
-      endpointId = endpointData.id || endpointData.endpoint_id;
-      console.log('Endpoint created:', endpointId);
-    } else {
-      console.log('Endpoint creation failed:', await endpointResponse.text());
-    }
-
-    // Initiate call with endpoint ID
-    const smartfloResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        api_key: Deno.env.get('SMARTFLO_API_KEY'),
         customer_number: phone_number,
         caller_id: agent.assigned_did.replace('+', ''),
-        voice_streaming_endpoint_id: endpointId,
+        webhook_url: webhookUrl,
+        call_id: callLog.call_sid,
         async: 1
       })
     });
@@ -133,18 +97,23 @@ Deno.serve(async (req) => {
 
     const smartfloData = await smartfloResponse.json();
 
-    // Update call log with response data
+    // Update call log with Smartflo response
     await base44.asServiceRole.entities.CallLog.update(callLog.id, {
       call_sid: smartfloData.call_id || smartfloData.call_sid || callLog.call_sid,
       status: 'ringing'
+    });
+
+    // Update lead status
+    await base44.asServiceRole.entities.Lead.update(lead_id, {
+      status: 'contacted',
+      last_call_date: new Date().toISOString()
     });
 
     return Response.json({
       success: true,
       call_id: callLog.id,
       call_sid: smartfloData.call_id || smartfloData.call_sid,
-      message: 'Call initiated successfully',
-      smartflo_response: smartfloData
+      message: 'Call initiated successfully'
     });
 
   } catch (error) {
