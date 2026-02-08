@@ -48,8 +48,49 @@ Deno.serve(async (req) => {
       wssUrl = `wss://${host}/api/functions/streamAudio?call_sid=${callLog.call_sid}`;
     }
 
+    // Authenticate with Smartflo to get token
+    const authResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        email: Deno.env.get('SMARTFLO_EMAIL'),
+        password: Deno.env.get('SMARTFLO_PASSWORD')
+      })
+    });
+
+    if (!authResponse.ok) {
+      return Response.json({ 
+        success: false, 
+        error: 'Failed to authenticate with Smartflo' 
+      }, { status: 500 });
+    }
+
+    const authData = await authResponse.json();
+    const smartfloToken = authData.access_token;
+
+    // Create Voice Streaming endpoint with WSS URL
+    const endpointResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/voice_streaming/endpoints', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${smartfloToken}`
+      },
+      body: JSON.stringify({
+        name: `Agent_${agent_id}_${Date.now()}`,
+        url: wssUrl,
+        type: 'voice_bot'
+      })
+    });
+
+    let endpointId = null;
+    if (endpointResponse.ok) {
+      const endpointData = await endpointResponse.json();
+      endpointId = endpointData.id || endpointData.endpoint_id;
+    }
+
     // Initiate call via Smartflo Click-to-Call API
-    // Using Click-to-Call Support API with voice bot destination
     const smartfloResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
       method: 'POST',
       headers: {
@@ -59,7 +100,7 @@ Deno.serve(async (req) => {
         api_key: Deno.env.get('SMARTFLO_API_KEY'),
         customer_number: phone_number,
         caller_id: agent.assigned_did.replace('+', ''),
-        callback_url: wssUrl,
+        voice_streaming_endpoint_id: endpointId,
         async: 1
       })
     });
