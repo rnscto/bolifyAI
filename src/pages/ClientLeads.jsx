@@ -76,6 +76,12 @@ export default function ClientLeads() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    if (!client) {
+      toast.error('Client not loaded. Please refresh the page.');
+      return;
+    }
+    
     try {
       const leadData = {
         ...formData,
