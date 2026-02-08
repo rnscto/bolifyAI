@@ -38,6 +38,7 @@ export default function ClientAgents() {
     language: 'en-US',
     system_prompt: '',
     assigned_did: '',
+    wss_url: '',
     knowledge_base_ids: []
   });
 
@@ -86,7 +87,7 @@ export default function ClientAgents() {
         system_prompt: formData.system_prompt,
         knowledge_base_ids: formData.knowledge_base_ids,
         assigned_did: formData.assigned_did,
-        wss_url: `wss://your-websocket-url/${client.id}`,
+        wss_url: formData.wss_url,
         status: 'inactive'
       };
 
@@ -116,6 +117,7 @@ export default function ClientAgents() {
       language: 'en-US',
       system_prompt: '',
       assigned_did: '',
+      wss_url: '',
       knowledge_base_ids: []
     });
   };
@@ -129,6 +131,7 @@ export default function ClientAgents() {
       language: agent.persona?.language || 'en-US',
       system_prompt: agent.system_prompt || '',
       assigned_did: agent.assigned_did || '',
+      wss_url: agent.wss_url || '',
       knowledge_base_ids: agent.knowledge_base_ids || []
     });
     setDialogOpen(true);
@@ -275,6 +278,20 @@ export default function ClientAgents() {
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="wss_url">WebSocket URL (Fixed Deno Deploy URL)</Label>
+                <Input
+                  id="wss_url"
+                  value={formData.wss_url}
+                  onChange={(e) => setFormData({ ...formData, wss_url: e.target.value })}
+                  placeholder="wss://your-deployment.deno.dev/api/functions/streamAudio"
+                  required
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Get this URL from your Deno deployment (see API Docs). It won't change when you update the function.
+                </p>
               </div>
 
               <div>
