@@ -314,14 +314,24 @@ Deno.serve(async (req) => {
   let db = null;
 
   try {
+    const serviceRoleKey = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
+    const appId = Deno.env.get('BASE44_APP_ID');
+    
+    if (!serviceRoleKey) {
+      throw new Error('BASE44_SERVICE_ROLE_KEY not set');
+    }
+    if (!appId) {
+      throw new Error('BASE44_APP_ID not set');
+    }
+
     const base44 = createClient({
-      appId: Deno.env.get('BASE44_APP_ID'),
-      serviceRoleKey: Deno.env.get('BASE44_SERVICE_ROLE_KEY')
+      appId: appId,
+      serviceToken: serviceRoleKey
     });
     db = base44.asServiceRole.entities;
     console.log(`[${reqId}] ✅ Base44 service role ready`);
   } catch (err) {
-    console.log(`[${reqId}] ⚠️ Base44 init failed: ${err.message}`);
+    console.error(`[${reqId}] ❌ Base44 init failed: ${err.message}`);
   }
 
   // Session state
