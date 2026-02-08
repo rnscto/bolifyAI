@@ -593,10 +593,27 @@ Deno.serve(async (req) => {
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}`);
 
         // Fetch existing CallLog by call_sid to get agent info
-         if (session.db) {
+         if (session.serviceToken && session.appId) {
            try {
              console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
-             const callLogs = await session.db.CallLog.filter({ call_sid: session.callSid });
+
+             // Direct HTTP call to Base44 API
+             const callLogsRes = await fetch(`https://api.base44.com/v1/apps/${session.appId}/entities/CallLog/filter`, {
+               method: 'POST',
+               headers: {
+                 'Authorization': `Bearer ${session.serviceToken}`,
+                 'Content-Type': 'application/json'
+               },
+               body: JSON.stringify({ call_sid: session.callSid })
+             });
+
+             if (!callLogsRes.ok) {
+               console.error(`[${reqId}] ❌ Call log API error: ${callLogsRes.status}`);
+               return;
+             }
+
+             const callLogsData = await callLogsRes.json();
+             const callLogs = callLogsData.data || [];
              console.log(`[${reqId}] 📋 Found ${callLogs.length} call logs`);
 
              if (callLogs.length > 0) {
@@ -605,16 +622,21 @@ Deno.serve(async (req) => {
                session.agentId = callLog.agent_id;
                console.log(`[${reqId}] 📍 Call log ID: ${session.callLogId}, Agent ID: ${session.agentId}`);
 
-               // Fetch agent to get persona and custom system prompt
+               // Fetch agent to get system prompt
                if (session.agentId) {
                  console.log(`[${reqId}] 🔎 Fetching agent ${session.agentId}`);
-                 const agent = await session.db.Agent.get(session.agentId);
-                 if (agent) {
+                 const agentRes = await fetch(`https://api.base44.com/v1/apps/${session.appId}/entities/Agent/${session.agentId}`, {
+                   headers: {
+                     'Authorization': `Bearer ${session.serviceToken}`
+                   }
+                 });
+
+                 if (agentRes.ok) {
+                   const agent = await agentRes.json();
                    session.agentConfig = agent;
                    console.log(`[${reqId}] ✅ Agent name: ${agent.name}`);
                    console.log(`[${reqId}] 📝 System prompt length: ${agent.system_prompt?.length || 0}`);
 
-                   // Use agent's custom system prompt if available
                    if (agent.system_prompt && agent.system_prompt.trim()) {
                      session.systemPrompt = agent.system_prompt;
                      console.log(`[${reqId}] ✅ Using custom system prompt for ${agent.name}`);
@@ -622,7 +644,7 @@ Deno.serve(async (req) => {
                      console.log(`[${reqId}] ⚠️ Agent has no custom system prompt`);
                    }
                  } else {
-                   console.log(`[${reqId}] ❌ Agent not found`);
+                   console.log(`[${reqId}] ❌ Agent fetch failed: ${agentRes.status}`);
                  }
                }
              } else {
@@ -632,7 +654,7 @@ Deno.serve(async (req) => {
              console.error(`[${reqId}] ❌ Call log lookup failed: ${e.message}`);
            }
          } else {
-           console.log(`[${reqId}] ⚠️ Database not initialized`);
+           console.log(`[${reqId}] ⚠️ Service token or app ID not set`);
          }
 
         // Send welcome
