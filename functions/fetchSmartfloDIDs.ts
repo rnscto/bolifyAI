@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Smartflo API key not configured' }, { status: 500 });
     }
 
-    // Fetch DIDs from Smartflo API
+    // Fetch all DIDs from Smartflo API
     const response = await fetch('https://api-smartflo.tatateleservices.com/v1/my_number', {
       method: 'GET',
       headers: {
@@ -24,29 +24,44 @@ Deno.serve(async (req) => {
     });
 
     if (!response.ok) {
-      const error = await response.text();
+      const errorText = await response.text();
+      console.error('Smartflo API error:', errorText);
       return Response.json({ 
         error: 'Failed to fetch DIDs from Smartflo',
-        details: error
+        details: errorText,
+        status_code: response.status
       }, { status: response.status });
     }
 
     const smartfloData = await response.json();
+    console.log('Smartflo response:', JSON.stringify(smartfloData));
 
-    // Sync DIDs to database
+    // Handle different response structures
+    const didsArray = smartfloData.data || smartfloData.numbers || smartfloData || [];
+    
+    if (!Array.isArray(didsArray)) {
+      return Response.json({
+        error: 'Unexpected response format from Smartflo',
+        response: smartfloData
+      }, { status: 500 });
+    }
+
+    // Sync all DIDs to database
     const existingDids = await base44.asServiceRole.entities.DID.list();
     const existingNumbers = new Set(existingDids.map(d => d.number));
 
     const newDids = [];
-    const didsArray = smartfloData.data || [];
     
     for (const did of didsArray) {
-      if (!existingNumbers.has(did.phone_number)) {
+      // Handle different field names
+      const phoneNumber = did.phone_number || did.number || did.did || did.phoneNumber;
+      
+      if (phoneNumber && !existingNumbers.has(phoneNumber)) {
         newDids.push({
-          number: did.phone_number,
-          country_code: did.country_code || '+91',
+          number: phoneNumber,
+          country_code: did.country_code || did.countryCode || '+91',
           status: 'available',
-          monthly_cost: 6500
+          monthly_cost: did.monthly_cost || did.cost || 6500
         });
       }
     }
@@ -58,12 +73,16 @@ Deno.serve(async (req) => {
     return Response.json({
       success: true,
       total_dids: didsArray.length,
+      existing_dids: existingDids.length,
       new_dids: newDids.length,
-      message: `Synced ${newDids.length} new DIDs from Smartflo`
+      message: `Successfully synced ${newDids.length} new DIDs from Smartflo (${didsArray.length} total available)`
     });
 
   } catch (error) {
     console.error('Error fetching Smartflo DIDs:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return Response.json({ 
+      error: error.message,
+      stack: error.stack
+    }, { status: 500 });
   }
 });
