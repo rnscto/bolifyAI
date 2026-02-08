@@ -588,25 +588,38 @@ Deno.serve(async (req) => {
 
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}`);
 
+        // Fetch existing CallLog by call_sid to get agent info
+        if (session.db) {
+          try {
+            const callLogs = await session.db.CallLog.filter({ call_sid: session.callSid });
+            if (callLogs.length > 0) {
+              const callLog = callLogs[0];
+              session.callLogId = callLog.id;
+              session.agentId = callLog.agent_id;
+
+              // Fetch agent to get persona and custom system prompt
+              if (session.agentId) {
+                const agent = await session.db.Agent.get(session.agentId);
+                if (agent) {
+                  session.agentConfig = agent;
+                  // Use agent's custom system prompt if available
+                  if (agent.system_prompt && agent.system_prompt.trim()) {
+                    session.systemPrompt = agent.system_prompt;
+                    console.log(`[${reqId}] 🤖 Agent loaded: ${agent.name}`);
+                  }
+                }
+              }
+              console.log(`[${reqId}] 📝 Call log loaded: ${session.callLogId}`);
+            }
+          } catch (e) {
+            console.log(`[${reqId}] ⚠️ Call log lookup failed: ${e.message}`);
+          }
+        }
+
         // Send welcome
         const welcome = 'Hello! How can I help you today?';
         session.conversationHistory.push({ role: 'assistant', content: welcome });
         session.transcript.push({ speaker: 'AI', text: welcome });
-
-        // Create call log
-        if (session.db) {
-          try {
-            const callLog = await session.db.CallLog.create({
-              call_sid: session.callSid,
-              status: 'answered',
-              call_start_time: new Date().toISOString()
-            });
-            session.callLogId = callLog.id;
-            console.log(`[${reqId}] 📝 Call log: ${session.callLogId}`);
-          } catch (e) {
-            console.log(`[${reqId}] ⚠️ Call log failed: ${e.message}`);
-          }
-        }
 
         await startSpeaking(welcome);
         return;
