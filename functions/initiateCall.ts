@@ -21,8 +21,11 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Agent not found' }, { status: 404 });
     }
 
-    if (!agent.assigned_did) {
-      return Response.json({ error: 'No DID assigned to agent' }, { status: 400 });
+    if (!agent.assigned_did || agent.assigned_did.trim() === '') {
+      return Response.json({ 
+        success: false,
+        error: 'No DID assigned to agent. Please assign a DID to the agent before making calls.' 
+      }, { status: 400 });
     }
 
     // Create call log
