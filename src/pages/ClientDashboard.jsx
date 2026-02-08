@@ -1,0 +1,216 @@
+import React, { useState, useEffect } from 'react';
+import { base44 } from '@/api/base44Client';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Bot, Users, PhoneCall, Calendar, TrendingUp } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '../utils';
+import { Button } from '@/components/ui/button';
+
+export default function ClientDashboard() {
+  const [user, setUser] = useState(null);
+  const [client, setClient] = useState(null);
+  const [stats, setStats] = useState({
+    totalAgents: 0,
+    activeAgents: 0,
+    totalLeads: 0,
+    totalCalls: 0,
+    callsToday: 0,
+    upcomingActivities: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      const currentUser = await base44.auth.me();
+      setUser(currentUser);
+
+      const clients = await base44.entities.Client.filter({ user_id: currentUser.id });
+      if (clients.length > 0) {
+        const clientData = clients[0];
+        setClient(clientData);
+
+        const [agents, leads, calls, activities] = await Promise.all([
+          base44.entities.Agent.filter({ client_id: clientData.id }),
+          base44.entities.Lead.filter({ client_id: clientData.id }),
+          base44.entities.CallLog.filter({ client_id: clientData.id }, '-created_date', 100),
+          base44.entities.Activity.filter({ client_id: clientData.id })
+        ]);
+
+        const today = new Date().toISOString().split('T')[0];
+        const callsToday = calls.filter(call => 
+          call.created_date?.startsWith(today)
+        ).length;
+
+        const upcoming = activities.filter(a => 
+          a.status === 'scheduled' && new Date(a.scheduled_date) > new Date()
+        ).length;
+
+        setStats({
+          totalAgents: agents.length,
+          activeAgents: agents.filter(a => a.status === 'active').length,
+          totalLeads: leads.length,
+          totalCalls: calls.length,
+          callsToday,
+          upcomingActivities: upcoming
+        });
+      }
+    } catch (error) {
+      console.error('Error loading data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const statCards = [
+    {
+      title: 'Active Agents',
+      value: stats.activeAgents,
+      subtitle: `of ${stats.totalAgents} total`,
+      icon: Bot,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-50',
+      link: 'ClientAgents'
+    },
+    {
+      title: 'Total Leads',
+      value: stats.totalLeads,
+      subtitle: 'Manage leads',
+      icon: Users,
+      color: 'text-green-600',
+      bgColor: 'bg-green-50',
+      link: 'ClientLeads'
+    },
+    {
+      title: 'Calls Today',
+      value: stats.callsToday,
+      subtitle: `${stats.totalCalls} total calls`,
+      icon: PhoneCall,
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-50',
+      link: 'ClientCallLogs'
+    },
+    {
+      title: 'Upcoming Activities',
+      value: stats.upcomingActivities,
+      subtitle: 'Scheduled',
+      icon: Calendar,
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-50',
+      link: 'ClientActivities'
+    }
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">
+            Welcome back, {user?.full_name}
+          </h1>
+          <p className="text-gray-600 mt-1">{client?.company_name}</p>
+        </div>
+        <Link to={createPageUrl('ClientAgents')}>
+          <Button className="bg-blue-600 hover:bg-blue-700">
+            <Bot className="w-4 h-4 mr-2" />
+            Create Agent
+          </Button>
+        </Link>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {statCards.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <Link key={stat.title} to={createPageUrl(stat.link)}>
+              <Card className="cursor-pointer hover:shadow-md transition-shadow">
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-gray-600">
+                    {stat.title}
+                  </CardTitle>
+                  <div className={`p-2 rounded-lg ${stat.bgColor}`}>
+                    <Icon className={`w-5 h-5 ${stat.color}`} />
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
+                  <p className="text-xs text-gray-500 mt-1">{stat.subtitle}</p>
+                </CardContent>
+              </Card>
+            </Link>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Quick Actions</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <Link to={createPageUrl('ClientAgents')}>
+              <Button variant="outline" className="w-full justify-start">
+                <Bot className="w-4 h-4 mr-2" />
+                Create New Agent
+              </Button>
+            </Link>
+            <Link to={createPageUrl('ClientLeads')}>
+              <Button variant="outline" className="w-full justify-start">
+                <Users className="w-4 h-4 mr-2" />
+                Import Leads
+              </Button>
+            </Link>
+            <Link to={createPageUrl('ClientKnowledgeBase')}>
+              <Button variant="outline" className="w-full justify-start">
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Upload Training Data
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Subscription Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Plan</span>
+                <span className="text-sm font-medium">Quarterly</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Channels</span>
+                <span className="text-sm font-medium">{client?.total_channels || 1}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Monthly Rate</span>
+                <span className="text-sm font-medium">
+                  ₹{((client?.total_channels || 1) * 6500).toLocaleString()}
+                </span>
+              </div>
+              <div className="pt-3 border-t">
+                <Link to={createPageUrl('ClientSubscription')}>
+                  <Button variant="outline" size="sm" className="w-full">
+                    Manage Subscription
+                  </Button>
+                </Link>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
