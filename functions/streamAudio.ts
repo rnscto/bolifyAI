@@ -16,24 +16,26 @@ const VAD_CONFIG = {
 };
 
 Deno.serve(async (req) => {
-  console.log('[streamAudio] ==== NEW REQUEST ====');
-  console.log('[streamAudio] Method:', req.method);
-  console.log('[streamAudio] URL:', req.url);
-  console.log('[streamAudio] Headers:');
-  for (const [key, value] of req.headers) {
-    if (key.includes('upgrade') || key.includes('connection') || key.includes('host')) {
-      console.log(`  ${key}: ${value}`);
-    }
+  console.log('[streamAudio] Incoming:', req.method, req.url);
+  console.log('[streamAudio] Headers:', {
+    upgrade: req.headers.get("upgrade"),
+    connection: req.headers.get("connection"),
+    'sec-websocket-key': req.headers.get('sec-websocket-key'),
+    'sec-websocket-version': req.headers.get('sec-websocket-version')
+  });
+
+  if (req.headers.get("upgrade") !== "websocket") {
+    console.error('[streamAudio] Not a WebSocket request');
+    return new Response("Expected WebSocket upgrade request", { status: 426 });
   }
 
-  // Only upgrade if it's a WebSocket request
-  if (req.headers.get("upgrade")?.toLowerCase() === "websocket") {
-    console.log('[streamAudio] WebSocket upgrade detected, attempting upgrade...');
-    try {
-      const { socket, response } = Deno.upgradeWebSocket(req);
-      const url = new URL(req.url);
-      const callSid = url.searchParams.get('call_sid');
-      console.log('[streamAudio] ✓ WebSocket upgraded successfully for call_sid:', callSid);
+  try {
+    const { socket, response } = Deno.upgradeWebSocket(req);
+    console.log('[streamAudio] WebSocket upgraded successfully');
+    
+    const url = new URL(req.url);
+    const callSid = url.searchParams.get('call_sid');
+    console.log('[streamAudio] Call SID:', callSid);
 
   let base44;
   try {
@@ -43,18 +45,18 @@ Deno.serve(async (req) => {
   }
 
   // Call context
-      let callState = CALL_STATES.IDLE;
-      let streamSid = null;
-      let callLog = null;
-      let agent = null;
-      let lead = null;
-      let conversationHistory = [];
-      let audioBuffer = [];
-      let hasSpeechStarted = false;
-      let consecutiveSilentChunks = 0;
-      let isProcessing = false;
+  let callState = CALL_STATES.IDLE;
+  let streamSid = null;
+  let callLog = null;
+  let agent = null;
+  let lead = null;
+  let conversationHistory = [];
+  let audioBuffer = [];
+  let hasSpeechStarted = false;
+  let consecutiveSilentChunks = 0;
+  let isProcessing = false;
 
-      socket.onopen = async () => {
+  socket.onopen = async () => {
     console.log('WebSocket opened for call:', callSid);
     if (base44 && callSid) {
       try {
