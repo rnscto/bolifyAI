@@ -27,10 +27,16 @@ function getBase44ServiceRoleClient(reqId) {
     throw new Error('Service role environment variables not set');
   }
 
-  return createClient({
+  console.log(`[${reqId}] 🔑 Creating service role client with appId: ${appId.substring(0, 8)}..., key length: ${serviceRoleKey.length}`);
+
+  const client = createClient({
     appId: appId,
     serviceToken: serviceRoleKey
-  }).asServiceRole.entities;
+  });
+
+  console.log(`[${reqId}] 🔑 Client created, accessing asServiceRole.entities`);
+  
+  return client.asServiceRole.entities;
 }
 
 // Mu-law decoding
