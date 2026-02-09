@@ -629,9 +629,8 @@ Deno.serve(async (req) => {
         // Fetch existing CallLog by call_sid to get agent info
         let agentLoaded = false;
         try {
-          const base44 = getBase44ServiceRoleClient(reqId);
           console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
-          const callLogs = await base44.entities.CallLog.filter({ call_sid: session.callSid });
+          const callLogs = await base44ServiceRole.entities.CallLog.filter({ call_sid: session.callSid });
           console.log(`[${reqId}] 📋 Found ${callLogs.length} call logs`);
 
           if (callLogs.length > 0) {
