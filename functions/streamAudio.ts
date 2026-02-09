@@ -1,4 +1,4 @@
-import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.6';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 const STATE = {
   IDLE: 'IDLE',
@@ -282,6 +282,17 @@ Deno.serve(async (req) => {
 
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
 
+  // Initialize Base44 client BEFORE WebSocket upgrade
+  let db = null;
+
+  try {
+    const base44 = createClientFromRequest(req);
+    db = base44.asServiceRole.entities;
+    console.log(`[${reqId}] ✅ Base44 service role ready`);
+  } catch (err) {
+    console.error(`[${reqId}] ❌ Base44 init failed: ${err.message}`);
+  }
+
   // Return status for non-WebSocket requests
   if (!isWebSocket) {
     const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
@@ -292,13 +303,13 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       status: 'ready',
-      version: 'v5.2-smartflo',
+      version: 'v5.3-base44-auto-servicetoken',
       wss_url: wssUrl,
       info: 'Use the wss_url above to connect WebSocket from Smartflo'
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
-  // Upgrade WebSocket FIRST
+  // Upgrade WebSocket
   let socket, response;
   try {
     const upgraded = Deno.upgradeWebSocket(req);
@@ -308,30 +319,6 @@ Deno.serve(async (req) => {
   } catch (err) {
     console.error(`[${reqId}] ❌ Upgrade failed: ${err.message}`);
     return new Response('WebSocket upgrade failed', { status: 500 });
-  }
-
-  // Initialize Base44 client (service role for database access)
-  let db = null;
-
-  try {
-    const serviceRoleKey = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
-    const appId = Deno.env.get('BASE44_APP_ID');
-    
-    if (!serviceRoleKey) {
-      throw new Error('BASE44_SERVICE_ROLE_KEY not set');
-    }
-    if (!appId) {
-      throw new Error('BASE44_APP_ID not set');
-    }
-
-    const base44 = createClient({
-      appId: appId,
-      serviceToken: serviceRoleKey
-    });
-    db = base44.asServiceRole.entities;
-    console.log(`[${reqId}] ✅ Base44 service role ready`);
-  } catch (err) {
-    console.error(`[${reqId}] ❌ Base44 init failed: ${err.message}`);
   }
 
   // Session state
