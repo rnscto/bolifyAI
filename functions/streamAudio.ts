@@ -308,15 +308,14 @@ Deno.serve(async (req) => {
   try {
     const appId = Deno.env.get('BASE44_APP_ID');
     const serviceToken = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
-    
+
     if (!appId || !serviceToken) {
       console.error(`[${reqId}] ❌ Missing BASE44_APP_ID or BASE44_SERVICE_ROLE_KEY`);
       return new Response('Server configuration error', { status: 500 });
     }
-    
+
     console.log(`[${reqId}] 🔑 Creating service role client`);
-    const client = createClient({ appId, serviceToken });
-    base44ServiceRole = client.asServiceRole;
+    base44ServiceRole = createClient({ appId, serviceToken });
     console.log(`[${reqId}] ✅ Service role client ready`);
   } catch (err) {
     console.error(`[${reqId}] ❌ Failed to create service role client: ${err.message}`);
