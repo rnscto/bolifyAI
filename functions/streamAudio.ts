@@ -627,6 +627,7 @@ Deno.serve(async (req) => {
                 if (agent.system_prompt && agent.system_prompt.trim()) {
                   session.systemPrompt = agent.system_prompt;
                   console.log(`[${reqId}] ✅ Using custom system prompt for ${agent.name}`);
+                  console.log(`[${reqId}] 📋 System prompt: "${session.systemPrompt.substring(0, 100)}..."`);
                 } else {
                   console.log(`[${reqId}] ⚠️ Agent has no custom system prompt`);
                 }
@@ -643,6 +644,7 @@ Deno.serve(async (req) => {
                           title: doc.title,
                           content: doc.content
                         });
+                        console.log(`[${reqId}] 📄 Loaded KB: ${doc.title} (${doc.content.length} chars)`);
                       }
                     }
                     
@@ -652,11 +654,15 @@ Deno.serve(async (req) => {
                       ).join('\n\n---\n\n');
                       
                       session.systemPrompt = `${session.systemPrompt}\n\nKNOWLEDGE BASE:\n${kbContext}`;
-                      console.log(`[${reqId}] ✅ Added ${kbDocs.length} knowledge base documents to context`);
+                      console.log(`[${reqId}] ✅ Added ${kbDocs.length} knowledge base documents to context (total: ${session.systemPrompt.length} chars)`);
+                      agentLoaded = true;
                     }
                   } catch (err) {
                     console.error(`[${reqId}] ⚠️ Failed to load knowledge base: ${err.message}`);
                   }
+                } else {
+                  agentLoaded = true;
+                  console.log(`[${reqId}] ℹ️ No knowledge base configured for agent`);
                 }
               } else {
                 console.log(`[${reqId}] ❌ Agent not found`);
