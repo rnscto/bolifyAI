@@ -281,16 +281,15 @@ async function sendTTSAudio(socket, session, reqId, text, markName) {
 }
 
 // Save call record
-async function saveCallRecord(session, reqId, duration) {
+async function saveCallRecord(session, reqId, duration, base44ServiceRole) {
   if (!session.callLogId) return;
 
   try {
-    const base44 = getBase44ServiceRoleClient(reqId);
     const transcript = session.transcript
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    await base44.entities.CallLog.update(session.callLogId, {
+    await base44ServiceRole.entities.CallLog.update(session.callLogId, {
       status: 'completed',
       transcript: transcript,
       duration: duration,
