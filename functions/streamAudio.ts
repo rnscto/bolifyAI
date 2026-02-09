@@ -157,6 +157,9 @@ async function generateResponse(reqId, conversationHistory, systemPrompt) {
   const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
   const url = `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`;
 
+  console.log(`[${reqId}] 🔮 LLM Request - System prompt: "${systemPrompt.substring(0, 100)}..." (${systemPrompt.length} chars)`);
+  console.log(`[${reqId}] 🔮 LLM Request - History length: ${conversationHistory.length} messages`);
+
   try {
     const response = await fetch(url, {
       method: 'POST',
