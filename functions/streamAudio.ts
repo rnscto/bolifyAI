@@ -673,7 +673,16 @@ Deno.serve(async (req) => {
           }
         } catch (e) {
           console.error(`[${reqId}] ❌ Call log lookup failed: ${e.message}`);
+          console.error(`[${reqId}] ❌ Error stack: ${e.stack}`);
         }
+
+        // Log final system prompt status
+        if (agentLoaded) {
+          console.log(`[${reqId}] ✅ Agent configuration loaded successfully`);
+        } else {
+          console.log(`[${reqId}] ⚠️ Using default system prompt (agent config not loaded)`);
+        }
+        console.log(`[${reqId}] 📝 Final system prompt length: ${session.systemPrompt.length} chars`);
 
         // Send welcome
         const welcome = 'Hello! How can I help you today?';
