@@ -18,7 +18,7 @@ const VAD_CONFIG = {
 };
 
 // Helper to get Base44 service role client with fallback
-function getBase44ServiceRoleClient(reqId, req = null) {
+function getBase44ServiceRoleClient(reqId) {
   const appId = Deno.env.get('BASE44_APP_ID');
   
   if (!appId) {
@@ -26,31 +26,20 @@ function getBase44ServiceRoleClient(reqId, req = null) {
     throw new Error('BASE44_APP_ID environment variable not set');
   }
 
-  // Try createClientFromRequest first (for standard auth)
-  if (req) {
-    try {
-      const base44 = createClientFromRequest(req);
-      console.log(`[${reqId}] ✅ Using createClientFromRequest`);
-      return base44.asServiceRole.entities;
-    } catch (err) {
-      console.log(`[${reqId}] ⚠️ createClientFromRequest failed, using fallback: ${err.message}`);
-    }
-  }
-
-  // Fallback: Use service role key (for Smartflo WebSocket connections)
+  // For WebSocket connections, use service role directly
   const serviceRoleKey = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
   if (!serviceRoleKey) {
     console.error(`[${reqId}] ❌ BASE44_SERVICE_ROLE_KEY not set`);
     throw new Error('BASE44_SERVICE_ROLE_KEY not set for service role access');
   }
 
-  console.log(`[${reqId}] 🔑 Using service role fallback`);
+  console.log(`[${reqId}] 🔑 Initializing service role client`);
   const client = createClient({
     appId: appId,
     serviceToken: serviceRoleKey
   });
   
-  return client.asServiceRole.entities;
+  return client.asServiceRole;
 }
 
 // Mu-law decoding
