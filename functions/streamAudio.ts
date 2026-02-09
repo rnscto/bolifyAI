@@ -20,14 +20,23 @@ const VAD_CONFIG = {
 // Helper to get Base44 service role client
 function getBase44ServiceRoleClient(reqId) {
   const appId = Deno.env.get('BASE44_APP_ID');
+  const serviceRoleKey = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
   
   if (!appId) {
     console.error(`[${reqId}] ❌ BASE44_APP_ID not set`);
     throw new Error('BASE44_APP_ID environment variable not set');
   }
 
-  console.log(`[${reqId}] 🔑 Initializing service role client`);
-  const client = createClient({ appId: appId });
+  if (!serviceRoleKey) {
+    console.error(`[${reqId}] ❌ BASE44_SERVICE_ROLE_KEY not set`);
+    throw new Error('BASE44_SERVICE_ROLE_KEY not set');
+  }
+
+  console.log(`[${reqId}] 🔑 Initializing service role client with app_id=${appId}`);
+  const client = createClient({ 
+    appId: appId,
+    serviceToken: serviceRoleKey
+  });
   
   return client.asServiceRole;
 }
