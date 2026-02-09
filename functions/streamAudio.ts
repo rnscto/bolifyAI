@@ -37,7 +37,7 @@ function getBase44ServiceRoleClient(reqId) {
   // Create client with service role key
   const client = createClient({ 
     appId: appId,
-    serviceRoleKey: serviceRoleKey
+    serviceToken: serviceRoleKey
   });
   
   console.log(`[${reqId}] ✅ Service role client created`);
