@@ -307,16 +307,15 @@ Deno.serve(async (req) => {
   let base44ServiceRole;
   try {
     const appId = Deno.env.get('BASE44_APP_ID');
-    const serviceToken = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
 
-    if (!appId || !serviceToken) {
-      console.error(`[${reqId}] ❌ Missing BASE44_APP_ID or BASE44_SERVICE_ROLE_KEY`);
+    if (!appId) {
+      console.error(`[${reqId}] ❌ Missing BASE44_APP_ID`);
       return new Response('Server configuration error', { status: 500 });
     }
 
-    console.log(`[${reqId}] 🔑 Creating service role client with serviceToken`);
-    base44ServiceRole = createClient({ appId, serviceToken });
-    console.log(`[${reqId}] ✅ Service role client ready`);
+    console.log(`[${reqId}] 🔑 Creating service role client`);
+    base44ServiceRole = createClient({ appId });
+    console.log(`[${reqId}] ✅ Service role client ready (automatic service role permissions)`);
   } catch (err) {
     console.error(`[${reqId}] ❌ Failed to create service role client: ${err.message}`);
     return new Response('Failed to initialize', { status: 500 });
