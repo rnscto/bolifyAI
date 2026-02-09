@@ -617,7 +617,7 @@ Deno.serve(async (req) => {
             // Fetch agent to get persona and custom system prompt
             if (session.agentId) {
               console.log(`[${reqId}] 🔎 Fetching agent ${session.agentId}`);
-              const agent = await base44Entities.Agent.get(session.agentId);
+              const agent = await base44.entities.Agent.get(session.agentId);
               if (agent) {
                 session.agentConfig = agent;
                 console.log(`[${reqId}] ✅ Agent name: ${agent.name}`);
