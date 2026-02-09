@@ -314,9 +314,8 @@ Deno.serve(async (req) => {
       return new Response('Server configuration error', { status: 500 });
     }
 
-    console.log(`[${reqId}] 🔑 Creating service role client`);
-    const client = createClient({ appId, serviceToken });
-    base44ServiceRole = client.asServiceRole;
+    console.log(`[${reqId}] 🔑 Creating service role client with serviceToken`);
+    base44ServiceRole = createClient({ appId, serviceToken });
     console.log(`[${reqId}] ✅ Service role client ready`);
   } catch (err) {
     console.error(`[${reqId}] ❌ Failed to create service role client: ${err.message}`);
