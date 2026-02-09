@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
+import { createClient } from 'npm:@base44/sdk@0.8.6';
 
 const STATE = {
   IDLE: 'IDLE',
@@ -282,17 +282,6 @@ Deno.serve(async (req) => {
 
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
 
-  // Initialize Base44 client BEFORE WebSocket upgrade
-  let db = null;
-
-  try {
-    const base44 = createClientFromRequest(req);
-    db = base44.asServiceRole.entities;
-    console.log(`[${reqId}] ✅ Base44 service role ready`);
-  } catch (err) {
-    console.error(`[${reqId}] ❌ Base44 init failed: ${err.message}`);
-  }
-
   // Return status for non-WebSocket requests
   if (!isWebSocket) {
     const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
@@ -303,13 +292,46 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       status: 'ready',
-      version: 'v5.3-base44-auto-servicetoken',
+      version: 'v5.3-smartflo',
       wss_url: wssUrl,
       info: 'Use the wss_url above to connect WebSocket from Smartflo'
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
-  // Upgrade WebSocket
+  // Initialize Base44 client BEFORE WebSocket upgrade
+  let db = null;
+
+  try {
+    const serviceRoleKey = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
+    const appId = Deno.env.get('BASE44_APP_ID');
+    
+    if (!serviceRoleKey) {
+      console.error(`[${reqId}] ❌ BASE44_SERVICE_ROLE_KEY not set`);
+      throw new Error('BASE44_SERVICE_ROLE_KEY not set');
+    }
+    if (!appId) {
+      console.error(`[${reqId}] ❌ BASE44_APP_ID not set`);
+      throw new Error('BASE44_APP_ID not set');
+    }
+
+    console.log(`[${reqId}] 🔧 Initializing Base44 client with appId: ${appId.substring(0, 8)}...`);
+
+    const base44 = createClient({
+      appId: appId,
+      serviceToken: serviceRoleKey
+    });
+    
+    db = base44.asServiceRole.entities;
+    console.log(`[${reqId}] ✅ Base44 service role ready`);
+  } catch (err) {
+    console.error(`[${reqId}] ❌ Base44 init failed: ${err.message}`);
+    return new Response(JSON.stringify({
+      error: 'Database initialization failed',
+      details: err.message
+    }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  }
+
+  // Now upgrade WebSocket
   let socket, response;
   try {
     const upgraded = Deno.upgradeWebSocket(req);
