@@ -17,6 +17,22 @@ const VAD_CONFIG = {
   BARGE_IN_CONSECUTIVE: 3
 };
 
+// Helper to get Base44 service role client
+function getBase44ServiceRoleClient(reqId) {
+  const serviceRoleKey = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
+  const appId = Deno.env.get('BASE44_APP_ID');
+
+  if (!serviceRoleKey || !appId) {
+    console.error(`[${reqId}] ❌ BASE44_SERVICE_ROLE_KEY or BASE44_APP_ID not set`);
+    throw new Error('Service role environment variables not set');
+  }
+
+  return createClient({
+    appId: appId,
+    serviceToken: serviceRoleKey
+  }).asServiceRole.entities;
+}
+
 // Mu-law decoding
 function decodeMulaw(mulawByte) {
   const MULAW_BIAS = 33;
@@ -252,14 +268,15 @@ async function sendTTSAudio(socket, session, reqId, text, markName) {
 
 // Save call record
 async function saveCallRecord(session, reqId, duration) {
-  if (!session.db || !session.callLogId) return;
+  if (!session.callLogId) return;
 
   try {
+    const base44Entities = getBase44ServiceRoleClient(reqId);
     const transcript = session.transcript
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    await session.db.CallLog.update(session.callLogId, {
+    await base44Entities.CallLog.update(session.callLogId, {
       status: 'completed',
       transcript: transcript,
       duration: duration,
@@ -292,43 +309,10 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       status: 'ready',
-      version: 'v5.3-smartflo',
+      version: 'v5.4-fixed-auth',
       wss_url: wssUrl,
       info: 'Use the wss_url above to connect WebSocket from Smartflo'
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
-  }
-
-  // Initialize Base44 client BEFORE WebSocket upgrade
-  let db = null;
-
-  try {
-    const serviceRoleKey = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
-    const appId = Deno.env.get('BASE44_APP_ID');
-    
-    if (!serviceRoleKey) {
-      console.error(`[${reqId}] ❌ BASE44_SERVICE_ROLE_KEY not set`);
-      throw new Error('BASE44_SERVICE_ROLE_KEY not set');
-    }
-    if (!appId) {
-      console.error(`[${reqId}] ❌ BASE44_APP_ID not set`);
-      throw new Error('BASE44_APP_ID not set');
-    }
-
-    console.log(`[${reqId}] 🔧 Initializing Base44 client with appId: ${appId.substring(0, 8)}...`);
-
-    const base44 = createClient({
-      appId: appId,
-      serviceToken: serviceRoleKey
-    });
-    
-    db = base44.asServiceRole.entities;
-    console.log(`[${reqId}] ✅ Base44 service role ready`);
-  } catch (err) {
-    console.error(`[${reqId}] ❌ Base44 init failed: ${err.message}`);
-    return new Response(JSON.stringify({
-      error: 'Database initialization failed',
-      details: err.message
-    }), { status: 500, headers: { 'Content-Type': 'application/json' } });
   }
 
   // Now upgrade WebSocket
@@ -351,7 +335,6 @@ Deno.serve(async (req) => {
     agentConfig: null,
     conversationHistory: [],
     transcript: [],
-    db: db,
     callLogId: null,
     speechBuffer: [],
     hasSpeechStarted: false,
@@ -610,47 +593,44 @@ Deno.serve(async (req) => {
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}`);
 
         // Fetch existing CallLog by call_sid to get agent info
-         if (session.db) {
-           try {
-             console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
-             const callLogs = await session.db.CallLog.filter({ call_sid: session.callSid });
-             console.log(`[${reqId}] 📋 Found ${callLogs.length} call logs`);
+        try {
+          const base44Entities = getBase44ServiceRoleClient(reqId);
+          console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
+          const callLogs = await base44Entities.CallLog.filter({ call_sid: session.callSid });
+          console.log(`[${reqId}] 📋 Found ${callLogs.length} call logs`);
 
-             if (callLogs.length > 0) {
-               const callLog = callLogs[0];
-               session.callLogId = callLog.id;
-               session.agentId = callLog.agent_id;
-               console.log(`[${reqId}] 📍 Call log ID: ${session.callLogId}, Agent ID: ${session.agentId}`);
+          if (callLogs.length > 0) {
+            const callLog = callLogs[0];
+            session.callLogId = callLog.id;
+            session.agentId = callLog.agent_id;
+            console.log(`[${reqId}] 📍 Call log ID: ${session.callLogId}, Agent ID: ${session.agentId}`);
 
-               // Fetch agent to get persona and custom system prompt
-               if (session.agentId) {
-                 console.log(`[${reqId}] 🔎 Fetching agent ${session.agentId}`);
-                 const agent = await session.db.Agent.get(session.agentId);
-                 if (agent) {
-                   session.agentConfig = agent;
-                   console.log(`[${reqId}] ✅ Agent name: ${agent.name}`);
-                   console.log(`[${reqId}] 📝 System prompt length: ${agent.system_prompt?.length || 0}`);
+            // Fetch agent to get persona and custom system prompt
+            if (session.agentId) {
+              console.log(`[${reqId}] 🔎 Fetching agent ${session.agentId}`);
+              const agent = await base44Entities.Agent.get(session.agentId);
+              if (agent) {
+                session.agentConfig = agent;
+                console.log(`[${reqId}] ✅ Agent name: ${agent.name}`);
+                console.log(`[${reqId}] 📝 System prompt length: ${agent.system_prompt?.length || 0}`);
 
-                   // Use agent's custom system prompt if available
-                   if (agent.system_prompt && agent.system_prompt.trim()) {
-                     session.systemPrompt = agent.system_prompt;
-                     console.log(`[${reqId}] ✅ Using custom system prompt for ${agent.name}`);
-                   } else {
-                     console.log(`[${reqId}] ⚠️ Agent has no custom system prompt`);
-                   }
-                 } else {
-                   console.log(`[${reqId}] ❌ Agent not found`);
-                 }
-               }
-             } else {
-               console.log(`[${reqId}] ❌ No call log found for call_sid: ${session.callSid}`);
-             }
-           } catch (e) {
-             console.error(`[${reqId}] ❌ Call log lookup failed: ${e.message}`);
-           }
-         } else {
-           console.log(`[${reqId}] ⚠️ Database not initialized`);
-         }
+                // Use agent's custom system prompt if available
+                if (agent.system_prompt && agent.system_prompt.trim()) {
+                  session.systemPrompt = agent.system_prompt;
+                  console.log(`[${reqId}] ✅ Using custom system prompt for ${agent.name}`);
+                } else {
+                  console.log(`[${reqId}] ⚠️ Agent has no custom system prompt`);
+                }
+              } else {
+                console.log(`[${reqId}] ❌ Agent not found`);
+              }
+            }
+          } else {
+            console.log(`[${reqId}] ❌ No call log found for call_sid: ${session.callSid}`);
+          }
+        } catch (e) {
+          console.error(`[${reqId}] ❌ Call log lookup failed: ${e.message}`);
+        }
 
         // Send welcome
         const welcome = 'Hello! How can I help you today?';
