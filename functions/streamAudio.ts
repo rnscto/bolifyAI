@@ -17,32 +17,7 @@ const VAD_CONFIG = {
   BARGE_IN_CONSECUTIVE: 3
 };
 
-// Helper to get Base44 service role client
-function getBase44ServiceRoleClient(reqId) {
-  const appId = Deno.env.get('BASE44_APP_ID');
-  const serviceRoleKey = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
-  
-  if (!appId) {
-    console.error(`[${reqId}] ❌ BASE44_APP_ID not set`);
-    throw new Error('BASE44_APP_ID environment variable not set');
-  }
 
-  if (!serviceRoleKey) {
-    console.error(`[${reqId}] ❌ BASE44_SERVICE_ROLE_KEY not set`);
-    throw new Error('BASE44_SERVICE_ROLE_KEY not set');
-  }
-
-  console.log(`[${reqId}] 🔑 Initializing service role client`);
-  
-  // Create client with service role key
-  const client = createClient({ 
-    appId: appId,
-    serviceToken: serviceRoleKey
-  });
-  
-  console.log(`[${reqId}] ✅ Service role client created`);
-  return client.asServiceRole;
-}
 
 // Mu-law decoding
 function decodeMulaw(mulawByte) {
