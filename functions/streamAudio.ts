@@ -315,7 +315,8 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[${reqId}] 🔑 Creating service role client`);
-    base44ServiceRole = createClient({ appId, serviceToken });
+    const client = createClient({ appId, serviceToken });
+    base44ServiceRole = client.asServiceRole;
     console.log(`[${reqId}] ✅ Service role client ready`);
   } catch (err) {
     console.error(`[${reqId}] ❌ Failed to create service role client: ${err.message}`);
