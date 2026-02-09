@@ -630,6 +630,34 @@ Deno.serve(async (req) => {
                 } else {
                   console.log(`[${reqId}] ⚠️ Agent has no custom system prompt`);
                 }
+
+                // Load knowledge base if available
+                if (agent.knowledge_base_ids && agent.knowledge_base_ids.length > 0) {
+                  console.log(`[${reqId}] 📚 Loading ${agent.knowledge_base_ids.length} knowledge base documents`);
+                  try {
+                    const kbDocs = [];
+                    for (const kbId of agent.knowledge_base_ids) {
+                      const doc = await base44.entities.KnowledgeBase.get(kbId);
+                      if (doc && doc.content) {
+                        kbDocs.push({
+                          title: doc.title,
+                          content: doc.content
+                        });
+                      }
+                    }
+                    
+                    if (kbDocs.length > 0) {
+                      const kbContext = kbDocs.map(doc => 
+                        `[${doc.title}]\n${doc.content}`
+                      ).join('\n\n---\n\n');
+                      
+                      session.systemPrompt = `${session.systemPrompt}\n\nKNOWLEDGE BASE:\n${kbContext}`;
+                      console.log(`[${reqId}] ✅ Added ${kbDocs.length} knowledge base documents to context`);
+                    }
+                  } catch (err) {
+                    console.error(`[${reqId}] ⚠️ Failed to load knowledge base: ${err.message}`);
+                  }
+                }
               } else {
                 console.log(`[${reqId}] ❌ Agent not found`);
               }
