@@ -329,6 +329,26 @@ Deno.serve(async (req) => {
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
+  // Create Base44 client with service role before upgrading WebSocket
+  let base44ServiceRole;
+  try {
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const serviceToken = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
+    
+    if (!appId || !serviceToken) {
+      console.error(`[${reqId}] ❌ Missing BASE44_APP_ID or BASE44_SERVICE_ROLE_KEY`);
+      return new Response('Server configuration error', { status: 500 });
+    }
+    
+    console.log(`[${reqId}] 🔑 Creating service role client`);
+    const client = createClient({ appId, serviceToken });
+    base44ServiceRole = client.asServiceRole;
+    console.log(`[${reqId}] ✅ Service role client ready`);
+  } catch (err) {
+    console.error(`[${reqId}] ❌ Failed to create service role client: ${err.message}`);
+    return new Response('Failed to initialize', { status: 500 });
+  }
+
   // Now upgrade WebSocket
   let socket, response;
   try {
