@@ -310,43 +310,51 @@ Deno.serve(async (req) => {
     return new Response('WebSocket upgrade failed', { status: 500 });
   }
 
-  // Initialize Base44 API access (direct HTTP calls)
-  const serviceToken = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
-  const appId = Deno.env.get('BASE44_APP_ID');
-  
-  if (!serviceToken) {
-    console.error(`[${reqId}] ❌ BASE44_SERVICE_ROLE_KEY not set`);
-  }
-  if (!appId) {
-    console.error(`[${reqId}] ❌ BASE44_APP_ID not set`);
-  }
-  
-  if (serviceToken && appId) {
-    console.log(`[${reqId}] ✅ Base44 API ready (direct HTTP mode)`);
+  // Initialize Base44 client (service role for database access)
+  let db = null;
+
+  try {
+    const serviceRoleKey = Deno.env.get('BASE44_SERVICE_ROLE_KEY');
+    const appId = Deno.env.get('BASE44_APP_ID');
+    
+    if (!serviceRoleKey) {
+      throw new Error('BASE44_SERVICE_ROLE_KEY not set');
+    }
+    if (!appId) {
+      throw new Error('BASE44_APP_ID not set');
+    }
+
+    const base44 = createClient({
+      appId: appId,
+      serviceToken: serviceRoleKey
+    });
+    db = base44.asServiceRole.entities;
+    console.log(`[${reqId}] ✅ Base44 service role ready`);
+  } catch (err) {
+    console.error(`[${reqId}] ❌ Base44 init failed: ${err.message}`);
   }
 
   // Session state
   const session = {
-  state: STATE.IDLE,
-  streamSid: null,
-  callSid: null,
-  agentConfig: null,
-  conversationHistory: [],
-  transcript: [],
-  callLogId: null,
-  speechBuffer: [],
-  hasSpeechStarted: false,
-  consecutiveSilentChunks: 0,
-  bargeInConsecutive: 0,
-  noSpeechTimer: null,
-  noSpeechCount: 0,
-  totalMediaReceived: 0,
-  pendingMarkName: null,
-  startTime: Date.now(),
-  systemPrompt: 'You are a friendly AI voice assistant. Be professional and concise. Keep responses to 1-3 sentences. Use only plain text, no emojis or special characters.',
-  agentId: null,
-  serviceToken: serviceToken,
-  appId: appId
+    state: STATE.IDLE,
+    streamSid: null,
+    callSid: null,
+    agentConfig: null,
+    conversationHistory: [],
+    transcript: [],
+    db: db,
+    callLogId: null,
+    speechBuffer: [],
+    hasSpeechStarted: false,
+    consecutiveSilentChunks: 0,
+    bargeInConsecutive: 0,
+    noSpeechTimer: null,
+    noSpeechCount: 0,
+    totalMediaReceived: 0,
+    pendingMarkName: null,
+    startTime: Date.now(),
+    systemPrompt: 'You are a friendly AI voice assistant. Be professional and concise. Keep responses to 1-3 sentences. Use only plain text, no emojis or special characters.',
+    agentId: null
   };
 
   function setState(newState) {
@@ -593,25 +601,10 @@ Deno.serve(async (req) => {
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}`);
 
         // Fetch existing CallLog by call_sid to get agent info
-         if (session.serviceToken && session.appId) {
+         if (session.db) {
            try {
              console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
-
-             // Direct HTTP call to Base44 API
-             const filterQuery = encodeURIComponent(JSON.stringify({ call_sid: session.callSid }));
-             const callLogsRes = await fetch(`https://api.base44.com/v1/apps/${session.appId}/entities/CallLog?filter=${filterQuery}`, {
-               method: 'GET',
-               headers: {
-                 'Authorization': `Bearer ${session.serviceToken}`
-               }
-             });
-
-             if (!callLogsRes.ok) {
-               console.error(`[${reqId}] ❌ Call log API error: ${callLogsRes.status}`);
-               return;
-             }
-
-             const callLogs = await callLogsRes.json();
+             const callLogs = await session.db.CallLog.filter({ call_sid: session.callSid });
              console.log(`[${reqId}] 📋 Found ${callLogs.length} call logs`);
 
              if (callLogs.length > 0) {
@@ -620,21 +613,16 @@ Deno.serve(async (req) => {
                session.agentId = callLog.agent_id;
                console.log(`[${reqId}] 📍 Call log ID: ${session.callLogId}, Agent ID: ${session.agentId}`);
 
-               // Fetch agent to get system prompt
+               // Fetch agent to get persona and custom system prompt
                if (session.agentId) {
                  console.log(`[${reqId}] 🔎 Fetching agent ${session.agentId}`);
-                 const agentRes = await fetch(`https://api.base44.com/v1/apps/${session.appId}/entities/Agent/${session.agentId}`, {
-                   headers: {
-                     'Authorization': `Bearer ${session.serviceToken}`
-                   }
-                 });
-
-                 if (agentRes.ok) {
-                   const agent = await agentRes.json();
+                 const agent = await session.db.Agent.get(session.agentId);
+                 if (agent) {
                    session.agentConfig = agent;
                    console.log(`[${reqId}] ✅ Agent name: ${agent.name}`);
                    console.log(`[${reqId}] 📝 System prompt length: ${agent.system_prompt?.length || 0}`);
 
+                   // Use agent's custom system prompt if available
                    if (agent.system_prompt && agent.system_prompt.trim()) {
                      session.systemPrompt = agent.system_prompt;
                      console.log(`[${reqId}] ✅ Using custom system prompt for ${agent.name}`);
@@ -642,7 +630,7 @@ Deno.serve(async (req) => {
                      console.log(`[${reqId}] ⚠️ Agent has no custom system prompt`);
                    }
                  } else {
-                   console.log(`[${reqId}] ❌ Agent fetch failed: ${agentRes.status}`);
+                   console.log(`[${reqId}] ❌ Agent not found`);
                  }
                }
              } else {
@@ -652,7 +640,7 @@ Deno.serve(async (req) => {
              console.error(`[${reqId}] ❌ Call log lookup failed: ${e.message}`);
            }
          } else {
-           console.log(`[${reqId}] ⚠️ Service token or app ID not set`);
+           console.log(`[${reqId}] ⚠️ Database not initialized`);
          }
 
         // Send welcome
