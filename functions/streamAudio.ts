@@ -598,13 +598,12 @@ Deno.serve(async (req) => {
              console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
 
              // Direct HTTP call to Base44 API
-             const callLogsRes = await fetch(`https://api.base44.com/v1/apps/${session.appId}/entities/CallLog/filter`, {
-               method: 'POST',
+             const filterQuery = encodeURIComponent(JSON.stringify({ call_sid: session.callSid }));
+             const callLogsRes = await fetch(`https://api.base44.com/v1/apps/${session.appId}/entities/CallLog?filter=${filterQuery}`, {
+               method: 'GET',
                headers: {
-                 'Authorization': `Bearer ${session.serviceToken}`,
-                 'Content-Type': 'application/json'
-               },
-               body: JSON.stringify({ call_sid: session.callSid })
+                 'Authorization': `Bearer ${session.serviceToken}`
+               }
              });
 
              if (!callLogsRes.ok) {
@@ -612,8 +611,7 @@ Deno.serve(async (req) => {
                return;
              }
 
-             const callLogsData = await callLogsRes.json();
-             const callLogs = callLogsData.data || [];
+             const callLogs = await callLogsRes.json();
              console.log(`[${reqId}] 📋 Found ${callLogs.length} call logs`);
 
              if (callLogs.length > 0) {
