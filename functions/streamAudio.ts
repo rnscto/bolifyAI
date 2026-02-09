@@ -424,7 +424,7 @@ Deno.serve(async (req) => {
         clearTimers();
         setState(STATE.IDLE);
         const duration = Math.round((Date.now() - session.startTime) / 1000);
-        await saveCallRecord(session, reqId, duration);
+        await saveCallRecord(session, reqId, duration, base44ServiceRole);
         return;
       }
 
