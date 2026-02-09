@@ -32,12 +32,15 @@ function getBase44ServiceRoleClient(reqId) {
     throw new Error('BASE44_SERVICE_ROLE_KEY not set');
   }
 
-  console.log(`[${reqId}] 🔑 Initializing service role client with app_id=${appId}`);
+  console.log(`[${reqId}] 🔑 Initializing service role client`);
+  
+  // Create client with service role key
   const client = createClient({ 
     appId: appId,
-    serviceToken: serviceRoleKey
+    serviceRoleKey: serviceRoleKey
   });
   
+  console.log(`[${reqId}] ✅ Service role client created`);
   return client.asServiceRole;
 }
 
