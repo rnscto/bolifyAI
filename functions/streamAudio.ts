@@ -663,7 +663,7 @@ Deno.serve(async (req) => {
                   try {
                     const kbDocs = [];
                     for (const kbId of agent.knowledge_base_ids) {
-                      const doc = await base44.entities.KnowledgeBase.get(kbId);
+                      const doc = await base44ServiceRole.entities.KnowledgeBase.get(kbId);
                       if (doc && doc.content) {
                         kbDocs.push({
                           title: doc.title,
