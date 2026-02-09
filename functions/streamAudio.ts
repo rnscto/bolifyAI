@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.6';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 const STATE = {
   IDLE: 'IDLE',
@@ -256,7 +256,7 @@ async function sendTTSAudio(socket, session, reqId, text, markName) {
 }
 
 // Save call record
-async function saveCallRecord(session, reqId, duration, base44ServiceRole) {
+async function saveCallRecord(session, reqId, duration) {
   if (!session.callLogId) return;
 
   try {
@@ -264,7 +264,7 @@ async function saveCallRecord(session, reqId, duration, base44ServiceRole) {
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    await base44ServiceRole.entities.CallLog.update(session.callLogId, {
+    await base44.asServiceRole.entities.CallLog.update(session.callLogId, {
       status: 'completed',
       transcript: transcript,
       duration: duration,
@@ -303,21 +303,14 @@ Deno.serve(async (req) => {
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
-  // Create Base44 client with service role before upgrading WebSocket
-  let base44ServiceRole;
+  // Create Base44 client from request
+  let base44;
   try {
-    const appId = Deno.env.get('BASE44_APP_ID');
-
-    if (!appId) {
-      console.error(`[${reqId}] ❌ Missing BASE44_APP_ID`);
-      return new Response('Server configuration error', { status: 500 });
-    }
-
-    console.log(`[${reqId}] 🔑 Creating service role client`);
-    base44ServiceRole = createClient({ appId });
-    console.log(`[${reqId}] ✅ Service role client ready (automatic service role permissions)`);
+    console.log(`[${reqId}] 🔑 Creating Base44 client`);
+    base44 = createClientFromRequest(req);
+    console.log(`[${reqId}] ✅ Base44 client ready (will use service role for entity access)`);
   } catch (err) {
-    console.error(`[${reqId}] ❌ Failed to create service role client: ${err.message}`);
+    console.error(`[${reqId}] ❌ Failed to create Base44 client: ${err.message}`);
     return new Response('Failed to initialize', { status: 500 });
   }
 
@@ -602,7 +595,7 @@ Deno.serve(async (req) => {
         let agentLoaded = false;
         try {
           console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
-          const callLogs = await base44ServiceRole.entities.CallLog.filter({ call_sid: session.callSid });
+          const callLogs = await base44.asServiceRole.entities.CallLog.filter({ call_sid: session.callSid });
           console.log(`[${reqId}] 📋 Found ${callLogs.length} call logs`);
 
           if (callLogs.length > 0) {
@@ -614,7 +607,7 @@ Deno.serve(async (req) => {
             // Fetch agent to get persona and custom system prompt
             if (session.agentId) {
               console.log(`[${reqId}] 🔎 Fetching agent ${session.agentId}`);
-              const agent = await base44ServiceRole.entities.Agent.get(session.agentId);
+              const agent = await base44.asServiceRole.entities.Agent.get(session.agentId);
               if (agent) {
                 session.agentConfig = agent;
                 console.log(`[${reqId}] ✅ Agent name: ${agent.name}`);
@@ -635,7 +628,7 @@ Deno.serve(async (req) => {
                   try {
                     const kbDocs = [];
                     for (const kbId of agent.knowledge_base_ids) {
-                      const doc = await base44ServiceRole.entities.KnowledgeBase.get(kbId);
+                      const doc = await base44.asServiceRole.entities.KnowledgeBase.get(kbId);
                       if (doc && doc.content) {
                         kbDocs.push({
                           title: doc.title,
@@ -720,7 +713,7 @@ Deno.serve(async (req) => {
         console.log(`[${reqId}] 📴 Stop event`);
         clearTimers();
         const duration = Math.round((Date.now() - session.startTime) / 1000);
-        await saveCallRecord(session, reqId, duration, base44ServiceRole);
+        await saveCallRecord(session, reqId, duration);
         return;
       }
     } catch (err) {
