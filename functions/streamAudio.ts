@@ -601,6 +601,7 @@ Deno.serve(async (req) => {
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}`);
 
         // Fetch existing CallLog by call_sid to get agent info
+        let agentLoaded = false;
         try {
           const base44 = getBase44ServiceRoleClient(reqId);
           console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
