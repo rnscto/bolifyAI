@@ -280,12 +280,12 @@ async function saveCallRecord(session, reqId, duration) {
   if (!session.callLogId) return;
 
   try {
-    const base44Entities = getBase44ServiceRoleClient(reqId);
+    const base44 = getBase44ServiceRoleClient(reqId);
     const transcript = session.transcript
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    await base44Entities.CallLog.update(session.callLogId, {
+    await base44.entities.CallLog.update(session.callLogId, {
       status: 'completed',
       transcript: transcript,
       duration: duration,
