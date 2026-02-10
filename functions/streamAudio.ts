@@ -604,10 +604,11 @@ Deno.serve(async (req) => {
         // Fetch agent config via internal backend function (has proper auth)
         let agentLoaded = false;
         try {
-          console.log(`[${reqId}] 🔍 Fetching agent config for call_sid: ${session.callSid}`);
+          console.log(`[${reqId}] 🔍 Fetching agent config for call_sid: ${session.callSid}, stream_sid: ${session.streamSid}`);
           
           const configResponse = await base44.functions.invoke('getAgentConfig', {
-            call_sid: session.callSid
+            call_sid: session.callSid,
+            stream_sid: session.streamSid
           });
           
           const configData = configResponse.data || configResponse;
