@@ -295,6 +295,7 @@ Deno.serve(async (req) => {
         console.log(`[${reqId}] ⚠️ No Base44-App-Id header on WS request, enriching from env`);
         const enrichedHeaders = new Headers(req.headers);
         enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
+        enrichedHeaders.set('Base44-Service-Token', Deno.env.get('BASE44_SERVICE_ROLE_KEY'));
         clientReq = new Request(req.url, {
           method: req.method,
           headers: enrichedHeaders
