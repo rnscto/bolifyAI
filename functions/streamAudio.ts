@@ -601,79 +601,48 @@ Deno.serve(async (req) => {
 
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}`);
 
-        // Fetch existing CallLog by call_sid to get agent info
+        // Fetch agent config via internal backend function (has proper auth)
         let agentLoaded = false;
         try {
-          console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
-          const callLogs = await base44.asServiceRole.entities.CallLog.filter({ call_sid: session.callSid });
-          console.log(`[${reqId}] 📋 Found ${callLogs.length} call logs`);
+          console.log(`[${reqId}] 🔍 Fetching agent config for call_sid: ${session.callSid}`);
+          
+          const configResponse = await base44.functions.invoke('getAgentConfig', {
+            call_sid: session.callSid
+          });
+          
+          const configData = configResponse.data || configResponse;
+          console.log(`[${reqId}] 📋 Agent config response: success=${configData.success}`);
 
-          if (callLogs.length > 0) {
-            const callLog = callLogs[0];
-            session.callLogId = callLog.id;
-            session.agentId = callLog.agent_id;
-            console.log(`[${reqId}] 📍 Call log ID: ${session.callLogId}, Agent ID: ${session.agentId}`);
+          if (configData.success && configData.agent) {
+            session.callLogId = configData.callLogId;
+            session.agentId = configData.agent.id;
+            session.agentConfig = configData.agent;
+            console.log(`[${reqId}] 📍 Call log ID: ${session.callLogId}, Agent: ${configData.agent.name}`);
 
-            // Fetch agent to get persona and custom system prompt
-            if (session.agentId) {
-              console.log(`[${reqId}] 🔎 Fetching agent ${session.agentId}`);
-              const agent = await base44.asServiceRole.entities.Agent.get(session.agentId);
-              if (agent) {
-                session.agentConfig = agent;
-                console.log(`[${reqId}] ✅ Agent name: ${agent.name}`);
-                console.log(`[${reqId}] 📝 System prompt length: ${agent.system_prompt?.length || 0}`);
+            // Use agent's custom system prompt
+            if (configData.agent.system_prompt && configData.agent.system_prompt.trim()) {
+              session.systemPrompt = configData.agent.system_prompt;
+              console.log(`[${reqId}] ✅ Using custom system prompt (${session.systemPrompt.length} chars)`);
+            }
 
-                // Use agent's custom system prompt if available
-                if (agent.system_prompt && agent.system_prompt.trim()) {
-                  session.systemPrompt = agent.system_prompt;
-                  console.log(`[${reqId}] ✅ Using custom system prompt for ${agent.name}`);
-                  console.log(`[${reqId}] 📋 System prompt: "${session.systemPrompt.substring(0, 100)}..."`);
-                } else {
-                  console.log(`[${reqId}] ⚠️ Agent has no custom system prompt`);
-                }
-
-                // Load knowledge base if available
-                if (agent.knowledge_base_ids && agent.knowledge_base_ids.length > 0) {
-                  console.log(`[${reqId}] 📚 Loading ${agent.knowledge_base_ids.length} knowledge base documents`);
-                  try {
-                    const kbDocs = [];
-                    for (const kbId of agent.knowledge_base_ids) {
-                      const doc = await base44.asServiceRole.entities.KnowledgeBase.get(kbId);
-                      if (doc && doc.content) {
-                        kbDocs.push({
-                          title: doc.title,
-                          content: doc.content
-                        });
-                        console.log(`[${reqId}] 📄 Loaded KB: ${doc.title} (${doc.content.length} chars)`);
-                      }
-                    }
-                    
-                    if (kbDocs.length > 0) {
-                      const kbContext = kbDocs.map(doc => 
-                        `[${doc.title}]\n${doc.content}`
-                      ).join('\n\n---\n\n');
-                      
-                      session.systemPrompt = `${session.systemPrompt}\n\nKNOWLEDGE BASE:\n${kbContext}`;
-                      console.log(`[${reqId}] ✅ Added ${kbDocs.length} knowledge base documents to context (total: ${session.systemPrompt.length} chars)`);
-                      agentLoaded = true;
-                    }
-                  } catch (err) {
-                    console.error(`[${reqId}] ⚠️ Failed to load knowledge base: ${err.message}`);
-                  }
-                } else {
-                  agentLoaded = true;
-                  console.log(`[${reqId}] ℹ️ No knowledge base configured for agent`);
-                }
-              } else {
-                console.log(`[${reqId}] ❌ Agent not found`);
-              }
+            // Add knowledge base to system prompt
+            if (configData.knowledgeDocs && configData.knowledgeDocs.length > 0) {
+              const kbContext = configData.knowledgeDocs.map(doc => 
+                `[${doc.title}]\n${doc.content}`
+              ).join('\n\n---\n\n');
+              
+              session.systemPrompt = `${session.systemPrompt}\n\nKNOWLEDGE BASE:\n${kbContext}`;
+              console.log(`[${reqId}] ✅ Added ${configData.knowledgeDocs.length} KB docs (total: ${session.systemPrompt.length} chars)`);
+              agentLoaded = true;
+            } else {
+              agentLoaded = true;
+              console.log(`[${reqId}] ℹ️ No knowledge base documents`);
             }
           } else {
-            console.log(`[${reqId}] ❌ No call log found for call_sid: ${session.callSid}`);
+            console.log(`[${reqId}] ❌ Agent config not found: ${configData.error || 'unknown'}`);
           }
         } catch (e) {
-          console.error(`[${reqId}] ❌ Call log lookup failed: ${e.message}`);
-          console.error(`[${reqId}] ❌ Error stack: ${e.stack}`);
+          console.error(`[${reqId}] ❌ Agent config lookup failed: ${e.message}`);
         }
 
         // Log final system prompt status
