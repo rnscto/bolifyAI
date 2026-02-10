@@ -255,23 +255,35 @@ async function sendTTSAudio(socket, session, reqId, text, markName) {
   }
 }
 
-// Save call record
+// Save call record via internal function call
 async function saveCallRecord(session, reqId, duration, base44Client) {
-  if (!session.callLogId || !base44Client) return;
+  if (!session.callLogId || !base44Client?._funcBaseUrl) return;
 
   try {
     const transcript = session.transcript
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    await base44Client.asServiceRole.entities.CallLog.update(session.callLogId, {
-      status: 'completed',
-      transcript: transcript,
-      duration: duration,
-      call_end_time: new Date().toISOString()
+    const response = await fetch(`${base44Client._funcBaseUrl}/updateCallLog`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...base44Client._authHeaders
+      },
+      body: JSON.stringify({
+        call_log_id: session.callLogId,
+        status: 'completed',
+        transcript: transcript,
+        duration: duration,
+        call_end_time: new Date().toISOString()
+      })
     });
 
-    console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}`);
+    if (response.ok) {
+      console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}`);
+    } else {
+      console.error(`[${reqId}] ❌ Save failed: ${response.status}`);
+    }
   } catch (err) {
     console.error(`[${reqId}] ❌ Save failed:`, err.message);
   }
