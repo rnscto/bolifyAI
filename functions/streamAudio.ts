@@ -271,8 +271,10 @@ async function saveCallRecord(session, reqId, duration, base44Client) {
 Deno.serve(async (req) => {
   const reqId = Math.random().toString(36).substring(2, 10);
 
-  // Create Base44 client — gateway injects service token automatically
-  const base44 = createClientFromRequest(req);
+  // Create Base44 client with explicit apiUrl for webhook/external calls
+  const base44 = createClientFromRequest(req, {
+    apiUrl: 'https://app.base44.com'
+  });
 
   const upgrade = (req.headers.get('upgrade') || '').toLowerCase();
   const isWebSocket = upgrade === 'websocket';
