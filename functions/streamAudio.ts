@@ -17,8 +17,6 @@ const VAD_CONFIG = {
   BARGE_IN_CONSECUTIVE: 3
 };
 
-
-
 // Mu-law decoding
 function decodeMulaw(mulawByte) {
   const MULAW_BIAS = 33;
@@ -118,14 +116,14 @@ async function transcribeAudio(reqId, wavBuffer) {
     if (response.ok) {
       const result = await response.json();
       const text = result.DisplayText || (result.NBest?.[0]?.Display) || '';
-      console.log(`[${reqId}] ✅ STT: "${text.substring(0, 100)}"`);
+      console.log(`[${reqId}] STT: "${text.substring(0, 100)}"`);
       return text;
     }
 
-    console.error(`[${reqId}] ❌ STT failed: ${response.status}`);
+    console.error(`[${reqId}] STT failed: ${response.status}`);
     return '';
   } catch (err) {
-    console.error(`[${reqId}] ❌ STT error:`, err.message);
+    console.error(`[${reqId}] STT error:`, err.message);
     return '';
   }
 }
@@ -134,9 +132,6 @@ async function transcribeAudio(reqId, wavBuffer) {
 async function generateResponse(reqId, conversationHistory, systemPrompt) {
   const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
   const url = `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`;
-
-  console.log(`[${reqId}] 🔮 LLM Request - System prompt: "${systemPrompt.substring(0, 100)}..." (${systemPrompt.length} chars)`);
-  console.log(`[${reqId}] 🔮 LLM Request - History length: ${conversationHistory.length} messages`);
 
   try {
     const response = await fetch(url, {
@@ -155,14 +150,13 @@ async function generateResponse(reqId, conversationHistory, systemPrompt) {
     });
 
     if (!response.ok) {
-      console.error(`[${reqId}] ❌ LLM failed: ${response.status}`);
+      console.error(`[${reqId}] LLM failed: ${response.status}`);
       return 'Sorry, please say that again.';
     }
 
     const data = await response.json();
     const text = data.choices?.[0]?.message?.content || '';
     
-    // Strip non-TTS-safe characters
     return text
       .replace(/[\u{1F600}-\u{1F64F}]/gu, '')
       .replace(/[\u{1F300}-\u{1F5FF}]/gu, '')
@@ -170,7 +164,7 @@ async function generateResponse(reqId, conversationHistory, systemPrompt) {
       .replace(/\s{2,}/g, ' ')
       .trim() || 'Sorry, please say that again.';
   } catch (err) {
-    console.error(`[${reqId}] ❌ LLM error:`, err.message);
+    console.error(`[${reqId}] LLM error:`, err.message);
     return 'Sorry, please say that again.';
   }
 }
@@ -178,7 +172,7 @@ async function generateResponse(reqId, conversationHistory, systemPrompt) {
 // Send TTS audio via WebSocket
 async function sendTTSAudio(socket, session, reqId, text, markName) {
   if (socket.readyState !== WebSocket.OPEN) {
-    console.error(`[${reqId}] ❌ Socket not open for TTS`);
+    console.error(`[${reqId}] Socket not open for TTS`);
     return false;
   }
 
@@ -200,20 +194,18 @@ async function sendTTSAudio(socket, session, reqId, text, markName) {
     });
 
     if (!response.ok) {
-      console.error(`[${reqId}] ❌ TTS failed: ${response.status}`);
+      console.error(`[${reqId}] TTS failed: ${response.status}`);
       return false;
     }
 
     const pcmBuffer = await response.arrayBuffer();
     const pcmSamples = new Int16Array(pcmBuffer);
 
-    // Convert PCM 16-bit → mu-law 8-bit
     const mulawData = new Uint8Array(pcmSamples.length);
     for (let i = 0; i < pcmSamples.length; i++) {
       mulawData[i] = encodeMulaw(pcmSamples[i]);
     }
 
-    // Send in 800-byte chunks (100ms @ 8kHz)
     const CHUNK_SIZE = 800;
     for (let i = 0; i < mulawData.length; i += CHUNK_SIZE) {
       if (socket.readyState !== WebSocket.OPEN) return false;
@@ -221,7 +213,6 @@ async function sendTTSAudio(socket, session, reqId, text, markName) {
       const end = Math.min(i + CHUNK_SIZE, mulawData.length);
       let chunk = mulawData.slice(i, end);
 
-      // Pad to multiple of 160
       if (chunk.length % 160 !== 0) {
         const paddedLen = Math.ceil(chunk.length / 160) * 160;
         const padded = new Uint8Array(paddedLen);
@@ -238,7 +229,6 @@ async function sendTTSAudio(socket, session, reqId, text, markName) {
       }));
     }
 
-    // Send mark when done
     if (socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify({
         event: 'mark',
@@ -247,10 +237,10 @@ async function sendTTSAudio(socket, session, reqId, text, markName) {
       }));
     }
 
-    console.log(`[${reqId}] 📤 TTS sent: ${pcmSamples.length} samples`);
+    console.log(`[${reqId}] TTS sent: ${pcmSamples.length} samples`);
     return true;
   } catch (err) {
-    console.error(`[${reqId}] ❌ TTS error:`, err.message);
+    console.error(`[${reqId}] TTS error:`, err.message);
     return false;
   }
 }
@@ -271,70 +261,46 @@ async function saveCallRecord(session, reqId, duration, base44Client) {
       call_end_time: new Date().toISOString()
     });
 
-    console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}`);
+    console.log(`[${reqId}] Call saved: ${session.callLogId}`);
   } catch (err) {
-    console.error(`[${reqId}] ❌ Save failed:`, err.message);
+    console.error(`[${reqId}] Save failed:`, err.message);
   }
 }
 
-// Main WebSocket handler
+// Main handler
 Deno.serve(async (req) => {
   const reqId = Math.random().toString(36).substring(2, 10);
 
-  // Log request
+  // Create Base44 client — gateway injects service token automatically
+  const base44 = createClientFromRequest(req);
+
   const upgrade = (req.headers.get('upgrade') || '').toLowerCase();
   const isWebSocket = upgrade === 'websocket';
 
-  // Diagnostic: log headers to verify routing
-  const incomingHost = req.headers.get('host') || 'no-host';
-  const hasAppId = req.headers.has('Base44-App-Id');
-  const hasServiceToken = req.headers.has('Base44-Service-Token');
-  const forwardedHost = req.headers.get('x-forwarded-host') || 'none';
-  console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
-  console.log(`[${reqId}] 🔍 HEADERS: host=${incomingHost}, x-forwarded-host=${forwardedHost}, Base44-App-Id=${hasAppId}, Base44-Service-Token=${hasServiceToken}`);
+  console.log(`[${reqId}] ${req.method} ws=${isWebSocket}`);
 
-  // For non-WebSocket requests, return status info
+  // Non-WebSocket: return status
   if (!isWebSocket) {
-    const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
-    const protocol = req.headers.get('x-forwarded-proto') === 'https' ? 'wss' : 'ws';
-    const wssUrl = `${protocol}://${host}/functions/streamAudio`;
-    console.log(`[${reqId}] 📡 WebSocket URL: ${wssUrl}`);
     return new Response(JSON.stringify({
       status: 'ready',
-      version: 'v5.8-ws-first',
-      wss_url: wssUrl,
-      info: 'Use the wss_url above to connect WebSocket from Smartflo'
+      version: 'v6.0-gateway',
+      info: 'Connect via Base44 gateway URL'
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
-  // CRITICAL: Upgrade WebSocket FIRST before any other async work
+  // Upgrade WebSocket FIRST
   let socket, response;
   try {
     const upgraded = Deno.upgradeWebSocket(req);
     socket = upgraded.socket;
     response = upgraded.response;
-    console.log(`[${reqId}] ✅ WebSocket upgraded`);
+    console.log(`[${reqId}] WebSocket upgraded`);
   } catch (err) {
-    console.error(`[${reqId}] ❌ Upgrade failed: ${err.message}`);
+    console.error(`[${reqId}] Upgrade failed: ${err.message}`);
     return new Response('WebSocket upgrade failed', { status: 500 });
   }
 
-  // Create Base44 client using env vars (WebSocket connections bypass the gateway,
-  // so we must provide Base44-App-Id and Base44-Service-Token from environment)
-  let base44 = null;
-  try {
-    const enrichedHeaders = new Headers();
-    enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
-    enrichedHeaders.set('Base44-Service-Token', Deno.env.get('BASE44_SERVICE_ROLE_KEY'));
-    const clientReq = new Request('https://localhost/ws', { method: 'GET', headers: enrichedHeaders });
-    base44 = createClientFromRequest(clientReq);
-    console.log(`[${reqId}] ✅ Base44 client created from env vars`);
-  } catch (err) {
-    console.error(`[${reqId}] ❌ Base44 client creation failed: ${err.message}`);
-    base44 = null;
-  }
-
-      // Session state
+  // Session state
   const session = {
     state: STATE.IDLE,
     streamSid: null,
@@ -357,7 +323,7 @@ Deno.serve(async (req) => {
   };
 
   function setState(newState) {
-    console.log(`[${reqId}] 🔄 ${session.state} → ${newState}`);
+    console.log(`[${reqId}] ${session.state} -> ${newState}`);
     session.state = newState;
   }
 
@@ -382,7 +348,7 @@ Deno.serve(async (req) => {
     session.noSpeechTimer = setTimeout(async () => {
       if (session.state !== STATE.LISTENING) return;
       session.noSpeechCount++;
-      console.log(`[${reqId}] 🔇 No speech timeout #${session.noSpeechCount}`);
+      console.log(`[${reqId}] No speech timeout #${session.noSpeechCount}`);
 
       if (socket.readyState !== WebSocket.OPEN) {
         clearTimers();
@@ -415,7 +381,7 @@ Deno.serve(async (req) => {
 
     if (isSpeech) {
       if (!session.hasSpeechStarted) {
-        console.log(`[${reqId}] 🗣️ Speech onset (rms=${rms.toFixed(0)})`);
+        console.log(`[${reqId}] Speech onset (rms=${rms.toFixed(0)})`);
         session.hasSpeechStarted = true;
         clearTimers();
       }
@@ -427,7 +393,7 @@ Deno.serve(async (req) => {
 
       if (session.consecutiveSilentChunks >= VAD_CONFIG.SILENCE_CHUNKS_FOR_END) {
         const speechChunks = session.speechBuffer.length - session.consecutiveSilentChunks;
-        console.log(`[${reqId}] 🔇 Speech ended: ${speechChunks} chunks`);
+        console.log(`[${reqId}] Speech ended: ${speechChunks} chunks`);
 
         if (speechChunks >= VAD_CONFIG.MIN_SPEECH_CHUNKS) {
           processUserAudio();
@@ -446,7 +412,7 @@ Deno.serve(async (req) => {
     if (rms >= VAD_CONFIG.BARGE_IN_THRESHOLD) {
       session.bargeInConsecutive++;
       if (session.bargeInConsecutive >= VAD_CONFIG.BARGE_IN_CONSECUTIVE) {
-        console.log(`[${reqId}] 🛑 Barge-in detected`);
+        console.log(`[${reqId}] Barge-in detected`);
         if (socket.readyState === WebSocket.OPEN) {
           socket.send(JSON.stringify({
             event: 'clear',
@@ -491,10 +457,9 @@ Deno.serve(async (req) => {
       return;
     }
 
-    // Mark timeout fallback (30s)
     setTimeout(() => {
       if (session.state === STATE.SPEAKING && session.pendingMarkName === markName) {
-        console.log(`[${reqId}] ⏱️ Mark timeout, forcing listening`);
+        console.log(`[${reqId}] Mark timeout, forcing listening`);
         session.pendingMarkName = null;
         transitionToListening();
       }
@@ -513,7 +478,6 @@ Deno.serve(async (req) => {
     session.consecutiveSilentChunks = 0;
 
     try {
-      // Combine mu-law bytes to PCM
       const totalBytes = audioChunks.reduce((sum, c) => sum + c.length, 0);
       const allMulaw = new Uint8Array(totalBytes);
       let offset = 0;
@@ -527,39 +491,36 @@ Deno.serve(async (req) => {
         pcmSamples[i] = decodeMulaw(allMulaw[i]);
       }
 
-      // Audio stats
       let sumSq = 0;
       for (let i = 0; i < pcmSamples.length; i++) {
         sumSq += pcmSamples[i] * pcmSamples[i];
       }
       const rms = Math.sqrt(sumSq / pcmSamples.length);
-      console.log(`[${reqId}] 🔊 Audio: ${pcmSamples.length} samples, rms=${rms.toFixed(0)}`);
+      console.log(`[${reqId}] Audio: ${pcmSamples.length} samples, rms=${rms.toFixed(0)}`);
 
       if (rms < 80) {
-        console.log(`[${reqId}] 🔇 Too quiet`);
+        console.log(`[${reqId}] Too quiet`);
         transitionToListening();
         return;
       }
 
-      // Transcribe
       const wavBuffer = createWavBuffer(pcmSamples, 8000);
       const customerText = await transcribeAudio(reqId, wavBuffer);
 
       if (customerText?.trim()) {
-        console.log(`[${reqId}] 🗣️ Customer: "${customerText}"`);
+        console.log(`[${reqId}] Customer: "${customerText}"`);
         session.transcript.push({ speaker: 'Customer', text: customerText });
         session.conversationHistory.push({ role: 'user', content: customerText });
         session.noSpeechCount = 0;
 
-        // Get LLM response
         const aiResponse = await generateResponse(reqId, session.conversationHistory, session.systemPrompt);
-        console.log(`[${reqId}] 🤖 AI: "${aiResponse}"`);
+        console.log(`[${reqId}] AI: "${aiResponse}"`);
         session.transcript.push({ speaker: 'AI', text: aiResponse });
         session.conversationHistory.push({ role: 'assistant', content: aiResponse });
 
         await startSpeaking(aiResponse);
       } else {
-        console.log(`[${reqId}] 🔇 STT empty`);
+        console.log(`[${reqId}] STT empty`);
         session.noSpeechCount++;
         if (session.noSpeechCount >= 3) {
           const prompt = 'I could not hear you clearly. Please try again.';
@@ -572,14 +533,14 @@ Deno.serve(async (req) => {
         }
       }
     } catch (err) {
-      console.error(`[${reqId}] ❌ Processing error: ${err.message}`);
+      console.error(`[${reqId}] Processing error: ${err.message}`);
       transitionToListening();
     }
   }
 
   // WebSocket handlers
   socket.onopen = () => {
-    console.log(`[${reqId}] 🟢 Socket opened`);
+    console.log(`[${reqId}] Socket opened`);
   };
 
   socket.onmessage = async (event) => {
@@ -588,7 +549,7 @@ Deno.serve(async (req) => {
       const eventType = msg.event;
 
       if (eventType === 'connected') {
-        console.log(`[${reqId}] ✅ Connected event`);
+        console.log(`[${reqId}] Connected event`);
         return;
       }
 
@@ -597,103 +558,64 @@ Deno.serve(async (req) => {
         session.streamSid = startData.streamSid;
         session.callSid = startData.callSid;
 
-        console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}`);
+        console.log(`[${reqId}] Call start: stream=${session.streamSid}, call=${session.callSid}`);
 
-        // Fetch agent config directly using service role
+        // Fetch agent config using service role
         let agentLoaded = false;
         try {
-          if (!base44) {
-            console.log(`[${reqId}] ❌ No base44 client, skipping agent config`);
-            throw new Error('No base44 client available');
-          }
-          console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
+          console.log(`[${reqId}] Looking up call_sid: ${session.callSid}`);
           
-          // Look up call log directly
           const callLogs = await base44.asServiceRole.entities.CallLog.filter({ call_sid: session.callSid });
-          console.log(`[${reqId}] 📋 Found ${callLogs.length} call logs`);
-
-          let configData = { success: false, agent: null, callLogId: null, knowledgeDocs: [] };
+          console.log(`[${reqId}] Found ${callLogs.length} call logs`);
 
           if (callLogs.length > 0) {
             const callLog = callLogs[0];
-            configData.callLogId = callLog.id;
+            session.callLogId = callLog.id;
 
             if (callLog.agent_id) {
               const agent = await base44.asServiceRole.entities.Agent.get(callLog.agent_id);
               if (agent) {
-                configData.success = true;
-                configData.agent = {
-                  id: agent.id,
-                  name: agent.name,
-                  system_prompt: agent.system_prompt || '',
-                  persona: agent.persona || {},
-                  knowledge_base_ids: agent.knowledge_base_ids || []
-                };
+                session.agentId = agent.id;
+                session.agentConfig = agent;
+                console.log(`[${reqId}] Agent: ${agent.name}`);
 
-                // Load knowledge base documents
+                if (agent.system_prompt && agent.system_prompt.trim()) {
+                  session.systemPrompt = agent.system_prompt;
+                  console.log(`[${reqId}] Custom system prompt (${session.systemPrompt.length} chars)`);
+                }
+
+                // Load knowledge base
                 if (agent.knowledge_base_ids && agent.knowledge_base_ids.length > 0) {
+                  const kbDocs = [];
                   for (const kbId of agent.knowledge_base_ids) {
                     try {
                       const doc = await base44.asServiceRole.entities.KnowledgeBase.get(kbId);
                       if (doc && doc.content) {
-                        configData.knowledgeDocs.push({ title: doc.title, content: doc.content });
+                        kbDocs.push(`[${doc.title}]\n${doc.content}`);
                       }
                     } catch (kbErr) {
-                      console.error(`[${reqId}] ⚠️ Failed to load KB doc ${kbId}: ${kbErr.message}`);
+                      console.error(`[${reqId}] KB doc ${kbId} failed: ${kbErr.message}`);
                     }
                   }
+                  if (kbDocs.length > 0) {
+                    session.systemPrompt = `${session.systemPrompt}\n\nKNOWLEDGE BASE:\n${kbDocs.join('\n\n---\n\n')}`;
+                    console.log(`[${reqId}] Added ${kbDocs.length} KB docs`);
+                  }
                 }
+                agentLoaded = true;
               }
             }
           }
-          
-          console.log(`[${reqId}] 📋 Agent config: success=${configData.success}`);
-
-          if (configData.success && configData.agent) {
-            session.callLogId = configData.callLogId;
-            session.agentId = configData.agent.id;
-            session.agentConfig = configData.agent;
-            console.log(`[${reqId}] 📍 Call log ID: ${session.callLogId}, Agent: ${configData.agent.name}`);
-
-            // Use agent's custom system prompt
-            if (configData.agent.system_prompt && configData.agent.system_prompt.trim()) {
-              session.systemPrompt = configData.agent.system_prompt;
-              console.log(`[${reqId}] ✅ Using custom system prompt (${session.systemPrompt.length} chars)`);
-            }
-
-            // Add knowledge base to system prompt
-            if (configData.knowledgeDocs && configData.knowledgeDocs.length > 0) {
-              const kbContext = configData.knowledgeDocs.map(doc => 
-                `[${doc.title}]\n${doc.content}`
-              ).join('\n\n---\n\n');
-              
-              session.systemPrompt = `${session.systemPrompt}\n\nKNOWLEDGE BASE:\n${kbContext}`;
-              console.log(`[${reqId}] ✅ Added ${configData.knowledgeDocs.length} KB docs (total: ${session.systemPrompt.length} chars)`);
-              agentLoaded = true;
-            } else {
-              agentLoaded = true;
-              console.log(`[${reqId}] ℹ️ No knowledge base documents`);
-            }
-          } else {
-            console.log(`[${reqId}] ❌ Agent config not found: ${configData.error || 'unknown'}`);
-          }
         } catch (e) {
-          console.error(`[${reqId}] ❌ Agent config lookup failed: ${e.message}`);
+          console.error(`[${reqId}] Agent config failed: ${e.message}`);
         }
 
-        // Log final system prompt status
-        if (agentLoaded) {
-          console.log(`[${reqId}] ✅ Agent configuration loaded successfully`);
-        } else {
-          console.log(`[${reqId}] ⚠️ Using default system prompt (agent config not loaded)`);
-        }
-        console.log(`[${reqId}] 📝 Final system prompt length: ${session.systemPrompt.length} chars`);
+        console.log(`[${reqId}] Agent loaded: ${agentLoaded}, prompt length: ${session.systemPrompt.length}`);
 
         // Send welcome
         const welcome = 'Hello! How can I help you today?';
         session.conversationHistory.push({ role: 'assistant', content: welcome });
         session.transcript.push({ speaker: 'AI', text: welcome });
-
         await startSpeaking(welcome);
         return;
       }
@@ -717,7 +639,7 @@ Deno.serve(async (req) => {
 
       if (eventType === 'mark' && msg.mark?.name) {
         if (session.state === STATE.SPEAKING && msg.mark.name === session.pendingMarkName) {
-          console.log(`[${reqId}] ✅ Mark confirmed`);
+          console.log(`[${reqId}] Mark confirmed`);
           session.pendingMarkName = null;
           transitionToListening();
         }
@@ -725,27 +647,27 @@ Deno.serve(async (req) => {
       }
 
       if (eventType === 'stop') {
-        console.log(`[${reqId}] 📴 Stop event`);
+        console.log(`[${reqId}] Stop event`);
         clearTimers();
         const duration = Math.round((Date.now() - session.startTime) / 1000);
         await saveCallRecord(session, reqId, duration, base44);
         return;
       }
     } catch (err) {
-      console.error(`[${reqId}] ❌ Message error: ${err.message}`);
+      console.error(`[${reqId}] Message error: ${err.message}`);
     }
   };
 
   socket.onclose = () => {
     clearTimers();
     session.state = STATE.IDLE;
-    console.log(`[${reqId}] 🔴 Socket closed`);
+    console.log(`[${reqId}] Socket closed`);
   };
 
   socket.onerror = () => {
     clearTimers();
     session.state = STATE.IDLE;
-    console.error(`[${reqId}] ❌ Socket error`);
+    console.error(`[${reqId}] Socket error`);
   };
 
   return response;
