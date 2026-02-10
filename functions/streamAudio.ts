@@ -260,6 +260,7 @@ async function saveCallRecord(session, reqId, duration) {
   if (!session.callLogId) return;
 
   try {
+    const base44 = getBase44Client();
     const transcript = session.transcript
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
@@ -287,11 +288,6 @@ Deno.serve(async (req) => {
 
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
 
-  // Create Base44 client BEFORE any branching (Base44 injects service token)
-  console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
-  const base44 = createClientFromRequest(req);
-  console.log(`[${reqId}] ✅ Base44 client ready`);
-
   // Return status for non-WebSocket requests
   if (!isWebSocket) {
     const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
@@ -318,9 +314,21 @@ Deno.serve(async (req) => {
     } catch (err) {
       console.error(`[${reqId}] ❌ Upgrade failed: ${err.message}`);
       return new Response('WebSocket upgrade failed', { status: 500 });
-    }
+      }
 
-  // Session state
+      // Create Base44 client AFTER WebSocket upgrade (Base44 injects service token)
+      // Don't create it during the upgrade request itself
+      let base44Client = null;
+      const getBase44Client = () => {
+      if (!base44Client) {
+      console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
+      base44Client = createClientFromRequest(req);
+      console.log(`[${reqId}] ✅ Base44 client ready`);
+      }
+      return base44Client;
+      };
+
+      // Session state
   const session = {
     state: STATE.IDLE,
     streamSid: null,
@@ -588,6 +596,7 @@ Deno.serve(async (req) => {
         // Fetch existing CallLog by call_sid to get agent info
         let agentLoaded = false;
         try {
+          const base44 = getBase44Client();
           console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
           const callLogs = await base44.asServiceRole.entities.CallLog.filter({ call_sid: session.callSid });
           console.log(`[${reqId}] 📋 Found ${callLogs.length} call logs`);
