@@ -645,8 +645,7 @@ Deno.serve(async (req) => {
             }
           }
           
-          const configData = configResponse.data || configResponse;
-          console.log(`[${reqId}] 📋 Agent config response: success=${configData.success}`);
+          console.log(`[${reqId}] 📋 Agent config: success=${configData.success}`);
 
           if (configData.success && configData.agent) {
             session.callLogId = configData.callLogId;
