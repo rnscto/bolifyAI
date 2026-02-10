@@ -319,22 +319,35 @@ Deno.serve(async (req) => {
     return new Response('WebSocket upgrade failed', { status: 500 });
   }
 
-  // Create Base44 client AFTER upgrade, using enriched headers for external connections
-  let base44;
+  // Build internal function base URL from the gateway request headers
+  // The gateway URL is: https://vaaniai.base44.app/api/apps/{appId}/functions/{funcName}
+  // We extract the base to call getAgentConfig internally
+  let internalFuncBaseUrl = null;
+  let base44 = null;
   try {
-    const enrichedHeaders = new Headers(req.headers);
-    if (!req.headers.has('Base44-App-Id')) {
-      console.log(`[${reqId}] ⚠️ No Base44-App-Id header, enriching from env`);
-      enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
-      enrichedHeaders.set('Base44-Service-Token', Deno.env.get('BASE44_SERVICE_ROLE_KEY'));
+    // Capture all auth headers from the gateway for forwarding to internal function calls
+    const authHeaders = {};
+    for (const [key, value] of req.headers.entries()) {
+      if (key.toLowerCase().startsWith('base44-') || key.toLowerCase() === 'authorization') {
+        authHeaders[key] = value;
+      }
     }
-    // Create a minimal GET request just for SDK initialization (no body needed)
-    const clientReq = new Request(req.url, { method: 'GET', headers: enrichedHeaders });
-    base44 = createClientFromRequest(clientReq);
-    console.log(`[${reqId}] ✅ Base44 client created`);
+
+    // Build the internal function URL from the current request URL
+    // req.url on Deno Deploy is the full URL, but we need the gateway URL
+    const gatewayHost = req.headers.get('x-forwarded-host') || req.headers.get('host') || 'vaaniai.base44.app';
+    const proto = req.headers.get('x-forwarded-proto') || 'https';
+    // Extract app path prefix from x-forwarded-path or construct from app ID
+    const appId = req.headers.get('Base44-App-Id') || Deno.env.get('BASE44_APP_ID');
+    internalFuncBaseUrl = `${proto}://${gatewayHost}/api/apps/${appId}/functions`;
+    
+    console.log(`[${reqId}] ✅ Internal function base URL: ${internalFuncBaseUrl}`);
+    console.log(`[${reqId}] ✅ Auth headers captured: ${Object.keys(authHeaders).join(', ')}`);
+    
+    // Store auth headers for later use
+    base44 = { _authHeaders: authHeaders, _funcBaseUrl: internalFuncBaseUrl };
   } catch (err) {
-    console.error(`[${reqId}] ❌ Base44 client creation failed: ${err.message}`);
-    // Continue without base44 - socket will still work but agent config won't load
+    console.error(`[${reqId}] ❌ Setup failed: ${err.message}`);
     base44 = null;
   }
 
