@@ -256,7 +256,7 @@ async function sendTTSAudio(socket, session, reqId, text, markName) {
 }
 
 // Save call record
-async function saveCallRecord(session, reqId, duration) {
+async function saveCallRecord(session, reqId, duration, base44Client) {
   if (!session.callLogId) return;
 
   try {
@@ -264,7 +264,7 @@ async function saveCallRecord(session, reqId, duration) {
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    await base44.asServiceRole.entities.CallLog.update(session.callLogId, {
+    await base44Client.asServiceRole.entities.CallLog.update(session.callLogId, {
       status: 'completed',
       transcript: transcript,
       duration: duration,
@@ -291,14 +291,15 @@ Deno.serve(async (req) => {
       // For WebSocket upgrades from external services (Smartflo), Base44 may not inject headers
       // so we enrich the request with Base44-App-Id from env vars
       let clientReq = req;
-      if (isWebSocket && !req.headers.has('Base44-App-Id')) {
-        console.log(`[${reqId}] ⚠️ No Base44-App-Id header on WS request, enriching from env`);
+      if (!req.headers.has('Base44-App-Id')) {
+        console.log(`[${reqId}] ⚠️ No Base44-App-Id header, enriching from env`);
         const enrichedHeaders = new Headers(req.headers);
         enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
         enrichedHeaders.set('Base44-Service-Token', Deno.env.get('BASE44_SERVICE_ROLE_KEY'));
         clientReq = new Request(req.url, {
           method: req.method,
-          headers: enrichedHeaders
+          headers: enrichedHeaders,
+          body: !isWebSocket ? req.body : undefined
         });
       }
       console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
@@ -399,7 +400,7 @@ Deno.serve(async (req) => {
         clearTimers();
         setState(STATE.IDLE);
         const duration = Math.round((Date.now() - session.startTime) / 1000);
-        await saveCallRecord(session, reqId, duration, base44ServiceRole);
+        await saveCallRecord(session, reqId, duration, base44);
         return;
       }
 
@@ -722,7 +723,7 @@ Deno.serve(async (req) => {
         console.log(`[${reqId}] 📴 Stop event`);
         clearTimers();
         const duration = Math.round((Date.now() - session.startTime) / 1000);
-        await saveCallRecord(session, reqId, duration);
+        await saveCallRecord(session, reqId, duration, base44);
         return;
       }
     } catch (err) {
