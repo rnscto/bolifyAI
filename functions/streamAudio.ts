@@ -264,7 +264,7 @@ async function saveCallRecord(session, reqId, duration) {
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    await base44.entities.CallLog.update(session.callLogId, {
+    await base44.asServiceRole.entities.CallLog.update(session.callLogId, {
       status: 'completed',
       transcript: transcript,
       duration: duration,
@@ -591,7 +591,7 @@ Deno.serve(async (req) => {
         let agentLoaded = false;
         try {
           console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
-          const callLogs = await base44.entities.CallLog.filter({ call_sid: session.callSid });
+          const callLogs = await base44.asServiceRole.entities.CallLog.filter({ call_sid: session.callSid });
           console.log(`[${reqId}] 📋 Found ${callLogs.length} call logs`);
 
           if (callLogs.length > 0) {
@@ -603,7 +603,7 @@ Deno.serve(async (req) => {
             // Fetch agent to get persona and custom system prompt
             if (session.agentId) {
               console.log(`[${reqId}] 🔎 Fetching agent ${session.agentId}`);
-              const agent = await base44.entities.Agent.get(session.agentId);
+              const agent = await base44.asServiceRole.entities.Agent.get(session.agentId);
               if (agent) {
                 session.agentConfig = agent;
                 console.log(`[${reqId}] ✅ Agent name: ${agent.name}`);
@@ -624,7 +624,7 @@ Deno.serve(async (req) => {
                   try {
                     const kbDocs = [];
                     for (const kbId of agent.knowledge_base_ids) {
-                      const doc = await base44.entities.KnowledgeBase.get(kbId);
+                      const doc = await base44.asServiceRole.entities.KnowledgeBase.get(kbId);
                       if (doc && doc.content) {
                         kbDocs.push({
                           title: doc.title,
