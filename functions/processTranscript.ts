@@ -2,19 +2,9 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 Deno.serve(async (req) => {
   try {
-    // Enrich request with Base44 headers for external/internal service calls
-    let clientReq = req;
-    if (!req.headers.has('Base44-App-Id')) {
-      const enrichedHeaders = new Headers(req.headers);
-      enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
-      enrichedHeaders.set('Base44-Service-Token', Deno.env.get('BASE44_SERVICE_ROLE_KEY'));
-      clientReq = new Request(req.url, {
-        method: req.method,
-        headers: enrichedHeaders,
-        body: req.body
-      });
-    }
-    const base44 = createClientFromRequest(clientReq);
+    const base44 = createClientFromRequest(req, {
+      apiUrl: 'https://app.base44.com'
+    });
     const { call_log_id, recording_url } = await req.json();
 
     if (!call_log_id || !recording_url) {
