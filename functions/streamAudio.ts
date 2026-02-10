@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.6';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 const STATE = {
   IDLE: 'IDLE',
@@ -287,6 +287,11 @@ Deno.serve(async (req) => {
 
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
 
+  // Create Base44 client BEFORE any branching (Base44 injects service token)
+  console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
+  const base44 = createClientFromRequest(req);
+  console.log(`[${reqId}] ✅ Base44 client ready`);
+
   // Return status for non-WebSocket requests
   if (!isWebSocket) {
     const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
@@ -297,34 +302,23 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       status: 'ready',
-      version: 'v5.4-fixed-auth',
+      version: 'v5.5-base44-support-fix',
       wss_url: wssUrl,
       info: 'Use the wss_url above to connect WebSocket from Smartflo'
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
-  // Create Base44 client for external webhook (no auth headers from Smartflo)
-  const appId = Deno.env.get('BASE44_APP_ID');
-  if (!appId) {
-    console.error(`[${reqId}] ❌ Missing BASE44_APP_ID`);
-    return new Response('Server configuration error', { status: 500 });
-  }
-
-  console.log(`[${reqId}] 🔑 Creating Base44 service client`);
-  const base44 = createClient({ appId });
-  console.log(`[${reqId}] ✅ Base44 client ready`);
-
-  // Upgrade WebSocket
-  let socket, response;
-  try {
-    const upgraded = Deno.upgradeWebSocket(req);
-    socket = upgraded.socket;
-    response = upgraded.response;
-    console.log(`[${reqId}] ✅ WebSocket upgraded`);
-  } catch (err) {
-    console.error(`[${reqId}] ❌ Upgrade failed: ${err.message}`);
-    return new Response('WebSocket upgrade failed', { status: 500 });
-  }
+    // Upgrade WebSocket
+    let socket, response;
+    try {
+      const upgraded = Deno.upgradeWebSocket(req);
+      socket = upgraded.socket;
+      response = upgraded.response;
+      console.log(`[${reqId}] ✅ WebSocket upgraded`);
+    } catch (err) {
+      console.error(`[${reqId}] ❌ Upgrade failed: ${err.message}`);
+      return new Response('WebSocket upgrade failed', { status: 500 });
+    }
 
   // Session state
   const session = {
