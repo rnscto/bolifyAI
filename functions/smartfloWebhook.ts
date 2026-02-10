@@ -13,19 +13,9 @@ const STATUS_MAP = {
 
 Deno.serve(async (req) => {
   try {
-    // Enrich request with Base44 headers for external webhook calls
-    let clientReq = req;
-    if (!req.headers.has('Base44-App-Id')) {
-      const enrichedHeaders = new Headers(req.headers);
-      enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
-      enrichedHeaders.set('Base44-Service-Token', Deno.env.get('BASE44_SERVICE_ROLE_KEY'));
-      clientReq = new Request(req.url, {
-        method: req.method,
-        headers: enrichedHeaders,
-        body: req.body
-      });
-    }
-    const base44 = createClientFromRequest(clientReq);
+    const base44 = createClientFromRequest(req, {
+      apiUrl: 'https://app.base44.com'
+    });
     const payload = await req.json();
 
     console.log('[smartfloWebhook] Received:', payload.status, 'Call:', payload.call_id);
