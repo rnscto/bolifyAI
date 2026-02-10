@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.6';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 const STATE = {
   IDLE: 'IDLE',
@@ -303,18 +303,12 @@ Deno.serve(async (req) => {
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
-  // Create Base44 client with service role (for external webhooks)
+  // Create Base44 client (Base44 auto-injects service token for webhooks)
   let base44;
   try {
-    const appId = Deno.env.get('BASE44_APP_ID');
-    if (!appId) {
-      console.error(`[${reqId}] ❌ Missing BASE44_APP_ID`);
-      return new Response('Server configuration error', { status: 500 });
-    }
-
-    console.log(`[${reqId}] 🔑 Creating Base44 client with app ID`);
-    base44 = createClient({ appId });
-    console.log(`[${reqId}] ✅ Base44 client ready (using service role for entity access)`);
+    console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
+    base44 = createClientFromRequest(req);
+    console.log(`[${reqId}] ✅ Base44 client ready`);
   } catch (err) {
     console.error(`[${reqId}] ❌ Failed to create Base44 client: ${err.message}`);
     return new Response('Failed to initialize', { status: 500 });
