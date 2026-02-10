@@ -257,7 +257,7 @@ async function sendTTSAudio(socket, session, reqId, text, markName) {
 
 // Save call record
 async function saveCallRecord(session, reqId, duration, base44Client) {
-  if (!session.callLogId) return;
+  if (!session.callLogId || !base44Client) return;
 
   try {
     const transcript = session.transcript
