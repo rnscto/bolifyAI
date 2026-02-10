@@ -260,6 +260,7 @@ async function saveCallRecord(session, reqId, duration) {
   if (!session.callLogId) return;
 
   try {
+    const base44 = getBase44();
     const transcript = session.transcript
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
@@ -297,18 +298,13 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify({
       status: 'ready',
-      version: 'v5.6-base44-client-before-upgrade',
+      version: 'v5.7-lazy-client',
       wss_url: wssUrl,
       info: 'Use the wss_url above to connect WebSocket from Smartflo'
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
-    // Create Base44 client BEFORE WebSocket upgrade (captures headers before upgrade)
-    console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
-    const base44 = createClientFromRequest(req);
-    console.log(`[${reqId}] ✅ Base44 client ready`);
-
-    // Upgrade WebSocket
+    // Upgrade WebSocket first
     let socket, response;
     try {
       const upgraded = Deno.upgradeWebSocket(req);
@@ -319,6 +315,17 @@ Deno.serve(async (req) => {
       console.error(`[${reqId}] ❌ Upgrade failed: ${err.message}`);
       return new Response('WebSocket upgrade failed', { status: 500 });
     }
+
+    // Create Base44 client lazily (only when needed in handlers)
+    let base44Client = null;
+    const getBase44 = () => {
+      if (!base44Client) {
+        console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
+        base44Client = createClientFromRequest(req);
+        console.log(`[${reqId}] ✅ Base44 client ready`);
+      }
+      return base44Client;
+    };
 
       // Session state
   const session = {
@@ -588,6 +595,7 @@ Deno.serve(async (req) => {
         // Fetch existing CallLog by call_sid to get agent info
         let agentLoaded = false;
         try {
+          const base44 = getBase44();
           console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
           const callLogs = await base44.asServiceRole.entities.CallLog.filter({ call_sid: session.callSid });
           console.log(`[${reqId}] 📋 Found ${callLogs.length} call logs`);
