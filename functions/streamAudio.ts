@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.6';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 const STATE = {
   IDLE: 'IDLE',
@@ -287,8 +287,13 @@ Deno.serve(async (req) => {
 
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
 
-  // Return status for non-WebSocket requests
-  if (!isWebSocket) {
+      // Create Base44 client immediately from request (Base44 injects service token automatically)
+      console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
+      const base44 = createClientFromRequest(req);
+      console.log(`[${reqId}] ✅ Base44 client created`);
+
+      // Return status for non-WebSocket requests
+      if (!isWebSocket) {
     const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
     const protocol = req.headers.get('x-forwarded-proto') === 'https' ? 'wss' : 'ws';
     const wssUrl = `${protocol}://${host}/functions/streamAudio`;
@@ -315,13 +320,7 @@ Deno.serve(async (req) => {
       return new Response('WebSocket upgrade failed', { status: 500 });
     }
 
-    // Create Base44 client with service role (for external WebSocket connections)
-    console.log(`[${reqId}] 🔑 Creating Base44 service role client`);
-    const base44 = createClient({
-      serviceRoleKey: Deno.env.get('BASE44_SERVICE_ROLE_KEY'),
-      appId: Deno.env.get('BASE44_APP_ID')
-    });
-    console.log(`[${reqId}] ✅ Base44 client ready`);
+    // base44 client already created above from request
 
       // Session state
   const session = {
