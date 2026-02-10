@@ -2,7 +2,9 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 Deno.serve(async (req) => {
   try {
-    const base44 = createClientFromRequest(req);
+    const base44 = createClientFromRequest(req, {
+      apiUrl: 'https://app.base44.com'
+    });
     const { call_log_id, status, transcript, duration, call_end_time } = await req.json();
 
     if (!call_log_id) {
