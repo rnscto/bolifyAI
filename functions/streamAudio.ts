@@ -285,7 +285,13 @@ Deno.serve(async (req) => {
   const upgrade = (req.headers.get('upgrade') || '').toLowerCase();
   const isWebSocket = upgrade === 'websocket';
 
+  // Diagnostic: log headers to verify routing
+  const incomingHost = req.headers.get('host') || 'no-host';
+  const hasAppId = req.headers.has('Base44-App-Id');
+  const hasServiceToken = req.headers.has('Base44-Service-Token');
+  const forwardedHost = req.headers.get('x-forwarded-host') || 'none';
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
+  console.log(`[${reqId}] 🔍 HEADERS: host=${incomingHost}, x-forwarded-host=${forwardedHost}, Base44-App-Id=${hasAppId}, Base44-Service-Token=${hasServiceToken}`);
 
   // For non-WebSocket requests, return status info
   if (!isWebSocket) {
