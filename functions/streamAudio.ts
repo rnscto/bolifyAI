@@ -597,14 +597,53 @@ Deno.serve(async (req) => {
 
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}`);
 
-        // Fetch agent config via internal backend function (has proper auth)
+        // Fetch agent config - directly using service role entities (no user auth in WebSocket)
         let agentLoaded = false;
         try {
-          console.log(`[${reqId}] 🔍 Fetching agent config for call_sid: ${session.callSid}`);
+          if (!base44) {
+            console.log(`[${reqId}] ❌ No base44 client, skipping agent config`);
+            throw new Error('No base44 client available');
+          }
+          console.log(`[${reqId}] 🔍 Looking up call_sid: ${session.callSid}`);
           
-          const configResponse = await base44.functions.invoke('getAgentConfig', {
-            call_sid: session.callSid
-          });
+          // Look up call log directly
+          const callLogs = await base44.asServiceRole.entities.CallLog.filter({ call_sid: session.callSid });
+          console.log(`[${reqId}] 📋 Found ${callLogs.length} call logs`);
+
+          let configData = { success: false, agent: null, callLogId: null, knowledgeDocs: [] };
+
+          if (callLogs.length > 0) {
+            const callLog = callLogs[0];
+            configData.callLogId = callLog.id;
+
+            if (callLog.agent_id) {
+              const agent = await base44.asServiceRole.entities.Agent.get(callLog.agent_id);
+              if (agent) {
+                configData.success = true;
+                configData.agent = {
+                  id: agent.id,
+                  name: agent.name,
+                  system_prompt: agent.system_prompt || '',
+                  persona: agent.persona || {},
+                  knowledge_base_ids: agent.knowledge_base_ids || []
+                };
+
+                // Load knowledge base documents
+                if (agent.knowledge_base_ids && agent.knowledge_base_ids.length > 0) {
+                  for (const kbId of agent.knowledge_base_ids) {
+                    try {
+                      const doc = await base44.asServiceRole.entities.KnowledgeBase.get(kbId);
+                      if (doc && doc.content) {
+                        configData.knowledgeDocs.push({ title: doc.title, content: doc.content });
+                      }
+                    } catch (kbErr) {
+                      console.error(`[${reqId}] ⚠️ Failed to load KB doc ${kbId}: ${kbErr.message}`);
+                    }
+                  }
+                }
+              }
+            }
+          }
           
           const configData = configResponse.data || configResponse;
           console.log(`[${reqId}] 📋 Agent config response: success=${configData.success}`);
