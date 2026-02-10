@@ -287,54 +287,50 @@ Deno.serve(async (req) => {
 
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
 
-      // Create Base44 client from request
-      // For WebSocket upgrades from external services (Smartflo), Base44 may not inject headers
-      // so we enrich the request with Base44-App-Id from env vars
-      let clientReq = req;
-      if (!req.headers.has('Base44-App-Id')) {
-        console.log(`[${reqId}] ⚠️ No Base44-App-Id header, enriching from env`);
-        const enrichedHeaders = new Headers(req.headers);
-        enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
-        enrichedHeaders.set('Base44-Service-Token', Deno.env.get('BASE44_SERVICE_ROLE_KEY'));
-        clientReq = new Request(req.url, {
-          method: req.method,
-          headers: enrichedHeaders,
-          body: !isWebSocket ? req.body : undefined
-        });
-      }
-      console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
-      const base44 = createClientFromRequest(clientReq);
-      console.log(`[${reqId}] ✅ Base44 client created`);
-
-      // Return status for non-WebSocket requests
-      if (!isWebSocket) {
+  // For non-WebSocket requests, return status info
+  if (!isWebSocket) {
     const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
     const protocol = req.headers.get('x-forwarded-proto') === 'https' ? 'wss' : 'ws';
     const wssUrl = `${protocol}://${host}/functions/streamAudio`;
-
     console.log(`[${reqId}] 📡 WebSocket URL: ${wssUrl}`);
-
     return new Response(JSON.stringify({
       status: 'ready',
-      version: 'v5.7-lazy-client',
+      version: 'v5.8-ws-first',
       wss_url: wssUrl,
       info: 'Use the wss_url above to connect WebSocket from Smartflo'
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
-    // Upgrade WebSocket first
-    let socket, response;
-    try {
-      const upgraded = Deno.upgradeWebSocket(req);
-      socket = upgraded.socket;
-      response = upgraded.response;
-      console.log(`[${reqId}] ✅ WebSocket upgraded`);
-    } catch (err) {
-      console.error(`[${reqId}] ❌ Upgrade failed: ${err.message}`);
-      return new Response('WebSocket upgrade failed', { status: 500 });
-    }
+  // CRITICAL: Upgrade WebSocket FIRST before any other async work
+  let socket, response;
+  try {
+    const upgraded = Deno.upgradeWebSocket(req);
+    socket = upgraded.socket;
+    response = upgraded.response;
+    console.log(`[${reqId}] ✅ WebSocket upgraded`);
+  } catch (err) {
+    console.error(`[${reqId}] ❌ Upgrade failed: ${err.message}`);
+    return new Response('WebSocket upgrade failed', { status: 500 });
+  }
 
-    // base44 client already created above from request
+  // Create Base44 client AFTER upgrade, using enriched headers for external connections
+  let base44;
+  try {
+    const enrichedHeaders = new Headers(req.headers);
+    if (!req.headers.has('Base44-App-Id')) {
+      console.log(`[${reqId}] ⚠️ No Base44-App-Id header, enriching from env`);
+      enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
+      enrichedHeaders.set('Base44-Service-Token', Deno.env.get('BASE44_SERVICE_ROLE_KEY'));
+    }
+    // Create a minimal GET request just for SDK initialization (no body needed)
+    const clientReq = new Request(req.url, { method: 'GET', headers: enrichedHeaders });
+    base44 = createClientFromRequest(clientReq);
+    console.log(`[${reqId}] ✅ Base44 client created`);
+  } catch (err) {
+    console.error(`[${reqId}] ❌ Base44 client creation failed: ${err.message}`);
+    // Continue without base44 - socket will still work but agent config won't load
+    base44 = null;
+  }
 
       // Session state
   const session = {
