@@ -94,7 +94,7 @@ export default function Navbar() {
               </Button>
               <Button
                 className="flex-1 bg-gradient-to-r from-[#e67e22] to-[#f39c12] text-white font-semibold"
-                onClick={() => base44.auth.redirectToLogin()}
+                onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
               >
                 Sign Up
               </Button>
