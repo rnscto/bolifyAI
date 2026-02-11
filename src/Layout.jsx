@@ -6,7 +6,7 @@ import {
   LayoutDashboard,
   Users,
   Phone,
-  Bot,
+  Cpu,
   FileText,
   CreditCard,
   Settings,
