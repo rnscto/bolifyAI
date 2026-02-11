@@ -76,8 +76,13 @@ const features = [
 
 export default function FeaturesSection() {
   return (
-    <section id="features" className="py-24 bg-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section id="features" className="py-24 bg-white relative overflow-hidden">
+      {/* Background wave */}
+      <VoiceWaveBg color="rgba(26,54,93,0.03)" position="top" />
+      {/* Decorative pulse */}
+      <PulseRings className="absolute -top-10 -right-10 opacity-15" color="#1a365d" size={250} rings={3} />
+      <PulseRings className="absolute bottom-20 -left-16 opacity-10" color="#138808" size={180} rings={2} />
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1a365d]/5 text-[#1a365d] text-sm font-semibold mb-4">
             <Zap className="w-3.5 h-3.5" /> Features
