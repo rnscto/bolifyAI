@@ -14,7 +14,7 @@ export default function FooterSection() {
           {/* Company Info */}
           <div className="md:col-span-2">
             <div className="mb-5">
-              <img src={LOGO_URL} alt="VaaniAI" className="h-12 object-contain" />
+              <img src={LOGO_URL} alt="VaaniAI" className="h-16 object-contain" />
             </div>
             <p className="text-sm leading-relaxed max-w-sm mb-6 text-gray-500">
               AI-powered voice sales platform that automates outbound calling, qualifies leads,
