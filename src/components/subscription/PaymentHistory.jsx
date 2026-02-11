@@ -37,6 +37,9 @@ export default function PaymentHistory({ payments }) {
                   <Badge className={statusColors[payment.status] || 'bg-gray-100 text-gray-800'}>
                     {payment.status}
                   </Badge>
+                  {payment.status === 'paid' && (
+                    <InvoiceButton paymentId={payment.id} />
+                  )}
                 </div>
               </div>
             ))}
