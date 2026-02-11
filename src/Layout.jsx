@@ -71,6 +71,14 @@ export default function Layout({ children, currentPageName }) {
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
   ];
 
+  // CRM sub-navigation (shown when CRM is active)
+  const crmNav = client?.has_custom_crm ? [
+    { name: 'CRM Dashboard', path: 'ClientCRMDashboard', icon: LayoutDashboard },
+    { name: 'Deals', path: 'ClientCRMDeals', icon: Activity },
+    { name: 'Contacts', path: 'ClientCRMContacts', icon: Users },
+    { name: 'Reports', path: 'ClientCRMReports', icon: FileText },
+  ] : [];
+
   const navigation = isAdmin ? adminNav : clientNav;
 
   if (!user) {
@@ -115,25 +123,50 @@ export default function Layout({ children, currentPageName }) {
           {/* Navigation */}
           <nav className="flex-1 overflow-y-auto p-4">
             <div className="space-y-1">
-              {navigation.map((item) => {
-                const Icon = item.icon;
-                const isActive = currentPageName === item.path;
-                return (
-                  <Link
-                    key={item.path}
-                    to={createPageUrl(item.path)}
-                    className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                      isActive
-                        ? 'bg-blue-50 text-blue-700'
-                        : 'text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    {item.name}
-                  </Link>
-                );
-              })}
-            </div>
+                  {navigation.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = currentPageName === item.path;
+                    return (
+                      <Link
+                        key={item.path}
+                        to={createPageUrl(item.path)}
+                        className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                          isActive
+                            ? 'bg-blue-50 text-blue-700'
+                            : 'text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5" />
+                        {item.name}
+                      </Link>
+                    );
+                  })}
+                  {crmNav.length > 0 && (
+                    <>
+                      <div className="px-4 pt-4 pb-2">
+                        <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">CRM</p>
+                      </div>
+                      {crmNav.map((item) => {
+                        const Icon = item.icon;
+                        const isActive = currentPageName === item.path;
+                        return (
+                          <Link
+                            key={item.path}
+                            to={createPageUrl(item.path)}
+                            className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                              isActive
+                                ? 'bg-indigo-50 text-indigo-700'
+                                : 'text-gray-700 hover:bg-gray-50'
+                            }`}
+                          >
+                            <Icon className="w-5 h-5" />
+                            {item.name}
+                          </Link>
+                        );
+                      })}
+                    </>
+                  )}
+                </div>
           </nav>
 
           {/* User info */}
