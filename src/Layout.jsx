@@ -46,7 +46,6 @@ export default function Layout({ children, currentPageName }) {
       }
     } catch (error) {
       console.error('Error loading user:', error);
-      base44.auth.redirectToLogin();
     } finally {
       setAuthLoading(false);
     }
