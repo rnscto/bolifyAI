@@ -62,6 +62,15 @@ Deno.serve(async (req) => {
 
     // --- LEAD AUTOMATIONS ---
     if (entityName === 'Lead') {
+      // GUARD: Skip if this update was made by automation (check for score field change only)
+      // to prevent infinite loops: score update -> triggers update event -> score update again
+      const isScoreOnlyChange = old_data && data.score !== old_data.score &&
+        data.status === old_data.status && data.engagement_count !== old_data.engagement_count;
+      if (isScoreOnlyChange) {
+        console.log(`[CRM Automation] Skipping score-only update to prevent loop for lead ${entityId}`);
+        return Response.json({ success: true, skipped: 'score_only_update' });
+      }
+
       // Update lead score based on status changes
       if (eventType === 'update' && data.status !== old_data?.status) {
         const scoreMap = {
@@ -81,13 +90,19 @@ Deno.serve(async (req) => {
       // Auto-create deal when lead becomes "interested"
       if (eventType === 'update' && data.status === 'interested' && old_data?.status !== 'interested') {
         if (data.client_id) {
+          // Check if client has CRM enabled
+          const configs = await base44.asServiceRole.entities.CRMConfig.filter({ client_id: data.client_id });
+          if (configs.length === 0) {
+            console.log(`[CRM Automation] Client ${data.client_id} has no CRM config, skipping deal creation`);
+            return Response.json({ success: true, skipped: 'no_crm_config' });
+          }
+
           const existingDeals = await base44.asServiceRole.entities.Deal.filter({
             client_id: data.client_id,
             lead_id: entityId
           });
 
           if (existingDeals.length === 0) {
-            const configs = await base44.asServiceRole.entities.CRMConfig.filter({ client_id: data.client_id });
             const firstStage = configs[0]?.deal_stages?.[0]?.name || 'new';
 
             await base44.asServiceRole.entities.Deal.create({
@@ -111,19 +126,23 @@ Deno.serve(async (req) => {
       // Auto-create follow-up if call completed
       if (eventType === 'update' && data.status === 'completed' && old_data?.status !== 'completed') {
         if (data.client_id && data.lead_id) {
-          const followupDate = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
-          await base44.asServiceRole.entities.Activity.create({
-            client_id: data.client_id,
-            lead_id: data.lead_id,
-            call_log_id: entityId,
-            type: 'followup',
-            title: `Follow up after call`,
-            scheduled_date: followupDate,
-            status: 'scheduled',
-            priority: 'medium',
-            auto_created: true
-          });
-          console.log(`[CRM Automation] Auto follow-up created after call ${entityId}`);
+          // Only create if client has CRM
+          const configs = await base44.asServiceRole.entities.CRMConfig.filter({ client_id: data.client_id });
+          if (configs.length > 0) {
+            const followupDate = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+            await base44.asServiceRole.entities.Activity.create({
+              client_id: data.client_id,
+              lead_id: data.lead_id,
+              call_log_id: entityId,
+              type: 'followup',
+              title: `Follow up after call`,
+              scheduled_date: followupDate,
+              status: 'scheduled',
+              priority: 'medium',
+              auto_created: true
+            });
+            console.log(`[CRM Automation] Auto follow-up created after call ${entityId}`);
+          }
         }
       }
     }

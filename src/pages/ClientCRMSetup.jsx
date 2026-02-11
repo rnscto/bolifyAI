@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, ArrowRight, Check, Loader2, Rocket } from 'lucide-react';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '../utils';
 import IndustrySelector from '../components/crm/IndustrySelector';
 
 const STEPS = ['Select Industry', 'Review Configuration', 'Launch CRM'];
@@ -34,6 +36,15 @@ export default function ClientCRMSetup() {
   const handleProvision = async () => {
     if (!client || !selectedTemplate) return;
     setProvisioning(true);
+
+    // Prevent duplicate CRM provisioning
+    const existingConfigs = await base44.entities.CRMConfig.filter({ client_id: client.id });
+    if (existingConfigs.length > 0) {
+      toast.error('CRM is already set up for your account.');
+      setProvisioning(false);
+      setStep(2);
+      return;
+    }
 
     const now = new Date();
     const trialEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -208,11 +219,11 @@ export default function ClientCRMSetup() {
             Start adding leads and deals now!
           </p>
           <div className="flex gap-4 justify-center">
-            <a href={`/ClientCRMDashboard`}>
+            <Link to={createPageUrl('ClientCRMDashboard')}>
               <Button size="lg" className="bg-indigo-600 hover:bg-indigo-700">
                 Go to CRM Dashboard <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
-            </a>
+            </Link>
           </div>
         </div>
       )}

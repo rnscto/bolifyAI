@@ -26,6 +26,16 @@ Deno.serve(async (req) => {
       });
     }
     const base44 = createClientFromRequest(clientReq);
+
+    // Webhook authentication: verify shared secret
+    const url = new URL(req.url);
+    const webhookSecret = url.searchParams.get('secret');
+    const expectedSecret = Deno.env.get('SMARTFLO_WEBHOOK_SECRET');
+    if (expectedSecret && webhookSecret !== expectedSecret) {
+      console.error('[smartfloWebhook] Invalid webhook secret');
+      return Response.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const payload = await req.json();
 
     console.log('[smartfloWebhook] Received:', payload.status, 'Call:', payload.call_id);
@@ -34,6 +44,12 @@ Deno.serve(async (req) => {
 
     if (!call_id) {
       return Response.json({ success: false, error: 'Missing call_id' }, { status: 400 });
+    }
+
+    // Validate status against known values
+    const knownStatuses = ['ringing', 'answered', 'completed', 'failed', 'no_answer', 'busy', 'cancelled'];
+    if (status && !knownStatuses.includes(status)) {
+      console.warn('[smartfloWebhook] Unknown status:', status);
     }
 
     // Find call log by call_sid

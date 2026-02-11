@@ -25,6 +25,21 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Agent not found' }, { status: 404 });
     }
 
+    if (!lead) {
+      return Response.json({ error: 'Lead not found' }, { status: 404 });
+    }
+
+    // Ownership validation: ensure the user owns this client's agent and lead
+    const clients = await base44.entities.Client.filter({ user_id: user.id });
+    const userClientIds = clients.map(c => c.id);
+    
+    if (!userClientIds.includes(agent.client_id)) {
+      return Response.json({ error: 'Forbidden: Agent does not belong to your account' }, { status: 403 });
+    }
+    if (!userClientIds.includes(lead.client_id)) {
+      return Response.json({ error: 'Forbidden: Lead does not belong to your account' }, { status: 403 });
+    }
+
     if (!agent.assigned_did || agent.assigned_did.trim() === '') {
       return Response.json({ 
         success: false,

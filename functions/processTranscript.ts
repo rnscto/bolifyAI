@@ -15,10 +15,33 @@ Deno.serve(async (req) => {
       });
     }
     const base44 = createClientFromRequest(clientReq);
+
+    // Authentication: must be a logged-in user or internal service call
+    let isAuthorized = false;
+    try {
+      const user = await base44.auth.me();
+      if (user) isAuthorized = true;
+    } catch (_) {
+      if (clientReq.headers.has('Base44-Service-Token')) {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const { call_log_id, recording_url } = await req.json();
 
     if (!call_log_id || !recording_url) {
       return Response.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // Validate recording_url is a proper URL
+    try {
+      new URL(recording_url);
+    } catch (_) {
+      return Response.json({ error: 'Invalid recording URL' }, { status: 400 });
     }
 
     const callLog = await base44.asServiceRole.entities.CallLog.get(call_log_id);
@@ -30,11 +53,7 @@ Deno.serve(async (req) => {
     const audioResponse = await fetch(recording_url);
     const audioBlob = await audioResponse.blob();
 
-    // Convert to Azure Speech API format
-    const formData = new FormData();
-    formData.append('audio', audioBlob);
-
-    // Azure Speech to Text using custom endpoint
+    // Azure Speech to Text
     const sttResponse = await fetch(Deno.env.get('AZURE_SPEECH_ENDPOINT'), {
       method: 'POST',
       headers: {
@@ -53,8 +72,9 @@ Deno.serve(async (req) => {
     const transcript = sttData.DisplayText || sttData.NBest?.[0]?.Display || '';
 
     // Use Azure OpenAI to analyze conversation
+    const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
     const analysisResponse = await fetch(
-      `${Deno.env.get('AZURE_OPENAI_ENDPOINT')}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`,
+      `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`,
       {
         method: 'POST',
         headers: {
@@ -85,12 +105,12 @@ Deno.serve(async (req) => {
     const analysisData = await analysisResponse.json();
     const summary = analysisData.choices?.[0]?.message?.content || 'Analysis not available';
 
-    // Extract lead status from summary (simple parsing)
+    // Extract lead status from summary
     let leadStatus = 'contacted';
-    if (summary.toLowerCase().includes('interested')) leadStatus = 'interested';
     if (summary.toLowerCase().includes('not interested')) leadStatus = 'not_interested';
-    if (summary.toLowerCase().includes('callback')) leadStatus = 'callback';
-    if (summary.toLowerCase().includes('converted')) leadStatus = 'converted';
+    else if (summary.toLowerCase().includes('interested')) leadStatus = 'interested';
+    else if (summary.toLowerCase().includes('callback')) leadStatus = 'callback';
+    else if (summary.toLowerCase().includes('converted')) leadStatus = 'converted';
 
     // Update call log with transcript and summary
     await base44.asServiceRole.entities.CallLog.update(call_log_id, {

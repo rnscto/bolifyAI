@@ -113,9 +113,9 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('Error fetching Smartflo DIDs:', error);
+    console.error('Stack:', error.stack);
     return Response.json({ 
-      error: error.message,
-      stack: error.stack
+      error: error.message
     }, { status: 500 });
   }
 });
