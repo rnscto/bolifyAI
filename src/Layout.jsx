@@ -24,15 +24,11 @@ export default function Layout({ children, currentPageName }) {
   const [client, setClient] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Public pages — render without layout chrome
-  const publicPages = ['Home'];
-  if (publicPages.includes(currentPageName)) {
-    return <>{children}</>;
-  }
+  const isPublicPage = ['Home'].includes(currentPageName);
 
   useEffect(() => {
-    loadUser();
-  }, []);
+    if (!isPublicPage) loadUser();
+  }, [isPublicPage]);
 
   const loadUser = async () => {
     try {
@@ -53,6 +49,10 @@ export default function Layout({ children, currentPageName }) {
   const handleLogout = () => {
     base44.auth.logout();
   };
+
+  if (isPublicPage) {
+    return <>{children}</>;
+  }
 
   const isAdmin = user?.role === 'admin';
 
