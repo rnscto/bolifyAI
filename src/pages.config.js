@@ -72,6 +72,7 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import ClientSettings from './pages/ClientSettings';
 import AdminPayments from './pages/AdminPayments';
+import AdminRetention from './pages/AdminRetention';
 import __Layout from './Layout.jsx';
 
 
@@ -101,6 +102,7 @@ export const PAGES = {
     "TermsOfService": TermsOfService,
     "ClientSettings": ClientSettings,
     "AdminPayments": AdminPayments,
+    "AdminRetention": AdminRetention,
 }
 
 export const pagesConfig = {
