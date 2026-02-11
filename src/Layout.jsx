@@ -29,10 +29,10 @@ export default function Layout({ children, currentPageName }) {
   const isOnboardingPage = currentPageName === 'Onboarding';
 
   useEffect(() => {
-    if (!isPublicPage) {
+    if (!isPublicPage && !isOnboardingPage) {
       loadUser();
     }
-  }, [isPublicPage]);
+  }, [isPublicPage, isOnboardingPage]);
 
   const loadUser = async () => {
     try {
