@@ -79,6 +79,11 @@ export default function HowItWorksSection() {
             );
           })}
         </div>
+
+        {/* Voice waveform decoration */}
+        <div className="flex justify-center mt-14 opacity-40">
+          <AnimatedWaveform barCount={40} color="rgba(26,54,93,0.3)" height={36} />
+        </div>
       </div>
     </section>
   );
