@@ -37,8 +37,11 @@ const steps = [
 
 export default function HowItWorksSection() {
   return (
-    <section id="how-it-works" className="py-24 bg-gradient-to-b from-gray-50 to-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <section id="how-it-works" className="py-24 bg-gradient-to-b from-gray-50 to-white relative overflow-hidden">
+      {/* Decorative pulses */}
+      <PulseRings className="absolute top-10 right-[5%] opacity-10" color="#e67e22" size={200} rings={3} />
+      <PulseRings className="absolute bottom-16 left-[3%] opacity-10" color="#1a365d" size={150} rings={2} />
+      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#e67e22]/10 text-[#e67e22] text-sm font-semibold mb-4">
             How It Works
