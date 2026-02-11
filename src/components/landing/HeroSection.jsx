@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight, Play, PhoneCall, TrendingUp, Mic } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
+import { createPageUrl } from '../../utils';
 import AnimatedWaveform from './AnimatedWaveform';
 import PulseRings from './PulseRings';
 import VoiceWaveBg from './VoiceWaveBg';
