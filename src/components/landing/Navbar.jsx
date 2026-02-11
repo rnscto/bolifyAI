@@ -55,7 +55,7 @@ export default function Navbar() {
             </Button>
             <Button
               className="bg-gradient-to-r from-[#e67e22] to-[#f39c12] hover:from-[#d35400] hover:to-[#e67e22] text-white font-semibold shadow-md shadow-orange-200"
-              onClick={() => base44.auth.redirectToLogin()}
+              onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
             >
               Start Free Trial
             </Button>
