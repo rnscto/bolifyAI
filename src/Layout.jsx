@@ -48,6 +48,12 @@ export default function Layout({ children, currentPageName }) {
     base44.auth.logout();
   };
 
+  // Public pages — render without layout chrome
+  const publicPages = ['Home'];
+  if (publicPages.includes(currentPageName)) {
+    return <>{children}</>;
+  }
+
   const isAdmin = user?.role === 'admin';
 
   const adminNav = [
