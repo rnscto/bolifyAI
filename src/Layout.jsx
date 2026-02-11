@@ -24,7 +24,7 @@ export default function Layout({ children, currentPageName }) {
   const [client, setClient] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const isPublicPage = ['Home'].includes(currentPageName);
+  const isPublicPage = ['Home', 'PrivacyPolicy', 'TermsOfService'].includes(currentPageName);
 
   useEffect(() => {
     if (!isPublicPage) loadUser();
