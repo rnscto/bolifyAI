@@ -36,7 +36,23 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const payload = await req.json();
+    // Handle non-POST or empty body requests (health checks, GET pings)
+    if (req.method === 'GET') {
+      return Response.json({ success: true, message: 'Smartflo webhook is active' });
+    }
+
+    let payload;
+    try {
+      const bodyText = await req.text();
+      if (!bodyText || bodyText.trim() === '') {
+        return Response.json({ success: true, message: 'Empty body received, ignoring' });
+      }
+      payload = JSON.parse(bodyText);
+    } catch (e) {
+      console.error('[smartfloWebhook] Invalid JSON body:', e.message);
+      return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
+    }
+
     console.log('[smartfloWebhook] Received:', payload.status, 'Call:', payload.call_id, 'Direction:', payload.direction);
 
     const { call_id, status, duration, recording_url, direction, caller_number, called_number } = payload;
