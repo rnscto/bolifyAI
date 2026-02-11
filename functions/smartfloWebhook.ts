@@ -37,25 +37,116 @@ Deno.serve(async (req) => {
     }
 
     const payload = await req.json();
+    console.log('[smartfloWebhook] Received:', payload.status, 'Call:', payload.call_id, 'Direction:', payload.direction);
 
-    console.log('[smartfloWebhook] Received:', payload.status, 'Call:', payload.call_id);
-
-    const { call_id, status, duration, recording_url } = payload;
+    const { call_id, status, duration, recording_url, direction, caller_number, called_number } = payload;
 
     if (!call_id) {
       return Response.json({ success: false, error: 'Missing call_id' }, { status: 400 });
     }
 
-    // Validate status against known values
+    // ===== INCOMING CALL IDENTIFICATION =====
+    if (direction === 'inbound' || payload.type === 'inbound') {
+      const incomingNumber = caller_number || payload.from || payload.caller_id;
+      console.log('[smartfloWebhook] Incoming call from:', incomingNumber);
+
+      if (incomingNumber) {
+        // Clean number for matching
+        const cleanNumber = incomingNumber.replace(/\D/g, '');
+        const last10 = cleanNumber.slice(-10);
+
+        // Search for client by phone number
+        const allClients = await base44.asServiceRole.entities.Client.list();
+        const matchedClient = allClients.find(c => {
+          if (!c.phone) return false;
+          const clientClean = c.phone.replace(/\D/g, '');
+          return clientClean.slice(-10) === last10;
+        });
+
+        if (matchedClient) {
+          console.log('[smartfloWebhook] Incoming call identified - Client:', matchedClient.company_name, 'Status:', matchedClient.account_status);
+
+          // Create call log with client context
+          const inboundLog = await base44.asServiceRole.entities.CallLog.create({
+            client_id: matchedClient.id,
+            agent_id: 'system',
+            call_sid: call_id,
+            caller_id: incomingNumber,
+            callee_number: called_number || payload.to || '',
+            direction: 'inbound',
+            status: 'ringing',
+            call_start_time: new Date().toISOString(),
+            conversation_summary: `Incoming call from known client: ${matchedClient.company_name} (${matchedClient.account_status}). Industry: ${matchedClient.industry || 'General'}`,
+          });
+
+          // Load retention config for incoming call handling
+          const configs = await base44.asServiceRole.entities.RetentionConfig.list('-created_date', 1);
+          const config = configs[0] || {};
+
+          if (config.enable_incoming_identification !== false) {
+            // Load client's agent & lead data for context
+            const [clientAgents, clientLeads] = await Promise.all([
+              base44.asServiceRole.entities.Agent.filter({ client_id: matchedClient.id }),
+              base44.asServiceRole.entities.Lead.filter({ client_id: matchedClient.id }),
+            ]);
+
+            console.log('[smartfloWebhook] Client context loaded - Agents:', clientAgents.length, 'Leads:', clientLeads.length);
+          }
+
+          // Create activity
+          await base44.asServiceRole.entities.Activity.create({
+            client_id: matchedClient.id,
+            type: 'call',
+            title: `Incoming call from ${matchedClient.company_name}`,
+            description: `Client called in. Account: ${matchedClient.account_status}. Phone: ${incomingNumber}`,
+            scheduled_date: new Date().toISOString(),
+            status: 'scheduled',
+            priority: matchedClient.account_status === 'expired' ? 'high' : 'medium',
+            auto_created: true,
+          });
+
+          return Response.json({
+            success: true,
+            identified: true,
+            client_id: matchedClient.id,
+            client_name: matchedClient.company_name,
+            account_status: matchedClient.account_status,
+            industry: matchedClient.industry,
+            call_log_id: inboundLog.id,
+          });
+        } else {
+          console.log('[smartfloWebhook] Incoming call from unknown number:', incomingNumber);
+
+          // Log unidentified incoming call
+          await base44.asServiceRole.entities.CallLog.create({
+            client_id: 'unknown',
+            agent_id: 'system',
+            call_sid: call_id,
+            caller_id: incomingNumber,
+            callee_number: called_number || '',
+            direction: 'inbound',
+            status: 'ringing',
+            call_start_time: new Date().toISOString(),
+            conversation_summary: `Incoming call from unregistered number: ${incomingNumber}`,
+          });
+
+          return Response.json({
+            success: true,
+            identified: false,
+            message: 'Caller not matched to any registered client',
+          });
+        }
+      }
+    }
+
+    // ===== EXISTING OUTBOUND/STATUS UPDATE LOGIC =====
     const knownStatuses = ['ringing', 'answered', 'completed', 'failed', 'no_answer', 'busy', 'cancelled'];
     if (status && !knownStatuses.includes(status)) {
       console.warn('[smartfloWebhook] Unknown status:', status);
     }
 
     // Find call log by call_sid
-    const callLogs = await base44.asServiceRole.entities.CallLog.filter({ 
-      call_sid: call_id 
-    });
+    const callLogs = await base44.asServiceRole.entities.CallLog.filter({ call_sid: call_id });
 
     if (callLogs.length === 0) {
       console.log('[smartfloWebhook] Call log not found:', call_id);
@@ -65,30 +156,19 @@ Deno.serve(async (req) => {
     const callLog = callLogs[0];
     const mappedStatus = STATUS_MAP[status] || status;
 
-    // Update call log with status
-    const updateData = {
-      status: mappedStatus
-    };
-
-    if (duration) {
-      updateData.duration = parseInt(duration);
-    }
-
-    if (status === 'completed') {
-      updateData.call_end_time = new Date().toISOString();
-    }
+    const updateData = { status: mappedStatus };
+    if (duration) updateData.duration = parseInt(duration);
+    if (status === 'completed') updateData.call_end_time = new Date().toISOString();
 
     await base44.asServiceRole.entities.CallLog.update(callLog.id, updateData);
 
-    // Update lead status based on call completion
-    if (status === 'answered' || status === 'completed') {
-      await base44.asServiceRole.entities.Lead.update(callLog.lead_id, {
-        status: 'interested'
-      });
-    } else if (status === 'no_answer' || status === 'failed') {
-      await base44.asServiceRole.entities.Lead.update(callLog.lead_id, {
-        status: 'callback'
-      });
+    // Update lead status based on call outcome (only for outbound client calls with valid lead_id)
+    if (callLog.lead_id && callLog.lead_id !== 'unknown') {
+      if (status === 'answered' || status === 'completed') {
+        await base44.asServiceRole.entities.Lead.update(callLog.lead_id, { status: 'interested' });
+      } else if (status === 'no_answer' || status === 'failed') {
+        await base44.asServiceRole.entities.Lead.update(callLog.lead_id, { status: 'callback' });
+      }
     }
 
     // If call is completed and has recording, trigger transcript processing

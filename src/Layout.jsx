@@ -86,6 +86,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Clients', path: 'AdminClients', icon: Users },
     { name: 'Agents', path: 'AdminAgents', icon: Cpu },
     { name: 'DIDs', path: 'AdminDIDs', icon: Phone },
+    { name: 'Retention', path: 'AdminRetention', icon: PhoneCall },
     { name: 'Subscriptions', path: 'AdminSubscriptions', icon: CreditCard },
     { name: 'Payments', path: 'AdminPayments', icon: IndianRupee },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
