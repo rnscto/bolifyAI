@@ -1,5 +1,5 @@
 import React from 'react';
-import { Bot } from 'lucide-react';
+import React from 'react';
 
 export default function FooterSection() {
   return (
@@ -8,8 +8,7 @@ export default function FooterSection() {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10">
           <div className="md:col-span-2">
             <div className="flex items-center gap-2 mb-4">
-              <Bot className="w-7 h-7 text-blue-500" />
-              <span className="text-xl font-bold text-white">VaaniAI</span>
+              <img src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/5161e7458_WhatsAppImage2026-02-11at44923PM.jpg" alt="VaaniAI" className="h-10 object-contain" />
             </div>
             <p className="text-sm leading-relaxed max-w-sm">
               AI-powered voice sales platform that automates outbound calling, qualifies leads, 

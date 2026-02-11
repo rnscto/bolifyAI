@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Bot, Menu, X } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 
 export default function Navbar() {
@@ -18,8 +18,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center gap-2">
-            <Bot className="w-7 h-7 text-blue-500" />
-            <span className="text-xl font-bold text-white">VaaniAI</span>
+            <img src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/5161e7458_WhatsAppImage2026-02-11at44923PM.jpg" alt="VaaniAI" className="h-10 object-contain" />
           </div>
 
           {/* Desktop nav */}
