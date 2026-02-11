@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Bot, Phone as PhoneIcon } from 'lucide-react';
 import { toast } from 'sonner';
+import FeatureGate from '../components/FeatureGate';
 
 export default function ClientAgents() {
   const [agent, setAgent] = useState(null);
@@ -77,6 +78,7 @@ export default function ClientAgents() {
   }
 
   return (
+    <FeatureGate client={client} featureName="AI Agents">
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">My AI Agent</h1>
@@ -175,5 +177,6 @@ export default function ClientAgents() {
         </>
       )}
     </div>
+    </FeatureGate>
   );
 }

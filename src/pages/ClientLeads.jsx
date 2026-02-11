@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import FeatureGate from '../components/FeatureGate';
 import {
   Dialog,
   DialogContent,
@@ -182,6 +183,7 @@ export default function ClientLeads() {
   }
 
   return (
+    <FeatureGate client={client} featureName="Leads">
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -337,5 +339,6 @@ export default function ClientLeads() {
         </CardContent>
       </Card>
     </div>
+    </FeatureGate>
   );
 }

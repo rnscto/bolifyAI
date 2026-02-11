@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import FeatureGate from '../components/FeatureGate';
 import {
   Dialog,
   DialogContent,
@@ -77,6 +78,7 @@ export default function ClientCallLogs() {
   }
 
   return (
+    <FeatureGate client={client} featureName="Call Logs">
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Call Logs</h1>
@@ -257,5 +259,6 @@ export default function ClientCallLogs() {
         </DialogContent>
       </Dialog>
     </div>
+    </FeatureGate>
   );
 }

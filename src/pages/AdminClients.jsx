@@ -243,6 +243,7 @@ export default function AdminClients() {
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Channels</TableHead>
+                <TableHead>Account</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Next Billing</TableHead>
                 <TableHead>Actions</TableHead>
@@ -251,7 +252,7 @@ export default function AdminClients() {
             <TableBody>
               {clients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-gray-500">
+                  <TableCell colSpan={8} className="text-center text-gray-500">
                     No clients found. Add your first client to get started.
                   </TableCell>
                 </TableRow>
@@ -262,6 +263,17 @@ export default function AdminClients() {
                     <TableCell>{client.email}</TableCell>
                     <TableCell>{client.phone || '-'}</TableCell>
                     <TableCell>{client.total_channels}</TableCell>
+                    <TableCell>
+                      <Badge className={{
+                        active: 'bg-green-100 text-green-800',
+                        trial: 'bg-blue-100 text-blue-800',
+                        expired: 'bg-red-100 text-red-800',
+                        onboarding: 'bg-yellow-100 text-yellow-800',
+                        suspended: 'bg-gray-100 text-gray-800',
+                      }[client.account_status] || 'bg-gray-100 text-gray-800'}>
+                        {client.account_status || 'unknown'}
+                      </Badge>
+                    </TableCell>
                     <TableCell>
                       <Badge className={statusColors[client.status]}>
                         {client.status}
