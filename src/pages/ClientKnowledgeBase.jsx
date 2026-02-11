@@ -14,6 +14,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Upload, FileText, Trash2, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import FeatureGate from '../components/FeatureGate';
 
 export default function ClientKnowledgeBase() {
   const [documents, setDocuments] = useState([]);
@@ -145,6 +146,7 @@ export default function ClientKnowledgeBase() {
   }
 
   return (
+    <FeatureGate client={client} featureName="Knowledge Base">
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -280,5 +282,6 @@ export default function ClientKnowledgeBase() {
         </div>
       )}
     </div>
+    </FeatureGate>
   );
 }

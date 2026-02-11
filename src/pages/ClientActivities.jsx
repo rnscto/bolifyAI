@@ -11,6 +11,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Calendar, CheckCircle2, XCircle } from 'lucide-react';
+import FeatureGate from '../components/FeatureGate';
 
 export default function ClientActivities() {
   const [activities, setActivities] = useState([]);
@@ -79,6 +80,7 @@ export default function ClientActivities() {
   }
 
   return (
+    <FeatureGate client={client} featureName="Activities">
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Activities</h1>
@@ -177,5 +179,6 @@ export default function ClientActivities() {
         </CardContent>
       </Card>
     </div>
+    </FeatureGate>
   );
 }

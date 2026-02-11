@@ -38,6 +38,7 @@ export default function ClientLeads() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
+  const [csvDialogOpen, setCsvDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -191,6 +192,9 @@ export default function ClientLeads() {
           <p className="text-gray-600 mt-1">Manage your lead database</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setCsvDialogOpen(true)}>
+            <Upload className="w-4 h-4 mr-2" /> Import CSV
+          </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Button 
@@ -338,6 +342,13 @@ export default function ClientLeads() {
           </Table>
         </CardContent>
       </Card>
+
+      <CSVImportDialog
+        open={csvDialogOpen}
+        onOpenChange={setCsvDialogOpen}
+        clientId={client?.id}
+        onComplete={loadData}
+      />
     </div>
     </FeatureGate>
   );

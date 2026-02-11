@@ -16,7 +16,9 @@ import {
   PhoneCall,
   Database,
   Activity,
-  BookOpen
+  BookOpen,
+  IndianRupee,
+  UserCog
 } from 'lucide-react';
 
 export default function Layout({ children, currentPageName }) {
@@ -85,6 +87,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Agents', path: 'AdminAgents', icon: Cpu },
     { name: 'DIDs', path: 'AdminDIDs', icon: Phone },
     { name: 'Subscriptions', path: 'AdminSubscriptions', icon: CreditCard },
+    { name: 'Payments', path: 'AdminPayments', icon: IndianRupee },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
   ];
 
@@ -97,8 +100,9 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Activities', path: 'ClientActivities', icon: Activity },
     { name: 'CRM Integration', path: 'ClientCRM', icon: Database },
     { name: 'Subscription', path: 'ClientSubscription', icon: CreditCard },
+    { name: 'Settings', path: 'ClientSettings', icon: UserCog },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
-  ];
+    ];
 
   // CRM sub-navigation (shown when CRM is active)
   const crmNav = client?.has_custom_crm ? [
