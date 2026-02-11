@@ -106,7 +106,7 @@ export default function PricingSection() {
                         : 'bg-[#1a365d] hover:bg-[#0f1f3d] text-white'
                     }`}
                     size="lg"
-                    onClick={() => base44.auth.redirectToLogin()}
+                    onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
                   >
                     {plan.cta} <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
