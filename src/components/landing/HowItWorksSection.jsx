@@ -1,6 +1,8 @@
 import React from 'react';
 import { UserPlus, Cpu, PhoneCall, BarChart3 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import AnimatedWaveform from './AnimatedWaveform';
+import PulseRings from './PulseRings';
 
 const steps = [
   {
