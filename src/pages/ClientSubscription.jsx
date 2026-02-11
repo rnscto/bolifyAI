@@ -1,41 +1,119 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { CreditCard, Calendar, TrendingUp } from 'lucide-react';
+import { toast } from 'sonner';
+import { AlertCircle, CheckCircle2 } from 'lucide-react';
+import TrialBanner from '../components/TrialBanner';
+import PlanSelector from '../components/subscription/PlanSelector';
+import ActiveSubscription from '../components/subscription/ActiveSubscription';
+import PaymentHistory from '../components/subscription/PaymentHistory';
 
 export default function ClientSubscription() {
-  const [subscription, setSubscription] = useState(null);
   const [client, setClient] = useState(null);
+  const [subscription, setSubscription] = useState(null);
+  const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [paying, setPaying] = useState(false);
+  const [channels, setChannels] = useState(1);
+  const [includeCRM, setIncludeCRM] = useState(false);
+  const [verifying, setVerifying] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const loadData = async () => {
-    try {
-      const user = await base44.auth.me();
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
-      
-      if (clients.length > 0) {
-        const clientData = clients[0];
-        setClient(clientData);
+  // Check for return from payment
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const orderId = params.get('order_id');
+    const status = params.get('status');
 
-        const subscriptions = await base44.entities.Subscription.filter({
-          client_id: clientData.id
-        });
-        
-        if (subscriptions.length > 0) {
-          setSubscription(subscriptions[0]);
-        }
-      }
-    } catch (error) {
-      console.error('Error loading data:', error);
-    } finally {
-      setLoading(false);
+    if (orderId) {
+      verifyPayment(orderId);
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
     }
+  }, []);
+
+  const loadData = async () => {
+    const user = await base44.auth.me();
+    const clients = await base44.entities.Client.filter({ user_id: user.id });
+
+    if (clients.length > 0) {
+      const clientData = clients[0];
+      setClient(clientData);
+      setChannels(clientData.total_channels || 1);
+      setIncludeCRM(clientData.has_custom_crm || false);
+
+      const [subs, pays] = await Promise.all([
+        base44.entities.Subscription.filter({ client_id: clientData.id }),
+        base44.entities.Payment.filter({ client_id: clientData.id }, '-created_date', 20),
+      ]);
+
+      if (subs.length > 0) setSubscription(subs[0]);
+      setPayments(pays);
+    }
+    setLoading(false);
+  };
+
+  const verifyPayment = async (orderId) => {
+    setVerifying(true);
+    const response = await base44.functions.invoke('verifyPayment', { order_id: orderId });
+    
+    if (response.data.status === 'paid') {
+      toast.success('Payment successful! Your subscription is now active.');
+      await loadData(); // Refresh everything
+    } else if (response.data.status === 'failed') {
+      toast.error('Payment failed. Please try again.');
+    } else {
+      toast.info('Payment is being processed. Please wait a moment.');
+    }
+    setVerifying(false);
+  };
+
+  const handleSubscribe = async () => {
+    setPaying(true);
+    const response = await base44.functions.invoke('createPaymentOrder', {
+      channels,
+      plan_type: 'quarterly',
+      include_crm: includeCRM,
+    });
+
+    const { payment_session_id, environment } = response.data;
+
+    if (!payment_session_id) {
+      toast.error('Failed to create payment order. Please try again.');
+      setPaying(false);
+      return;
+    }
+
+    // Load Cashfree JS SDK and redirect
+    const sdkUrl = environment === 'production'
+      ? 'https://sdk.cashfree.com/js/v3/cashfree.js'
+      : 'https://sdk.cashfree.com/js/v3/cashfree.js';
+
+    if (!window.Cashfree) {
+      const script = document.createElement('script');
+      script.src = sdkUrl;
+      script.async = true;
+      script.onload = () => initCashfreeCheckout(payment_session_id, environment);
+      document.body.appendChild(script);
+    } else {
+      initCashfreeCheckout(payment_session_id, environment);
+    }
+  };
+
+  const initCashfreeCheckout = (sessionId, environment) => {
+    const cashfree = window.Cashfree({
+      mode: environment === 'production' ? 'production' : 'sandbox',
+    });
+
+    cashfree.checkout({
+      paymentSessionId: sessionId,
+      redirectTarget: '_self',
+    });
+
+    setPaying(false);
   };
 
   if (loading) {
@@ -46,94 +124,60 @@ export default function ClientSubscription() {
     );
   }
 
+  if (verifying) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 gap-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        <p className="text-gray-600 font-medium">Verifying your payment...</p>
+      </div>
+    );
+  }
+
+  const isActive = client?.account_status === 'active' && subscription?.status === 'active';
+  const isTrial = client?.account_status === 'trial';
+  const isExpired = client?.account_status === 'expired';
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-3xl mx-auto">
+      <TrialBanner client={client} />
+
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Subscription</h1>
-        <p className="text-gray-600 mt-1">Manage your billing and subscription</p>
+        <p className="text-gray-600 mt-1">
+          {isActive ? 'Manage your active subscription' : 'Subscribe to continue using VaaniAI'}
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <CreditCard className="w-8 h-8 text-blue-600" />
-              <div>
-                <p className="text-2xl font-bold">{client?.total_channels || 1}</p>
-                <p className="text-sm text-gray-600">Active Channels</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <TrendingUp className="w-8 h-8 text-green-600" />
-              <div>
-                <p className="text-2xl font-bold">
-                  ₹{((client?.total_channels || 1) * 6500).toLocaleString()}
-                </p>
-                <p className="text-sm text-gray-600">Monthly Rate</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <Calendar className="w-8 h-8 text-orange-600" />
-              <div>
-                <p className="text-2xl font-bold">
-                  {client?.next_billing_date ? 
-                    new Date(client.next_billing_date).toLocaleDateString() : '-'}
-                </p>
-                <p className="text-sm text-gray-600">Next Billing</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Show expired warning */}
+      {isExpired && (
+        <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 shrink-0" />
+          <div>
+            <p className="font-medium text-red-800">Your trial has expired</p>
+            <p className="text-sm text-red-700 mt-1">Subscribe now to regain access to all features.</p>
+          </div>
+        </div>
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Current Plan</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-center justify-between py-3 border-b">
-            <span className="text-gray-600">Billing Cycle</span>
-            <span className="font-medium">Quarterly</span>
-          </div>
-          <div className="flex items-center justify-between py-3 border-b">
-            <span className="text-gray-600">Rate per Channel</span>
-            <span className="font-medium">₹6,500/month</span>
-          </div>
-          <div className="flex items-center justify-between py-3 border-b">
-            <span className="text-gray-600">Total Channels</span>
-            <span className="font-medium">{client?.total_channels || 1}</span>
-          </div>
-          <div className="flex items-center justify-between py-3 border-b">
-            <span className="text-gray-600">Quarterly Total</span>
-            <span className="font-medium text-lg">
-              ₹{((client?.total_channels || 1) * 6500 * 3).toLocaleString()}
-            </span>
-          </div>
-          <div className="flex items-center justify-between py-3">
-            <span className="text-gray-600">Status</span>
-            <Badge className="bg-green-100 text-green-800">
-              {client?.status || 'Active'}
-            </Badge>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Active subscription view */}
+      {isActive && (
+        <ActiveSubscription client={client} subscription={subscription} />
+      )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Billing History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-gray-500">No billing history available yet</p>
-        </CardContent>
-      </Card>
+      {/* Plan selector for trial/expired users */}
+      {(isTrial || isExpired || !isActive) && (
+        <PlanSelector
+          channels={channels}
+          setChannels={setChannels}
+          includeCRM={includeCRM}
+          setIncludeCRM={setIncludeCRM}
+          onSubscribe={handleSubscribe}
+          loading={paying}
+        />
+      )}
+
+      {/* Payment History */}
+      <PaymentHistory payments={payments} />
     </div>
   );
 }
