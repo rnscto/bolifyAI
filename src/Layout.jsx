@@ -92,10 +92,21 @@ export default function Layout({ children, currentPageName }) {
 
   const navigation = isAdmin ? adminNav : clientNav;
 
-  if (authLoading || !user) {
+  if (authLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
+        <p className="text-gray-600">Please log in to access the dashboard.</p>
+        <button onClick={() => base44.auth.redirectToLogin()} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+          Log In
+        </button>
       </div>
     );
   }
