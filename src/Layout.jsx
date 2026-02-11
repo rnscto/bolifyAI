@@ -115,7 +115,7 @@ export default function Layout({ children, currentPageName }) {
           {/* Logo */}
           <div className="flex items-center justify-between p-6 border-b">
             <div className="flex items-center gap-2">
-              <img src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/5161e7458_WhatsAppImage2026-02-11at44923PM.jpg" alt="VaaniAI" className="h-10 object-contain" />
+              <img src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/9b1876319_WhatsApp_Image_2026-02-11_at_44923_PM-removebg-preview.png" alt="VaaniAI" className="h-10 object-contain" />
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
