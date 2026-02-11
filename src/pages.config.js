@@ -67,9 +67,9 @@ import ClientKnowledgeBase from './pages/ClientKnowledgeBase';
 import ClientLeads from './pages/ClientLeads';
 import ClientSubscription from './pages/ClientSubscription';
 import Home from './pages/Home';
+import Onboarding from './pages/Onboarding';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
-import Onboarding from './pages/Onboarding';
 import __Layout from './Layout.jsx';
 
 
@@ -94,9 +94,9 @@ export const PAGES = {
     "ClientLeads": ClientLeads,
     "ClientSubscription": ClientSubscription,
     "Home": Home,
+    "Onboarding": Onboarding,
     "PrivacyPolicy": PrivacyPolicy,
     "TermsOfService": TermsOfService,
-    "Onboarding": Onboarding,
 }
 
 export const pagesConfig = {
