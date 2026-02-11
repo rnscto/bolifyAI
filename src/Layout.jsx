@@ -43,6 +43,15 @@ export default function Layout({ children, currentPageName }) {
         const clients = await base44.entities.Client.filter({ user_id: currentUser.id });
         if (clients.length > 0) {
           setClient(clients[0]);
+          // If onboarding not completed, redirect
+          if (!clients[0].onboarding_completed) {
+            window.location.href = createPageUrl('Onboarding');
+            return;
+          }
+        } else {
+          // No client record - redirect to onboarding
+          window.location.href = createPageUrl('Onboarding');
+          return;
         }
       }
     } catch (error) {
