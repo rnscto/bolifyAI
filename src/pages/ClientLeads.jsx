@@ -30,6 +30,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
+import CSVImportDialog from '../components/leads/CSVImportDialog';
 
 export default function ClientLeads() {
   const [leads, setLeads] = useState([]);
