@@ -59,7 +59,7 @@ export default function Layout({ children, currentPageName }) {
   const adminNav = [
     { name: 'Dashboard', path: 'AdminDashboard', icon: LayoutDashboard },
     { name: 'Clients', path: 'AdminClients', icon: Users },
-    { name: 'Agents', path: 'AdminAgents', icon: Bot },
+    { name: 'Agents', path: 'AdminAgents', icon: Cpu },
     { name: 'DIDs', path: 'AdminDIDs', icon: Phone },
     { name: 'Subscriptions', path: 'AdminSubscriptions', icon: CreditCard },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
