@@ -61,7 +61,7 @@ export default function HeroSection() {
               <Button
                 size="lg"
                 className="bg-gradient-to-r from-[#e67e22] to-[#f39c12] hover:from-[#d35400] hover:to-[#e67e22] text-white px-8 py-6 text-lg rounded-xl shadow-lg shadow-orange-500/25 font-semibold"
-                onClick={() => base44.auth.redirectToLogin()}
+                onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
               >
                 Start Free Trial <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
