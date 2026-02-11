@@ -110,7 +110,7 @@ export default function Layout({ children, currentPageName }) {
           <div className="flex items-center justify-between p-6 border-b">
             <div className="flex items-center gap-2">
               <Bot className="w-8 h-8 text-blue-600" />
-              <span className="text-xl font-bold text-gray-900">VoiceAI</span>
+                  <span className="text-xl font-bold text-gray-900">VaaniAI</span>
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
