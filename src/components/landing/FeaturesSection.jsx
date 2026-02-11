@@ -5,6 +5,8 @@ import {
   Brain, Calendar, Shield
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import PulseRings from './PulseRings';
+import VoiceWaveBg from './VoiceWaveBg';
 
 const features = [
   {
