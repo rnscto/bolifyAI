@@ -56,7 +56,7 @@ export default function Layout({ children, currentPageName }) {
     base44.auth.logout();
   };
 
-  if (isPublicPage) {
+  if (isPublicPage || isOnboardingPage) {
     return <>{children}</>;
   }
 
