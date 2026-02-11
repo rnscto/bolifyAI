@@ -103,6 +103,11 @@ export default function HeroSection() {
               <div className="relative bg-white/5 backdrop-blur-sm border border-white/10 rounded-3xl p-8">
                 <img src={LOGO_URL} alt="VaaniAI" className="w-80 h-auto drop-shadow-2xl" />
                 
+                {/* Voice waveform overlay */}
+                <div className="absolute bottom-2 left-1/2 -translate-x-1/2">
+                  <AnimatedWaveform barCount={24} color="rgba(255,153,51,0.35)" height={30} />
+                </div>
+                
                 {/* Floating cards */}
                 <motion.div
                   animate={{ y: [0, -10, 0] }}
