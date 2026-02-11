@@ -23,11 +23,14 @@ export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
   const [client, setClient] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
 
   const isPublicPage = ['Home', 'PrivacyPolicy', 'TermsOfService'].includes(currentPageName);
 
   useEffect(() => {
-    if (!isPublicPage) loadUser();
+    if (!isPublicPage) {
+      loadUser();
+    }
   }, [isPublicPage]);
 
   const loadUser = async () => {
@@ -43,6 +46,9 @@ export default function Layout({ children, currentPageName }) {
       }
     } catch (error) {
       console.error('Error loading user:', error);
+      base44.auth.redirectToLogin();
+    } finally {
+      setAuthLoading(false);
     }
   };
 
