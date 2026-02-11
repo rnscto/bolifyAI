@@ -25,7 +25,6 @@ const plans = [
     ],
     cta: 'Get Started',
     popular: false,
-    color: 'border-gray-200'
   },
   {
     name: 'Custom Sales CRM',
@@ -47,7 +46,6 @@ const plans = [
     ],
     cta: 'Start Free Trial',
     popular: true,
-    color: 'border-blue-500 shadow-lg shadow-blue-100'
   }
 ];
 
@@ -56,7 +54,9 @@ export default function PricingSection() {
     <section id="pricing" className="py-24 bg-white">
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <p className="text-sm font-semibold text-blue-600 uppercase tracking-wider mb-2">Pricing</p>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#e67e22]/10 text-[#e67e22] text-sm font-semibold mb-4">
+            Pricing
+          </div>
           <h2 className="text-4xl font-bold text-gray-900 mb-4">Simple, Transparent Pricing</h2>
           <p className="text-lg text-gray-500">No hidden fees. Scale as you grow.</p>
         </div>
@@ -70,32 +70,40 @@ export default function PricingSection() {
               viewport={{ once: true }}
               transition={{ delay: i * 0.1 }}
             >
-              <Card className={`relative h-full ${plan.color}`}>
+              <Card className={`relative h-full transition-shadow ${
+                plan.popular
+                  ? 'border-[#e67e22] shadow-lg shadow-orange-100'
+                  : 'border-gray-200 hover:shadow-md'
+              }`}>
                 {plan.popular && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-blue-600 text-white px-4 py-1">Most Popular</Badge>
+                    <Badge className="bg-gradient-to-r from-[#e67e22] to-[#f39c12] text-white px-4 py-1 border-0">Most Popular</Badge>
                   </div>
                 )}
                 <CardHeader className="text-center pt-8">
                   <CardTitle className="text-xl font-semibold text-gray-900">{plan.name}</CardTitle>
                   <p className="text-sm text-gray-500 mt-1">{plan.description}</p>
                   <div className="mt-4">
-                    <span className="text-4xl font-bold text-gray-900">{plan.price}</span>
+                    <span className="text-4xl font-bold text-[#1a365d]">{plan.price}</span>
                     <span className="text-gray-500">{plan.period}</span>
                   </div>
-                  <p className="text-xs text-blue-600 font-medium mt-1">{plan.billing}</p>
+                  <p className="text-xs text-[#e67e22] font-semibold mt-1">{plan.billing}</p>
                 </CardHeader>
                 <CardContent className="pb-8">
                   <ul className="space-y-3 mb-8">
                     {plan.features.map((feature) => (
                       <li key={feature} className="flex items-start gap-3 text-sm">
-                        <Check className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
+                        <Check className="w-4 h-4 text-[#138808] mt-0.5 shrink-0" />
                         <span className="text-gray-600">{feature}</span>
                       </li>
                     ))}
                   </ul>
                   <Button
-                    className={`w-full ${plan.popular ? 'bg-blue-600 hover:bg-blue-700' : 'bg-gray-900 hover:bg-gray-800'} text-white`}
+                    className={`w-full font-semibold ${
+                      plan.popular
+                        ? 'bg-gradient-to-r from-[#e67e22] to-[#f39c12] hover:from-[#d35400] hover:to-[#e67e22] text-white shadow-md shadow-orange-200'
+                        : 'bg-[#1a365d] hover:bg-[#0f1f3d] text-white'
+                    }`}
                     size="lg"
                     onClick={() => base44.auth.redirectToLogin()}
                   >

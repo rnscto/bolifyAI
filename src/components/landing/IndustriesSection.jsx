@@ -32,10 +32,12 @@ const industries = [
 
 export default function IndustriesSection() {
   return (
-    <section className="py-24 bg-slate-50">
+    <section className="py-24 bg-[#fafbfc]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
-          <p className="text-sm font-semibold text-blue-600 uppercase tracking-wider mb-2">Industries</p>
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#138808]/10 text-[#138808] text-sm font-semibold mb-4">
+            Industries
+          </div>
           <h2 className="text-4xl font-bold text-gray-900 mb-4">Built for Your Industry</h2>
           <p className="text-lg text-gray-500 max-w-2xl mx-auto">
             Pre-configured CRM templates with industry-specific deal stages, lead sources, and automations.
@@ -55,9 +57,9 @@ export default function IndustriesSection() {
               >
                 <Badge
                   variant="outline"
-                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium bg-white hover:bg-blue-50 hover:border-blue-300 transition-colors cursor-default"
+                  className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium bg-white hover:bg-[#1a365d]/5 hover:border-[#1a365d]/30 transition-all cursor-default shadow-sm"
                 >
-                  <Icon className="w-4 h-4 text-blue-600" />
+                  <Icon className="w-4 h-4 text-[#e67e22]" />
                   {industry.name}
                 </Badge>
               </motion.div>
