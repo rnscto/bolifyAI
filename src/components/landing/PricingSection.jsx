@@ -5,6 +5,7 @@ import { Check, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
+import { createPageUrl } from '../../utils';
 
 const plans = [
   {
