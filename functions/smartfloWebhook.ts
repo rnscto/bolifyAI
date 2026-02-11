@@ -61,65 +61,146 @@ Deno.serve(async (req) => {
       return Response.json({ success: false, error: 'Missing call_id' }, { status: 400 });
     }
 
-    // ===== INCOMING CALL IDENTIFICATION =====
+    // ===== INCOMING CALL IDENTIFICATION & AI ROUTING =====
     if (direction === 'inbound' || payload.type === 'inbound') {
       const incomingNumber = caller_number || payload.from || payload.caller_id;
       console.log('[smartfloWebhook] Incoming call from:', incomingNumber);
 
       if (incomingNumber) {
-        // Clean number for matching
         const cleanNumber = incomingNumber.replace(/\D/g, '');
         const last10 = cleanNumber.slice(-10);
 
-        // Search for client by phone number
+        // Match caller to registered client
         const allClients = await base44.asServiceRole.entities.Client.list();
         const matchedClient = allClients.find(c => {
           if (!c.phone) return false;
-          const clientClean = c.phone.replace(/\D/g, '');
-          return clientClean.slice(-10) === last10;
+          return c.phone.replace(/\D/g, '').slice(-10) === last10;
         });
 
-        if (matchedClient) {
-          console.log('[smartfloWebhook] Incoming call identified - Client:', matchedClient.company_name, 'Status:', matchedClient.account_status);
+        // Load retention config
+        const configs = await base44.asServiceRole.entities.RetentionConfig.list('-created_date', 1);
+        const retentionConfig = configs[0] || {};
 
-          // Create call log with client context
+        // ----- KNOWN CLIENT -----
+        if (matchedClient) {
+          console.log('[smartfloWebhook] Identified client:', matchedClient.company_name, matchedClient.account_status);
+
+          // Gather full client context in parallel
+          const [clientAgents, clientLeads, clientSubs, clientCallHistory, clientActivities] = await Promise.all([
+            base44.asServiceRole.entities.Agent.filter({ client_id: matchedClient.id }),
+            base44.asServiceRole.entities.Lead.filter({ client_id: matchedClient.id }),
+            base44.asServiceRole.entities.Subscription.filter({ client_id: matchedClient.id }),
+            base44.asServiceRole.entities.CallLog.filter({ client_id: matchedClient.id }),
+            base44.asServiceRole.entities.Activity.filter({ client_id: matchedClient.id }),
+          ]);
+
+          const recentCalls = clientCallHistory
+            .sort((a, b) => new Date(b.call_start_time || b.created_date) - new Date(a.call_start_time || a.created_date))
+            .slice(0, 5);
+          const activeSub = clientSubs.find(s => s.status === 'active');
+          const pendingActivities = clientActivities.filter(a => a.status === 'scheduled');
+
+          // AI: classify intent + generate personalized greeting
+          const aiAnalysis = await base44.asServiceRole.integrations.Core.InvokeLLM({
+            prompt: `You are VaaniAI's intelligent call routing assistant. An incoming call has been received from a KNOWN registered client. Analyze their context and generate an appropriate response.
+
+CALLER CONTEXT:
+- Company: ${matchedClient.company_name}
+- Industry: ${matchedClient.industry || 'General'}
+- Account Status: ${matchedClient.account_status}
+- Has Active Subscription: ${activeSub ? 'Yes (₹' + activeSub.total_amount + ')' : 'No'}
+- Total Agents: ${clientAgents.length} (Active: ${clientAgents.filter(a => a.status === 'active').length})
+- Total Leads: ${clientLeads.length}
+- Recent Call Count: ${recentCalls.length}
+- Pending Activities: ${pendingActivities.length}
+- Has CRM: ${matchedClient.has_custom_crm ? 'Yes' : 'No'}
+- Trial End Date: ${matchedClient.trial_end_date || 'N/A'}
+
+RECENT CALL SUMMARIES:
+${recentCalls.map(c => `- ${c.direction} | ${c.status} | ${c.conversation_summary || 'No summary'}`).join('\n') || 'No recent calls'}
+
+${retentionConfig.active_offer ? `ACTIVE OFFER: ${retentionConfig.active_offer}${retentionConfig.offer_code ? ' (Code: ' + retentionConfig.offer_code + ')' : ''}` : ''}
+
+${retentionConfig.custom_instructions ? `CUSTOM INSTRUCTIONS: ${retentionConfig.custom_instructions}` : ''}
+
+Based on the context, determine:
+1. The most likely INTENT of the call (sales_inquiry, support, billing, retention, feature_question, complaint, general)
+2. The best ROUTING action (self_serve, retention_agent, support_team, sales_team, account_manager)
+3. A warm, personalized GREETING acknowledging who they are
+4. KEY CONTEXT the handling agent needs to know
+5. SUGGESTED TALKING POINTS based on their situation
+
+Be specific and Indian business context aware. If the account is expired, prioritize retention. If active, prioritize support/value.`,
+            response_json_schema: {
+              type: "object",
+              properties: {
+                intent: {
+                  type: "string",
+                  enum: ["sales_inquiry", "support", "billing", "retention", "feature_question", "complaint", "general"]
+                },
+                confidence: { type: "number" },
+                routing: {
+                  type: "string",
+                  enum: ["self_serve", "retention_agent", "support_team", "sales_team", "account_manager"]
+                },
+                greeting: { type: "string" },
+                agent_context: { type: "string" },
+                talking_points: {
+                  type: "array",
+                  items: { type: "string" }
+                },
+                priority: {
+                  type: "string",
+                  enum: ["low", "medium", "high", "urgent"]
+                },
+                follow_up_needed: { type: "boolean" },
+                follow_up_reason: { type: "string" }
+              }
+            }
+          });
+
+          console.log('[smartfloWebhook] AI Analysis - Intent:', aiAnalysis.intent, 'Routing:', aiAnalysis.routing, 'Priority:', aiAnalysis.priority);
+
+          // Create detailed call log
           const inboundLog = await base44.asServiceRole.entities.CallLog.create({
             client_id: matchedClient.id,
-            agent_id: 'system',
+            agent_id: 'system_inbound',
             call_sid: call_id,
             caller_id: incomingNumber,
             callee_number: called_number || payload.to || '',
             direction: 'inbound',
-            status: 'ringing',
+            status: 'answered',
             call_start_time: new Date().toISOString(),
-            conversation_summary: `Incoming call from known client: ${matchedClient.company_name} (${matchedClient.account_status}). Industry: ${matchedClient.industry || 'General'}`,
+            conversation_summary: `[INBOUND - IDENTIFIED] ${matchedClient.company_name} | Intent: ${aiAnalysis.intent} | Routed to: ${aiAnalysis.routing} | Priority: ${aiAnalysis.priority}\n\nGreeting: ${aiAnalysis.greeting}\n\nAgent Context: ${aiAnalysis.agent_context}\n\nTalking Points:\n${(aiAnalysis.talking_points || []).map(tp => '• ' + tp).join('\n')}`,
           });
 
-          // Load retention config for incoming call handling
-          const configs = await base44.asServiceRole.entities.RetentionConfig.list('-created_date', 1);
-          const config = configs[0] || {};
-
-          if (config.enable_incoming_identification !== false) {
-            // Load client's agent & lead data for context
-            const [clientAgents, clientLeads] = await Promise.all([
-              base44.asServiceRole.entities.Agent.filter({ client_id: matchedClient.id }),
-              base44.asServiceRole.entities.Lead.filter({ client_id: matchedClient.id }),
-            ]);
-
-            console.log('[smartfloWebhook] Client context loaded - Agents:', clientAgents.length, 'Leads:', clientLeads.length);
-          }
-
-          // Create activity
+          // Create activity with routing info
           await base44.asServiceRole.entities.Activity.create({
             client_id: matchedClient.id,
             type: 'call',
-            title: `Incoming call from ${matchedClient.company_name}`,
-            description: `Client called in. Account: ${matchedClient.account_status}. Phone: ${incomingNumber}`,
+            title: `Inbound: ${aiAnalysis.intent.replace('_', ' ')} — ${matchedClient.company_name}`,
+            description: `Routed to: ${aiAnalysis.routing.replace('_', ' ')}. ${aiAnalysis.agent_context || ''}\n${aiAnalysis.follow_up_needed ? 'FOLLOW-UP NEEDED: ' + aiAnalysis.follow_up_reason : ''}`,
             scheduled_date: new Date().toISOString(),
-            status: 'scheduled',
-            priority: matchedClient.account_status === 'expired' ? 'high' : 'medium',
+            status: aiAnalysis.follow_up_needed ? 'scheduled' : 'completed',
+            priority: aiAnalysis.priority === 'urgent' ? 'high' : aiAnalysis.priority || 'medium',
             auto_created: true,
           });
+
+          // If follow-up needed, create a separate follow-up activity
+          if (aiAnalysis.follow_up_needed) {
+            const followUpDate = new Date();
+            followUpDate.setDate(followUpDate.getDate() + 1);
+            await base44.asServiceRole.entities.Activity.create({
+              client_id: matchedClient.id,
+              type: 'followup',
+              title: `Follow-up: ${aiAnalysis.follow_up_reason || aiAnalysis.intent}`,
+              description: `Auto-created after inbound call. Original intent: ${aiAnalysis.intent}. Client: ${matchedClient.company_name}`,
+              scheduled_date: followUpDate.toISOString(),
+              status: 'scheduled',
+              priority: 'high',
+              auto_created: true,
+            });
+          }
 
           return Response.json({
             success: true,
@@ -129,27 +210,102 @@ Deno.serve(async (req) => {
             account_status: matchedClient.account_status,
             industry: matchedClient.industry,
             call_log_id: inboundLog.id,
+            ai_analysis: {
+              intent: aiAnalysis.intent,
+              confidence: aiAnalysis.confidence,
+              routing: aiAnalysis.routing,
+              greeting: aiAnalysis.greeting,
+              priority: aiAnalysis.priority,
+              talking_points: aiAnalysis.talking_points,
+              agent_context: aiAnalysis.agent_context,
+              follow_up_needed: aiAnalysis.follow_up_needed,
+            },
           });
-        } else {
-          console.log('[smartfloWebhook] Incoming call from unknown number:', incomingNumber);
 
-          // Log unidentified incoming call
-          await base44.asServiceRole.entities.CallLog.create({
+        // ----- UNKNOWN CALLER -----
+        } else {
+          console.log('[smartfloWebhook] Unknown caller:', incomingNumber);
+
+          // AI: handle unknown caller with general greeting + lead qualification
+          const unknownAnalysis = await base44.asServiceRole.integrations.Core.InvokeLLM({
+            prompt: `You are VaaniAI's intelligent call routing assistant. An incoming call has been received from an UNKNOWN number (not a registered client).
+
+Caller Number: ${incomingNumber}
+${retentionConfig.active_offer ? `Active Offer: ${retentionConfig.active_offer}` : ''}
+
+Generate:
+1. A professional greeting for an unknown caller to VaaniAI
+2. The most likely intent (new_lead, wrong_number, partner_inquiry, media, general)
+3. Key qualifying questions to ask
+4. Routing recommendation
+5. Whether this should be flagged as a potential new lead
+
+VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at ₹6,500/month per channel.`,
+            response_json_schema: {
+              type: "object",
+              properties: {
+                greeting: { type: "string" },
+                likely_intent: {
+                  type: "string",
+                  enum: ["new_lead", "wrong_number", "partner_inquiry", "media", "general"]
+                },
+                qualifying_questions: {
+                  type: "array",
+                  items: { type: "string" }
+                },
+                routing: {
+                  type: "string",
+                  enum: ["sales_team", "support_team", "auto_response", "voicemail"]
+                },
+                is_potential_lead: { type: "boolean" },
+                suggested_response: { type: "string" }
+              }
+            }
+          });
+
+          console.log('[smartfloWebhook] Unknown caller AI - Intent:', unknownAnalysis.likely_intent, 'Potential lead:', unknownAnalysis.is_potential_lead);
+
+          // Log the unknown call
+          const unknownLog = await base44.asServiceRole.entities.CallLog.create({
             client_id: 'unknown',
-            agent_id: 'system',
+            agent_id: 'system_inbound',
             call_sid: call_id,
             caller_id: incomingNumber,
             callee_number: called_number || '',
             direction: 'inbound',
-            status: 'ringing',
+            status: 'answered',
             call_start_time: new Date().toISOString(),
-            conversation_summary: `Incoming call from unregistered number: ${incomingNumber}`,
+            conversation_summary: `[INBOUND - UNIDENTIFIED] Number: ${incomingNumber} | Likely intent: ${unknownAnalysis.likely_intent} | Potential lead: ${unknownAnalysis.is_potential_lead ? 'YES' : 'No'} | Routed to: ${unknownAnalysis.routing}\n\nGreeting: ${unknownAnalysis.greeting}\n\nQualifying Questions:\n${(unknownAnalysis.qualifying_questions || []).map(q => '• ' + q).join('\n')}`,
           });
+
+          // If potential lead, create a system-level activity for admin follow-up
+          if (unknownAnalysis.is_potential_lead) {
+            // Find any admin client record to attach the activity, or use first client
+            const adminActivity = {
+              client_id: allClients[0]?.id || 'system',
+              type: 'call',
+              title: `New inbound lead: ${incomingNumber}`,
+              description: `Unknown caller identified as potential lead. Intent: ${unknownAnalysis.likely_intent}. Routed to: ${unknownAnalysis.routing}.\n\nSuggested response: ${unknownAnalysis.suggested_response || 'Standard sales pitch'}`,
+              scheduled_date: new Date().toISOString(),
+              status: 'scheduled',
+              priority: 'high',
+              auto_created: true,
+            };
+            await base44.asServiceRole.entities.Activity.create(adminActivity);
+          }
 
           return Response.json({
             success: true,
             identified: false,
-            message: 'Caller not matched to any registered client',
+            call_log_id: unknownLog.id,
+            ai_analysis: {
+              greeting: unknownAnalysis.greeting,
+              likely_intent: unknownAnalysis.likely_intent,
+              routing: unknownAnalysis.routing,
+              is_potential_lead: unknownAnalysis.is_potential_lead,
+              qualifying_questions: unknownAnalysis.qualifying_questions,
+              suggested_response: unknownAnalysis.suggested_response,
+            },
           });
         }
       }
