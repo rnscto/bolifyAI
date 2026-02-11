@@ -66,6 +66,7 @@ import ClientDashboard from './pages/ClientDashboard';
 import ClientKnowledgeBase from './pages/ClientKnowledgeBase';
 import ClientLeads from './pages/ClientLeads';
 import ClientSubscription from './pages/ClientSubscription';
+import Home from './pages/Home';
 import __Layout from './Layout.jsx';
 
 
@@ -89,6 +90,7 @@ export const PAGES = {
     "ClientKnowledgeBase": ClientKnowledgeBase,
     "ClientLeads": ClientLeads,
     "ClientSubscription": ClientSubscription,
+    "Home": Home,
 }
 
 export const pagesConfig = {
