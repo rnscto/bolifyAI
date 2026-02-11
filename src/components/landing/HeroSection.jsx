@@ -3,6 +3,9 @@ import { Button } from '@/components/ui/button';
 import { ArrowRight, Play, PhoneCall, TrendingUp, Mic } from 'lucide-react';
 import { base44 } from '@/api/base44Client';
 import { motion } from 'framer-motion';
+import AnimatedWaveform from './AnimatedWaveform';
+import PulseRings from './PulseRings';
+import VoiceWaveBg from './VoiceWaveBg';
 
 const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/9b1876319_WhatsApp_Image_2026-02-11_at_44923_PM-removebg-preview.png";
 
