@@ -26,6 +26,7 @@ export default function Layout({ children, currentPageName }) {
   const [authLoading, setAuthLoading] = useState(true);
 
   const isPublicPage = ['Home', 'PrivacyPolicy', 'TermsOfService'].includes(currentPageName);
+  const isOnboardingPage = currentPageName === 'Onboarding';
 
   useEffect(() => {
     if (!isPublicPage) {
