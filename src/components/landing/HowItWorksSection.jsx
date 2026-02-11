@@ -35,7 +35,7 @@ const steps = [
 
 export default function HowItWorksSection() {
   return (
-    <section className="py-24 bg-gradient-to-b from-gray-50 to-white">
+    <section id="how-it-works" className="py-24 bg-gradient-to-b from-gray-50 to-white">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-16">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#e67e22]/10 text-[#e67e22] text-sm font-semibold mb-4">
