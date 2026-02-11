@@ -48,6 +48,7 @@
  * The mainPage value must match a key in the PAGES object exactly.
  */
 import APIDocs from './pages/APIDocs';
+import AdminAgents from './pages/AdminAgents';
 import AdminClients from './pages/AdminClients';
 import AdminDIDs from './pages/AdminDIDs';
 import AdminDashboard from './pages/AdminDashboard';
@@ -60,12 +61,13 @@ import ClientDashboard from './pages/ClientDashboard';
 import ClientKnowledgeBase from './pages/ClientKnowledgeBase';
 import ClientLeads from './pages/ClientLeads';
 import ClientSubscription from './pages/ClientSubscription';
-import AdminAgents from './pages/AdminAgents';
+import ClientCRMSetup from './pages/ClientCRMSetup';
 import __Layout from './Layout.jsx';
 
 
 export const PAGES = {
     "APIDocs": APIDocs,
+    "AdminAgents": AdminAgents,
     "AdminClients": AdminClients,
     "AdminDIDs": AdminDIDs,
     "AdminDashboard": AdminDashboard,
@@ -78,7 +80,7 @@ export const PAGES = {
     "ClientKnowledgeBase": ClientKnowledgeBase,
     "ClientLeads": ClientLeads,
     "ClientSubscription": ClientSubscription,
-    "AdminAgents": AdminAgents,
+    "ClientCRMSetup": ClientCRMSetup,
 }
 
 export const pagesConfig = {
