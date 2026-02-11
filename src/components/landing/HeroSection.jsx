@@ -19,7 +19,12 @@ export default function HeroSection() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-[#FF9933]/5 rounded-full blur-3xl" />
         {/* Subtle dot grid */}
         <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:40px_40px]" />
+        {/* Pulse rings - AI calling feel */}
+        <PulseRings className="absolute top-16 right-[15%] opacity-40" color="#FF9933" size={160} rings={3} />
+        <PulseRings className="absolute bottom-24 left-[8%] opacity-25" color="#138808" size={120} rings={2} />
       </div>
+      {/* Animated wave at bottom */}
+      <VoiceWaveBg color="rgba(255,153,51,0.06)" position="bottom" />
 
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
