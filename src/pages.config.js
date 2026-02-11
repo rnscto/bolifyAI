@@ -70,6 +70,8 @@ import Home from './pages/Home';
 import Onboarding from './pages/Onboarding';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
+import ClientSettings from './pages/ClientSettings';
+import AdminPayments from './pages/AdminPayments';
 import __Layout from './Layout.jsx';
 
 
@@ -97,6 +99,8 @@ export const PAGES = {
     "Onboarding": Onboarding,
     "PrivacyPolicy": PrivacyPolicy,
     "TermsOfService": TermsOfService,
+    "ClientSettings": ClientSettings,
+    "AdminPayments": AdminPayments,
 }
 
 export const pagesConfig = {
