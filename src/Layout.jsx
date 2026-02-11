@@ -45,9 +45,17 @@ export default function Layout({ children, currentPageName }) {
           setClient(clients[0]);
           // If onboarding not completed, redirect
           if (!clients[0].onboarding_completed) {
-            window.location.href = createPageUrl('Onboarding');
-            return;
-          }
+              window.location.href = createPageUrl('Onboarding');
+              return;
+            }
+            // Check if trial expired and not subscribed
+            if (clients[0].account_status === 'trial' && clients[0].trial_end_date) {
+              const trialEnd = new Date(clients[0].trial_end_date);
+              if (trialEnd < new Date()) {
+                await base44.entities.Client.update(clients[0].id, { account_status: 'expired' });
+                clients[0].account_status = 'expired';
+              }
+            }
         } else {
           // No client record - redirect to onboarding
           window.location.href = createPageUrl('Onboarding');
