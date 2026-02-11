@@ -155,7 +155,8 @@ async function generateResponse(reqId, conversationHistory, systemPrompt) {
     });
 
     if (!response.ok) {
-      console.error(`[${reqId}] ❌ LLM failed: ${response.status}`);
+      const errBody = await response.text();
+      console.error(`[${reqId}] ❌ LLM failed: ${response.status} - ${errBody}`);
       return 'Sorry, please say that again.';
     }
 
@@ -264,12 +265,24 @@ async function saveCallRecord(session, reqId, duration, base44Client) {
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    await base44Client.asServiceRole.entities.CallLog.update(session.callLogId, {
-      status: 'completed',
-      transcript: transcript,
-      duration: duration,
-      call_end_time: new Date().toISOString()
-    });
+    // Try asServiceRole first, fall back to internal function call
+    try {
+      await base44Client.asServiceRole.entities.CallLog.update(session.callLogId, {
+        status: 'completed',
+        transcript: transcript,
+        duration: duration,
+        call_end_time: new Date().toISOString()
+      });
+    } catch (serviceErr) {
+      console.log(`[${reqId}] ⚠️ asServiceRole failed, using function invoke fallback`);
+      await base44Client.functions.invoke('updateCallLog', {
+        call_log_id: session.callLogId,
+        status: 'completed',
+        transcript: transcript,
+        duration: duration,
+        call_end_time: new Date().toISOString()
+      });
+    }
 
     console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}`);
   } catch (err) {
