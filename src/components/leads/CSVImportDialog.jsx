@@ -88,7 +88,8 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
       return;
     }
 
-    const rows = Array.isArray(extracted.output) ? extracted.output : [];
+    const rows = Array.isArray(extracted.output?.rows) ? extracted.output.rows : 
+                 Array.isArray(extracted.output) ? extracted.output : [];
     if (rows.length === 0) {
       toast.error('No data found in file');
       setFile(null);
@@ -96,8 +97,8 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
       return;
     }
 
-    // Detect headers from first row keys
-    const headers = [...new Set(rows.flatMap(r => Object.keys(r)))];
+    // Detect headers from first row keys - filter out empty keys
+    const headers = [...new Set(rows.flatMap(r => Object.keys(r)))].filter(h => h && h.trim());
     setFileHeaders(headers);
     setRawData(rows);
 
