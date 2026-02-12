@@ -128,6 +128,16 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Trigger post-call follow-up emails & RCS
+    try {
+      await base44.asServiceRole.functions.invoke('postCallFollowup', {
+        call_log_id: call_log_id
+      });
+      console.log('[processTranscript] Post-call follow-up triggered');
+    } catch (followupErr) {
+      console.error('[processTranscript] Post-call follow-up error:', followupErr.message);
+    }
+
     return Response.json({ 
       success: true,
       transcript,
