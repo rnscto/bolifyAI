@@ -85,13 +85,13 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
       }
 
       const detectedHeaders = [...new Set(rows.flatMap(r => Object.keys(r)))].filter(h => h && h.trim());
-    setFileHeaders(headers);
+    setFileHeaders(detectedHeaders);
     setRawData(rows);
 
     // Auto-map by fuzzy matching
     const autoMap = {};
     LEAD_FIELDS.forEach(field => {
-      const match = headers.find(h => {
+      const match = detectedHeaders.find(h => {
         const hLower = h.toLowerCase().trim();
         const fLower = field.key.toLowerCase();
         const fLabel = field.label.toLowerCase();
