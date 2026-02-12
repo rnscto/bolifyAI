@@ -52,6 +52,8 @@ import AdminAgents from './pages/AdminAgents';
 import AdminClients from './pages/AdminClients';
 import AdminDIDs from './pages/AdminDIDs';
 import AdminDashboard from './pages/AdminDashboard';
+import AdminPayments from './pages/AdminPayments';
+import AdminRetention from './pages/AdminRetention';
 import AdminSubscriptions from './pages/AdminSubscriptions';
 import ClientActivities from './pages/ClientActivities';
 import ClientAgents from './pages/ClientAgents';
@@ -65,14 +67,13 @@ import ClientCallLogs from './pages/ClientCallLogs';
 import ClientDashboard from './pages/ClientDashboard';
 import ClientKnowledgeBase from './pages/ClientKnowledgeBase';
 import ClientLeads from './pages/ClientLeads';
+import ClientSettings from './pages/ClientSettings';
 import ClientSubscription from './pages/ClientSubscription';
 import Home from './pages/Home';
 import Onboarding from './pages/Onboarding';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
-import ClientSettings from './pages/ClientSettings';
-import AdminPayments from './pages/AdminPayments';
-import AdminRetention from './pages/AdminRetention';
+import AdminOutreach from './pages/AdminOutreach';
 import __Layout from './Layout.jsx';
 
 
@@ -82,6 +83,8 @@ export const PAGES = {
     "AdminClients": AdminClients,
     "AdminDIDs": AdminDIDs,
     "AdminDashboard": AdminDashboard,
+    "AdminPayments": AdminPayments,
+    "AdminRetention": AdminRetention,
     "AdminSubscriptions": AdminSubscriptions,
     "ClientActivities": ClientActivities,
     "ClientAgents": ClientAgents,
@@ -95,14 +98,13 @@ export const PAGES = {
     "ClientDashboard": ClientDashboard,
     "ClientKnowledgeBase": ClientKnowledgeBase,
     "ClientLeads": ClientLeads,
+    "ClientSettings": ClientSettings,
     "ClientSubscription": ClientSubscription,
     "Home": Home,
     "Onboarding": Onboarding,
     "PrivacyPolicy": PrivacyPolicy,
     "TermsOfService": TermsOfService,
-    "ClientSettings": ClientSettings,
-    "AdminPayments": AdminPayments,
-    "AdminRetention": AdminRetention,
+    "AdminOutreach": AdminOutreach,
 }
 
 export const pagesConfig = {
