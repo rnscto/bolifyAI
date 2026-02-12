@@ -55,10 +55,28 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
     const extracted = await base44.integrations.Core.ExtractDataFromUploadedFile({
       file_url,
       json_schema: {
-        type: "array",
-        items: {
-          type: "object",
-          additionalProperties: { type: "string" }
+        type: "object",
+        properties: {
+          rows: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                name: { type: "string" },
+                phone: { type: "string" },
+                email: { type: "string" },
+                company: { type: "string" },
+                notes: { type: "string" },
+                source: { type: "string" },
+                mobile: { type: "string" },
+                contact: { type: "string" },
+                organization: { type: "string" },
+                business: { type: "string" },
+                tel: { type: "string" },
+                customer: { type: "string" },
+              }
+            }
+          }
         }
       }
     });
