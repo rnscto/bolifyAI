@@ -49,56 +49,42 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
     setFile(selectedFile);
     setUploading(true);
 
-    const { file_url } = await base44.integrations.Core.UploadFile({ file: selectedFile });
-
-    // Extract raw data with generic schema to detect columns
-    const extracted = await base44.integrations.Core.ExtractDataFromUploadedFile({
-      file_url,
-      json_schema: {
-        type: "object",
-        properties: {
-          rows: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                name: { type: "string" },
-                phone: { type: "string" },
-                email: { type: "string" },
-                company: { type: "string" },
-                notes: { type: "string" },
-                source: { type: "string" },
-                mobile: { type: "string" },
-                contact: { type: "string" },
-                organization: { type: "string" },
-                business: { type: "string" },
-                tel: { type: "string" },
-                customer: { type: "string" },
-              }
-            }
-          }
-        }
+    // Read file content locally to detect headers
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const text = event.target.result;
+      const lines = text.split('\n').filter(l => l.trim());
+      
+      if (lines.length < 2) {
+        toast.error('File has no data rows');
+        setFile(null);
+        setUploading(false);
+        return;
       }
-    });
 
-    if (extracted.status === 'error') {
-      toast.error('Failed to read file: ' + (extracted.details || 'Unknown error'));
-      setFile(null);
-      setUploading(false);
-      return;
-    }
+      // Parse headers from first line
+      const delimiter = lines[0].includes('\t') ? '\t' : ',';
+      const headers = lines[0].split(delimiter).map(h => h.trim().replace(/^["']|["']$/g, ''));
 
-    const rows = Array.isArray(extracted.output?.rows) ? extracted.output.rows : 
-                 Array.isArray(extracted.output) ? extracted.output : [];
-    if (rows.length === 0) {
-      toast.error('No data found in file');
-      setFile(null);
-      setUploading(false);
-      return;
-    }
+      // Parse data rows
+      const rows = [];
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(delimiter).map(v => v.trim().replace(/^["']|["']$/g, ''));
+        const row = {};
+        headers.forEach((h, idx) => {
+          if (h && values[idx]) row[h] = values[idx];
+        });
+        if (Object.keys(row).length > 0) rows.push(row);
+      }
 
-    // Detect headers from first row keys - filter out empty keys
-    const headers = [...new Set(rows.flatMap(r => Object.keys(r)))].filter(h => h && h.trim());
+      if (rows.length === 0) {
+        toast.error('No data found in file');
+        setFile(null);
+        setUploading(false);
+        return;
+      }
+
+      const detectedHeaders = [...new Set(rows.flatMap(r => Object.keys(r)))].filter(h => h && h.trim());
     setFileHeaders(headers);
     setRawData(rows);
 
