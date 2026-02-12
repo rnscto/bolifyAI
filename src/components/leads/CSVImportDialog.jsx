@@ -109,6 +109,71 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
 
     setUploading(false);
     setStep(2);
+    };
+
+    // For Excel files, use the upload + extract approach
+    const ext = selectedFile.name.substring(selectedFile.name.lastIndexOf('.')).toLowerCase();
+    if (ext === '.xlsx' || ext === '.xls') {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file: selectedFile });
+      const extracted = await base44.integrations.Core.ExtractDataFromUploadedFile({
+        file_url,
+        json_schema: {
+          type: "object",
+          properties: {
+            rows: {
+              type: "array",
+              items: {
+                type: "object",
+                additionalProperties: { type: "string" }
+              }
+            }
+          }
+        }
+      });
+
+      if (extracted.status === 'error') {
+        toast.error('Failed to read file: ' + (extracted.details || 'Unknown error'));
+        setFile(null);
+        setUploading(false);
+        return;
+      }
+
+      const rows = Array.isArray(extracted.output?.rows) ? extracted.output.rows :
+                   Array.isArray(extracted.output) ? extracted.output : [];
+      if (rows.length === 0) {
+        toast.error('No data found in file');
+        setFile(null);
+        setUploading(false);
+        return;
+      }
+
+      const detectedHeaders = [...new Set(rows.flatMap(r => Object.keys(r)))].filter(h => h && h.trim());
+      setFileHeaders(detectedHeaders);
+      setRawData(rows);
+
+      const autoMap = {};
+      LEAD_FIELDS.forEach(field => {
+        const match = detectedHeaders.find(h => {
+          const hLower = h.toLowerCase().trim();
+          const fLower = field.key.toLowerCase();
+          const fLabel = field.label.toLowerCase();
+          return hLower === fLower || hLower === fLabel ||
+            hLower.includes(fLower) || fLower.includes(hLower) ||
+            (fLower === 'phone' && (hLower.includes('mobile') || hLower.includes('contact') || hLower.includes('tel'))) ||
+            (fLower === 'name' && (hLower.includes('full name') || hLower.includes('customer') || hLower.includes('lead'))) ||
+            (fLower === 'company' && (hLower.includes('org') || hLower.includes('business'))) ||
+            (fLower === 'email' && hLower.includes('mail'));
+        });
+        if (match) autoMap[field.key] = match;
+      });
+      setFieldMapping(autoMap);
+      setUploading(false);
+      setStep(2);
+      return;
+    }
+
+    // For CSV files, read locally
+    reader.readAsText(selectedFile);
   };
 
   const getMappedLeads = () => {
