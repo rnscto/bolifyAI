@@ -194,7 +194,7 @@ export default function ClientLeads() {
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setCsvDialogOpen(true)}>
-            <Upload className="w-4 h-4 mr-2" /> Import CSV
+            <Upload className="w-4 h-4 mr-2" /> Import Leads
           </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
