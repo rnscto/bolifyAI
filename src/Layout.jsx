@@ -89,6 +89,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Retention', path: 'AdminRetention', icon: PhoneCall },
     { name: 'Subscriptions', path: 'AdminSubscriptions', icon: CreditCard },
     { name: 'Payments', path: 'AdminPayments', icon: IndianRupee },
+    { name: 'Outreach', path: 'AdminOutreach', icon: Activity },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
   ];
 
