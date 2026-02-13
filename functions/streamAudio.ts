@@ -638,8 +638,11 @@ Deno.serve(async (req) => {
             })
           });
           
-          const configData = await configResp.json();
-          console.log(`[${reqId}] 📋 Agent config response: status=${configResp.status}, success=${configData.success}`);
+          const configRespText = await configResp.text();
+          console.log(`[${reqId}] 📋 Agent config response: status=${configResp.status}, body=${configRespText.substring(0, 300)}`);
+          
+          const configData = JSON.parse(configRespText);
+          console.log(`[${reqId}] 📋 Agent config parsed: success=${configData.success}`);
 
           if (configData.success && configData.agent) {
             session.callLogId = configData.callLogId;
