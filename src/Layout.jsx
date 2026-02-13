@@ -18,7 +18,8 @@ import {
   Activity,
   BookOpen,
   IndianRupee,
-  UserCog
+  UserCog,
+  Megaphone
 } from 'lucide-react';
 
 export default function Layout({ children, currentPageName }) {
