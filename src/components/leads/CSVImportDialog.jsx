@@ -334,6 +334,11 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
               </div>
             )}
             <p className="text-sm font-medium text-gray-700">Map your file columns to lead fields</p>
+            <div className="flex flex-wrap gap-1.5">
+              {fileHeaders.map(h => (
+                <Badge key={h} variant="outline" className="text-xs font-mono bg-gray-50">{h}</Badge>
+              ))}
+            </div>
             <div className="space-y-2">
               {LEAD_FIELDS.map(field => (
                 <div key={field.key} className="flex items-center gap-3">
