@@ -351,18 +351,28 @@ Deno.serve(async (req) => {
 
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
 
-      // Create Base44 client — enrich with Base44-App-Id for external WebSocket requests (Smartflo)
-      // Platform adds the service token automatically for hosted functions
-      let clientReq = req;
-      if (!req.headers.has('Base44-App-Id')) {
-        console.log(`[${reqId}] ⚠️ No Base44-App-Id header, enriching from env`);
-        const enrichedHeaders = new Headers(req.headers);
-        enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
-        clientReq = new Request(req.url, { method: req.method, headers: enrichedHeaders });
-      }
-      console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
-      const base44 = createClientFromRequest(clientReq);
-      console.log(`[${reqId}] ✅ Base44 client created`);
+  // For WebSocket connections (from Smartflo), use createClient directly
+  // For regular HTTP requests, use createClientFromRequest
+  let base44;
+  if (isWebSocket) {
+    console.log(`[${reqId}] 🔑 Creating Base44 client via createClient (WebSocket mode)`);
+    base44 = createClient({
+      appId: Deno.env.get('BASE44_APP_ID'),
+      apiUrl: 'https://vaaniai.base44.app'
+    });
+    console.log(`[${reqId}] ✅ Base44 client created (createClient)`);
+  } else {
+    let clientReq = req;
+    if (!req.headers.has('Base44-App-Id')) {
+      console.log(`[${reqId}] ⚠️ No Base44-App-Id header, enriching from env`);
+      const enrichedHeaders = new Headers(req.headers);
+      enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
+      clientReq = new Request(req.url, { method: req.method, headers: enrichedHeaders });
+    }
+    console.log(`[${reqId}] 🔑 Creating Base44 client from request (HTTP mode)`);
+    base44 = createClientFromRequest(clientReq);
+    console.log(`[${reqId}] ✅ Base44 client created (createClientFromRequest)`);
+  }
 
       // Return status for non-WebSocket requests
       if (!isWebSocket) {
