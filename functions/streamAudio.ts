@@ -351,28 +351,21 @@ Deno.serve(async (req) => {
 
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
 
-  // For WebSocket connections (from Smartflo), use createClient directly
-  // For regular HTTP requests, use createClientFromRequest
-  let base44;
-  if (isWebSocket) {
-    console.log(`[${reqId}] 🔑 Creating Base44 client via createClient (WebSocket mode)`);
-    base44 = createClient({
-      appId: Deno.env.get('BASE44_APP_ID'),
-      apiUrl: 'https://vaaniai.base44.app'
-    });
-    console.log(`[${reqId}] ✅ Base44 client created (createClient)`);
-  } else {
-    let clientReq = req;
-    if (!req.headers.has('Base44-App-Id')) {
-      console.log(`[${reqId}] ⚠️ No Base44-App-Id header, enriching from env`);
-      const enrichedHeaders = new Headers(req.headers);
-      enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
-      clientReq = new Request(req.url, { method: req.method, headers: enrichedHeaders });
-    }
-    console.log(`[${reqId}] 🔑 Creating Base44 client from request (HTTP mode)`);
-    base44 = createClientFromRequest(clientReq);
-    console.log(`[${reqId}] ✅ Base44 client created (createClientFromRequest)`);
+  // Always use createClientFromRequest for asServiceRole access
+  // For external WebSocket connections (Smartflo), enrich headers with app ID and service token
+  const enrichedHeaders = new Headers(req.headers);
+  if (!req.headers.has('Base44-App-Id')) {
+    enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
+    console.log(`[${reqId}] ⚠️ Enriched Base44-App-Id from env`);
   }
+  if (!req.headers.has('Base44-Service-Token') && Deno.env.get('BASE44_SERVICE_ROLE_KEY')) {
+    enrichedHeaders.set('Base44-Service-Token', Deno.env.get('BASE44_SERVICE_ROLE_KEY'));
+    console.log(`[${reqId}] ⚠️ Enriched Base44-Service-Token from env`);
+  }
+  const clientReq = new Request(req.url, { method: req.method, headers: enrichedHeaders });
+  console.log(`[${reqId}] 🔑 Creating Base44 client from enriched request`);
+  const base44 = createClientFromRequest(clientReq);
+  console.log(`[${reqId}] ✅ Base44 client created`);
 
       // Return status for non-WebSocket requests
       if (!isWebSocket) {
