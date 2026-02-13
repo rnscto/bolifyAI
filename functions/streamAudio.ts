@@ -300,22 +300,9 @@ Deno.serve(async (req) => {
 
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
 
-      // Create Base44 client from request
-      // WebSocket requests from Smartflo don't have Base44 headers,
-      // so we enrich the request with Base44-App-Id from env when missing.
-      // Base44 platform automatically provides the service role token for hosted functions.
-      let clientReq = req;
-      if (!req.headers.has('Base44-App-Id')) {
-        console.log(`[${reqId}] ⚠️ No Base44-App-Id header, enriching from env`);
-        const enrichedHeaders = new Headers(req.headers);
-        enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
-        clientReq = new Request(req.url, {
-          method: req.method,
-          headers: enrichedHeaders
-        });
-      }
+      // Create Base44 client — platform adds the service token automatically for hosted functions
       console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
-      const base44 = createClientFromRequest(clientReq);
+      const base44 = createClientFromRequest(req);
       console.log(`[${reqId}] ✅ Base44 client created`);
 
       // Return status for non-WebSocket requests
