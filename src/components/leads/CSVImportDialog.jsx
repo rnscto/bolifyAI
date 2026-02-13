@@ -191,8 +191,15 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
       const lead = {};
       LEAD_FIELDS.forEach(field => {
         const sourceCol = fieldMapping[field.key];
-        if (sourceCol && row[sourceCol] !== undefined && row[sourceCol] !== null) {
-          lead[field.key] = String(row[sourceCol]).trim();
+        if (!sourceCol) return;
+        // Try exact match first, then case-insensitive match
+        let val = row[sourceCol];
+        if (val === undefined || val === null) {
+          const matchKey = Object.keys(row).find(k => k.trim().toLowerCase() === sourceCol.trim().toLowerCase());
+          if (matchKey) val = row[matchKey];
+        }
+        if (val !== undefined && val !== null && String(val).trim()) {
+          lead[field.key] = String(val).trim();
         }
       });
       lead._row = idx + 1;
