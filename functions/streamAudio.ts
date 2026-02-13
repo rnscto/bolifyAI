@@ -258,35 +258,86 @@ async function sendTTSAudio(socket, session, reqId, text, markName) {
 
 // Save call record
 async function saveCallRecord(session, reqId, duration, base44Client) {
-  if (!session.callLogId) return;
+  if (!session.callLogId) {
+    console.log(`[${reqId}] ⚠️ No callLogId, skipping save`);
+    return;
+  }
+  if (session._saved) {
+    console.log(`[${reqId}] ⚠️ Already saved, skipping duplicate`);
+    return;
+  }
+  session._saved = true;
 
   try {
     const transcript = session.transcript
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
+    // Generate AI summary from transcript
+    let summary = '';
+    if (transcript && transcript.trim().length > 20) {
+      try {
+        const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+        const summaryRes = await fetch(
+          `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`,
+          {
+            method: 'POST',
+            headers: {
+              'api-key': Deno.env.get('AZURE_OPENAI_KEY'),
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messages: [
+                { role: 'system', content: 'Summarize this call transcript in 2-3 sentences. Mention the outcome and key points discussed.' },
+                { role: 'user', content: transcript }
+              ],
+              max_completion_tokens: 200
+            })
+          }
+        );
+        if (summaryRes.ok) {
+          const summaryData = await summaryRes.json();
+          summary = summaryData.choices?.[0]?.message?.content || '';
+          console.log(`[${reqId}] 📝 Summary generated: ${summary.substring(0, 80)}...`);
+        }
+      } catch (sumErr) {
+        console.error(`[${reqId}] ⚠️ Summary generation failed: ${sumErr.message}`);
+      }
+    }
+
+    const updateData = {
+      status: 'completed',
+      transcript: transcript || '',
+      duration: duration,
+      call_end_time: new Date().toISOString()
+    };
+    if (summary) updateData.conversation_summary = summary;
+
     // Try asServiceRole first, fall back to internal function call
     try {
-      await base44Client.asServiceRole.entities.CallLog.update(session.callLogId, {
-        status: 'completed',
-        transcript: transcript,
-        duration: duration,
-        call_end_time: new Date().toISOString()
-      });
+      await base44Client.asServiceRole.entities.CallLog.update(session.callLogId, updateData);
     } catch (serviceErr) {
       console.log(`[${reqId}] ⚠️ asServiceRole failed, using function invoke fallback`);
       await base44Client.functions.invoke('updateCallLog', {
         call_log_id: session.callLogId,
-        status: 'completed',
-        transcript: transcript,
-        duration: duration,
-        call_end_time: new Date().toISOString()
+        ...updateData
       });
     }
 
-    console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}`);
+    console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}, duration=${duration}s, transcript=${transcript.length} chars`);
   } catch (err) {
     console.error(`[${reqId}] ❌ Save failed:`, err.message);
+    // Last resort: try a minimal update to at least mark as completed
+    try {
+      await base44Client.asServiceRole.entities.CallLog.update(session.callLogId, {
+        status: 'completed',
+        call_end_time: new Date().toISOString(),
+        duration: duration
+      });
+      console.log(`[${reqId}] 💾 Minimal save succeeded`);
+    } catch (minErr) {
+      console.error(`[${reqId}] ❌ Minimal save also failed:`, minErr.message);
+    }
   }
 }
 
