@@ -613,84 +613,58 @@ Deno.serve(async (req) => {
 
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}`);
 
-        // Fetch agent config directly using service role (no auth dependency)
+        // Fetch agent config by calling getAgentConfig function via HTTP
+        // This works because HTTP calls to backend functions get the service token injected by the platform
         let agentLoaded = false;
         try {
           console.log(`[${reqId}] 🔍 Fetching agent config for call_sid: ${session.callSid}, stream_sid: ${session.streamSid}`);
           
-          // Find call log by call_sid or stream_sid
-          let callLog = null;
-          if (session.callSid) {
-            const logs = await base44.asServiceRole.entities.CallLog.filter({ call_sid: session.callSid });
-            if (logs.length > 0) callLog = logs[0];
-          }
-          if (!callLog && session.streamSid) {
-            const logs = await base44.asServiceRole.entities.CallLog.filter({ stream_sid: session.streamSid });
-            if (logs.length > 0) callLog = logs[0];
-          }
-          // Fallback: most recent ringing/initiated call
-          if (!callLog) {
-            const recentLogs = await base44.asServiceRole.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 1);
-            if (recentLogs.length > 0) callLog = recentLogs[0];
-          }
-          if (!callLog) {
-            const initiatedLogs = await base44.asServiceRole.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 1);
-            if (initiatedLogs.length > 0) callLog = initiatedLogs[0];
-          }
+          const host = Deno.env.get('DENO_DEPLOYMENT_ID') 
+            ? `https://${req.headers.get('host') || 'localhost'}`
+            : 'http://127.0.0.1:80';
+          const configUrl = `${host}/functions/getAgentConfig`;
+          
+          console.log(`[${reqId}] 📡 Calling getAgentConfig at: ${configUrl}`);
+          
+          const configResp = await fetch(configUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Base44-App-Id': Deno.env.get('BASE44_APP_ID')
+            },
+            body: JSON.stringify({
+              call_sid: session.callSid,
+              stream_sid: session.streamSid
+            })
+          });
+          
+          const configData = await configResp.json();
+          console.log(`[${reqId}] 📋 Agent config response: status=${configResp.status}, success=${configData.success}`);
 
-          if (callLog) {
-            session.callLogId = callLog.id;
-            const resolvedAgentId = callLog.agent_id;
-            console.log(`[${reqId}] 📍 Call log ID: ${session.callLogId}, Agent ID: ${resolvedAgentId}`);
+          if (configData.success && configData.agent) {
+            session.callLogId = configData.callLogId;
+            session.agentId = configData.agent.id;
+            session.agentConfig = configData.agent;
+            console.log(`[${reqId}] 📍 Call log ID: ${session.callLogId}, Agent: ${configData.agent.name}`);
 
-            // Update call log with stream_sid if missing
-            const updateData = {};
-            if (session.streamSid && !callLog.stream_sid) updateData.stream_sid = session.streamSid;
-            if (session.callSid && callLog.call_sid !== session.callSid) updateData.call_sid = session.callSid;
-            if (Object.keys(updateData).length > 0) {
-              await base44.asServiceRole.entities.CallLog.update(callLog.id, updateData);
+            // Use agent's custom system prompt
+            if (configData.agent.system_prompt && configData.agent.system_prompt.trim()) {
+              session.systemPrompt = configData.agent.system_prompt;
+              console.log(`[${reqId}] ✅ Using custom system prompt (${session.systemPrompt.length} chars)`);
             }
 
-            if (resolvedAgentId) {
-              // Fetch agent
-              const agent = await base44.asServiceRole.entities.Agent.get(resolvedAgentId);
-              if (agent) {
-                session.agentId = agent.id;
-                session.agentConfig = agent;
-                console.log(`[${reqId}] ✅ Agent found: ${agent.name}`);
-
-                // Use agent's custom system prompt
-                if (agent.system_prompt && agent.system_prompt.trim()) {
-                  session.systemPrompt = agent.system_prompt;
-                  console.log(`[${reqId}] ✅ Using custom system prompt (${session.systemPrompt.length} chars)`);
-                }
-
-                // Fetch and append knowledge base
-                if (agent.knowledge_base_ids && agent.knowledge_base_ids.length > 0) {
-                  const knowledgeDocs = [];
-                  for (const kbId of agent.knowledge_base_ids) {
-                    try {
-                      const doc = await base44.asServiceRole.entities.KnowledgeBase.get(kbId);
-                      if (doc && doc.content) {
-                        knowledgeDocs.push({ title: doc.title, content: doc.content });
-                      }
-                    } catch (kbErr) {
-                      console.error(`[${reqId}] ⚠️ KB doc ${kbId} load failed: ${kbErr.message}`);
-                    }
-                  }
-                  if (knowledgeDocs.length > 0) {
-                    const kbContext = knowledgeDocs.map(doc => `[${doc.title}]\n${doc.content}`).join('\n\n---\n\n');
-                    session.systemPrompt = `${session.systemPrompt}\n\nKNOWLEDGE BASE:\n${kbContext}`;
-                    console.log(`[${reqId}] ✅ Added ${knowledgeDocs.length} KB docs (total: ${session.systemPrompt.length} chars)`);
-                  }
-                }
-                agentLoaded = true;
-              } else {
-                console.log(`[${reqId}] ❌ Agent not found for ID: ${resolvedAgentId}`);
-              }
+            // Add knowledge base to system prompt
+            if (configData.knowledgeDocs && configData.knowledgeDocs.length > 0) {
+              const kbContext = configData.knowledgeDocs.map(doc => 
+                `[${doc.title}]\n${doc.content}`
+              ).join('\n\n---\n\n');
+              
+              session.systemPrompt = `${session.systemPrompt}\n\nKNOWLEDGE BASE:\n${kbContext}`;
+              console.log(`[${reqId}] ✅ Added ${configData.knowledgeDocs.length} KB docs (total: ${session.systemPrompt.length} chars)`);
             }
+            agentLoaded = true;
           } else {
-            console.log(`[${reqId}] ❌ No matching call log found`);
+            console.log(`[${reqId}] ❌ Agent config not found: ${configData.error || 'unknown'}`);
           }
         } catch (e) {
           console.error(`[${reqId}] ❌ Agent config lookup failed: ${e.message}`);
