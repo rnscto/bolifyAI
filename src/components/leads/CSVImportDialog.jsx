@@ -168,16 +168,24 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
       // CSV: parse locally
       const reader = new FileReader();
       reader.onload = (event) => {
-        const { headers, rows } = parseCSVLocally(event.target.result);
+        const text = event.target.result;
+        console.log("CSV raw first 500 chars:", text.substring(0, 500));
+        const { headers, rows } = parseCSVLocally(text);
+        console.log("Detected headers:", headers);
+        console.log("Sample row 0:", rows[0]);
+        console.log("Sample row 1:", rows[1]);
+        console.log("Total rows parsed:", rows.length);
         if (rows.length === 0) {
           toast.error('No data found in file');
           setFile(null);
           setUploading(false);
           return;
         }
+        const mapping = autoMapFields(headers);
+        console.log("Auto mapping result:", mapping);
         setFileHeaders(headers);
         setRawData(rows);
-        setFieldMapping(autoMapFields(headers));
+        setFieldMapping(mapping);
         setUploading(false);
         setStep(2);
       };
