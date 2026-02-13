@@ -613,33 +613,20 @@ Deno.serve(async (req) => {
 
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}`);
 
-        // Fetch agent config by calling getAgentConfig function via HTTP
-        // This works because HTTP calls to backend functions get the service token injected by the platform
+        // Fetch agent config using Base44 SDK functions.invoke
+        // This routes through the platform which injects proper service tokens
         let agentLoaded = false;
         try {
           console.log(`[${reqId}] 🔍 Fetching agent config for call_sid: ${session.callSid}, stream_sid: ${session.streamSid}`);
           
-          const host = Deno.env.get('DENO_DEPLOYMENT_ID') 
-            ? `https://${req.headers.get('host') || 'localhost'}`
-            : 'http://127.0.0.1:80';
-          const configUrl = `${host}/functions/getAgentConfig`;
-          
-          console.log(`[${reqId}] 📡 Calling getAgentConfig at: ${configUrl}`);
-          
-          const configResp = await fetch(configUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Base44-App-Id': Deno.env.get('BASE44_APP_ID')
-            },
-            body: JSON.stringify({
-              call_sid: session.callSid,
-              stream_sid: session.streamSid
-            })
+          const configResult = await base44.functions.invoke('getAgentConfig', {
+            call_sid: session.callSid,
+            stream_sid: session.streamSid
           });
           
-          const configData = await configResp.json();
-          console.log(`[${reqId}] 📋 Agent config response: status=${configResp.status}, success=${configData.success}`);
+          // functions.invoke returns axios-style {data, status}
+          const configData = configResult.data || configResult;
+          console.log(`[${reqId}] 📋 Agent config response: success=${configData.success}`);
 
           if (configData.success && configData.agent) {
             session.callLogId = configData.callLogId;
