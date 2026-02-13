@@ -98,7 +98,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Dashboard', path: 'ClientDashboard', icon: LayoutDashboard },
     { name: 'Agents', path: 'ClientAgents', icon: Cpu },
     { name: 'Leads', path: 'ClientLeads', icon: Users },
-    { name: 'Campaigns', path: 'ClientCampaigns', icon: PhoneCall },
+    { name: 'Campaigns', path: 'ClientCampaigns', icon: Megaphone },
     { name: 'Call Logs', path: 'ClientCallLogs', icon: PhoneCall },
     { name: 'Knowledge Base', path: 'ClientKnowledgeBase', icon: BookOpen },
     { name: 'Activities', path: 'ClientActivities', icon: Activity },
