@@ -82,7 +82,7 @@ function autoMapFields(headers) {
   const FIELD_ALIASES = {
     name: ['name', 'full name', 'fullname', 'customer', 'customer name', 'lead', 'lead name', 'contact name', 'person', 'client', 'client name', 'first name', 'firstname', 'person name', 'prospect', 'prospect name'],
     phone: ['phone', 'phone number', 'phonenumber', 'mobile', 'mobile number', 'mobilenumber', 'contact', 'contact number', 'contactnumber', 'tel', 'telephone', 'cell', 'cell number', 'cellphone', 'whatsapp', 'number', 'ph no', 'ph', 'mob', 'mob no', 'mobile no', 'phone no', 'contact no'],
-    email: ['email', 'email address', 'emailaddress', 'e-mail', 'mail', 'email id', 'emailid', 'e mail'],
+    email: ['email', 'emai', 'email address', 'emailaddress', 'e-mail', 'mail', 'email id', 'emailid', 'e mail', 'e mail id'],
     company: ['company', 'company name', 'companyname', 'organization', 'organisation', 'org', 'business', 'business name', 'firm', 'firm name', 'employer'],
     notes: ['notes', 'note', 'comment', 'comments', 'remark', 'remarks', 'description', 'details', 'info', 'additional info'],
     source: ['source', 'lead source', 'leadsource', 'origin', 'channel', 'campaign', 'medium', 'referral', 'referred by'],
