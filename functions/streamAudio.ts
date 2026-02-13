@@ -300,23 +300,11 @@ Deno.serve(async (req) => {
 
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
 
-      // Create Base44 client from request
-      // For WebSocket upgrades from external services (Smartflo), Base44 may not inject headers
-      // so we enrich the request with Base44-App-Id from env vars
-      let clientReq = req;
-      if (!req.headers.has('Base44-App-Id')) {
-        console.log(`[${reqId}] ⚠️ No Base44-App-Id header, enriching from env`);
-        const enrichedHeaders = new Headers(req.headers);
-        enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
-        enrichedHeaders.set('Base44-Service-Token', Deno.env.get('BASE44_SERVICE_ROLE_KEY'));
-        clientReq = new Request(req.url, {
-          method: req.method,
-          headers: enrichedHeaders,
-          body: !isWebSocket ? req.body : undefined
-        });
-      }
+      // Create Base44 client from the original request
+      // The platform automatically injects the necessary headers for hosted functions
       console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
-      const base44 = createClientFromRequest(clientReq);
+      console.log(`[${reqId}] 📋 Headers: Base44-App-Id=${req.headers.has('Base44-App-Id')}, Base44-Service-Role-Key=${req.headers.has('Base44-Service-Role-Key')}`);
+      const base44 = createClientFromRequest(req);
       console.log(`[${reqId}] ✅ Base44 client created`);
 
       // Return status for non-WebSocket requests
