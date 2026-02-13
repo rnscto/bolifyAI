@@ -746,10 +746,15 @@ Deno.serve(async (req) => {
     }
   };
 
-  socket.onclose = () => {
+  socket.onclose = async () => {
     clearTimers();
+    const duration = Math.round((Date.now() - session.startTime) / 1000);
+    console.log(`[${reqId}] 🔴 Socket closed, duration=${duration}s, transcript entries=${session.transcript.length}`);
+    // Always attempt to save on close in case stop event was missed
+    if (session.callLogId && session.state !== STATE.IDLE) {
+      await saveCallRecord(session, reqId, duration, base44);
+    }
     session.state = STATE.IDLE;
-    console.log(`[${reqId}] 🔴 Socket closed`);
   };
 
   socket.onerror = () => {
