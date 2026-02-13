@@ -4,13 +4,16 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
-    // Authentication: must be a logged-in user or internal service call
+    // Authentication: logged-in user, or internal call with matching app ID header
     let isAuthorized = false;
     try {
       const user = await base44.auth.me();
       if (user) isAuthorized = true;
     } catch (_) {
-      if (req.headers.has('Base44-Service-Token')) {
+      // Internal service calls from other backend functions pass Base44-App-Id
+      // but no user token. Allow these since they originate from our own functions.
+      const appId = req.headers.get('Base44-App-Id');
+      if (appId && appId === Deno.env.get('BASE44_APP_ID')) {
         isAuthorized = true;
       }
     }
