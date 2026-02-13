@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from '@/components/ui/dialog';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -118,6 +118,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create Campaign</DialogTitle>
+          <DialogDescription>Configure your campaign settings and select leads to call.</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-5">
           {/* Basic Info */}
@@ -203,15 +204,14 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
                 <p className="text-sm text-gray-500 text-center py-4">No leads found</p>
               ) : (
                 filteredLeads.map(lead => (
-                  <div key={lead.id} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer"
-                    onClick={() => toggleLead(lead.id)}>
-                    <Checkbox checked={selectedLeads.includes(lead.id)} />
+                  <label key={lead.id} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
+                    <Checkbox checked={selectedLeads.includes(lead.id)} onCheckedChange={() => toggleLead(lead.id)} />
                     <span className="text-sm font-medium flex-1">{lead.name || lead.phone}</span>
                     <span className="text-xs text-gray-500">{lead.phone}</span>
                     <span className={`text-xs px-1.5 py-0.5 rounded ${lead.status === 'new' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
                       {lead.status}
                     </span>
-                  </div>
+                  </label>
                 ))
               )}
             </div>
