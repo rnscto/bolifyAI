@@ -149,16 +149,27 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
         return;
       }
 
-      const rows = Array.isArray(extracted.output?.rows) ? extracted.output.rows :
+      const rawRows = Array.isArray(extracted.output?.rows) ? extracted.output.rows :
                    Array.isArray(extracted.output) ? extracted.output : [];
-      if (rows.length === 0) {
+      if (rawRows.length === 0) {
         toast.error('No data found in file');
         setFile(null);
         setUploading(false);
         return;
       }
 
+      // Convert all values to strings (Excel may return numbers)
+      const rows = rawRows.map(row => {
+        const strRow = {};
+        Object.entries(row).forEach(([k, v]) => {
+          strRow[k] = v !== null && v !== undefined ? String(v).trim() : '';
+        });
+        return strRow;
+      });
+
+      console.log("Excel rows sample:", rows[0], rows[1]);
       const headers = [...new Set(rows.flatMap(r => Object.keys(r)))].filter(h => h && h.trim());
+      console.log("Excel headers:", headers);
       setFileHeaders(headers);
       setRawData(rows);
       setFieldMapping(autoMapFields(headers));
