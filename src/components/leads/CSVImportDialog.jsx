@@ -24,19 +24,52 @@ const LEAD_FIELDS = [
   { key: 'source', label: 'Source' },
 ];
 
+function parseCSVLine(line, delimiter) {
+  const values = [];
+  let current = '';
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"' && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else if (ch === '"') {
+        inQuotes = false;
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === delimiter) {
+        values.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+  }
+  values.push(current.trim());
+  return values;
+}
+
 function parseCSVLocally(text) {
-  const lines = text.split('\n').filter(l => l.trim());
+  // Normalize line endings
+  const normalized = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const lines = normalized.split('\n').filter(l => l.trim());
   if (lines.length < 2) return { headers: [], rows: [] };
 
   const delimiter = lines[0].includes('\t') ? '\t' : ',';
-  const headers = lines[0].split(delimiter).map(h => h.trim().replace(/^["']|["']$/g, ''));
+  const headers = parseCSVLine(lines[0], delimiter).map(h => h.replace(/^["']|["']$/g, ''));
 
   const rows = [];
   for (let i = 1; i < lines.length; i++) {
-    const values = lines[i].split(delimiter).map(v => v.trim().replace(/^["']|["']$/g, ''));
+    const values = parseCSVLine(lines[i], delimiter);
     const row = {};
     headers.forEach((h, idx) => {
-      if (h && values[idx]) row[h] = values[idx];
+      const val = values[idx] !== undefined ? values[idx].replace(/^["']|["']$/g, '') : '';
+      if (h && val) row[h] = val;
     });
     if (Object.keys(row).length > 0) rows.push(row);
   }
