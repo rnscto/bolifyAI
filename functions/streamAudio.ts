@@ -300,25 +300,23 @@ Deno.serve(async (req) => {
 
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
 
-      // Create Base44 client
-      // WebSocket requests from external services (Smartflo) don't have Base44 headers
-      // so we need to handle both cases
-      console.log(`[${reqId}] 🔑 Creating Base44 client`);
-      console.log(`[${reqId}] 📋 Headers: Base44-App-Id=${req.headers.has('Base44-App-Id')}`);
-      
-      let base44;
-      if (req.headers.has('Base44-App-Id')) {
-        // Normal request from frontend/SDK - use createClientFromRequest
-        base44 = createClientFromRequest(req);
-        console.log(`[${reqId}] ✅ Base44 client created from request headers`);
-      } else {
-        // External WebSocket (Smartflo) - no Base44 headers available
-        // Use createClient with app ID from env, then use service role for all operations
-        const appId = Deno.env.get('BASE44_APP_ID');
-        console.log(`[${reqId}] ⚠️ No Base44 headers, using createClient with appId: ${appId}`);
-        base44 = createClient({ appId });
-        console.log(`[${reqId}] ✅ Base44 client created from env`);
+      // Create Base44 client from request
+      // WebSocket requests from Smartflo may not have Base44 headers injected,
+      // so we enrich the request with Base44-App-Id from env when missing
+      let clientReq = req;
+      if (!req.headers.has('Base44-App-Id')) {
+        console.log(`[${reqId}] ⚠️ No Base44-App-Id header, enriching from env`);
+        const enrichedHeaders = new Headers(req.headers);
+        enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
+        // For WebSocket upgrades we cannot pass body
+        clientReq = new Request(req.url, {
+          method: req.method,
+          headers: enrichedHeaders
+        });
       }
+      console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
+      const base44 = createClientFromRequest(clientReq);
+      console.log(`[${reqId}] ✅ Base44 client created`);
 
       // Return status for non-WebSocket requests
       if (!isWebSocket) {
