@@ -343,16 +343,24 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
       }
     }
 
-    // If call is completed and has recording, trigger transcript processing
-    if (status === 'completed' && recording_url) {
-      try {
-        await base44.asServiceRole.functions.invoke('processTranscript', {
-          call_log_id: callLog.id,
-          recording_url: recording_url
-        });
-        console.log('[smartfloWebhook] Transcript processing triggered');
-      } catch (error) {
-        console.error('[smartfloWebhook] Error triggering transcript:', error);
+    // If call is completed, trigger transcript processing if recording available
+    if (status === 'completed' || status === 'no_answer' || status === 'failed' || status === 'busy' || status === 'cancelled') {
+      // Mark terminal statuses
+      if (!updateData.call_end_time) {
+        updateData.call_end_time = new Date().toISOString();
+        await base44.asServiceRole.entities.CallLog.update(callLog.id, { call_end_time: new Date().toISOString() });
+      }
+
+      if (recording_url) {
+        try {
+          await base44.asServiceRole.functions.invoke('processTranscript', {
+            call_log_id: callLog.id,
+            recording_url: recording_url
+          });
+          console.log('[smartfloWebhook] Transcript processing triggered');
+        } catch (error) {
+          console.error('[smartfloWebhook] Error triggering transcript:', error);
+        }
       }
     }
 
