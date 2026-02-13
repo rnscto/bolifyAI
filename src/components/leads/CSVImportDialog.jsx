@@ -78,17 +78,21 @@ function parseCSVLocally(text) {
 
 function autoMapFields(headers) {
   const autoMap = {};
+  
+  const FIELD_ALIASES = {
+    name: ['name', 'full name', 'fullname', 'customer', 'customer name', 'lead', 'lead name', 'contact name', 'person', 'client', 'client name', 'first name', 'firstname', 'person name', 'prospect', 'prospect name'],
+    phone: ['phone', 'phone number', 'phonenumber', 'mobile', 'mobile number', 'mobilenumber', 'contact', 'contact number', 'contactnumber', 'tel', 'telephone', 'cell', 'cell number', 'cellphone', 'whatsapp', 'number', 'ph no', 'ph', 'mob', 'mob no', 'mobile no', 'phone no', 'contact no'],
+    email: ['email', 'email address', 'emailaddress', 'e-mail', 'mail', 'email id', 'emailid', 'e mail'],
+    company: ['company', 'company name', 'companyname', 'organization', 'organisation', 'org', 'business', 'business name', 'firm', 'firm name', 'employer'],
+    notes: ['notes', 'note', 'comment', 'comments', 'remark', 'remarks', 'description', 'details', 'info', 'additional info'],
+    source: ['source', 'lead source', 'leadsource', 'origin', 'channel', 'campaign', 'medium', 'referral', 'referred by'],
+  };
+
   LEAD_FIELDS.forEach(field => {
+    const aliases = FIELD_ALIASES[field.key] || [field.key];
     const match = headers.find(h => {
-      const hLower = h.toLowerCase().trim();
-      const fLower = field.key.toLowerCase();
-      const fLabel = field.label.toLowerCase();
-      return hLower === fLower || hLower === fLabel ||
-        hLower.includes(fLower) || fLower.includes(hLower) ||
-        (fLower === 'phone' && (hLower.includes('mobile') || hLower.includes('contact') || hLower.includes('tel'))) ||
-        (fLower === 'name' && (hLower.includes('full name') || hLower.includes('customer') || hLower.includes('lead'))) ||
-        (fLower === 'company' && (hLower.includes('org') || hLower.includes('business'))) ||
-        (fLower === 'email' && hLower.includes('mail'));
+      const hLower = h.toLowerCase().trim().replace(/[_\-\.]/g, ' ').replace(/\s+/g, ' ');
+      return aliases.some(alias => hLower === alias || hLower.includes(alias) || alias.includes(hLower));
     });
     if (match) autoMap[field.key] = match;
   });
