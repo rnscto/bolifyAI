@@ -46,11 +46,13 @@ export default function ClientSubscription() {
       setIncludeCRM(clientData.has_custom_crm || false);
 
       const [subs, pays] = await Promise.all([
-        base44.entities.Subscription.filter({ client_id: clientData.id }),
+        base44.entities.Subscription.filter({ client_id: clientData.id }, '-created_date', 10),
         base44.entities.Payment.filter({ client_id: clientData.id }, '-created_date', 20),
       ]);
 
-      if (subs.length > 0) setSubscription(subs[0]);
+      // Use the latest active subscription, or fall back to most recent
+      const activeSub = subs.find(s => s.status === 'active') || subs[0];
+      if (activeSub) setSubscription(activeSub);
       setPayments(pays);
     }
     setLoading(false);
