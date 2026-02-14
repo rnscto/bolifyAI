@@ -54,26 +54,7 @@ Deno.serve(async (req) => {
     // Use primary DID for single calls
     const callerDID = allDIDs[0];
 
-    // Pre-fetch knowledge base content for the agent (so streamAudio can use it without asServiceRole)
-    let knowledgeContent = '';
-    if (agent.knowledge_base_ids && agent.knowledge_base_ids.length > 0) {
-      const kbParts = [];
-      for (const kbId of agent.knowledge_base_ids) {
-        try {
-          const doc = await base44.asServiceRole.entities.KnowledgeBase.get(kbId);
-          if (doc && doc.content) kbParts.push(`[${doc.title}]\n${doc.content}`);
-        } catch (_) {}
-      }
-      knowledgeContent = kbParts.join('\n\n---\n\n');
-    }
-
-    // Build full system prompt
-    let fullSystemPrompt = agent.system_prompt || '';
-    if (knowledgeContent) {
-      fullSystemPrompt = `${fullSystemPrompt}\n\nKNOWLEDGE BASE:\n${knowledgeContent}`;
-    }
-
-    // Create call log — embed agent config so streamAudio can read it without asServiceRole
+    // Create call log
     const callLog = await base44.asServiceRole.entities.CallLog.create({
       client_id: agent.client_id,
       agent_id: agent_id,
@@ -83,12 +64,7 @@ Deno.serve(async (req) => {
       callee_number: phone_number,
       direction: 'outbound',
       status: 'initiated',
-      call_start_time: new Date().toISOString(),
-      conversation_summary: `__AGENT_CONFIG__${JSON.stringify({
-        agent_name: agent.name,
-        system_prompt: fullSystemPrompt,
-        persona: agent.persona || {}
-      })}`
+      call_start_time: new Date().toISOString()
     });
 
     // Clean phone number (remove + and non-digits)
