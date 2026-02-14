@@ -295,8 +295,13 @@ Deno.serve(async (req) => {
 
     // ─── Audio output from model → send to Smartflo caller ───
     if (type === 'response.audio.delta' && msg.delta) {
+      if (!session._audioLogCount) session._audioLogCount = 0;
+      session._audioLogCount++;
+      if (session._audioLogCount <= 5) {
+        console.log(`[${reqId}] 🔊 Audio delta #${session._audioLogCount}: ${msg.delta.length} base64 chars, smartflo=${smartfloSocket.readyState === WebSocket.OPEN}, streamSid=${!!session.streamSid}`);
+      }
       session.isSpeaking = true;
-      // Convert PCM16 base64 from Realtime API → mu-law for Smartflo
+      // Convert PCM16 24kHz base64 from Realtime API → mu-law 8kHz for Smartflo
       const mulawBytes = base64PCM16_24kToMulaw(msg.delta);
 
       if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
