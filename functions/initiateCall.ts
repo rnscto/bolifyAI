@@ -41,7 +41,9 @@ Deno.serve(async (req) => {
     }
 
     // Support multiple DIDs - pick first available
-    const allDIDs = agent.assigned_dids || (agent.assigned_did ? [agent.assigned_did] : []);
+    const allDIDs = (agent.assigned_dids && agent.assigned_dids.length > 0)
+      ? agent.assigned_dids
+      : (agent.assigned_did ? [agent.assigned_did] : []);
     if (allDIDs.length === 0) {
       return Response.json({ 
         success: false,

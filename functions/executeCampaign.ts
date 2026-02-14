@@ -36,7 +36,9 @@ Deno.serve(async (req) => {
     });
 
     const agent = await base44.asServiceRole.entities.Agent.get(campaign.agent_id);
-    const agentDIDs = agent?.assigned_dids || (agent?.assigned_did ? [agent.assigned_did] : []);
+    const agentDIDs = (agent?.assigned_dids && agent.assigned_dids.length > 0)
+      ? agent.assigned_dids
+      : (agent?.assigned_did ? [agent.assigned_did] : []);
     if (!agent || agentDIDs.length === 0) {
       await base44.asServiceRole.entities.Campaign.update(campaign_id, { status: 'draft' });
       return Response.json({ error: 'Agent has no assigned DID' }, { status: 400 });
