@@ -1,25 +1,7 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
 
-const STATE = {
-  IDLE: 'IDLE',
-  SPEAKING: 'SPEAKING',
-  LISTENING: 'LISTENING',
-  PROCESSING: 'PROCESSING'
-};
+// ─── Audio Conversion Helpers ───
 
-const VAD_CONFIG = {
-  SPEECH_THRESHOLD: 120,
-  SILENCE_CHUNKS_FOR_END: 15,
-  MIN_SPEECH_CHUNKS: 4,
-  NO_SPEECH_TIMEOUT_MS: 10000,
-  MAX_NO_SPEECH_PROMPTS: 3,
-  BARGE_IN_THRESHOLD: 300,
-  BARGE_IN_CONSECUTIVE: 3
-};
-
-
-
-// Mu-law decoding
 function decodeMulaw(mulawByte) {
   const MULAW_BIAS = 33;
   let mu = ~mulawByte & 0xFF;
@@ -31,7 +13,6 @@ function decodeMulaw(mulawByte) {
   return sign * sample;
 }
 
-// Mu-law encoding
 function encodeMulaw(sample) {
   const MULAW_MAX = 32635;
   const MULAW_BIAS = 33;
@@ -46,217 +27,54 @@ function encodeMulaw(sample) {
     sample <<= 1;
   }
   const mantissa = (sample >> 10) & 0x0F;
-  const mulaw = ~(sign | (exponent << 4) | mantissa) & 0xFF;
+  return ~(sign | (exponent << 4) | mantissa) & 0xFF;
+}
+
+// Convert mu-law bytes → PCM16 Int16Array
+function mulawToPcm16(mulawBytes) {
+  const pcm = new Int16Array(mulawBytes.length);
+  for (let i = 0; i < mulawBytes.length; i++) {
+    pcm[i] = decodeMulaw(mulawBytes[i]);
+  }
+  return pcm;
+}
+
+// Convert PCM16 Int16Array → mu-law Uint8Array
+function pcm16ToMulaw(pcmSamples) {
+  const mulaw = new Uint8Array(pcmSamples.length);
+  for (let i = 0; i < pcmSamples.length; i++) {
+    mulaw[i] = encodeMulaw(pcmSamples[i]);
+  }
   return mulaw;
 }
 
-// Calculate RMS energy
-function getChunkRMS(bytes) {
-  let sumSq = 0;
-  for (let i = 0; i < bytes.length; i++) {
-    const sample = decodeMulaw(bytes[i]);
-    sumSq += sample * sample;
+// PCM16 Int16Array → base64 string (little-endian raw bytes)
+function pcm16ToBase64(pcm16) {
+  const buffer = new Uint8Array(pcm16.length * 2);
+  const view = new DataView(buffer.buffer);
+  for (let i = 0; i < pcm16.length; i++) {
+    view.setInt16(i * 2, pcm16[i], true); // little-endian
   }
-  return Math.sqrt(sumSq / bytes.length);
+  return btoa(String.fromCharCode(...buffer));
 }
 
-// Create WAV buffer from PCM samples
-function createWavBuffer(samples, sampleRate) {
-  const buffer = new ArrayBuffer(44 + samples.length * 2);
-  const view = new DataView(buffer);
-  
-  const writeString = (offset, str) => {
-    for (let i = 0; i < str.length; i++) {
-      view.setUint8(offset + i, str.charCodeAt(i));
-    }
-  };
-
-  writeString(0, 'RIFF');
-  view.setUint32(4, 36 + samples.length * 2, true);
-  writeString(8, 'WAVE');
-  writeString(12, 'fmt ');
-  view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
-  view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate * 2, true);
-  view.setUint16(32, 2, true);
-  view.setUint16(34, 16, true);
-  writeString(36, 'data');
-  view.setUint32(40, samples.length * 2, true);
-
-  for (let i = 0; i < samples.length; i++) {
-    view.setInt16(44 + i * 2, samples[i], true);
+// base64 string → PCM16 Int16Array (little-endian)
+function base64ToPcm16(b64) {
+  const raw = atob(b64);
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) {
+    bytes[i] = raw.charCodeAt(i);
   }
-  return new Uint8Array(buffer);
+  const pcm = new Int16Array(bytes.length / 2);
+  const view = new DataView(bytes.buffer);
+  for (let i = 0; i < pcm.length; i++) {
+    pcm[i] = view.getInt16(i * 2, true);
+  }
+  return pcm;
 }
 
-// Escape XML for SSML
-function escapeXml(text) {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
+// ─── Save Call Record ───
 
-// STT: Azure Speech Services
-async function transcribeAudio(reqId, wavBuffer) {
-  try {
-    const sttUrl = `https://${Deno.env.get('AZURE_SPEECH_REGION')}.stt.speech.microsoft.com/speech/recognition/conversation/cognitiveservices/v1?language=en-IN&format=detailed`;
-
-    const response = await fetch(sttUrl, {
-      method: 'POST',
-      headers: {
-        'Ocp-Apim-Subscription-Key': Deno.env.get('AZURE_SPEECH_KEY'),
-        'Content-Type': 'audio/wav'
-      },
-      body: wavBuffer
-    });
-
-    if (response.ok) {
-      const result = await response.json();
-      const text = result.DisplayText || (result.NBest?.[0]?.Display) || '';
-      console.log(`[${reqId}] ✅ STT: "${text.substring(0, 100)}"`);
-      return text;
-    }
-
-    console.error(`[${reqId}] ❌ STT failed: ${response.status}`);
-    return '';
-  } catch (err) {
-    console.error(`[${reqId}] ❌ STT error:`, err.message);
-    return '';
-  }
-}
-
-// LLM: Azure OpenAI
-async function generateResponse(reqId, conversationHistory, systemPrompt) {
-  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
-  const url = `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`;
-
-  console.log(`[${reqId}] 🔮 LLM Request - System prompt: "${systemPrompt.substring(0, 100)}..." (${systemPrompt.length} chars)`);
-  console.log(`[${reqId}] 🔮 LLM Request - History length: ${conversationHistory.length} messages`);
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'api-key': Deno.env.get('AZURE_OPENAI_KEY')
-      },
-      body: JSON.stringify({
-        messages: [
-          { role: 'system', content: systemPrompt },
-          ...conversationHistory.slice(-16)
-        ],
-        max_completion_tokens: 250
-      })
-    });
-
-    if (!response.ok) {
-      const errBody = await response.text();
-      console.error(`[${reqId}] ❌ LLM failed: ${response.status} - ${errBody}`);
-      return 'Sorry, please say that again.';
-    }
-
-    const data = await response.json();
-    const text = data.choices?.[0]?.message?.content || '';
-    
-    // Strip non-TTS-safe characters
-    return text
-      .replace(/[\u{1F600}-\u{1F64F}]/gu, '')
-      .replace(/[\u{1F300}-\u{1F5FF}]/gu, '')
-      .replace(/[\*\#\[\]`~_{}|\\<>^=+]/g, '')
-      .replace(/\s{2,}/g, ' ')
-      .trim() || 'Sorry, please say that again.';
-  } catch (err) {
-    console.error(`[${reqId}] ❌ LLM error:`, err.message);
-    return 'Sorry, please say that again.';
-  }
-}
-
-// Send TTS audio via WebSocket
-async function sendTTSAudio(socket, session, reqId, text, markName) {
-  if (socket.readyState !== WebSocket.OPEN) {
-    console.error(`[${reqId}] ❌ Socket not open for TTS`);
-    return false;
-  }
-
-  const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-IN'>
-    <voice name='en-IN-BharatNeural'>
-      <prosody rate='0%'>${escapeXml(text)}</prosody>
-    </voice>
-  </speak>`;
-
-  try {
-    const response = await fetch(Deno.env.get('AZURE_SPEECH_ENDPOINT'), {
-      method: 'POST',
-      headers: {
-        'Ocp-Apim-Subscription-Key': Deno.env.get('AZURE_SPEECH_KEY'),
-        'Content-Type': 'application/ssml+xml',
-        'X-Microsoft-OutputFormat': 'raw-8khz-16bit-mono-pcm'
-      },
-      body: ssml
-    });
-
-    if (!response.ok) {
-      console.error(`[${reqId}] ❌ TTS failed: ${response.status}`);
-      return false;
-    }
-
-    const pcmBuffer = await response.arrayBuffer();
-    const pcmSamples = new Int16Array(pcmBuffer);
-
-    // Convert PCM 16-bit → mu-law 8-bit
-    const mulawData = new Uint8Array(pcmSamples.length);
-    for (let i = 0; i < pcmSamples.length; i++) {
-      mulawData[i] = encodeMulaw(pcmSamples[i]);
-    }
-
-    // Send in 800-byte chunks (100ms @ 8kHz)
-    const CHUNK_SIZE = 800;
-    for (let i = 0; i < mulawData.length; i += CHUNK_SIZE) {
-      if (socket.readyState !== WebSocket.OPEN) return false;
-
-      const end = Math.min(i + CHUNK_SIZE, mulawData.length);
-      let chunk = mulawData.slice(i, end);
-
-      // Pad to multiple of 160
-      if (chunk.length % 160 !== 0) {
-        const paddedLen = Math.ceil(chunk.length / 160) * 160;
-        const padded = new Uint8Array(paddedLen);
-        padded.set(chunk);
-        padded.fill(0xFF, chunk.length);
-        chunk = padded;
-      }
-
-      const payload = btoa(String.fromCharCode(...chunk));
-      socket.send(JSON.stringify({
-        event: 'media',
-        streamSid: session.streamSid,
-        media: { payload }
-      }));
-    }
-
-    // Send mark when done
-    if (socket.readyState === WebSocket.OPEN) {
-      socket.send(JSON.stringify({
-        event: 'mark',
-        streamSid: session.streamSid,
-        mark: { name: markName }
-      }));
-    }
-
-    console.log(`[${reqId}] 📤 TTS sent: ${pcmSamples.length} samples`);
-    return true;
-  } catch (err) {
-    console.error(`[${reqId}] ❌ TTS error:`, err.message);
-    return false;
-  }
-}
-
-// Save call record via updateCallLog HTTP endpoint (WebSocket context has no service role token)
 async function saveCallRecord(session, reqId, duration) {
   if (!session.callLogId) {
     console.log(`[${reqId}] ⚠️ No callLogId, skipping save`);
@@ -273,11 +91,12 @@ async function saveCallRecord(session, reqId, duration) {
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    // Generate AI summary from transcript
+    // Generate AI summary using standard chat completions
     let summary = '';
     if (transcript && transcript.trim().length > 20) {
       try {
         const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+        // Use same deployment for summary (it also supports text) or fallback
         const summaryRes = await fetch(
           `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`,
           {
@@ -298,55 +117,213 @@ async function saveCallRecord(session, reqId, duration) {
         if (summaryRes.ok) {
           const summaryData = await summaryRes.json();
           summary = summaryData.choices?.[0]?.message?.content || '';
-          console.log(`[${reqId}] 📝 Summary generated: ${summary.substring(0, 80)}...`);
+          console.log(`[${reqId}] 📝 Summary: ${summary.substring(0, 80)}...`);
         }
       } catch (sumErr) {
-        console.error(`[${reqId}] ⚠️ Summary generation failed: ${sumErr.message}`);
+        console.error(`[${reqId}] ⚠️ Summary failed: ${sumErr.message}`);
       }
     }
 
-    const updateData = {
-      call_log_id: session.callLogId,
-      status: 'completed',
-      transcript: transcript || '',
-      duration: duration,
-      call_end_time: new Date().toISOString()
-    };
-    if (summary) updateData.conversation_summary = summary;
-
-    // Use anonymous SDK to update the call log directly
     const { createClient } = await import('npm:@base44/sdk@0.8.18');
     const appId = Deno.env.get('BASE44_APP_ID');
     const anonClient = createClient({ appId });
-    
+
     await anonClient.entities.CallLog.update(session.callLogId, {
-      status: updateData.status,
-      transcript: updateData.transcript,
-      duration: updateData.duration,
-      call_end_time: updateData.call_end_time,
+      status: 'completed',
+      transcript: transcript || '',
+      duration: duration,
+      call_end_time: new Date().toISOString(),
       ...(summary ? { conversation_summary: summary } : {})
     });
-    
-    try { anonClient.cleanup(); } catch (_) { /* ignore */ }
 
-    console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}, duration=${duration}s, transcript=${transcript.length} chars`);
+    try { anonClient.cleanup(); } catch (_) { /* ignore */ }
+    console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}, duration=${duration}s`);
   } catch (err) {
     console.error(`[${reqId}] ❌ Save failed:`, err.message);
   }
 }
 
-// Main WebSocket handler
+// ─── Connect to Azure OpenAI Realtime API ───
+
+function connectToRealtimeAPI(session, smartfloSocket, reqId) {
+  const endpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '').replace(/^https?:\/\//, '');
+  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
+  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+
+  // Azure OpenAI Realtime WebSocket URL (GA format)
+  const realtimeUrl = `wss://${endpoint}/openai/realtime?api-version=2025-04-01-preview&deployment=${deployment}`;
+
+  console.log(`[${reqId}] 🔗 Connecting to Realtime API: wss://${endpoint}/openai/realtime?deployment=${deployment}`);
+
+  const realtimeWs = new WebSocket(realtimeUrl, {
+    headers: {
+      'api-key': apiKey
+    }
+  });
+
+  realtimeWs.onopen = () => {
+    console.log(`[${reqId}] ✅ Realtime API connected`);
+
+    // Configure the session
+    const sessionConfig = {
+      type: 'session.update',
+      session: {
+        modalities: ['text', 'audio'],
+        instructions: session.systemPrompt,
+        voice: 'shimmer',
+        input_audio_format: 'pcm16',
+        output_audio_format: 'pcm16',
+        input_audio_transcription: {
+          model: 'whisper-1'
+        },
+        turn_detection: {
+          type: 'server_vad',
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 500
+        }
+      }
+    };
+
+    realtimeWs.send(JSON.stringify(sessionConfig));
+    console.log(`[${reqId}] 📤 Session configured with system prompt (${session.systemPrompt.length} chars)`);
+  };
+
+  realtimeWs.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+
+      switch (msg.type) {
+        case 'session.created':
+          console.log(`[${reqId}] ✅ Realtime session created`);
+          break;
+
+        case 'session.updated':
+          console.log(`[${reqId}] ✅ Realtime session updated`);
+          break;
+
+        case 'input_audio_buffer.speech_started':
+          console.log(`[${reqId}] 🗣️ User speech started`);
+          // Barge-in: clear any audio being sent to Smartflo
+          if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
+            smartfloSocket.send(JSON.stringify({
+              event: 'clear',
+              streamSid: session.streamSid
+            }));
+          }
+          session._isModelSpeaking = false;
+          break;
+
+        case 'input_audio_buffer.speech_stopped':
+          console.log(`[${reqId}] 🔇 User speech stopped`);
+          break;
+
+        case 'conversation.item.input_audio_transcription.completed':
+          if (msg.transcript?.trim()) {
+            console.log(`[${reqId}] 🗣️ Customer: "${msg.transcript.trim()}"`);
+            session.transcript.push({ speaker: 'Customer', text: msg.transcript.trim() });
+          }
+          break;
+
+        case 'response.audio.delta':
+          // Stream audio back to Smartflo
+          if (msg.delta && smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
+            session._isModelSpeaking = true;
+            const pcm16 = base64ToPcm16(msg.delta);
+            const mulawData = pcm16ToMulaw(pcm16);
+
+            // Send in chunks padded to multiples of 160 bytes
+            const CHUNK_SIZE = 800;
+            for (let i = 0; i < mulawData.length; i += CHUNK_SIZE) {
+              if (smartfloSocket.readyState !== WebSocket.OPEN) break;
+              const end = Math.min(i + CHUNK_SIZE, mulawData.length);
+              let chunk = mulawData.slice(i, end);
+
+              if (chunk.length % 160 !== 0) {
+                const paddedLen = Math.ceil(chunk.length / 160) * 160;
+                const padded = new Uint8Array(paddedLen);
+                padded.set(chunk);
+                padded.fill(0xFF, chunk.length);
+                chunk = padded;
+              }
+
+              const payload = btoa(String.fromCharCode(...chunk));
+              smartfloSocket.send(JSON.stringify({
+                event: 'media',
+                streamSid: session.streamSid,
+                media: { payload }
+              }));
+            }
+          }
+          break;
+
+        case 'response.audio.done':
+          console.log(`[${reqId}] 📤 Audio response complete`);
+          session._isModelSpeaking = false;
+          // Send a mark to track playback completion
+          if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
+            smartfloSocket.send(JSON.stringify({
+              event: 'mark',
+              streamSid: session.streamSid,
+              mark: { name: `rt_done_${Date.now()}` }
+            }));
+          }
+          break;
+
+        case 'response.audio_transcript.delta':
+          // Accumulate AI response transcript
+          if (msg.delta) {
+            if (!session._currentAIText) session._currentAIText = '';
+            session._currentAIText += msg.delta;
+          }
+          break;
+
+        case 'response.audio_transcript.done':
+          if (session._currentAIText?.trim()) {
+            console.log(`[${reqId}] 🤖 AI: "${session._currentAIText.trim()}"`);
+            session.transcript.push({ speaker: 'AI', text: session._currentAIText.trim() });
+          }
+          session._currentAIText = '';
+          break;
+
+        case 'response.done':
+          console.log(`[${reqId}] ✅ Response complete`);
+          break;
+
+        case 'error':
+          console.error(`[${reqId}] ❌ Realtime API error:`, JSON.stringify(msg.error));
+          break;
+
+        default:
+          // Log other events at debug level
+          break;
+      }
+    } catch (err) {
+      console.error(`[${reqId}] ❌ Realtime message parse error:`, err.message);
+    }
+  };
+
+  realtimeWs.onerror = (err) => {
+    console.error(`[${reqId}] ❌ Realtime WS error`);
+  };
+
+  realtimeWs.onclose = (ev) => {
+    console.log(`[${reqId}] 🔴 Realtime WS closed: code=${ev.code}`);
+  };
+
+  return realtimeWs;
+}
+
+// ─── Main WebSocket Handler ───
+
 Deno.serve(async (req) => {
   const reqId = Math.random().toString(36).substring(2, 10);
-
-  // Log request
   const upgrade = (req.headers.get('upgrade') || '').toLowerCase();
   const isWebSocket = upgrade === 'websocket';
 
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
 
-  // Create Base44 client - inject App ID header if missing (WebSocket from Smartflo won't have it)
-  console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
+  // Inject App ID header if missing
   let base44Req = req;
   if (!req.headers.get('Base44-App-Id')) {
     const appId = Deno.env.get('BASE44_APP_ID');
@@ -354,347 +331,91 @@ Deno.serve(async (req) => {
       const newHeaders = new Headers(req.headers);
       newHeaders.set('Base44-App-Id', appId);
       base44Req = new Request(req.url, { method: req.method, headers: newHeaders });
-      console.log(`[${reqId}] 🔧 Injected Base44-App-Id from env`);
     }
   }
   const base44 = createClientFromRequest(base44Req);
-  console.log(`[${reqId}] ✅ Base44 client created`);
 
-      // Return status for non-WebSocket requests
-      if (!isWebSocket) {
+  // Non-WebSocket: return status
+  if (!isWebSocket) {
     const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
     const protocol = req.headers.get('x-forwarded-proto') === 'https' ? 'wss' : 'ws';
     const wssUrl = `${protocol}://${host}/functions/streamAudio`;
 
-    console.log(`[${reqId}] 📡 WebSocket URL: ${wssUrl}`);
-
     return new Response(JSON.stringify({
       status: 'ready',
-      version: 'v5.7-lazy-client',
+      version: 'v6.0-realtime-api',
       wss_url: wssUrl,
-      info: 'Use the wss_url above to connect WebSocket from Smartflo'
+      info: 'Uses Azure OpenAI Realtime API (gpt-realtime-mini) for speech-to-speech'
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
-    // Upgrade WebSocket first
-    let socket, response;
-    try {
-      const upgraded = Deno.upgradeWebSocket(req);
-      socket = upgraded.socket;
-      response = upgraded.response;
-      console.log(`[${reqId}] ✅ WebSocket upgraded`);
-    } catch (err) {
-      console.error(`[${reqId}] ❌ Upgrade failed: ${err.message}`);
-      return new Response('WebSocket upgrade failed', { status: 500 });
-    }
+  // Upgrade WebSocket
+  let socket, response;
+  try {
+    const upgraded = Deno.upgradeWebSocket(req);
+    socket = upgraded.socket;
+    response = upgraded.response;
+    console.log(`[${reqId}] ✅ WebSocket upgraded`);
+  } catch (err) {
+    console.error(`[${reqId}] ❌ Upgrade failed: ${err.message}`);
+    return new Response('WebSocket upgrade failed', { status: 500 });
+  }
 
-    // base44 client already created above from request
-
-      // Session state
+  // Session state
   const session = {
-    state: STATE.IDLE,
     streamSid: null,
     callSid: null,
-    agentConfig: null,
-    conversationHistory: [],
-    transcript: [],
     callLogId: null,
-    speechBuffer: [],
-    hasSpeechStarted: false,
-    consecutiveSilentChunks: 0,
-    bargeInConsecutive: 0,
-    noSpeechTimer: null,
-    noSpeechCount: 0,
-    totalMediaReceived: 0,
-    pendingMarkName: null,
+    transcript: [],
     startTime: Date.now(),
-    systemPrompt: 'You are a friendly AI voice assistant. Be professional and concise. Keep responses to 1-3 sentences. Use only plain text, no emojis or special characters.',
-    agentId: null
+    systemPrompt: 'You are a friendly AI voice assistant for a business. Be professional, helpful, and concise. Keep responses to 1-3 sentences. Speak naturally.',
+    _saved: false,
+    _isModelSpeaking: false,
+    _currentAIText: '',
+    _realtimeWs: null
   };
 
-  function setState(newState) {
-    console.log(`[${reqId}] 🔄 ${session.state} → ${newState}`);
-    session.state = newState;
-  }
-
-  function clearTimers() {
-    if (session.noSpeechTimer) {
-      clearTimeout(session.noSpeechTimer);
-      session.noSpeechTimer = null;
-    }
-  }
-
-  function transitionToListening() {
-    setState(STATE.LISTENING);
-    clearTimers();
-    session.hasSpeechStarted = false;
-    session.consecutiveSilentChunks = 0;
-    session.speechBuffer = [];
-    session.bargeInConsecutive = 0;
-    startNoSpeechTimer();
-  }
-
-  function startNoSpeechTimer() {
-    session.noSpeechTimer = setTimeout(async () => {
-      if (session.state !== STATE.LISTENING) return;
-      session.noSpeechCount++;
-      console.log(`[${reqId}] 🔇 No speech timeout #${session.noSpeechCount}`);
-
-      if (socket.readyState !== WebSocket.OPEN) {
-        clearTimers();
-        setState(STATE.IDLE);
-        return;
-      }
-
-      if (session.noSpeechCount >= VAD_CONFIG.MAX_NO_SPEECH_PROMPTS) {
-        const goodbye = 'It seems there is a connection issue. Please call back. Thank you.';
-        session.conversationHistory.push({ role: 'assistant', content: goodbye });
-        session.transcript.push({ speaker: 'AI', text: goodbye });
-        await sendTTSAudio(socket, session, reqId, goodbye, `tts_goodbye_${Date.now()}`);
-        clearTimers();
-        setState(STATE.IDLE);
-        const duration = Math.round((Date.now() - session.startTime) / 1000);
-        await saveCallRecord(session, reqId, duration);
-        return;
-      }
-
-      const prompt = session.noSpeechCount === 1 ? 'Hello? Can you hear me?' : 'Please speak now.';
-      session.conversationHistory.push({ role: 'assistant', content: prompt });
-      session.transcript.push({ speaker: 'AI', text: prompt });
-      await startSpeaking(prompt);
-    }, VAD_CONFIG.NO_SPEECH_TIMEOUT_MS);
-  }
-
-  function handleListeningMedia(bytes) {
-    const rms = getChunkRMS(bytes);
-    const isSpeech = rms >= VAD_CONFIG.SPEECH_THRESHOLD;
-
-    if (isSpeech) {
-      if (!session.hasSpeechStarted) {
-        console.log(`[${reqId}] 🗣️ Speech onset (rms=${rms.toFixed(0)})`);
-        session.hasSpeechStarted = true;
-        clearTimers();
-      }
-      session.speechBuffer.push(bytes);
-      session.consecutiveSilentChunks = 0;
-    } else if (session.hasSpeechStarted) {
-      session.speechBuffer.push(bytes);
-      session.consecutiveSilentChunks++;
-
-      if (session.consecutiveSilentChunks >= VAD_CONFIG.SILENCE_CHUNKS_FOR_END) {
-        const speechChunks = session.speechBuffer.length - session.consecutiveSilentChunks;
-        console.log(`[${reqId}] 🔇 Speech ended: ${speechChunks} chunks`);
-
-        if (speechChunks >= VAD_CONFIG.MIN_SPEECH_CHUNKS) {
-          processUserAudio();
-        } else {
-          session.hasSpeechStarted = false;
-          session.consecutiveSilentChunks = 0;
-          session.speechBuffer = [];
-          startNoSpeechTimer();
-        }
-      }
-    }
-  }
-
-  function handleSpeakingMedia(bytes) {
-    const rms = getChunkRMS(bytes);
-    if (rms >= VAD_CONFIG.BARGE_IN_THRESHOLD) {
-      session.bargeInConsecutive++;
-      if (session.bargeInConsecutive >= VAD_CONFIG.BARGE_IN_CONSECUTIVE) {
-        console.log(`[${reqId}] 🛑 Barge-in detected`);
-        if (socket.readyState === WebSocket.OPEN) {
-          socket.send(JSON.stringify({
-            event: 'clear',
-            streamSid: session.streamSid
-          }));
-        }
-        session.pendingMarkName = null;
-        transitionToListening();
-        session.hasSpeechStarted = true;
-        session.speechBuffer.push(bytes);
-      }
-    } else {
-      session.bargeInConsecutive = 0;
-    }
-  }
-
-  async function startSpeaking(text) {
-    if (socket.readyState !== WebSocket.OPEN) {
-      clearTimers();
-      setState(STATE.IDLE);
-      return;
-    }
-
-    clearTimers();
-    setState(STATE.SPEAKING);
-    session.speechBuffer = [];
-    session.bargeInConsecutive = 0;
-
-    const markName = `tts_${Date.now()}`;
-    session.pendingMarkName = markName;
-
-    const sent = await sendTTSAudio(socket, session, reqId, text, markName);
-
-    if (!sent) {
-      session.pendingMarkName = null;
-      if (socket.readyState === WebSocket.OPEN) {
-        transitionToListening();
-      } else {
-        clearTimers();
-        setState(STATE.IDLE);
-      }
-      return;
-    }
-
-    // Mark timeout fallback (30s)
-    setTimeout(() => {
-      if (session.state === STATE.SPEAKING && session.pendingMarkName === markName) {
-        console.log(`[${reqId}] ⏱️ Mark timeout, forcing listening`);
-        session.pendingMarkName = null;
-        transitionToListening();
-      }
-    }, 30000);
-  }
-
-  async function processUserAudio() {
-    if (session.state === STATE.PROCESSING) return;
-
-    setState(STATE.PROCESSING);
-    clearTimers();
-
-    const audioChunks = session.speechBuffer.splice(0);
-    session.speechBuffer = [];
-    session.hasSpeechStarted = false;
-    session.consecutiveSilentChunks = 0;
-
-    try {
-      // Combine mu-law bytes to PCM
-      const totalBytes = audioChunks.reduce((sum, c) => sum + c.length, 0);
-      const allMulaw = new Uint8Array(totalBytes);
-      let offset = 0;
-      for (const chunk of audioChunks) {
-        allMulaw.set(chunk, offset);
-        offset += chunk.length;
-      }
-
-      const pcmSamples = new Int16Array(allMulaw.length);
-      for (let i = 0; i < allMulaw.length; i++) {
-        pcmSamples[i] = decodeMulaw(allMulaw[i]);
-      }
-
-      // Audio stats
-      let sumSq = 0;
-      for (let i = 0; i < pcmSamples.length; i++) {
-        sumSq += pcmSamples[i] * pcmSamples[i];
-      }
-      const rms = Math.sqrt(sumSq / pcmSamples.length);
-      console.log(`[${reqId}] 🔊 Audio: ${pcmSamples.length} samples, rms=${rms.toFixed(0)}`);
-
-      if (rms < 80) {
-        console.log(`[${reqId}] 🔇 Too quiet`);
-        transitionToListening();
-        return;
-      }
-
-      // Transcribe
-      const wavBuffer = createWavBuffer(pcmSamples, 8000);
-      const customerText = await transcribeAudio(reqId, wavBuffer);
-
-      if (customerText?.trim()) {
-        console.log(`[${reqId}] 🗣️ Customer: "${customerText}"`);
-        session.transcript.push({ speaker: 'Customer', text: customerText });
-        session.conversationHistory.push({ role: 'user', content: customerText });
-        session.noSpeechCount = 0;
-
-        // Get LLM response
-        const aiResponse = await generateResponse(reqId, session.conversationHistory, session.systemPrompt);
-        console.log(`[${reqId}] 🤖 AI: "${aiResponse}"`);
-        session.transcript.push({ speaker: 'AI', text: aiResponse });
-        session.conversationHistory.push({ role: 'assistant', content: aiResponse });
-
-        await startSpeaking(aiResponse);
-      } else {
-        console.log(`[${reqId}] 🔇 STT empty`);
-        session.noSpeechCount++;
-        if (session.noSpeechCount >= 3) {
-          const prompt = 'I could not hear you clearly. Please try again.';
-          session.conversationHistory.push({ role: 'assistant', content: prompt });
-          session.transcript.push({ speaker: 'AI', text: prompt });
-          await startSpeaking(prompt);
-          session.noSpeechCount = 0;
-        } else {
-          transitionToListening();
-        }
-      }
-    } catch (err) {
-      console.error(`[${reqId}] ❌ Processing error: ${err.message}`);
-      transitionToListening();
-    }
-  }
-
-  // WebSocket handlers
   socket.onopen = () => {
-    console.log(`[${reqId}] 🟢 Socket opened`);
+    console.log(`[${reqId}] 🟢 Smartflo socket opened`);
   };
 
   socket.onmessage = async (event) => {
     try {
       const msg = JSON.parse(event.data);
-      const eventType = msg.event;
 
-      if (eventType === 'connected') {
-        console.log(`[${reqId}] ✅ Connected event`);
+      if (msg.event === 'connected') {
+        console.log(`[${reqId}] ✅ Smartflo connected`);
         return;
       }
 
-      if (eventType === 'start') {
+      if (msg.event === 'start') {
         const startData = msg.start || {};
         session.streamSid = startData.streamSid;
         session.callSid = startData.callSid;
-
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}`);
 
-        // Store base URL for later HTTP calls (e.g. saveCallRecord)
-        const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
-        const protocol = req.headers.get('x-forwarded-proto') || 'https';
-        session._functionBaseUrl = `${protocol}://${host}`;
-
-        // Load agent config from CallLog's cached agent_config_cache field
-        // Uses createClient (anonymous SDK) since WebSocket has no user auth token for asServiceRole
-        // The initiateCall function pre-caches agent config when creating the CallLog
-        let agentLoaded = false;
+        // Load agent config from CallLog cache
         try {
-          console.log(`[${reqId}] 🔍 Fetching agent config for call_sid: ${session.callSid}, stream_sid: ${session.streamSid}`);
-          
-          // Create anonymous SDK client (no auth needed, just appId)
           const { createClient } = await import('npm:@base44/sdk@0.8.18');
           const appId = Deno.env.get('BASE44_APP_ID');
           const anonClient = createClient({ appId });
-          
+
           let callLog = null;
 
-          // Strategy 1: Match by call_sid
           if (session.callSid) {
             try {
               const logs = await anonClient.entities.CallLog.filter({ call_sid: session.callSid });
               if (logs.length > 0) callLog = logs[0];
-            } catch (e) {
-              console.log(`[${reqId}] ⚠️ call_sid filter failed: ${e.message}`);
-            }
+            } catch (e) { /* ignore */ }
           }
 
-          // Strategy 2: Match by stream_sid
           if (!callLog && session.streamSid) {
             try {
               const logs = await anonClient.entities.CallLog.filter({ stream_sid: session.streamSid });
               if (logs.length > 0) callLog = logs[0];
-            } catch (e) {
-              console.log(`[${reqId}] ⚠️ stream_sid filter failed: ${e.message}`);
-            }
+            } catch (e) { /* ignore */ }
           }
 
-          // Strategy 3: Most recent ringing/initiated call
           if (!callLog) {
             try {
               const recentLogs = await anonClient.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 1);
@@ -708,99 +429,74 @@ Deno.serve(async (req) => {
             }
           }
 
-          // Clean up anonymous client
           try { anonClient.cleanup(); } catch (_) { /* ignore */ }
 
           if (callLog) {
             session.callLogId = callLog.id;
-            console.log(`[${reqId}] 📍 Found call log: ${callLog.id}, agent_id: ${callLog.agent_id}`);
+            console.log(`[${reqId}] 📍 Found call log: ${callLog.id}`);
 
-            // Update call log with stream_sid/call_sid via the request-based client
+            // Update call log with stream/call sids
             const updateFields = {};
             if (session.streamSid && !callLog.stream_sid) updateFields.stream_sid = session.streamSid;
             if (session.callSid && callLog.call_sid !== session.callSid) updateFields.call_sid = session.callSid;
             if (Object.keys(updateFields).length > 0) {
               try {
                 await base44.asServiceRole.entities.CallLog.update(callLog.id, updateFields);
-              } catch (e) {
-                console.log(`[${reqId}] ⚠️ CallLog update failed: ${e.message}`);
-              }
+              } catch (e) { /* ignore */ }
             }
 
-            // Read agent config from cached field
+            // Load cached agent config
             const cache = callLog.agent_config_cache;
             if (cache && cache.system_prompt) {
-              session.agentId = callLog.agent_id;
-              session.agentConfig = cache;
-              console.log(`[${reqId}] ✅ Agent from cache: ${cache.agent_name || callLog.agent_id}`);
-
-              if (cache.system_prompt.trim()) {
-                session.systemPrompt = cache.system_prompt;
-                console.log(`[${reqId}] ✅ Using cached system prompt (${session.systemPrompt.length} chars)`);
-              }
-
+              let prompt = cache.system_prompt;
               if (cache.knowledge_base_content) {
-                session.systemPrompt = `${session.systemPrompt}\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
-                console.log(`[${reqId}] ✅ Added cached KB content (total: ${session.systemPrompt.length} chars)`);
+                prompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
               }
-              agentLoaded = true;
-            } else {
-              console.log(`[${reqId}] ⚠️ No agent_config_cache on call log`);
+              session.systemPrompt = prompt;
+              console.log(`[${reqId}] ✅ Agent config loaded (${session.systemPrompt.length} chars)`);
             }
-          } else {
-            console.log(`[${reqId}] ❌ No call log found`);
           }
         } catch (e) {
           console.error(`[${reqId}] ❌ Agent config lookup failed: ${e.message}`);
         }
 
-        // Log final system prompt status
-        if (agentLoaded) {
-          console.log(`[${reqId}] ✅ Agent configuration loaded successfully`);
-        } else {
-          console.log(`[${reqId}] ⚠️ Using default system prompt (agent config not loaded)`);
-        }
-        console.log(`[${reqId}] 📝 Final system prompt length: ${session.systemPrompt.length} chars`);
-
-        // Send welcome
-        const welcome = 'Hello! How can I help you today?';
-        session.conversationHistory.push({ role: 'assistant', content: welcome });
-        session.transcript.push({ speaker: 'AI', text: welcome });
-
-        await startSpeaking(welcome);
+        // Connect to Azure OpenAI Realtime API
+        session._realtimeWs = connectToRealtimeAPI(session, socket, reqId);
         return;
       }
 
-      if (eventType === 'media' && msg.media?.payload) {
-        session.totalMediaReceived++;
+      if (msg.event === 'media' && msg.media?.payload) {
+        // Forward audio to Realtime API
+        if (session._realtimeWs && session._realtimeWs.readyState === WebSocket.OPEN) {
+          // Decode mu-law → PCM16 → base64
+          const raw = atob(msg.media.payload);
+          const mulawBytes = new Uint8Array(raw.length);
+          for (let i = 0; i < raw.length; i++) {
+            mulawBytes[i] = raw.charCodeAt(i);
+          }
 
-        const raw = atob(msg.media.payload);
-        const bytes = new Uint8Array(raw.length);
-        for (let i = 0; i < raw.length; i++) {
-          bytes[i] = raw.charCodeAt(i);
-        }
+          const pcm16 = mulawToPcm16(mulawBytes);
+          const pcmBase64 = pcm16ToBase64(pcm16);
 
-        if (session.state === STATE.SPEAKING) {
-          handleSpeakingMedia(bytes);
-        } else if (session.state === STATE.LISTENING) {
-          handleListeningMedia(bytes);
+          session._realtimeWs.send(JSON.stringify({
+            type: 'input_audio_buffer.append',
+            audio: pcmBase64
+          }));
         }
         return;
       }
 
-      if (eventType === 'mark' && msg.mark?.name) {
-        if (session.state === STATE.SPEAKING && msg.mark.name === session.pendingMarkName) {
-          console.log(`[${reqId}] ✅ Mark confirmed`);
-          session.pendingMarkName = null;
-          transitionToListening();
-        }
+      if (msg.event === 'mark') {
+        // Mark received from Smartflo (playback tracking)
         return;
       }
 
-      if (eventType === 'stop') {
-        console.log(`[${reqId}] 📴 Stop event`);
-        clearTimers();
+      if (msg.event === 'stop') {
+        console.log(`[${reqId}] 📴 Smartflo stop event`);
         const duration = Math.round((Date.now() - session.startTime) / 1000);
+        if (session._realtimeWs && session._realtimeWs.readyState === WebSocket.OPEN) {
+          session._realtimeWs.close();
+        }
         await saveCallRecord(session, reqId, duration);
         return;
       }
@@ -810,20 +506,21 @@ Deno.serve(async (req) => {
   };
 
   socket.onclose = async () => {
-    clearTimers();
     const duration = Math.round((Date.now() - session.startTime) / 1000);
-    console.log(`[${reqId}] 🔴 Socket closed, duration=${duration}s, transcript entries=${session.transcript.length}`);
-    // Always attempt to save on close in case stop event was missed
-    if (session.callLogId && session.state !== STATE.IDLE) {
+    console.log(`[${reqId}] 🔴 Smartflo socket closed, duration=${duration}s, transcript=${session.transcript.length} entries`);
+    if (session._realtimeWs && session._realtimeWs.readyState === WebSocket.OPEN) {
+      session._realtimeWs.close();
+    }
+    if (session.callLogId && !session._saved) {
       await saveCallRecord(session, reqId, duration);
     }
-    session.state = STATE.IDLE;
   };
 
   socket.onerror = () => {
-    clearTimers();
-    session.state = STATE.IDLE;
-    console.error(`[${reqId}] ❌ Socket error`);
+    console.error(`[${reqId}] ❌ Smartflo socket error`);
+    if (session._realtimeWs && session._realtimeWs.readyState === WebSocket.OPEN) {
+      session._realtimeWs.close();
+    }
   };
 
   return response;
