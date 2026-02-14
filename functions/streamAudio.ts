@@ -701,9 +701,7 @@ Deno.serve(async (req) => {
         try {
           console.log(`[${reqId}] 🔍 Fetching agent config for call_sid: ${session.callSid}, stream_sid: ${session.streamSid}`);
           
-          const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
-          const protocol = req.headers.get('x-forwarded-proto') || 'https';
-          const configUrl = `${protocol}://${host}/functions/getAgentConfig`;
+          const configUrl = `${session._functionBaseUrl}/functions/getAgentConfig`;
           const appId = Deno.env.get('BASE44_APP_ID');
           
           const configRes = await fetch(configUrl, {
