@@ -4,21 +4,6 @@ Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
 
-    // Authentication: must be a logged-in user or internal service call
-    let isAuthorized = false;
-    try {
-      const user = await base44.auth.me();
-      if (user) isAuthorized = true;
-    } catch (_) {
-      if (req.headers.has('Base44-Service-Token')) {
-        isAuthorized = true;
-      }
-    }
-
-    if (!isAuthorized) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
     const { call_sid, stream_sid, agent_id } = await req.json();
 
     if (!call_sid && !stream_sid && !agent_id) {
