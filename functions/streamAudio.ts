@@ -801,7 +801,7 @@ Deno.serve(async (req) => {
         console.log(`[${reqId}] 📴 Stop event`);
         clearTimers();
         const duration = Math.round((Date.now() - session.startTime) / 1000);
-        await saveCallRecord(session, reqId, duration, base44);
+        await saveCallRecord(session, reqId, duration);
         return;
       }
     } catch (err) {
