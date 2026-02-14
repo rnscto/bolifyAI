@@ -51,18 +51,20 @@ Deno.serve(async (req) => {
         paid_at: new Date().toISOString(),
       });
 
-      // Fetch client
+      // Fetch client (has the latest total_channels from createPaymentOrder)
       const client = await base44.asServiceRole.entities.Client.get(payment.client_id);
+      const subscribedChannels = client.total_channels || 1;
 
       // Parse order note to extract details
       const now = new Date();
       const billingEnd = new Date(now);
       billingEnd.setMonth(billingEnd.getMonth() + 3); // quarterly
 
-      // Update client to active
+      // Update client to active with correct channel count
       await base44.asServiceRole.entities.Client.update(payment.client_id, {
         account_status: 'active',
         status: 'active',
+        total_channels: subscribedChannels,
         next_billing_date: billingEnd.toISOString().split('T')[0],
       });
 
@@ -70,7 +72,7 @@ Deno.serve(async (req) => {
       const subs = await base44.asServiceRole.entities.Subscription.filter({ client_id: payment.client_id });
       const subData = {
         client_id: payment.client_id,
-        channels: client.total_channels || 1,
+        channels: subscribedChannels,
         rate_per_channel: 6500,
         total_amount: payment.amount,
         billing_start_date: now.toISOString().split('T')[0],

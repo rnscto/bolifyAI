@@ -65,6 +65,13 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Failed to create payment order', details: cfData }, { status: 500 });
     }
 
+    // Save selected channels on client so verifyPayment can read it
+    await base44.asServiceRole.entities.Client.update(client.id, {
+      total_channels: channels || 1,
+      monthly_rate_per_channel: ratePerChannel,
+      has_custom_crm: include_crm || false,
+    });
+
     // Create Payment record
     const payment = await base44.entities.Payment.create({
       client_id: client.id,
