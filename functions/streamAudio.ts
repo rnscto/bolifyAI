@@ -30,60 +30,44 @@ function encodeMulaw(sample) {
   return ~(sign | (exponent << 4) | mantissa) & 0xFF;
 }
 
-// Convert mu-law bytes → PCM16 Int16Array
-function mulawToPcm16(mulawBytes) {
-  const pcm = new Int16Array(mulawBytes.length);
+// Convert mu-law 8kHz → PCM16 LE base64 (for Realtime API input_audio_buffer.append)
+function mulawToBase64PCM16(mulawBytes) {
+  const pcm16 = new Int16Array(mulawBytes.length);
   for (let i = 0; i < mulawBytes.length; i++) {
-    pcm[i] = decodeMulaw(mulawBytes[i]);
+    pcm16[i] = decodeMulaw(mulawBytes[i]);
   }
-  return pcm;
+  const bytes = new Uint8Array(pcm16.buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
-// Convert PCM16 Int16Array → mu-law Uint8Array
-function pcm16ToMulaw(pcmSamples) {
-  const mulaw = new Uint8Array(pcmSamples.length);
-  for (let i = 0; i < pcmSamples.length; i++) {
-    mulaw[i] = encodeMulaw(pcmSamples[i]);
-  }
-  return mulaw;
-}
-
-// PCM16 Int16Array → base64 string (little-endian raw bytes)
-function pcm16ToBase64(pcm16) {
-  const buffer = new Uint8Array(pcm16.length * 2);
-  const view = new DataView(buffer.buffer);
-  for (let i = 0; i < pcm16.length; i++) {
-    view.setInt16(i * 2, pcm16[i], true); // little-endian
-  }
-  return btoa(String.fromCharCode(...buffer));
-}
-
-// base64 string → PCM16 Int16Array (little-endian)
-function base64ToPcm16(b64) {
-  const raw = atob(b64);
+// Convert PCM16 LE base64 (from Realtime API audio delta) → mu-law bytes
+function base64PCM16ToMulaw(base64Pcm16) {
+  const raw = atob(base64Pcm16);
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) {
     bytes[i] = raw.charCodeAt(i);
   }
-  const pcm = new Int16Array(bytes.length / 2);
-  const view = new DataView(bytes.buffer);
-  for (let i = 0; i < pcm.length; i++) {
-    pcm[i] = view.getInt16(i * 2, true);
+  // Interpret as Int16 LE
+  const pcm16 = new Int16Array(bytes.buffer);
+  const mulaw = new Uint8Array(pcm16.length);
+  for (let i = 0; i < pcm16.length; i++) {
+    mulaw[i] = encodeMulaw(pcm16[i]);
   }
-  return pcm;
+  return mulaw;
 }
 
-// ─── Save Call Record ───
+// ─── Save call record (reused from original) ───
 
 async function saveCallRecord(session, reqId, duration) {
   if (!session.callLogId) {
     console.log(`[${reqId}] ⚠️ No callLogId, skipping save`);
     return;
   }
-  if (session._saved) {
-    console.log(`[${reqId}] ⚠️ Already saved, skipping duplicate`);
-    return;
-  }
+  if (session._saved) return;
   session._saved = true;
 
   try {
@@ -91,12 +75,10 @@ async function saveCallRecord(session, reqId, duration) {
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    // Generate AI summary using standard chat completions
     let summary = '';
     if (transcript && transcript.trim().length > 20) {
       try {
         const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
-        // Use same deployment for summary (it also supports text) or fallback
         const summaryRes = await fetch(
           `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`,
           {
@@ -117,10 +99,9 @@ async function saveCallRecord(session, reqId, duration) {
         if (summaryRes.ok) {
           const summaryData = await summaryRes.json();
           summary = summaryData.choices?.[0]?.message?.content || '';
-          console.log(`[${reqId}] 📝 Summary: ${summary.substring(0, 80)}...`);
         }
       } catch (sumErr) {
-        console.error(`[${reqId}] ⚠️ Summary failed: ${sumErr.message}`);
+        console.error(`[${reqId}] ⚠️ Summary generation failed: ${sumErr.message}`);
       }
     }
 
@@ -143,178 +124,7 @@ async function saveCallRecord(session, reqId, duration) {
   }
 }
 
-// ─── Connect to Azure OpenAI Realtime API ───
-
-function connectToRealtimeAPI(session, smartfloSocket, reqId) {
-  const endpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '').replace(/^https?:\/\//, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-
-  // Azure OpenAI Realtime WebSocket URL (GA format)
-  const realtimeUrl = `wss://${endpoint}/openai/realtime?api-version=2025-04-01-preview&deployment=${deployment}`;
-
-  console.log(`[${reqId}] 🔗 Connecting to Realtime API: wss://${endpoint}/openai/realtime?deployment=${deployment}`);
-
-  const realtimeWs = new WebSocket(realtimeUrl, {
-    headers: {
-      'api-key': apiKey
-    }
-  });
-
-  realtimeWs.onopen = () => {
-    console.log(`[${reqId}] ✅ Realtime API connected`);
-
-    // Configure the session
-    const sessionConfig = {
-      type: 'session.update',
-      session: {
-        modalities: ['text', 'audio'],
-        instructions: session.systemPrompt,
-        voice: 'shimmer',
-        input_audio_format: 'pcm16',
-        output_audio_format: 'pcm16',
-        input_audio_transcription: {
-          model: 'whisper-1'
-        },
-        turn_detection: {
-          type: 'server_vad',
-          threshold: 0.5,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 500
-        }
-      }
-    };
-
-    realtimeWs.send(JSON.stringify(sessionConfig));
-    console.log(`[${reqId}] 📤 Session configured with system prompt (${session.systemPrompt.length} chars)`);
-  };
-
-  realtimeWs.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data);
-
-      switch (msg.type) {
-        case 'session.created':
-          console.log(`[${reqId}] ✅ Realtime session created`);
-          break;
-
-        case 'session.updated':
-          console.log(`[${reqId}] ✅ Realtime session updated`);
-          break;
-
-        case 'input_audio_buffer.speech_started':
-          console.log(`[${reqId}] 🗣️ User speech started`);
-          // Barge-in: clear any audio being sent to Smartflo
-          if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
-            smartfloSocket.send(JSON.stringify({
-              event: 'clear',
-              streamSid: session.streamSid
-            }));
-          }
-          session._isModelSpeaking = false;
-          break;
-
-        case 'input_audio_buffer.speech_stopped':
-          console.log(`[${reqId}] 🔇 User speech stopped`);
-          break;
-
-        case 'conversation.item.input_audio_transcription.completed':
-          if (msg.transcript?.trim()) {
-            console.log(`[${reqId}] 🗣️ Customer: "${msg.transcript.trim()}"`);
-            session.transcript.push({ speaker: 'Customer', text: msg.transcript.trim() });
-          }
-          break;
-
-        case 'response.audio.delta':
-          // Stream audio back to Smartflo
-          if (msg.delta && smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
-            session._isModelSpeaking = true;
-            const pcm16 = base64ToPcm16(msg.delta);
-            const mulawData = pcm16ToMulaw(pcm16);
-
-            // Send in chunks padded to multiples of 160 bytes
-            const CHUNK_SIZE = 800;
-            for (let i = 0; i < mulawData.length; i += CHUNK_SIZE) {
-              if (smartfloSocket.readyState !== WebSocket.OPEN) break;
-              const end = Math.min(i + CHUNK_SIZE, mulawData.length);
-              let chunk = mulawData.slice(i, end);
-
-              if (chunk.length % 160 !== 0) {
-                const paddedLen = Math.ceil(chunk.length / 160) * 160;
-                const padded = new Uint8Array(paddedLen);
-                padded.set(chunk);
-                padded.fill(0xFF, chunk.length);
-                chunk = padded;
-              }
-
-              const payload = btoa(String.fromCharCode(...chunk));
-              smartfloSocket.send(JSON.stringify({
-                event: 'media',
-                streamSid: session.streamSid,
-                media: { payload }
-              }));
-            }
-          }
-          break;
-
-        case 'response.audio.done':
-          console.log(`[${reqId}] 📤 Audio response complete`);
-          session._isModelSpeaking = false;
-          // Send a mark to track playback completion
-          if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
-            smartfloSocket.send(JSON.stringify({
-              event: 'mark',
-              streamSid: session.streamSid,
-              mark: { name: `rt_done_${Date.now()}` }
-            }));
-          }
-          break;
-
-        case 'response.audio_transcript.delta':
-          // Accumulate AI response transcript
-          if (msg.delta) {
-            if (!session._currentAIText) session._currentAIText = '';
-            session._currentAIText += msg.delta;
-          }
-          break;
-
-        case 'response.audio_transcript.done':
-          if (session._currentAIText?.trim()) {
-            console.log(`[${reqId}] 🤖 AI: "${session._currentAIText.trim()}"`);
-            session.transcript.push({ speaker: 'AI', text: session._currentAIText.trim() });
-          }
-          session._currentAIText = '';
-          break;
-
-        case 'response.done':
-          console.log(`[${reqId}] ✅ Response complete`);
-          break;
-
-        case 'error':
-          console.error(`[${reqId}] ❌ Realtime API error:`, JSON.stringify(msg.error));
-          break;
-
-        default:
-          // Log other events at debug level
-          break;
-      }
-    } catch (err) {
-      console.error(`[${reqId}] ❌ Realtime message parse error:`, err.message);
-    }
-  };
-
-  realtimeWs.onerror = (err) => {
-    console.error(`[${reqId}] ❌ Realtime WS error`);
-  };
-
-  realtimeWs.onclose = (ev) => {
-    console.log(`[${reqId}] 🔴 Realtime WS closed: code=${ev.code}`);
-  };
-
-  return realtimeWs;
-}
-
-// ─── Main WebSocket Handler ───
+// ─── Main Handler ───
 
 Deno.serve(async (req) => {
   const reqId = Math.random().toString(36).substring(2, 10);
@@ -323,7 +133,7 @@ Deno.serve(async (req) => {
 
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
 
-  // Inject App ID header if missing
+  // Inject Base44 App ID
   let base44Req = req;
   if (!req.headers.get('Base44-App-Id')) {
     const appId = Deno.env.get('BASE44_APP_ID');
@@ -339,47 +149,293 @@ Deno.serve(async (req) => {
   if (!isWebSocket) {
     const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
     const protocol = req.headers.get('x-forwarded-proto') === 'https' ? 'wss' : 'ws';
-    const wssUrl = `${protocol}://${host}/functions/streamAudio`;
-
     return new Response(JSON.stringify({
       status: 'ready',
-      version: 'v6.0-realtime-api',
-      wss_url: wssUrl,
-      info: 'Uses Azure OpenAI Realtime API (gpt-realtime-mini) for speech-to-speech'
+      version: 'v6.0-realtime-mini',
+      wss_url: `${protocol}://${host}/functions/streamAudio`
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
-  // Upgrade WebSocket
-  let socket, response;
+  // ─── Upgrade Smartflo WebSocket ───
+  let smartfloSocket, response;
   try {
     const upgraded = Deno.upgradeWebSocket(req);
-    socket = upgraded.socket;
+    smartfloSocket = upgraded.socket;
     response = upgraded.response;
-    console.log(`[${reqId}] ✅ WebSocket upgraded`);
+    console.log(`[${reqId}] ✅ Smartflo WebSocket upgraded`);
   } catch (err) {
     console.error(`[${reqId}] ❌ Upgrade failed: ${err.message}`);
     return new Response('WebSocket upgrade failed', { status: 500 });
   }
 
-  // Session state
+  // ─── Session State ───
   const session = {
     streamSid: null,
     callSid: null,
     callLogId: null,
     transcript: [],
     startTime: Date.now(),
-    systemPrompt: 'You are a friendly AI voice assistant for a business. Be professional, helpful, and concise. Keep responses to 1-3 sentences. Speak naturally.',
+    systemPrompt: 'You are a friendly AI voice assistant. Be professional and concise. Keep responses to 1-3 sentences.',
     _saved: false,
-    _isModelSpeaking: false,
-    _currentAIText: '',
-    _realtimeWs: null
+    realtimeWs: null,         // WebSocket connection to Azure Realtime API
+    realtimeReady: false,     // Whether session.created has been received
+    isSpeaking: false         // Track if model is currently outputting audio
   };
 
-  socket.onopen = () => {
+  // ─── Connect to Azure Realtime API ───
+  function connectRealtime() {
+    const realtimeUrl = Deno.env.get('AZURE_REALTIME_ENDPOINT');
+    const realtimeKey = Deno.env.get('AZURE_REALTIME_KEY');
+
+    if (!realtimeUrl || !realtimeKey) {
+      console.error(`[${reqId}] ❌ Missing AZURE_REALTIME_ENDPOINT or AZURE_REALTIME_KEY`);
+      return;
+    }
+
+    // Convert https:// to wss:// for WebSocket
+    const wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
+    console.log(`[${reqId}] 🔌 Connecting to Azure Realtime: ${wsUrl.substring(0, 80)}...`);
+
+    const ws = new WebSocket(wsUrl, {
+      headers: {
+        'api-key': realtimeKey
+      }
+    });
+
+    ws.onopen = () => {
+      console.log(`[${reqId}] ✅ Azure Realtime WebSocket connected`);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        handleRealtimeMessage(msg);
+      } catch (err) {
+        console.error(`[${reqId}] ❌ Realtime message parse error: ${err.message}`);
+      }
+    };
+
+    ws.onclose = (event) => {
+      console.log(`[${reqId}] 🔴 Azure Realtime closed: code=${event.code} reason=${event.reason}`);
+      session.realtimeReady = false;
+    };
+
+    ws.onerror = (event) => {
+      console.error(`[${reqId}] ❌ Azure Realtime error`);
+    };
+
+    session.realtimeWs = ws;
+  }
+
+  // ─── Handle messages FROM Azure Realtime API ───
+  function handleRealtimeMessage(msg) {
+    const type = msg.type;
+
+    if (type === 'session.created') {
+      console.log(`[${reqId}] ✅ Realtime session created`);
+      session.realtimeReady = true;
+
+      // Configure session: audio format, turn detection, instructions
+      sendToRealtime({
+        type: 'session.update',
+        session: {
+          instructions: session.systemPrompt,
+          voice: 'alloy',
+          input_audio_format: 'pcm16',
+          output_audio_format: 'pcm16',
+          input_audio_transcription: {
+            model: 'whisper-1'
+          },
+          turn_detection: {
+            type: 'server_vad',
+            threshold: 0.5,
+            prefix_padding_ms: 300,
+            silence_duration_ms: 500
+          }
+        }
+      });
+      console.log(`[${reqId}] 📤 Session configured with system prompt (${session.systemPrompt.length} chars)`);
+      return;
+    }
+
+    if (type === 'session.updated') {
+      console.log(`[${reqId}] ✅ Realtime session updated`);
+      return;
+    }
+
+    // ─── Audio output from model → send to Smartflo caller ───
+    if (type === 'response.audio.delta' && msg.delta) {
+      session.isSpeaking = true;
+      // Convert PCM16 base64 from Realtime API → mu-law for Smartflo
+      const mulawBytes = base64PCM16ToMulaw(msg.delta);
+
+      if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
+        // Send in chunks padded to 160-byte boundaries
+        const CHUNK_SIZE = 800;
+        for (let i = 0; i < mulawBytes.length; i += CHUNK_SIZE) {
+          const end = Math.min(i + CHUNK_SIZE, mulawBytes.length);
+          let chunk = mulawBytes.slice(i, end);
+
+          if (chunk.length % 160 !== 0) {
+            const paddedLen = Math.ceil(chunk.length / 160) * 160;
+            const padded = new Uint8Array(paddedLen);
+            padded.set(chunk);
+            padded.fill(0xFF, chunk.length);
+            chunk = padded;
+          }
+
+          const payload = btoa(String.fromCharCode(...chunk));
+          smartfloSocket.send(JSON.stringify({
+            event: 'media',
+            streamSid: session.streamSid,
+            media: { payload }
+          }));
+        }
+      }
+      return;
+    }
+
+    if (type === 'response.audio.done') {
+      session.isSpeaking = false;
+      console.log(`[${reqId}] 🔊 Audio response complete`);
+      return;
+    }
+
+    // ─── Transcription of user's speech ───
+    if (type === 'conversation.item.input_audio_transcription.completed' && msg.transcript) {
+      const text = msg.transcript.trim();
+      if (text) {
+        console.log(`[${reqId}] 🗣️ Customer: "${text.substring(0, 100)}"`);
+        session.transcript.push({ speaker: 'Customer', text });
+      }
+      return;
+    }
+
+    // ─── Model's text output (for transcript logging) ───
+    if (type === 'response.audio_transcript.done' && msg.transcript) {
+      const text = msg.transcript.trim();
+      if (text) {
+        console.log(`[${reqId}] 🤖 AI: "${text.substring(0, 100)}"`);
+        session.transcript.push({ speaker: 'AI', text });
+      }
+      return;
+    }
+
+    // ─── Barge-in: user started speaking while model is responding ───
+    if (type === 'input_audio_buffer.speech_started') {
+      console.log(`[${reqId}] 🛑 Barge-in: user speaking, clearing Smartflo buffer`);
+      if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
+        smartfloSocket.send(JSON.stringify({
+          event: 'clear',
+          streamSid: session.streamSid
+        }));
+      }
+      session.isSpeaking = false;
+      return;
+    }
+
+    if (type === 'input_audio_buffer.speech_stopped') {
+      console.log(`[${reqId}] 🔇 User speech ended`);
+      return;
+    }
+
+    if (type === 'error') {
+      console.error(`[${reqId}] ❌ Realtime API error:`, JSON.stringify(msg.error || msg));
+      return;
+    }
+
+    // Log other events at debug level
+    if (!['response.created', 'response.output_item.added', 'response.content_part.added',
+          'response.output_item.done', 'response.content_part.done', 'response.done',
+          'conversation.item.created', 'rate_limits.updated'].includes(type)) {
+      console.log(`[${reqId}] 📩 Realtime event: ${type}`);
+    }
+  }
+
+  // ─── Send message to Azure Realtime API ───
+  function sendToRealtime(msg) {
+    if (session.realtimeWs && session.realtimeWs.readyState === WebSocket.OPEN) {
+      session.realtimeWs.send(JSON.stringify(msg));
+    }
+  }
+
+  // ─── Load agent config from CallLog cache (same as before) ───
+  async function loadAgentConfig() {
+    try {
+      const { createClient } = await import('npm:@base44/sdk@0.8.18');
+      const appId = Deno.env.get('BASE44_APP_ID');
+      const anonClient = createClient({ appId });
+
+      let callLog = null;
+
+      if (session.callSid) {
+        try {
+          const logs = await anonClient.entities.CallLog.filter({ call_sid: session.callSid });
+          if (logs.length > 0) callLog = logs[0];
+        } catch (e) {
+          console.log(`[${reqId}] ⚠️ call_sid filter failed: ${e.message}`);
+        }
+      }
+
+      if (!callLog && session.streamSid) {
+        try {
+          const logs = await anonClient.entities.CallLog.filter({ stream_sid: session.streamSid });
+          if (logs.length > 0) callLog = logs[0];
+        } catch (e) { /* ignore */ }
+      }
+
+      if (!callLog) {
+        try {
+          const logs = await anonClient.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 1);
+          if (logs.length > 0) callLog = logs[0];
+        } catch (e) { /* ignore */ }
+        if (!callLog) {
+          try {
+            const logs = await anonClient.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 1);
+            if (logs.length > 0) callLog = logs[0];
+          } catch (e) { /* ignore */ }
+        }
+      }
+
+      try { anonClient.cleanup(); } catch (_) { /* ignore */ }
+
+      if (callLog) {
+        session.callLogId = callLog.id;
+        console.log(`[${reqId}] 📍 Found call log: ${callLog.id}`);
+
+        // Update call log with stream/call sid
+        const updateFields = {};
+        if (session.streamSid && !callLog.stream_sid) updateFields.stream_sid = session.streamSid;
+        if (session.callSid && callLog.call_sid !== session.callSid) updateFields.call_sid = session.callSid;
+        if (Object.keys(updateFields).length > 0) {
+          try {
+            await base44.asServiceRole.entities.CallLog.update(callLog.id, updateFields);
+          } catch (e) { /* ignore */ }
+        }
+
+        const cache = callLog.agent_config_cache;
+        if (cache && cache.system_prompt) {
+          session.systemPrompt = cache.system_prompt;
+          if (cache.knowledge_base_content) {
+            session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
+          }
+          console.log(`[${reqId}] ✅ Agent config loaded (${session.systemPrompt.length} chars)`);
+        }
+      } else {
+        console.log(`[${reqId}] ⚠️ No call log found, using default prompt`);
+      }
+    } catch (e) {
+      console.error(`[${reqId}] ❌ Agent config load failed: ${e.message}`);
+    }
+  }
+
+  // ─── Smartflo WebSocket Handlers ───
+
+  smartfloSocket.onopen = () => {
     console.log(`[${reqId}] 🟢 Smartflo socket opened`);
   };
 
-  socket.onmessage = async (event) => {
+  smartfloSocket.onmessage = async (event) => {
     try {
       const msg = JSON.parse(event.data);
 
@@ -392,134 +448,74 @@ Deno.serve(async (req) => {
         const startData = msg.start || {};
         session.streamSid = startData.streamSid;
         session.callSid = startData.callSid;
-        console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}`);
+        console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}, call=${session.callSid}`);
 
-        // Load agent config from CallLog cache
-        try {
-          const { createClient } = await import('npm:@base44/sdk@0.8.18');
-          const appId = Deno.env.get('BASE44_APP_ID');
-          const anonClient = createClient({ appId });
-
-          let callLog = null;
-
-          if (session.callSid) {
-            try {
-              const logs = await anonClient.entities.CallLog.filter({ call_sid: session.callSid });
-              if (logs.length > 0) callLog = logs[0];
-            } catch (e) { /* ignore */ }
-          }
-
-          if (!callLog && session.streamSid) {
-            try {
-              const logs = await anonClient.entities.CallLog.filter({ stream_sid: session.streamSid });
-              if (logs.length > 0) callLog = logs[0];
-            } catch (e) { /* ignore */ }
-          }
-
-          if (!callLog) {
-            try {
-              const recentLogs = await anonClient.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 1);
-              if (recentLogs.length > 0) callLog = recentLogs[0];
-            } catch (e) { /* ignore */ }
-            if (!callLog) {
-              try {
-                const initiatedLogs = await anonClient.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 1);
-                if (initiatedLogs.length > 0) callLog = initiatedLogs[0];
-              } catch (e) { /* ignore */ }
-            }
-          }
-
-          try { anonClient.cleanup(); } catch (_) { /* ignore */ }
-
-          if (callLog) {
-            session.callLogId = callLog.id;
-            console.log(`[${reqId}] 📍 Found call log: ${callLog.id}`);
-
-            // Update call log with stream/call sids
-            const updateFields = {};
-            if (session.streamSid && !callLog.stream_sid) updateFields.stream_sid = session.streamSid;
-            if (session.callSid && callLog.call_sid !== session.callSid) updateFields.call_sid = session.callSid;
-            if (Object.keys(updateFields).length > 0) {
-              try {
-                await base44.asServiceRole.entities.CallLog.update(callLog.id, updateFields);
-              } catch (e) { /* ignore */ }
-            }
-
-            // Load cached agent config
-            const cache = callLog.agent_config_cache;
-            if (cache && cache.system_prompt) {
-              let prompt = cache.system_prompt;
-              if (cache.knowledge_base_content) {
-                prompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
-              }
-              session.systemPrompt = prompt;
-              console.log(`[${reqId}] ✅ Agent config loaded (${session.systemPrompt.length} chars)`);
-            }
-          }
-        } catch (e) {
-          console.error(`[${reqId}] ❌ Agent config lookup failed: ${e.message}`);
-        }
-
-        // Connect to Azure OpenAI Realtime API
-        session._realtimeWs = connectToRealtimeAPI(session, socket, reqId);
+        // Load agent config, then connect to Realtime API
+        await loadAgentConfig();
+        connectRealtime();
         return;
       }
 
       if (msg.event === 'media' && msg.media?.payload) {
-        // Forward audio to Realtime API
-        if (session._realtimeWs && session._realtimeWs.readyState === WebSocket.OPEN) {
-          // Decode mu-law → PCM16 → base64
+        // Forward caller audio → Azure Realtime API
+        if (session.realtimeReady) {
           const raw = atob(msg.media.payload);
           const mulawBytes = new Uint8Array(raw.length);
           for (let i = 0; i < raw.length; i++) {
             mulawBytes[i] = raw.charCodeAt(i);
           }
 
-          const pcm16 = mulawToPcm16(mulawBytes);
-          const pcmBase64 = pcm16ToBase64(pcm16);
+          // Convert mu-law → PCM16 base64 for Realtime API
+          const pcm16Base64 = mulawToBase64PCM16(mulawBytes);
 
-          session._realtimeWs.send(JSON.stringify({
+          sendToRealtime({
             type: 'input_audio_buffer.append',
-            audio: pcmBase64
-          }));
+            audio: pcm16Base64
+          });
         }
         return;
       }
 
       if (msg.event === 'mark') {
-        // Mark received from Smartflo (playback tracking)
+        // Marks not used in realtime mode
         return;
       }
 
       if (msg.event === 'stop') {
         console.log(`[${reqId}] 📴 Smartflo stop event`);
         const duration = Math.round((Date.now() - session.startTime) / 1000);
-        if (session._realtimeWs && session._realtimeWs.readyState === WebSocket.OPEN) {
-          session._realtimeWs.close();
+
+        // Close Realtime WebSocket
+        if (session.realtimeWs && session.realtimeWs.readyState === WebSocket.OPEN) {
+          session.realtimeWs.close();
         }
+
         await saveCallRecord(session, reqId, duration);
         return;
       }
     } catch (err) {
-      console.error(`[${reqId}] ❌ Message error: ${err.message}`);
+      console.error(`[${reqId}] ❌ Smartflo message error: ${err.message}`);
     }
   };
 
-  socket.onclose = async () => {
+  smartfloSocket.onclose = async () => {
     const duration = Math.round((Date.now() - session.startTime) / 1000);
-    console.log(`[${reqId}] 🔴 Smartflo socket closed, duration=${duration}s, transcript=${session.transcript.length} entries`);
-    if (session._realtimeWs && session._realtimeWs.readyState === WebSocket.OPEN) {
-      session._realtimeWs.close();
+    console.log(`[${reqId}] 🔴 Smartflo socket closed, duration=${duration}s`);
+
+    // Close Realtime API connection
+    if (session.realtimeWs && session.realtimeWs.readyState === WebSocket.OPEN) {
+      session.realtimeWs.close();
     }
-    if (session.callLogId && !session._saved) {
+
+    if (session.callLogId) {
       await saveCallRecord(session, reqId, duration);
     }
   };
 
-  socket.onerror = () => {
+  smartfloSocket.onerror = () => {
     console.error(`[${reqId}] ❌ Smartflo socket error`);
-    if (session._realtimeWs && session._realtimeWs.readyState === WebSocket.OPEN) {
-      session._realtimeWs.close();
+    if (session.realtimeWs && session.realtimeWs.readyState === WebSocket.OPEN) {
+      session.realtimeWs.close();
     }
   };
 
