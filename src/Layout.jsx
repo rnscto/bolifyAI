@@ -19,7 +19,8 @@ import {
   BookOpen,
   IndianRupee,
   UserCog,
-  Megaphone
+  Megaphone,
+  BarChart3
 } from 'lucide-react';
 
 export default function Layout({ children, currentPageName }) {
