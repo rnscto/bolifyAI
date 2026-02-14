@@ -100,6 +100,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Leads', path: 'ClientLeads', icon: Users },
     { name: 'Campaigns', path: 'ClientCampaigns', icon: Megaphone },
     { name: 'Call Logs', path: 'ClientCallLogs', icon: PhoneCall },
+    { name: 'Analytics', path: 'ClientAnalytics', icon: Activity },
     { name: 'Knowledge Base', path: 'ClientKnowledgeBase', icon: BookOpen },
     { name: 'Activities', path: 'ClientActivities', icon: Activity },
     { name: 'CRM Integration', path: 'ClientCRM', icon: Database },

@@ -18,7 +18,8 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing } from 'lucide-react';
+import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing, Play } from 'lucide-react';
+import AudioPlayer from '../components/calls/AudioPlayer';
 
 export default function ClientCallLogs() {
   const [calls, setCall] = useState([]);
@@ -252,6 +253,13 @@ export default function ClientCallLogs() {
                 <div>
                   <p className="text-sm text-gray-600">Lead Status Updated</p>
                   <p className="font-medium">{selectedCall.lead_status_updated}</p>
+                </div>
+              )}
+
+              {selectedCall.recording_url && (
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Call Recording</p>
+                  <AudioPlayer url={selectedCall.recording_url} />
                 </div>
               )}
             </div>
