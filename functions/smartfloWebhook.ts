@@ -312,6 +312,7 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
 
     const updateData = { status: mappedStatus };
     if (duration) updateData.duration = parseInt(duration);
+    if (recording_url) updateData.recording_url = recording_url;
     if (status === 'completed') updateData.call_end_time = new Date().toISOString();
 
     await base44.asServiceRole.entities.CallLog.update(callLog.id, updateData);
