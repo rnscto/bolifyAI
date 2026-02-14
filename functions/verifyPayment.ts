@@ -51,11 +51,20 @@ Deno.serve(async (req) => {
         paid_at: new Date().toISOString(),
       });
 
-      // Fetch client (has the latest total_channels from createPaymentOrder)
-      const client = await base44.asServiceRole.entities.Client.get(payment.client_id);
-      const subscribedChannels = client.total_channels || 1;
+      // Parse plan details from payment description
+      let subscribedChannels = 1;
+      let includeCRM = false;
+      try {
+        const planDetails = JSON.parse(payment.description);
+        subscribedChannels = planDetails.channels || 1;
+        includeCRM = planDetails.include_crm || false;
+      } catch (e) {
+        // Legacy format fallback - try to extract from text
+        const chMatch = payment.description?.match(/^(\d+)\s*channel/);
+        if (chMatch) subscribedChannels = parseInt(chMatch[1]);
+        includeCRM = payment.description?.includes('CRM') || false;
+      }
 
-      // Parse order note to extract details
       const now = new Date();
       const billingEnd = new Date(now);
       billingEnd.setMonth(billingEnd.getMonth() + 3); // quarterly
@@ -65,6 +74,8 @@ Deno.serve(async (req) => {
         account_status: 'active',
         status: 'active',
         total_channels: subscribedChannels,
+        monthly_rate_per_channel: 6500,
+        has_custom_crm: includeCRM,
         next_billing_date: billingEnd.toISOString().split('T')[0],
       });
 

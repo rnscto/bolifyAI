@@ -65,14 +65,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Failed to create payment order', details: cfData }, { status: 500 });
     }
 
-    // Save selected channels on client so verifyPayment can read it
-    await base44.asServiceRole.entities.Client.update(client.id, {
-      total_channels: channels || 1,
-      monthly_rate_per_channel: ratePerChannel,
-      has_custom_crm: include_crm || false,
-    });
-
-    // Create Payment record
+    // Create Payment record with channel/CRM info embedded for verifyPayment
     const payment = await base44.entities.Payment.create({
       client_id: client.id,
       cashfree_order_id: orderId,
@@ -80,7 +73,7 @@ Deno.serve(async (req) => {
       currency: 'INR',
       status: 'pending',
       payment_session_id: cfData.payment_session_id,
-      description: `${channels} channel(s) × ₹${ratePerChannel}/mo × ${months} months${include_crm ? ' + CRM ₹' + crmRate + '/mo × ' + months + ' months' : ''}`,
+      description: JSON.stringify({ channels: channels || 1, include_crm: !!include_crm, rate_per_channel: ratePerChannel, crm_rate: crmRate, months }),
     });
 
     return Response.json({
