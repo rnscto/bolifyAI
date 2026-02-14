@@ -3,14 +3,17 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Phone, Plus, X, AlertCircle } from 'lucide-react';
+import { Phone, Plus, X, AlertCircle, Crown } from 'lucide-react';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '../../utils';
 
 export default function DIDManager({ agent, client, onUpdate }) {
   const [availableDIDs, setAvailableDIDs] = useState([]);
   const [assignedDIDs, setAssignedDIDs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
   useEffect(() => {
     loadDIDs();
@@ -34,7 +37,16 @@ export default function DIDManager({ agent, client, onUpdate }) {
     }
   };
 
+  const isTrial = client.account_status === 'trial' || client.account_status === 'onboarding';
+  const trialMaxDIDs = 1;
+
   const addDID = async (didNumber) => {
+    // Trial clients can only have 1 DID
+    if (isTrial && assignedDIDs.length >= trialMaxDIDs) {
+      setShowUpgradePrompt(true);
+      return;
+    }
+
     const maxAllowed = client.total_channels || 1;
     if (assignedDIDs.length >= maxAllowed) {
       toast.error(`You can only assign up to ${maxAllowed} DID(s) based on your subscription`);
@@ -81,7 +93,7 @@ export default function DIDManager({ agent, client, onUpdate }) {
 
   if (loading) return null;
 
-  const maxChannels = client?.total_channels || 1;
+  const maxChannels = isTrial ? trialMaxDIDs : (client?.total_channels || 1);
 
   return (
     <Card>
@@ -93,7 +105,9 @@ export default function DIDManager({ agent, client, onUpdate }) {
               Assigned Phone Numbers (DIDs)
             </CardTitle>
             <p className="text-sm text-gray-500 mt-1">
-              Assign multiple DIDs to enable concurrent calling. 
+              {isTrial 
+                ? 'Trial accounts can assign 1 DID. Subscribe to enable concurrent calling.'
+                : 'Assign multiple DIDs to enable concurrent calling.'}
               <span className="font-medium"> {assignedDIDs.length}/{maxChannels} channels used.</span>
             </p>
           </div>
@@ -156,7 +170,35 @@ export default function DIDManager({ agent, client, onUpdate }) {
           </div>
         )}
 
-        {assignedDIDs.length >= maxChannels && availableDIDs.length > 0 && (
+        {/* Upgrade prompt for trial users */}
+        {showUpgradePrompt && isTrial && (
+          <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg">
+            <div className="flex items-start gap-3">
+              <Crown className="w-5 h-5 text-blue-600 mt-0.5 shrink-0" />
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold text-gray-900">Upgrade to Add More DIDs</h4>
+                <p className="text-sm text-gray-600 mt-1">
+                  Trial accounts are limited to 1 DID. Subscribe to a plan to assign multiple DIDs and enable concurrent calling.
+                </p>
+                <p className="text-sm text-gray-600 mt-1">
+                  Each additional DID costs <span className="font-semibold">₹6,500/month</span>. Select the number of channels you need in the subscription page.
+                </p>
+                <div className="flex gap-2 mt-3">
+                  <Link to={createPageUrl('ClientSubscription')}>
+                    <Button size="sm" className="bg-blue-600 hover:bg-blue-700">
+                      <Crown className="w-4 h-4 mr-1" /> Subscribe Now
+                    </Button>
+                  </Link>
+                  <Button size="sm" variant="ghost" onClick={() => setShowUpgradePrompt(false)}>
+                    Maybe Later
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {assignedDIDs.length >= maxChannels && !isTrial && availableDIDs.length > 0 && (
           <p className="text-xs text-gray-500">
             Upgrade your subscription to add more channels.
           </p>
