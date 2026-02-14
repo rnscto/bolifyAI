@@ -695,55 +695,104 @@ Deno.serve(async (req) => {
         const protocol = req.headers.get('x-forwarded-proto') || 'https';
         session._functionBaseUrl = `${protocol}://${host}`;
 
-        // Fetch agent config via updateCallLog function (different function = no 508 loop)
+        // Load agent config from CallLog's cached agent_config_cache field
+        // This avoids cross-function HTTP calls (which cause 508 Loop Detected on Deno Deploy)
+        // The initiateCall function pre-caches agent config when creating the CallLog
         let agentLoaded = false;
         try {
           console.log(`[${reqId}] 🔍 Fetching agent config for call_sid: ${session.callSid}, stream_sid: ${session.streamSid}`);
           
-          const configUrl = `${session._functionBaseUrl}/functions/updateCallLog`;
-          const appId = Deno.env.get('BASE44_APP_ID');
-          
-          const configRes = await fetch(configUrl, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Base44-App-Id': appId
-            },
-            body: JSON.stringify({
-              action: 'get_agent_config',
-              call_sid: session.callSid,
-              stream_sid: session.streamSid
-            })
-          });
-          
-          if (configRes.ok) {
-            const configData = await configRes.json();
-            console.log(`[${reqId}] 📍 Agent config response: success=${configData.success}, callLogId=${configData.callLogId}`);
-            
-            if (configData.success && configData.agent) {
-              session.callLogId = configData.callLogId;
-              session.agentId = configData.agent.id;
-              session.agentConfig = configData.agent;
-              console.log(`[${reqId}] ✅ Agent found: ${configData.agent.name}`);
+          let callLog = null;
 
-              if (configData.agent.system_prompt && configData.agent.system_prompt.trim()) {
-                session.systemPrompt = configData.agent.system_prompt;
-                console.log(`[${reqId}] ✅ Using custom system prompt (${session.systemPrompt.length} chars)`);
+          // Strategy 1: Match by call_sid
+          if (session.callSid) {
+            try {
+              const logs = await base44.asServiceRole.entities.CallLog.filter({ call_sid: session.callSid });
+              if (logs.length > 0) callLog = logs[0];
+            } catch (e) {
+              console.log(`[${reqId}] ⚠️ call_sid filter failed: ${e.message}`);
+            }
+          }
+
+          // Strategy 2: Match by stream_sid
+          if (!callLog && session.streamSid) {
+            try {
+              const logs = await base44.asServiceRole.entities.CallLog.filter({ stream_sid: session.streamSid });
+              if (logs.length > 0) callLog = logs[0];
+            } catch (e) {
+              console.log(`[${reqId}] ⚠️ stream_sid filter failed: ${e.message}`);
+            }
+          }
+
+          // Strategy 3: Most recent ringing/initiated call
+          if (!callLog) {
+            try {
+              const recentLogs = await base44.asServiceRole.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 1);
+              if (recentLogs.length > 0) callLog = recentLogs[0];
+            } catch (e) { /* ignore */ }
+            if (!callLog) {
+              try {
+                const initiatedLogs = await base44.asServiceRole.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 1);
+                if (initiatedLogs.length > 0) callLog = initiatedLogs[0];
+              } catch (e) { /* ignore */ }
+            }
+          }
+
+          if (callLog) {
+            session.callLogId = callLog.id;
+            console.log(`[${reqId}] 📍 Found call log: ${callLog.id}, agent_id: ${callLog.agent_id}`);
+
+            // Update call log with stream_sid/call_sid
+            const updateFields = {};
+            if (session.streamSid && !callLog.stream_sid) updateFields.stream_sid = session.streamSid;
+            if (session.callSid && callLog.call_sid !== session.callSid) updateFields.call_sid = session.callSid;
+            if (Object.keys(updateFields).length > 0) {
+              try {
+                await base44.asServiceRole.entities.CallLog.update(callLog.id, updateFields);
+              } catch (e) {
+                console.log(`[${reqId}] ⚠️ CallLog update failed: ${e.message}`);
+              }
+            }
+
+            // Read agent config from cached field
+            const cache = callLog.agent_config_cache;
+            if (cache && cache.system_prompt) {
+              session.agentId = callLog.agent_id;
+              session.agentConfig = cache;
+              console.log(`[${reqId}] ✅ Agent from cache: ${cache.agent_name || callLog.agent_id}`);
+
+              if (cache.system_prompt.trim()) {
+                session.systemPrompt = cache.system_prompt;
+                console.log(`[${reqId}] ✅ Using cached system prompt (${session.systemPrompt.length} chars)`);
               }
 
-              if (configData.knowledgeDocs && configData.knowledgeDocs.length > 0) {
-                const kbContext = configData.knowledgeDocs.map(doc => `[${doc.title}]\n${doc.content}`).join('\n\n---\n\n');
-                session.systemPrompt = `${session.systemPrompt}\n\nKNOWLEDGE BASE:\n${kbContext}`;
-                console.log(`[${reqId}] ✅ Added ${configData.knowledgeDocs.length} KB docs (total: ${session.systemPrompt.length} chars)`);
+              if (cache.knowledge_base_content) {
+                session.systemPrompt = `${session.systemPrompt}\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
+                console.log(`[${reqId}] ✅ Added cached KB content (total: ${session.systemPrompt.length} chars)`);
               }
               agentLoaded = true;
             } else {
-              console.log(`[${reqId}] ❌ Agent config not found: ${configData.error || 'unknown'}`);
-              if (configData.callLogId) session.callLogId = configData.callLogId;
+              console.log(`[${reqId}] ⚠️ No agent_config_cache on call log, trying direct agent fetch`);
+              // Fallback: try to load agent directly (works if base44 SDK has service role)
+              if (callLog.agent_id) {
+                try {
+                  const agent = await base44.asServiceRole.entities.Agent.get(callLog.agent_id);
+                  if (agent) {
+                    session.agentId = agent.id;
+                    session.agentConfig = agent;
+                    if (agent.system_prompt && agent.system_prompt.trim()) {
+                      session.systemPrompt = agent.system_prompt;
+                    }
+                    agentLoaded = true;
+                    console.log(`[${reqId}] ✅ Agent loaded directly: ${agent.name}`);
+                  }
+                } catch (agentErr) {
+                  console.log(`[${reqId}] ⚠️ Direct agent fetch failed: ${agentErr.message}`);
+                }
+              }
             }
           } else {
-            const errText = await configRes.text();
-            console.error(`[${reqId}] ❌ Agent config HTTP ${configRes.status}: ${errText}`);
+            console.log(`[${reqId}] ❌ No call log found`);
           }
         } catch (e) {
           console.error(`[${reqId}] ❌ Agent config lookup failed: ${e.message}`);
