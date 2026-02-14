@@ -488,7 +488,16 @@ Deno.serve(async (req) => {
 
       if (msg.event === 'media' && msg.media?.payload) {
         // Forward caller audio → Azure Realtime API
-        if (session.realtimeReady) {
+        if (!session.realtimeReady) {
+          // Buffer or drop — log first few drops
+          if (!session._mediaDropCount) session._mediaDropCount = 0;
+          session._mediaDropCount++;
+          if (session._mediaDropCount <= 3) {
+            console.log(`[${reqId}] ⏳ Realtime not ready yet, dropping media packet #${session._mediaDropCount}`);
+          }
+          return;
+        }
+        if (true) {
           const raw = atob(msg.media.payload);
           const mulawBytes = new Uint8Array(raw.length);
           for (let i = 0; i < raw.length; i++) {
