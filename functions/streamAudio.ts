@@ -192,15 +192,14 @@ Deno.serve(async (req) => {
       return;
     }
 
-    // Convert https:// to wss:// for WebSocket
-    const wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
+    // Convert https:// to wss:// for WebSocket and append api-key as query param
+    let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
+    // Append api-key to URL since Deno WebSocket doesn't support custom headers
+    const separator = wsUrl.includes('?') ? '&' : '?';
+    wsUrl = `${wsUrl}${separator}api-key=${encodeURIComponent(realtimeKey)}`;
     console.log(`[${reqId}] 🔌 Connecting to Azure Realtime: ${wsUrl.substring(0, 80)}...`);
 
-    const ws = new WebSocket(wsUrl, {
-      headers: {
-        'api-key': realtimeKey
-      }
-    });
+    const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       console.log(`[${reqId}] ✅ Azure Realtime WebSocket connected`);
