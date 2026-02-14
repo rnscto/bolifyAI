@@ -36,7 +36,8 @@ Deno.serve(async (req) => {
     });
 
     const agent = await base44.asServiceRole.entities.Agent.get(campaign.agent_id);
-    if (!agent || !agent.assigned_did) {
+    const agentDIDs = agent?.assigned_dids || (agent?.assigned_did ? [agent.assigned_did] : []);
+    if (!agent || agentDIDs.length === 0) {
       await base44.asServiceRole.entities.Campaign.update(campaign_id, { status: 'draft' });
       return Response.json({ error: 'Agent has no assigned DID' }, { status: 400 });
     }
@@ -59,15 +60,19 @@ Deno.serve(async (req) => {
     const results = { initiated: 0, failed: 0, errors: [] };
 
     // Initiate calls for the batch
-    for (const cl of batch) {
+    for (let i = 0; i < batch.length; i++) {
+      const cl = batch[i];
       try {
+        // Round-robin DID selection for concurrent calls
+        const selectedDID = agentDIDs[i % agentDIDs.length];
+
         // Mark as calling
         await base44.asServiceRole.entities.CampaignLead.update(cl.id, {
           status: 'calling',
           attempt_count: (cl.attempt_count || 0) + 1
         });
 
-        const cleanCallerID = agent.assigned_did.replace(/\D/g, '');
+        const cleanCallerID = selectedDID.replace(/\D/g, '');
         const cleanPhone = cl.lead_phone.replace(/\D/g, '');
 
         // Create call log
@@ -77,7 +82,7 @@ Deno.serve(async (req) => {
           agent_id: campaign.agent_id,
           lead_id: cl.lead_id,
           call_sid: callSid,
-          caller_id: agent.assigned_did,
+          caller_id: selectedDID,
           callee_number: cl.lead_phone,
           direction: 'outbound',
           status: 'initiated',

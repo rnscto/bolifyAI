@@ -40,12 +40,17 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Forbidden: Lead does not belong to your account' }, { status: 403 });
     }
 
-    if (!agent.assigned_did || agent.assigned_did.trim() === '') {
+    // Support multiple DIDs - pick first available
+    const allDIDs = agent.assigned_dids || (agent.assigned_did ? [agent.assigned_did] : []);
+    if (allDIDs.length === 0) {
       return Response.json({ 
         success: false,
         error: 'No DID assigned to agent. Please assign a DID to the agent before making calls.' 
       }, { status: 400 });
     }
+
+    // Use primary DID for single calls
+    const callerDID = allDIDs[0];
 
     // Create call log
     const callLog = await base44.asServiceRole.entities.CallLog.create({
@@ -53,7 +58,7 @@ Deno.serve(async (req) => {
       agent_id: agent_id,
       lead_id: lead_id,
       call_sid: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      caller_id: agent.assigned_did,
+      caller_id: callerDID,
       callee_number: phone_number,
       direction: 'outbound',
       status: 'initiated',
@@ -61,7 +66,7 @@ Deno.serve(async (req) => {
     });
 
     // Clean phone number (remove + and non-digits)
-    const cleanCallerID = agent.assigned_did.replace(/\D/g, '');
+    const cleanCallerID = callerDID.replace(/\D/g, '');
     const cleanPhoneNumber = phone_number.replace(/\D/g, '');
 
     // Initiate call via Smartflo Click-to-Call Support API
