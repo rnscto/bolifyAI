@@ -695,84 +695,55 @@ Deno.serve(async (req) => {
         const protocol = req.headers.get('x-forwarded-proto') || 'https';
         session._functionBaseUrl = `${protocol}://${host}`;
 
-        // Inline agent config lookup (cannot HTTP-call other functions on same host — triggers 508 Loop Detected)
+        // Fetch agent config via updateCallLog function (different function = no 508 loop)
         let agentLoaded = false;
         try {
           console.log(`[${reqId}] 🔍 Fetching agent config for call_sid: ${session.callSid}, stream_sid: ${session.streamSid}`);
           
-          let callLog = null;
-          let resolvedAgentId = null;
+          const configUrl = `${session._functionBaseUrl}/functions/updateCallLog`;
+          const appId = Deno.env.get('BASE44_APP_ID');
+          
+          const configRes = await fetch(configUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Base44-App-Id': appId
+            },
+            body: JSON.stringify({
+              action: 'get_agent_config',
+              call_sid: session.callSid,
+              stream_sid: session.streamSid
+            })
+          });
+          
+          if (configRes.ok) {
+            const configData = await configRes.json();
+            console.log(`[${reqId}] 📍 Agent config response: success=${configData.success}, callLogId=${configData.callLogId}`);
+            
+            if (configData.success && configData.agent) {
+              session.callLogId = configData.callLogId;
+              session.agentId = configData.agent.id;
+              session.agentConfig = configData.agent;
+              console.log(`[${reqId}] ✅ Agent found: ${configData.agent.name}`);
 
-          // Strategy 1: Match by call_sid
-          if (session.callSid) {
-            const logs = await base44.asServiceRole.entities.CallLog.filter({ call_sid: session.callSid });
-            if (logs.length > 0) callLog = logs[0];
-          }
-
-          // Strategy 2: Match by stream_sid
-          if (!callLog && session.streamSid) {
-            const logs = await base44.asServiceRole.entities.CallLog.filter({ stream_sid: session.streamSid });
-            if (logs.length > 0) callLog = logs[0];
-          }
-
-          // Strategy 3: Most recent active call log
-          if (!callLog) {
-            const recentLogs = await base44.asServiceRole.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 1);
-            if (recentLogs.length > 0) callLog = recentLogs[0];
-            if (!callLog) {
-              const initiatedLogs = await base44.asServiceRole.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 1);
-              if (initiatedLogs.length > 0) callLog = initiatedLogs[0];
-            }
-          }
-
-          if (callLog) {
-            session.callLogId = callLog.id;
-            resolvedAgentId = callLog.agent_id;
-
-            // Update call log with stream_sid/call_sid for future matching
-            const updateData = {};
-            if (session.streamSid && !callLog.stream_sid) updateData.stream_sid = session.streamSid;
-            if (session.callSid && callLog.call_sid !== session.callSid) updateData.call_sid = session.callSid;
-            if (Object.keys(updateData).length > 0) {
-              await base44.asServiceRole.entities.CallLog.update(callLog.id, updateData);
-            }
-          }
-
-          if (resolvedAgentId) {
-            const agent = await base44.asServiceRole.entities.Agent.get(resolvedAgentId);
-            if (agent) {
-              session.agentId = agent.id;
-              session.agentConfig = agent;
-              console.log(`[${reqId}] ✅ Agent found: ${agent.name}`);
-
-              if (agent.system_prompt && agent.system_prompt.trim()) {
-                session.systemPrompt = agent.system_prompt;
+              if (configData.agent.system_prompt && configData.agent.system_prompt.trim()) {
+                session.systemPrompt = configData.agent.system_prompt;
                 console.log(`[${reqId}] ✅ Using custom system prompt (${session.systemPrompt.length} chars)`);
               }
 
-              // Load knowledge base docs
-              if (agent.knowledge_base_ids && agent.knowledge_base_ids.length > 0) {
-                const kbDocs = [];
-                for (const kbId of agent.knowledge_base_ids) {
-                  try {
-                    const doc = await base44.asServiceRole.entities.KnowledgeBase.get(kbId);
-                    if (doc && doc.content) kbDocs.push({ title: doc.title, content: doc.content });
-                  } catch (kbErr) {
-                    console.error(`[${reqId}] ⚠️ KB doc ${kbId} failed: ${kbErr.message}`);
-                  }
-                }
-                if (kbDocs.length > 0) {
-                  const kbContext = kbDocs.map(doc => `[${doc.title}]\n${doc.content}`).join('\n\n---\n\n');
-                  session.systemPrompt = `${session.systemPrompt}\n\nKNOWLEDGE BASE:\n${kbContext}`;
-                  console.log(`[${reqId}] ✅ Added ${kbDocs.length} KB docs (total: ${session.systemPrompt.length} chars)`);
-                }
+              if (configData.knowledgeDocs && configData.knowledgeDocs.length > 0) {
+                const kbContext = configData.knowledgeDocs.map(doc => `[${doc.title}]\n${doc.content}`).join('\n\n---\n\n');
+                session.systemPrompt = `${session.systemPrompt}\n\nKNOWLEDGE BASE:\n${kbContext}`;
+                console.log(`[${reqId}] ✅ Added ${configData.knowledgeDocs.length} KB docs (total: ${session.systemPrompt.length} chars)`);
               }
               agentLoaded = true;
             } else {
-              console.log(`[${reqId}] ❌ Agent not found for id: ${resolvedAgentId}`);
+              console.log(`[${reqId}] ❌ Agent config not found: ${configData.error || 'unknown'}`);
+              if (configData.callLogId) session.callLogId = configData.callLogId;
             }
           } else {
-            console.log(`[${reqId}] ❌ No call log or agent_id found`);
+            const errText = await configRes.text();
+            console.error(`[${reqId}] ❌ Agent config HTTP ${configRes.status}: ${errText}`);
           }
         } catch (e) {
           console.error(`[${reqId}] ❌ Agent config lookup failed: ${e.message}`);
