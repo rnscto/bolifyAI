@@ -56,6 +56,7 @@ import AdminOutreach from './pages/AdminOutreach';
 import AdminPayments from './pages/AdminPayments';
 import AdminRetention from './pages/AdminRetention';
 import AdminSubscriptions from './pages/AdminSubscriptions';
+import CampaignDetail from './pages/CampaignDetail';
 import ClientActivities from './pages/ClientActivities';
 import ClientAgents from './pages/ClientAgents';
 import ClientCRM from './pages/ClientCRM';
@@ -65,6 +66,7 @@ import ClientCRMDeals from './pages/ClientCRMDeals';
 import ClientCRMReports from './pages/ClientCRMReports';
 import ClientCRMSetup from './pages/ClientCRMSetup';
 import ClientCallLogs from './pages/ClientCallLogs';
+import ClientCampaigns from './pages/ClientCampaigns';
 import ClientDashboard from './pages/ClientDashboard';
 import ClientKnowledgeBase from './pages/ClientKnowledgeBase';
 import ClientLeads from './pages/ClientLeads';
@@ -74,8 +76,7 @@ import Home from './pages/Home';
 import Onboarding from './pages/Onboarding';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
-import ClientCampaigns from './pages/ClientCampaigns';
-import CampaignDetail from './pages/CampaignDetail';
+import ClientAnalytics from './pages/ClientAnalytics';
 import __Layout from './Layout.jsx';
 
 
@@ -89,6 +90,7 @@ export const PAGES = {
     "AdminPayments": AdminPayments,
     "AdminRetention": AdminRetention,
     "AdminSubscriptions": AdminSubscriptions,
+    "CampaignDetail": CampaignDetail,
     "ClientActivities": ClientActivities,
     "ClientAgents": ClientAgents,
     "ClientCRM": ClientCRM,
@@ -98,6 +100,7 @@ export const PAGES = {
     "ClientCRMReports": ClientCRMReports,
     "ClientCRMSetup": ClientCRMSetup,
     "ClientCallLogs": ClientCallLogs,
+    "ClientCampaigns": ClientCampaigns,
     "ClientDashboard": ClientDashboard,
     "ClientKnowledgeBase": ClientKnowledgeBase,
     "ClientLeads": ClientLeads,
@@ -107,8 +110,7 @@ export const PAGES = {
     "Onboarding": Onboarding,
     "PrivacyPolicy": PrivacyPolicy,
     "TermsOfService": TermsOfService,
-    "ClientCampaigns": ClientCampaigns,
-    "CampaignDetail": CampaignDetail,
+    "ClientAnalytics": ClientAnalytics,
 }
 
 export const pagesConfig = {
