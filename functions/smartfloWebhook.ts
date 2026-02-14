@@ -13,7 +13,22 @@ const STATUS_MAP = {
 
 Deno.serve(async (req) => {
   try {
-    const base44 = createClientFromRequest(req);
+    // Inject Base44-App-Id if missing (external webhook calls won't have it)
+    let base44Req = req;
+    if (!req.headers.get('Base44-App-Id')) {
+      const appId = Deno.env.get('BASE44_APP_ID');
+      if (appId) {
+        const newHeaders = new Headers(req.headers);
+        newHeaders.set('Base44-App-Id', appId);
+        base44Req = new Request(req.url, {
+          method: req.method,
+          headers: newHeaders,
+          body: req.body,
+          duplex: 'half'
+        });
+      }
+    }
+    const base44 = createClientFromRequest(base44Req);
 
     // Webhook authentication: verify shared secret
     const url = new URL(req.url);
