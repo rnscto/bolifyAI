@@ -343,14 +343,27 @@ async function saveCallRecord(session, reqId, duration, base44Client) {
     console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}, duration=${duration}s, transcript=${transcript.length} chars`);
   } catch (err) {
     console.error(`[${reqId}] ❌ Save failed:`, err.message);
-    // Last resort: try a minimal update to at least mark as completed
+    // Last resort: try minimal update via HTTP
     try {
-      await base44Client.asServiceRole.entities.CallLog.update(session.callLogId, {
-        status: 'completed',
-        call_end_time: new Date().toISOString(),
-        duration: duration
-      });
-      console.log(`[${reqId}] 💾 Minimal save succeeded`);
+      const appId = Deno.env.get('BASE44_APP_ID');
+      const funcUrl = session._functionBaseUrl ? `${session._functionBaseUrl}/functions/updateCallLog` : null;
+      if (funcUrl) {
+        await fetch(funcUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Base44-App-Id': appId,
+            'X-Base44-Service-Role': 'true'
+          },
+          body: JSON.stringify({
+            call_log_id: session.callLogId,
+            status: 'completed',
+            call_end_time: new Date().toISOString(),
+            duration: duration
+          })
+        });
+        console.log(`[${reqId}] 💾 Minimal save succeeded via HTTP`);
+      }
     } catch (minErr) {
       console.error(`[${reqId}] ❌ Minimal save also failed:`, minErr.message);
     }
