@@ -313,15 +313,31 @@ async function saveCallRecord(session, reqId, duration, base44Client) {
     };
     if (summary) updateData.conversation_summary = summary;
 
-    // Try asServiceRole first, fall back to internal function call
+    // Call updateCallLog function via HTTP (WebSocket has no user auth for asServiceRole)
     try {
-      await base44Client.asServiceRole.entities.CallLog.update(session.callLogId, updateData);
+      const funcUrl = session._functionBaseUrl ? `${session._functionBaseUrl}/functions/updateCallLog` : null;
+      const appId = Deno.env.get('BASE44_APP_ID');
+      if (funcUrl) {
+        const res = await fetch(funcUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Base44-App-Id': appId,
+            'X-Base44-Service-Role': 'true'
+          },
+          body: JSON.stringify({ call_log_id: session.callLogId, ...updateData })
+        });
+        if (!res.ok) throw new Error(`updateCallLog returned ${res.status}`);
+      } else {
+        await base44Client.asServiceRole.entities.CallLog.update(session.callLogId, updateData);
+      }
     } catch (serviceErr) {
-      console.log(`[${reqId}] ⚠️ asServiceRole failed, using function invoke fallback`);
-      await base44Client.functions.invoke('updateCallLog', {
-        call_log_id: session.callLogId,
-        ...updateData
-      });
+      console.log(`[${reqId}] ⚠️ Primary save failed (${serviceErr.message}), trying fallback`);
+      try {
+        await base44Client.asServiceRole.entities.CallLog.update(session.callLogId, updateData);
+      } catch (e2) {
+        console.error(`[${reqId}] ❌ Fallback also failed: ${e2.message}`);
+      }
     }
 
     console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}, duration=${duration}s, transcript=${transcript.length} chars`);
