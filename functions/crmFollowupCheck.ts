@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
 
 // Scheduled function: checks for leads with no response in 48h and creates follow-up tasks
 Deno.serve(async (req) => {
