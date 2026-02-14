@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     }
     const base44 = createClientFromRequest(base44Req);
 
-    const { call_log_id, status, transcript, duration, call_end_time } = await req.json();
+    const { call_log_id, status, transcript, duration, call_end_time, conversation_summary } = await req.json();
 
     if (!call_log_id) {
       return Response.json({ error: 'call_log_id required' }, { status: 400 });
@@ -36,6 +36,7 @@ Deno.serve(async (req) => {
     if (transcript) updateData.transcript = transcript;
     if (duration !== undefined) updateData.duration = duration;
     if (call_end_time) updateData.call_end_time = call_end_time;
+    if (conversation_summary) updateData.conversation_summary = conversation_summary;
 
     await base44.asServiceRole.entities.CallLog.update(call_log_id, updateData);
 
