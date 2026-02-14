@@ -75,6 +75,7 @@ export default function ClientCRM() {
   }
 
   return (
+    <FeatureGate client={client} featureName="CRM Integration">
     <div className="space-y-6">
       {/* Build CRM Card - shown if CRM not active */}
       <BuildCRMCard
@@ -180,5 +181,6 @@ export default function ClientCRM() {
         </div>
       )}
     </div>
+    </FeatureGate>
   );
 }
