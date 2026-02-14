@@ -3,9 +3,18 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const payload = await req.json();
 
+    // Authenticate: allow entity automation triggers (which have event) or authenticated users
+    const payload = await req.json();
     const { event, data, old_data } = payload;
+
+    if (!event) {
+      // Direct invocation — require authentication
+      const user = await base44.auth.me();
+      if (!user) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    }
 
     // Can be triggered via entity automation or direct invocation
     let callLog = data;

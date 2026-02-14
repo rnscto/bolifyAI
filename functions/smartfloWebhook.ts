@@ -70,7 +70,7 @@ Deno.serve(async (req) => {
         const cleanNumber = incomingNumber.replace(/\D/g, '');
         const last10 = cleanNumber.slice(-10);
 
-        // Match caller to registered client
+        // Match caller to registered client (scoped outside so unknown caller block can access it)
         const allClients = await base44.asServiceRole.entities.Client.list();
         const matchedClient = allClients.find(c => {
           if (!c.phone) return false;
@@ -205,21 +205,9 @@ Be specific and Indian business context aware. If the account is expired, priori
           return Response.json({
             success: true,
             identified: true,
-            client_id: matchedClient.id,
-            client_name: matchedClient.company_name,
-            account_status: matchedClient.account_status,
-            industry: matchedClient.industry,
             call_log_id: inboundLog.id,
-            ai_analysis: {
-              intent: aiAnalysis.intent,
-              confidence: aiAnalysis.confidence,
-              routing: aiAnalysis.routing,
-              greeting: aiAnalysis.greeting,
-              priority: aiAnalysis.priority,
-              talking_points: aiAnalysis.talking_points,
-              agent_context: aiAnalysis.agent_context,
-              follow_up_needed: aiAnalysis.follow_up_needed,
-            },
+            greeting: aiAnalysis.greeting,
+            routing: aiAnalysis.routing,
           });
 
         // ----- UNKNOWN CALLER -----
@@ -298,14 +286,8 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
             success: true,
             identified: false,
             call_log_id: unknownLog.id,
-            ai_analysis: {
-              greeting: unknownAnalysis.greeting,
-              likely_intent: unknownAnalysis.likely_intent,
-              routing: unknownAnalysis.routing,
-              is_potential_lead: unknownAnalysis.is_potential_lead,
-              qualifying_questions: unknownAnalysis.qualifying_questions,
-              suggested_response: unknownAnalysis.suggested_response,
-            },
+            greeting: unknownAnalysis.greeting,
+            routing: unknownAnalysis.routing,
           });
         }
       }
