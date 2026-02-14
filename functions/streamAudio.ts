@@ -297,7 +297,7 @@ Deno.serve(async (req) => {
     if (type === 'response.audio.delta' && msg.delta) {
       session.isSpeaking = true;
       // Convert PCM16 base64 from Realtime API → mu-law for Smartflo
-      const mulawBytes = base64PCM16ToMulaw(msg.delta);
+      const mulawBytes = base64PCM16_24kToMulaw(msg.delta);
 
       if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
         // Send in chunks padded to 160-byte boundaries
