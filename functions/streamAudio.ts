@@ -495,8 +495,8 @@ Deno.serve(async (req) => {
             mulawBytes[i] = raw.charCodeAt(i);
           }
 
-          // Convert mu-law → PCM16 base64 for Realtime API
-          const pcm16Base64 = mulawToBase64PCM16(mulawBytes);
+          // Convert mu-law 8kHz → PCM16 24kHz base64 for Realtime API
+          const pcm16Base64 = mulawToBase64PCM16_24k(mulawBytes);
 
           sendToRealtime({
             type: 'input_audio_buffer.append',
