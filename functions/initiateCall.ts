@@ -54,7 +54,24 @@ Deno.serve(async (req) => {
     // Use primary DID for single calls
     const callerDID = allDIDs[0];
 
-    // Create call log
+    // Pre-fetch knowledge base content for agent config cache
+    let kbContent = '';
+    if (agent.knowledge_base_ids && agent.knowledge_base_ids.length > 0) {
+      const kbDocs = [];
+      for (const kbId of agent.knowledge_base_ids) {
+        try {
+          const doc = await base44.asServiceRole.entities.KnowledgeBase.get(kbId);
+          if (doc && doc.content) kbDocs.push({ title: doc.title, content: doc.content });
+        } catch (e) {
+          console.log(`KB doc ${kbId} fetch failed: ${e.message}`);
+        }
+      }
+      if (kbDocs.length > 0) {
+        kbContent = kbDocs.map(doc => `[${doc.title}]\n${doc.content}`).join('\n\n---\n\n');
+      }
+    }
+
+    // Create call log with cached agent config (so streamAudio WebSocket can read it without cross-function calls)
     const callLog = await base44.asServiceRole.entities.CallLog.create({
       client_id: agent.client_id,
       agent_id: agent_id,
@@ -64,7 +81,13 @@ Deno.serve(async (req) => {
       callee_number: phone_number,
       direction: 'outbound',
       status: 'initiated',
-      call_start_time: new Date().toISOString()
+      call_start_time: new Date().toISOString(),
+      agent_config_cache: {
+        agent_name: agent.name,
+        system_prompt: agent.system_prompt || '',
+        persona: agent.persona || {},
+        knowledge_base_content: kbContent
+      }
     });
 
     // Clean phone number (remove + and non-digits)
