@@ -696,18 +696,23 @@ Deno.serve(async (req) => {
         session._functionBaseUrl = `${protocol}://${host}`;
 
         // Load agent config from CallLog's cached agent_config_cache field
-        // This avoids cross-function HTTP calls (which cause 508 Loop Detected on Deno Deploy)
+        // Uses createClient (anonymous SDK) since WebSocket has no user auth token for asServiceRole
         // The initiateCall function pre-caches agent config when creating the CallLog
         let agentLoaded = false;
         try {
           console.log(`[${reqId}] 🔍 Fetching agent config for call_sid: ${session.callSid}, stream_sid: ${session.streamSid}`);
+          
+          // Create anonymous SDK client (no auth needed, just appId)
+          const { createClient } = await import('npm:@base44/sdk@0.8.18');
+          const appId = Deno.env.get('BASE44_APP_ID');
+          const anonClient = createClient({ appId });
           
           let callLog = null;
 
           // Strategy 1: Match by call_sid
           if (session.callSid) {
             try {
-              const logs = await base44.asServiceRole.entities.CallLog.filter({ call_sid: session.callSid });
+              const logs = await anonClient.entities.CallLog.filter({ call_sid: session.callSid });
               if (logs.length > 0) callLog = logs[0];
             } catch (e) {
               console.log(`[${reqId}] ⚠️ call_sid filter failed: ${e.message}`);
@@ -717,7 +722,7 @@ Deno.serve(async (req) => {
           // Strategy 2: Match by stream_sid
           if (!callLog && session.streamSid) {
             try {
-              const logs = await base44.asServiceRole.entities.CallLog.filter({ stream_sid: session.streamSid });
+              const logs = await anonClient.entities.CallLog.filter({ stream_sid: session.streamSid });
               if (logs.length > 0) callLog = logs[0];
             } catch (e) {
               console.log(`[${reqId}] ⚠️ stream_sid filter failed: ${e.message}`);
@@ -727,22 +732,25 @@ Deno.serve(async (req) => {
           // Strategy 3: Most recent ringing/initiated call
           if (!callLog) {
             try {
-              const recentLogs = await base44.asServiceRole.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 1);
+              const recentLogs = await anonClient.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 1);
               if (recentLogs.length > 0) callLog = recentLogs[0];
             } catch (e) { /* ignore */ }
             if (!callLog) {
               try {
-                const initiatedLogs = await base44.asServiceRole.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 1);
+                const initiatedLogs = await anonClient.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 1);
                 if (initiatedLogs.length > 0) callLog = initiatedLogs[0];
               } catch (e) { /* ignore */ }
             }
           }
 
+          // Clean up anonymous client
+          try { anonClient.cleanup(); } catch (_) { /* ignore */ }
+
           if (callLog) {
             session.callLogId = callLog.id;
             console.log(`[${reqId}] 📍 Found call log: ${callLog.id}, agent_id: ${callLog.agent_id}`);
 
-            // Update call log with stream_sid/call_sid
+            // Update call log with stream_sid/call_sid via the request-based client
             const updateFields = {};
             if (session.streamSid && !callLog.stream_sid) updateFields.stream_sid = session.streamSid;
             if (session.callSid && callLog.call_sid !== session.callSid) updateFields.call_sid = session.callSid;
@@ -772,24 +780,7 @@ Deno.serve(async (req) => {
               }
               agentLoaded = true;
             } else {
-              console.log(`[${reqId}] ⚠️ No agent_config_cache on call log, trying direct agent fetch`);
-              // Fallback: try to load agent directly (works if base44 SDK has service role)
-              if (callLog.agent_id) {
-                try {
-                  const agent = await base44.asServiceRole.entities.Agent.get(callLog.agent_id);
-                  if (agent) {
-                    session.agentId = agent.id;
-                    session.agentConfig = agent;
-                    if (agent.system_prompt && agent.system_prompt.trim()) {
-                      session.systemPrompt = agent.system_prompt;
-                    }
-                    agentLoaded = true;
-                    console.log(`[${reqId}] ✅ Agent loaded directly: ${agent.name}`);
-                  }
-                } catch (agentErr) {
-                  console.log(`[${reqId}] ⚠️ Direct agent fetch failed: ${agentErr.message}`);
-                }
-              }
+              console.log(`[${reqId}] ⚠️ No agent_config_cache on call log`);
             }
           } else {
             console.log(`[${reqId}] ❌ No call log found`);
