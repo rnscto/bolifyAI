@@ -59,6 +59,7 @@ import AdminSubscriptions from './pages/AdminSubscriptions';
 import CampaignDetail from './pages/CampaignDetail';
 import ClientActivities from './pages/ClientActivities';
 import ClientAgents from './pages/ClientAgents';
+import ClientAnalytics from './pages/ClientAnalytics';
 import ClientCRM from './pages/ClientCRM';
 import ClientCRMContacts from './pages/ClientCRMContacts';
 import ClientCRMDashboard from './pages/ClientCRMDashboard';
@@ -76,7 +77,6 @@ import Home from './pages/Home';
 import Onboarding from './pages/Onboarding';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
-import ClientAnalytics from './pages/ClientAnalytics';
 import __Layout from './Layout.jsx';
 
 
@@ -93,6 +93,7 @@ export const PAGES = {
     "CampaignDetail": CampaignDetail,
     "ClientActivities": ClientActivities,
     "ClientAgents": ClientAgents,
+    "ClientAnalytics": ClientAnalytics,
     "ClientCRM": ClientCRM,
     "ClientCRMContacts": ClientCRMContacts,
     "ClientCRMDashboard": ClientCRMDashboard,
@@ -110,7 +111,6 @@ export const PAGES = {
     "Onboarding": Onboarding,
     "PrivacyPolicy": PrivacyPolicy,
     "TermsOfService": TermsOfService,
-    "ClientAnalytics": ClientAnalytics,
 }
 
 export const pagesConfig = {

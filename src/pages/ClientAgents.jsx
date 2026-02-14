@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Bot, Phone as PhoneIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import FeatureGate from '../components/FeatureGate';
+import DIDManager from '../components/agents/DIDManager';
 
 export default function ClientAgents() {
   const [agent, setAgent] = useState(null);
@@ -104,16 +105,17 @@ export default function ClientAgents() {
                   </div>
                   <div>
                     <CardTitle className="text-xl">{agent.name}</CardTitle>
-                    <div className="flex items-center gap-2 mt-2">
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <Badge className={agent.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
                         {agent.status}
                       </Badge>
-                      {agent.assigned_did && (
-                        <Badge variant="outline" className="flex items-center gap-1">
+                      {(agent.assigned_dids || (agent.assigned_did ? [agent.assigned_did] : [])).map((did, i) => (
+                        <Badge key={did} variant="outline" className="flex items-center gap-1">
                           <PhoneIcon className="w-3 h-3" />
-                          {agent.assigned_did}
+                          {did}
+                          {i === 0 && <span className="text-xs text-blue-600 ml-1">primary</span>}
                         </Badge>
-                      )}
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -145,6 +147,8 @@ export default function ClientAgents() {
               )}
             </CardContent>
           </Card>
+
+          <DIDManager agent={agent} client={client} onUpdate={loadData} />
 
           <Card>
             <CardHeader>
