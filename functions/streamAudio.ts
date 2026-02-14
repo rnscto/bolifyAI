@@ -677,6 +677,11 @@ Deno.serve(async (req) => {
 
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}`);
 
+        // Store base URL for later HTTP calls (e.g. saveCallRecord)
+        const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
+        const protocol = req.headers.get('x-forwarded-proto') || 'https';
+        session._functionBaseUrl = `${protocol}://${host}`;
+
         // Fetch agent config by calling getAgentConfig function via HTTP
         // (WebSocket connections from Smartflo have no user auth, so asServiceRole won't work directly)
         let agentLoaded = false;
