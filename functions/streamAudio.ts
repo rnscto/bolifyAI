@@ -30,32 +30,63 @@ function encodeMulaw(sample) {
   return ~(sign | (exponent << 4) | mantissa) & 0xFF;
 }
 
-// Convert mu-law 8kHz → PCM16 LE base64 (for Realtime API input_audio_buffer.append)
-function mulawToBase64PCM16(mulawBytes) {
-  const pcm16 = new Int16Array(mulawBytes.length);
+// Realtime API uses 24kHz PCM16, Smartflo uses 8kHz mu-law
+// We need to upsample 8k→24k on input, downsample 24k→8k on output
+
+// Convert mu-law 8kHz → PCM16 24kHz LE base64 (upsample 3x for Realtime API)
+function mulawToBase64PCM16_24k(mulawBytes) {
+  // Decode mu-law to PCM16 at 8kHz
+  const pcm8k = new Int16Array(mulawBytes.length);
   for (let i = 0; i < mulawBytes.length; i++) {
-    pcm16[i] = decodeMulaw(mulawBytes[i]);
+    pcm8k[i] = decodeMulaw(mulawBytes[i]);
   }
-  const bytes = new Uint8Array(pcm16.buffer);
+  
+  // Upsample 8kHz → 24kHz (3x linear interpolation)
+  const pcm24k = new Int16Array(pcm8k.length * 3);
+  for (let i = 0; i < pcm8k.length - 1; i++) {
+    const s0 = pcm8k[i];
+    const s1 = pcm8k[i + 1];
+    pcm24k[i * 3] = s0;
+    pcm24k[i * 3 + 1] = Math.round(s0 + (s1 - s0) / 3);
+    pcm24k[i * 3 + 2] = Math.round(s0 + (s1 - s0) * 2 / 3);
+  }
+  // Last sample
+  const last = pcm8k.length - 1;
+  pcm24k[last * 3] = pcm8k[last];
+  pcm24k[last * 3 + 1] = pcm8k[last];
+  pcm24k[last * 3 + 2] = pcm8k[last];
+
+  // Convert to base64 (little-endian bytes)
+  const buffer = new Uint8Array(pcm24k.length * 2);
+  const view = new DataView(buffer.buffer);
+  for (let i = 0; i < pcm24k.length; i++) {
+    view.setInt16(i * 2, pcm24k[i], true);
+  }
   let binary = '';
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
+  for (let i = 0; i < buffer.length; i++) {
+    binary += String.fromCharCode(buffer[i]);
   }
   return btoa(binary);
 }
 
-// Convert PCM16 LE base64 (from Realtime API audio delta) → mu-law bytes
-function base64PCM16ToMulaw(base64Pcm16) {
+// Convert PCM16 24kHz LE base64 (from Realtime API) → mu-law 8kHz bytes (downsample 3x)
+function base64PCM16_24kToMulaw(base64Pcm16) {
   const raw = atob(base64Pcm16);
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) {
     bytes[i] = raw.charCodeAt(i);
   }
-  // Interpret as Int16 LE
-  const pcm16 = new Int16Array(bytes.buffer);
-  const mulaw = new Uint8Array(pcm16.length);
-  for (let i = 0; i < pcm16.length; i++) {
-    mulaw[i] = encodeMulaw(pcm16[i]);
+  
+  // Read PCM16 LE samples safely using DataView (avoids alignment issues)
+  const numSamples = Math.floor(bytes.length / 2);
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  
+  // Downsample 24kHz → 8kHz (take every 3rd sample)
+  const downsampledLen = Math.floor(numSamples / 3);
+  const mulaw = new Uint8Array(downsampledLen);
+  for (let i = 0; i < downsampledLen; i++) {
+    const sample = view.getInt16(i * 3 * 2, true);
+    mulaw[i] = encodeMulaw(sample);
   }
   return mulaw;
 }
