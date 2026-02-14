@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import BuildCRMCard from '../components/crm/BuildCRMCard';
+import FeatureGate from '../components/FeatureGate';
 
 export default function ClientCRM() {
   const [integrations, setIntegrations] = useState([]);
