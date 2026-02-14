@@ -815,7 +815,7 @@ Deno.serve(async (req) => {
     console.log(`[${reqId}] 🔴 Socket closed, duration=${duration}s, transcript entries=${session.transcript.length}`);
     // Always attempt to save on close in case stop event was missed
     if (session.callLogId && session.state !== STATE.IDLE) {
-      await saveCallRecord(session, reqId, duration, base44);
+      await saveCallRecord(session, reqId, duration);
     }
     session.state = STATE.IDLE;
   };
