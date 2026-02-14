@@ -256,8 +256,8 @@ async function sendTTSAudio(socket, session, reqId, text, markName) {
   }
 }
 
-// Save call record
-async function saveCallRecord(session, reqId, duration, base44Client) {
+// Save call record via updateCallLog HTTP endpoint (WebSocket context has no service role token)
+async function saveCallRecord(session, reqId, duration) {
   if (!session.callLogId) {
     console.log(`[${reqId}] ⚠️ No callLogId, skipping save`);
     return;
@@ -306,6 +306,7 @@ async function saveCallRecord(session, reqId, duration, base44Client) {
     }
 
     const updateData = {
+      call_log_id: session.callLogId,
       status: 'completed',
       transcript: transcript || '',
       duration: duration,
@@ -313,60 +314,24 @@ async function saveCallRecord(session, reqId, duration, base44Client) {
     };
     if (summary) updateData.conversation_summary = summary;
 
-    // Call updateCallLog function via HTTP (WebSocket has no user auth for asServiceRole)
-    try {
-      const funcUrl = session._functionBaseUrl ? `${session._functionBaseUrl}/functions/updateCallLog` : null;
-      const appId = Deno.env.get('BASE44_APP_ID');
-      if (funcUrl) {
-        const res = await fetch(funcUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Base44-App-Id': appId,
-            'X-Base44-Service-Role': 'true'
-          },
-          body: JSON.stringify({ call_log_id: session.callLogId, ...updateData })
-        });
-        if (!res.ok) throw new Error(`updateCallLog returned ${res.status}`);
-      } else {
-        await base44Client.asServiceRole.entities.CallLog.update(session.callLogId, updateData);
-      }
-    } catch (serviceErr) {
-      console.log(`[${reqId}] ⚠️ Primary save failed (${serviceErr.message}), trying fallback`);
-      try {
-        await base44Client.asServiceRole.entities.CallLog.update(session.callLogId, updateData);
-      } catch (e2) {
-        console.error(`[${reqId}] ❌ Fallback also failed: ${e2.message}`);
-      }
-    }
+    // Use anonymous SDK to update the call log directly
+    const { createClient } = await import('npm:@base44/sdk@0.8.18');
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const anonClient = createClient({ appId });
+    
+    await anonClient.entities.CallLog.update(session.callLogId, {
+      status: updateData.status,
+      transcript: updateData.transcript,
+      duration: updateData.duration,
+      call_end_time: updateData.call_end_time,
+      ...(summary ? { conversation_summary: summary } : {})
+    });
+    
+    try { anonClient.cleanup(); } catch (_) { /* ignore */ }
 
     console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}, duration=${duration}s, transcript=${transcript.length} chars`);
   } catch (err) {
     console.error(`[${reqId}] ❌ Save failed:`, err.message);
-    // Last resort: try minimal update via HTTP
-    try {
-      const appId = Deno.env.get('BASE44_APP_ID');
-      const funcUrl = session._functionBaseUrl ? `${session._functionBaseUrl}/functions/updateCallLog` : null;
-      if (funcUrl) {
-        await fetch(funcUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Base44-App-Id': appId,
-            'X-Base44-Service-Role': 'true'
-          },
-          body: JSON.stringify({
-            call_log_id: session.callLogId,
-            status: 'completed',
-            call_end_time: new Date().toISOString(),
-            duration: duration
-          })
-        });
-        console.log(`[${reqId}] 💾 Minimal save succeeded via HTTP`);
-      }
-    } catch (minErr) {
-      console.error(`[${reqId}] ❌ Minimal save also failed:`, minErr.message);
-    }
   }
 }
 
