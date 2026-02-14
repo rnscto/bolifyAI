@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Phone, Plus, X, AlertCircle, Crown } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../../utils';
@@ -14,6 +15,8 @@ export default function DIDManager({ agent, client, onUpdate }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [showAddInput, setShowAddInput] = useState(false);
+  const [newDIDNumber, setNewDIDNumber] = useState('');
 
   useEffect(() => {
     loadDIDs();
