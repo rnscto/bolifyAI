@@ -351,20 +351,9 @@ Deno.serve(async (req) => {
 
   console.log(`[${reqId}] 📨 ${req.method} ${req.url}, ws=${isWebSocket}`);
 
-  // Always use createClientFromRequest for asServiceRole access
-  // For external WebSocket connections (Smartflo), enrich headers with app ID and service token
-  const enrichedHeaders = new Headers(req.headers);
-  if (!req.headers.has('Base44-App-Id')) {
-    enrichedHeaders.set('Base44-App-Id', Deno.env.get('BASE44_APP_ID'));
-    console.log(`[${reqId}] ⚠️ Enriched Base44-App-Id from env`);
-  }
-  if (!req.headers.has('Base44-Service-Token') && Deno.env.get('BASE44_SERVICE_ROLE_KEY')) {
-    enrichedHeaders.set('Base44-Service-Token', Deno.env.get('BASE44_SERVICE_ROLE_KEY'));
-    console.log(`[${reqId}] ⚠️ Enriched Base44-Service-Token from env`);
-  }
-  const clientReq = new Request(req.url, { method: req.method, headers: enrichedHeaders });
-  console.log(`[${reqId}] 🔑 Creating Base44 client from enriched request`);
-  const base44 = createClientFromRequest(clientReq);
+  // Create Base44 client from request - SDK v0.8.18 handles service role internally
+  console.log(`[${reqId}] 🔑 Creating Base44 client from request`);
+  const base44 = createClientFromRequest(req);
   console.log(`[${reqId}] ✅ Base44 client created`);
 
       // Return status for non-WebSocket requests
