@@ -193,16 +193,10 @@ export default function APIDocs() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
-            <h3 className="font-semibold mb-1">Azure OpenAI GPT-5.2</h3>
-            <p className="text-sm text-gray-600">
-              Powers conversational AI with advanced language understanding and response generation.
-            </p>
-          </div>
-          <div>
-            <h3 className="font-semibold mb-1">Azure Custom Voice</h3>
-            <p className="text-sm text-gray-600">
-              Provides Speech-to-Text (STT) and Text-to-Speech (TTS) for real-time voice interactions.
-            </p>
+            <h3 className="font-semibold mb-1">Azure OpenAI Realtime (gpt-realtime-mini)</h3>
+                <p className="text-sm text-gray-600">
+                  Speech-to-speech model with built-in STT/TTS. Handles real-time voice conversations with ultra-low latency.
+                </p>
           </div>
           <div>
             <h3 className="font-semibold mb-1">Smartflo Telecom</h3>
