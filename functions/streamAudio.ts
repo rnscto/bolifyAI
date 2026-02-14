@@ -150,9 +150,9 @@ async function generateResponse(reqId, conversationHistory, systemPrompt) {
           { role: 'system', content: systemPrompt },
           ...conversationHistory.slice(-16)
         ],
-        max_completion_tokens: 100
-        })
-        });
+        max_completion_tokens: 250
+      })
+    });
 
     if (!response.ok) {
       const errBody = await response.text();
@@ -408,7 +408,7 @@ Deno.serve(async (req) => {
     totalMediaReceived: 0,
     pendingMarkName: null,
     startTime: Date.now(),
-    systemPrompt: 'You are a friendly AI voice assistant. Be professional and very concise. Keep responses to 1-2 short sentences. Use only plain text, no emojis or special characters.',
+    systemPrompt: 'You are a friendly AI voice assistant. Be professional and concise. Keep responses to 1-3 sentences. Use only plain text, no emojis or special characters.',
     agentId: null
   };
 
