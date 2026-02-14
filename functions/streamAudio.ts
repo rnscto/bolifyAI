@@ -136,11 +136,11 @@ async function saveCallRecord(session, reqId, duration) {
       }
     }
 
-    const { createClient } = await import('npm:@base44/sdk@0.8.18');
+    const { createClient } = await import('npm:@base44/sdk@0.8.6');
     const appId = Deno.env.get('BASE44_APP_ID');
-    const anonClient = createClient({ appId });
+    const serviceClient = createClient({ appId, asServiceRole: true });
 
-    await anonClient.entities.CallLog.update(session.callLogId, {
+    await serviceClient.entities.CallLog.update(session.callLogId, {
       status: 'completed',
       transcript: transcript || '',
       duration: duration,
@@ -148,7 +148,7 @@ async function saveCallRecord(session, reqId, duration) {
       ...(summary ? { conversation_summary: summary } : {})
     });
 
-    try { anonClient.cleanup(); } catch (_) { /* ignore */ }
+    try { serviceClient.cleanup(); } catch (_) { /* ignore */ }
     console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}, duration=${duration}s`);
   } catch (err) {
     console.error(`[${reqId}] ❌ Save failed:`, err.message);
