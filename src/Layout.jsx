@@ -93,9 +93,10 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Payments', path: 'AdminPayments', icon: IndianRupee },
     { name: 'Outreach', path: 'AdminOutreach', icon: Activity },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
-  ];
+    { name: 'Concept Note', path: 'ConceptNote', icon: FileText },
+    ];
 
-  const clientNav = [
+    const clientNav = [
     { name: 'Dashboard', path: 'ClientDashboard', icon: LayoutDashboard },
     { name: 'Agents', path: 'ClientAgents', icon: Cpu },
     { name: 'Leads', path: 'ClientLeads', icon: Users },
