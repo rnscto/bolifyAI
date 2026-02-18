@@ -269,6 +269,45 @@ export default function VoiceAgentPopup() {
         return;
       }
 
+      // Function call completed — execute the tool
+      if (type === 'response.function_call_arguments.done') {
+        const callId = msg.call_id;
+        const fnName = msg.name;
+        vlog('info', `🔧 Tool call: ${fnName} | call_id=${callId} | args=${msg.arguments}`);
+        
+        if (fnName === 'send_email') {
+          let args;
+          try { args = JSON.parse(msg.arguments); } catch (_) { args = {}; }
+          
+          setMessages(prev => [...prev, { role: 'system', text: `📧 Sending ${args.template_type?.replace('_', ' ')} email to ${args.email}...` }]);
+          
+          // Fire the email in background
+          base44.functions.invoke('sendVoiceAgentEmail', {
+            email: args.email,
+            name: args.name || '',
+            template_type: args.template_type || 'free_trial'
+          }).then(() => {
+            vlog('info', `✅ Email sent: ${args.template_type} → ${args.email}`);
+            setMessages(prev => [...prev, { role: 'system', text: `✅ Email sent to ${args.email}!` }]);
+          }).catch(err => {
+            vlog('error', `❌ Email failed: ${err.message}`);
+            setMessages(prev => [...prev, { role: 'system', text: `⚠️ Could not send email. Please try again.` }]);
+          });
+
+          // Send tool result back to Azure so AI can continue
+          ws.send(JSON.stringify({
+            type: 'conversation.item.create',
+            item: {
+              type: 'function_call_output',
+              call_id: callId,
+              output: JSON.stringify({ success: true, message: `Email sent to ${args.email}` })
+            }
+          }));
+          ws.send(JSON.stringify({ type: 'response.create' }));
+        }
+        return;
+      }
+
       if (type === 'error') {
         vlog('error', '❌ Azure error:', JSON.stringify(msg.error || msg));
         setMessages(prev => [...prev, { role: 'system', text: `Error: ${msg.error?.message || 'AI error'}` }]);
@@ -278,7 +317,8 @@ export default function VoiceAgentPopup() {
       // Ignore common event types silently
       if (['response.created', 'response.output_item.added', 'response.content_part.added',
            'response.output_item.done', 'response.content_part.done', 'response.done',
-           'conversation.item.created', 'rate_limits.updated'].includes(type)) {
+           'conversation.item.created', 'rate_limits.updated', 
+           'response.function_call_arguments.delta'].includes(type)) {
         return;
       }
 
