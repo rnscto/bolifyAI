@@ -1,206 +1,160 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, X, Phone, PhoneOff } from 'lucide-react';
+import { Mic, MicOff, X, Phone, PhoneOff, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { base44 } from '@/api/base44Client';
 import LeadCaptureForm from './LeadCaptureForm';
 
 const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/9b1876319_WhatsApp_Image_2026-02-11_at_44923_PM-removebg-preview.png";
 
 export default function VoiceAgentPopup() {
   const [isOpen, setIsOpen] = useState(false);
-  const [status, setStatus] = useState('idle'); // idle, connecting, ready, listening, speaking, processing, error, ended
-  const [transcript, setTranscript] = useState([]);
-  const [isMuted, setIsMuted] = useState(false);
+  const [status, setStatus] = useState('idle'); // idle, listening, processing, speaking, ended
+  const [messages, setMessages] = useState([]);
+  const [textInput, setTextInput] = useState('');
   const [showPulse, setShowPulse] = useState(true);
   const [showLeadForm, setShowLeadForm] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
 
-  const wsRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const processorRef = useRef(null);
-  const streamRef = useRef(null);
-  const nextPlayTimeRef = useRef(0);
-  const transcriptEndRef = useRef(null);
-  const isMutedRef = useRef(false);
+  const messagesEndRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const synthRef = useRef(window.speechSynthesis);
 
   useEffect(() => {
-    isMutedRef.current = isMuted;
-  }, [isMuted]);
-
-  useEffect(() => {
-    if (transcriptEndRef.current) {
-      transcriptEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [transcript]);
+  }, [messages]);
 
-  const getWsUrl = useCallback(() => {
-    const host = window.location.host;
-    const protocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
-    return `${protocol}://${host}/functions/webVoiceAgent`;
-  }, []);
-
-  const playAudioChunk = useCallback((base64Data) => {
-    if (!audioContextRef.current) return;
-    const ctx = audioContextRef.current;
-
-    const raw = atob(base64Data);
-    const bytes = new Uint8Array(raw.length);
-    for (let i = 0; i < raw.length; i++) {
-      bytes[i] = raw.charCodeAt(i);
-    }
-
-    const numSamples = Math.floor(bytes.length / 2);
-    const view = new DataView(bytes.buffer);
-    const audioBuffer = ctx.createBuffer(1, numSamples, 24000);
-    const channelData = audioBuffer.getChannelData(0);
-    for (let i = 0; i < numSamples; i++) {
-      channelData[i] = view.getInt16(i * 2, true) / 32768;
-    }
-
-    const source = ctx.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(ctx.destination);
-
-    const now = ctx.currentTime;
-    const startTime = Math.max(now, nextPlayTimeRef.current);
-    source.start(startTime);
-    nextPlayTimeRef.current = startTime + audioBuffer.duration;
-  }, []);
-
-  const startCall = useCallback(async () => {
-    setStatus('connecting');
-    setTranscript([]);
-    setShowPulse(false);
-    setShowLeadForm(false);
-
-    const ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 24000 });
-    audioContextRef.current = ctx;
-    nextPlayTimeRef.current = 0;
-
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          sampleRate: 24000,
-          channelCount: 1,
-          echoCancellation: true,
-          noiseSuppression: true,
-          autoGainControl: true
-        }
-      });
-    } catch (err) {
-      console.error('Microphone access denied:', err);
-      setStatus('error');
+  // Initialize speech recognition
+  const startListening = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      addMessage('system', 'Speech recognition not supported in this browser. Please type your message.');
       return;
     }
-    streamRef.current = stream;
 
-    const ws = new WebSocket(getWsUrl());
-    wsRef.current = ws;
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-IN';
+    recognition.interimResults = false;
+    recognition.continuous = false;
 
-    ws.onopen = () => {
-      const source = ctx.createMediaStreamSource(stream);
-      const processor = ctx.createScriptProcessor(4096, 1, 1);
-
-      processor.onaudioprocess = (e) => {
-        if (isMutedRef.current) return;
-        if (ws.readyState !== WebSocket.OPEN) return;
-
-        const inputData = e.inputBuffer.getChannelData(0);
-        const pcm16 = new Int16Array(inputData.length);
-        for (let i = 0; i < inputData.length; i++) {
-          const s = Math.max(-1, Math.min(1, inputData[i]));
-          pcm16[i] = s < 0 ? s * 32768 : s * 32767;
-        }
-        const bytes = new Uint8Array(pcm16.buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.length; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        ws.send(JSON.stringify({ type: 'audio', data: btoa(binary) }));
-      };
-
-      source.connect(processor);
-      processor.connect(ctx.destination);
-      processorRef.current = processor;
+    recognition.onstart = () => {
+      setIsRecording(true);
+      setStatus('listening');
     };
 
-    ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
-
-      if (msg.type === 'ready') {
-        setStatus('ready');
-        setTranscript(prev => [...prev, { role: 'system', text: 'Connected! Start speaking...' }]);
-      }
-      if (msg.type === 'audio') {
-        setStatus('speaking');
-        playAudioChunk(msg.data);
-      }
-      if (msg.type === 'audio_done') setStatus('ready');
-      if (msg.type === 'listening') setStatus('listening');
-      if (msg.type === 'processing') setStatus('processing');
-      if (msg.type === 'user_transcript') {
-        setTranscript(prev => [...prev, { role: 'user', text: msg.text }]);
-      }
-      if (msg.type === 'ai_transcript') {
-        setTranscript(prev => [...prev, { role: 'ai', text: msg.text }]);
-      }
-      if (msg.type === 'error') {
-        setStatus('error');
-        setTranscript(prev => [...prev, { role: 'system', text: msg.message }]);
-      }
-      if (msg.type === 'session_ended' || msg.type === 'conversation_complete') {
-        setStatus('ended');
-        setShowLeadForm(true);
+    recognition.onresult = (event) => {
+      const text = event.results[0][0].transcript;
+      if (text.trim()) {
+        handleUserMessage(text.trim());
       }
     };
 
-    ws.onclose = () => {
-      if (status !== 'idle' && status !== 'ended') {
-        setStatus('ended');
-        setShowLeadForm(true);
+    recognition.onerror = (event) => {
+      console.log('Speech recognition error:', event.error);
+      setIsRecording(false);
+      setStatus('idle');
+      if (event.error === 'not-allowed') {
+        addMessage('system', 'Microphone access denied. Please type your message instead.');
       }
     };
 
-    ws.onerror = () => setStatus('error');
-  }, [getWsUrl, playAudioChunk]);
+    recognition.onend = () => {
+      setIsRecording(false);
+      if (status === 'listening') setStatus('idle');
+    };
 
-  const endCall = useCallback(() => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'end' }));
-      wsRef.current.close();
-    }
-    wsRef.current = null;
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
 
-    if (processorRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current = null;
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
     }
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
+    setIsRecording(false);
+    setStatus('idle');
+  };
 
+  const speakText = (text) => {
+    if (!synthRef.current) return;
+    synthRef.current.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-IN';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    // Try to find an Indian English voice
+    const voices = synthRef.current.getVoices();
+    const indianVoice = voices.find(v => v.lang === 'en-IN') || voices.find(v => v.lang.startsWith('en'));
+    if (indianVoice) utterance.voice = indianVoice;
+
+    utterance.onstart = () => setStatus('speaking');
+    utterance.onend = () => setStatus('idle');
+
+    synthRef.current.speak(utterance);
+  };
+
+  const addMessage = (role, text) => {
+    setMessages(prev => [...prev, { role, text }]);
+  };
+
+  const handleUserMessage = async (text) => {
+    addMessage('user', text);
+    setStatus('processing');
+
+    const updatedMessages = [...messages, { role: 'user', text }];
+
+    try {
+      const response = await base44.functions.invoke('webVoiceAgent', {
+        action: 'chat',
+        messages: updatedMessages.filter(m => m.role === 'user' || m.role === 'ai')
+      });
+
+      const reply = response.data.reply;
+      addMessage('ai', reply);
+      speakText(reply);
+    } catch (err) {
+      console.error('Chat error:', err);
+      const fallback = "I'm having trouble connecting. Please try again or type your question.";
+      addMessage('ai', fallback);
+      setStatus('idle');
+    }
+  };
+
+  const handleTextSubmit = (e) => {
+    e.preventDefault();
+    if (!textInput.trim()) return;
+    handleUserMessage(textInput.trim());
+    setTextInput('');
+  };
+
+  const handleStartConversation = () => {
+    setShowPulse(false);
+    setMessages([]);
+    setShowLeadForm(false);
+    const greeting = "Hi! I'm VaaniAI's assistant. I can help you learn about our AI voice agent platform, pricing, and features. What would you like to know?";
+    addMessage('ai', greeting);
+    speakText(greeting);
+  };
+
+  const handleEndConversation = () => {
+    synthRef.current?.cancel();
+    stopListening();
     setStatus('ended');
     setShowLeadForm(true);
-  }, []);
+  };
 
   const handleClose = () => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'end' }));
-      wsRef.current.close();
-    }
-    wsRef.current = null;
-    if (processorRef.current) { processorRef.current.disconnect(); processorRef.current = null; }
-    if (streamRef.current) { streamRef.current.getTracks().forEach(t => t.stop()); streamRef.current = null; }
-    if (audioContextRef.current) { audioContextRef.current.close(); audioContextRef.current = null; }
-
+    synthRef.current?.cancel();
+    stopListening();
     setStatus('idle');
     setIsOpen(false);
-    setTranscript([]);
+    setMessages([]);
     setShowPulse(true);
     setShowLeadForm(false);
   };
@@ -208,38 +162,26 @@ export default function VoiceAgentPopup() {
   const handleLeadSubmitted = () => {
     setShowLeadForm(false);
     setStatus('idle');
-    setTranscript([]);
-  };
-
-  const handleLeadSkip = () => {
-    setShowLeadForm(false);
-    setStatus('idle');
-    setTranscript([]);
+    setMessages([]);
   };
 
   const statusText = {
-    idle: 'Tap to start a conversation',
-    connecting: 'Connecting...',
-    ready: 'Listening...',
-    listening: '🎙️ Hearing you...',
-    speaking: '🔊 Speaking...',
+    idle: 'Ready',
+    listening: '🎙️ Listening...',
     processing: 'Thinking...',
-    error: 'Connection error',
+    speaking: '🔊 Speaking...',
     ended: 'Conversation ended'
   };
 
   const statusColor = {
-    idle: 'bg-gray-400',
-    connecting: 'bg-yellow-400',
-    ready: 'bg-green-500',
+    idle: 'bg-green-500',
     listening: 'bg-blue-500',
-    speaking: 'bg-orange-500',
     processing: 'bg-purple-500',
-    error: 'bg-red-500',
+    speaking: 'bg-orange-500',
     ended: 'bg-gray-400'
   };
 
-  const isInCall = !['idle', 'ended', 'error'].includes(status);
+  const hasStarted = messages.length > 0;
 
   return (
     <>
@@ -297,31 +239,37 @@ export default function VoiceAgentPopup() {
               </button>
             </div>
 
-            {/* Lead capture form (shown after call ends) */}
             {showLeadForm ? (
               <LeadCaptureForm
-                conversationTranscript={transcript}
+                conversationTranscript={messages}
                 onSubmitted={handleLeadSubmitted}
-                onSkip={handleLeadSkip}
+                onSkip={handleLeadSubmitted}
               />
             ) : (
               <>
-                {/* Transcript area */}
-                <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[200px] max-h-[300px] bg-gray-50">
-                  {transcript.length === 0 && status === 'idle' && (
+                {/* Messages area */}
+                <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[200px] max-h-[320px] bg-gray-50">
+                  {!hasStarted && (
                     <div className="text-center py-8">
                       <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-50 flex items-center justify-center">
                         <Mic className="w-8 h-8 text-blue-500" />
                       </div>
                       <p className="text-sm font-medium text-gray-800">Talk to VaaniAI</p>
                       <p className="text-xs text-gray-500 mt-1.5 max-w-[240px] mx-auto">
-                        Ask me anything about our AI voice agent platform, pricing, features, or how to get started!
+                        Ask about our AI voice agents, pricing, features, or how to get started!
                       </p>
+                      <Button
+                        onClick={handleStartConversation}
+                        className="mt-4 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-full px-6 gap-2 shadow-lg shadow-green-200"
+                      >
+                        <Phone className="w-4 h-4" />
+                        Start Conversation
+                      </Button>
                     </div>
                   )}
-                  {transcript.map((msg, i) => (
+                  {messages.map((msg, i) => (
                     <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                      <div className={`max-w-[80%] px-3 py-2 rounded-xl text-sm ${
+                      <div className={`max-w-[82%] px-3 py-2 rounded-xl text-sm ${
                         msg.role === 'user'
                           ? 'bg-[#1a365d] text-white rounded-br-sm'
                           : msg.role === 'ai'
@@ -332,74 +280,63 @@ export default function VoiceAgentPopup() {
                       </div>
                     </div>
                   ))}
-                  <div ref={transcriptEndRef} />
-                </div>
-
-                {/* Controls */}
-                <div className="p-4 bg-white border-t border-gray-100 shrink-0">
-                  <div className="flex items-center justify-center gap-4">
-                    {status === 'idle' ? (
-                      <Button
-                        onClick={startCall}
-                        className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-full px-6 py-2.5 gap-2 shadow-lg shadow-green-200"
-                      >
-                        <Phone className="w-4 h-4" />
-                        Start Conversation
-                      </Button>
-                    ) : isInCall ? (
-                      <>
-                        <button
-                          onClick={() => setIsMuted(!isMuted)}
-                          className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                            isMuted
-                              ? 'bg-red-100 text-red-600 hover:bg-red-200'
-                              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                          }`}
-                        >
-                          {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-                        </button>
-
-                        <div className="relative w-16 h-16 flex items-center justify-center">
-                          {(status === 'listening' || status === 'speaking') && (
-                            <>
-                              <span className="absolute inset-0 rounded-full bg-blue-400 animate-ping opacity-20" />
-                              <span className="absolute inset-1 rounded-full bg-blue-300 animate-pulse opacity-30" />
-                            </>
-                          )}
-                          <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                            status === 'listening' ? 'bg-blue-500' :
-                            status === 'speaking' ? 'bg-orange-500' :
-                            status === 'processing' ? 'bg-purple-500 animate-pulse' :
-                            status === 'connecting' ? 'bg-yellow-500 animate-pulse' :
-                            'bg-green-500'
-                          }`}>
-                            <Mic className="w-5 h-5 text-white" />
-                          </div>
+                  {status === 'processing' && (
+                    <div className="flex justify-start">
+                      <div className="bg-white border border-gray-200 rounded-xl rounded-bl-sm shadow-sm px-4 py-2.5">
+                        <div className="flex gap-1.5">
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                         </div>
-
-                        <button
-                          onClick={endCall}
-                          className="w-12 h-12 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg shadow-red-200"
-                        >
-                          <PhoneOff className="w-5 h-5" />
-                        </button>
-                      </>
-                    ) : (
-                      <Button
-                        onClick={startCall}
-                        className="bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-full px-6 py-2.5 gap-2 shadow-lg shadow-green-200"
-                      >
-                        <Phone className="w-4 h-4" />
-                        New Conversation
-                      </Button>
-                    )}
-                  </div>
-                  {isInCall && (
-                    <p className="text-center text-[10px] text-gray-400 mt-2">
-                      {status === 'connecting' ? 'Setting up voice connection...' : 'Powered by VaaniAI'}
-                    </p>
+                      </div>
+                    </div>
                   )}
+                  <div ref={messagesEndRef} />
                 </div>
+
+                {/* Input controls */}
+                {hasStarted && (
+                  <div className="p-3 bg-white border-t border-gray-100 shrink-0 space-y-2">
+                    <form onSubmit={handleTextSubmit} className="flex gap-2">
+                      <Input
+                        value={textInput}
+                        onChange={(e) => setTextInput(e.target.value)}
+                        placeholder="Type or tap mic to speak..."
+                        className="flex-1 h-9 text-sm"
+                        disabled={status === 'processing'}
+                      />
+                      <button
+                        type="button"
+                        onClick={isRecording ? stopListening : startListening}
+                        disabled={status === 'processing'}
+                        className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+                          isRecording
+                            ? 'bg-red-500 text-white animate-pulse'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        }`}
+                      >
+                        {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                      </button>
+                      <Button
+                        type="submit"
+                        size="icon"
+                        disabled={!textInput.trim() || status === 'processing'}
+                        className="w-9 h-9 shrink-0 bg-[#1a365d] hover:bg-[#2563eb]"
+                      >
+                        <Send className="w-4 h-4" />
+                      </Button>
+                    </form>
+                    <div className="flex justify-between items-center">
+                      <p className="text-[10px] text-gray-400">Powered by VaaniAI</p>
+                      <button
+                        onClick={handleEndConversation}
+                        className="text-[10px] text-red-500 hover:text-red-600 flex items-center gap-1"
+                      >
+                        <PhoneOff className="w-3 h-3" /> End Chat
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             )}
           </motion.div>
