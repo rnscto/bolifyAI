@@ -114,8 +114,7 @@ Deno.serve(async (req) => {
           headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: chatMessages,
-            max_completion_tokens: 300,
-            temperature: 0.7
+            max_completion_tokens: 300
           })
         }
       );
