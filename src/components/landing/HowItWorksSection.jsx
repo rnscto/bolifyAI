@@ -8,29 +8,29 @@ const steps = [
   {
     step: '01',
     icon: UserPlus,
-    title: 'Sign Up & Choose Industry',
-    description: 'Create your account and select from 23+ industry templates. Your CRM configures itself in seconds.',
+    title: 'Sign Up & Select Your Industry',
+    description: 'Create your free account and choose from 23+ pre-built industry CRM templates — auto-configured in seconds.',
     color: 'bg-[#1a365d]'
   },
   {
     step: '02',
     icon: Cpu,
-    title: 'Train Your AI Agent',
-    description: 'Upload your knowledge base, set the tone and language. Your AI agent learns your business.',
+    title: 'Configure Your AI Voice Agent',
+    description: 'Upload your knowledge base, set the conversation tone, and choose Hindi, English, or bilingual mode. Your AI agent is ready.',
     color: 'bg-[#FF9933]'
   },
   {
     step: '03',
     icon: PhoneCall,
-    title: 'Start Calling Leads',
-    description: 'Import leads and let your AI agent make outbound calls, qualify prospects, and book follow-ups.',
+    title: 'Launch Automated Calling Campaigns',
+    description: 'Import your lead list and let the AI calling agent make outbound sales calls, qualify leads, and schedule follow-ups.',
     color: 'bg-[#138808]'
   },
   {
     step: '04',
     icon: BarChart3,
-    title: 'Track & Close Deals',
-    description: 'Monitor your pipeline, review AI-analyzed transcripts, and watch deals progress automatically.',
+    title: 'Track Pipeline & Close Deals',
+    description: 'Monitor your sales funnel with AI analytics, review call transcripts, and watch deals close automatically.',
     color: 'bg-[#e67e22]'
   }
 ];
@@ -46,9 +46,9 @@ export default function HowItWorksSection() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#e67e22]/10 text-[#e67e22] text-sm font-semibold mb-4">
             How It Works
           </div>
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">Up and Running in Minutes</h2>
+          <h2 className="text-4xl font-bold text-gray-900 mb-4">Set Up Your AI Calling Agent in Minutes</h2>
           <p className="text-lg text-gray-500 max-w-2xl mx-auto">
-            Four simple steps to transform your sales process with AI.
+            Four simple steps to automate your outbound sales calls with India's best AI voice agent.
           </p>
         </div>
 

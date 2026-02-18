@@ -11,64 +11,64 @@ import VoiceWaveBg from './VoiceWaveBg';
 const features = [
   {
     icon: Cpu,
-    title: 'AI Voice Agents',
-    description: 'Deploy intelligent voice agents that speak naturally in English and Hindi, trained on your business knowledge.',
+    title: 'AI Voice Agent for Business',
+    description: 'Deploy voice AI agents that speak naturally in English and Hindi — trained on your products, services, and sales scripts.',
     color: 'from-[#1a365d] to-[#2a4a7f]',
     iconBg: 'bg-[#1a365d]/10 text-[#1a365d]'
   },
   {
     icon: PhoneCall,
-    title: 'Automated Outbound Calls',
-    description: 'Reach hundreds of leads automatically. Your AI agent qualifies, engages, and books follow-ups.',
+    title: 'Automated Outbound Calling',
+    description: 'AI-powered outbound call automation that reaches hundreds of leads daily. Qualifies prospects, books meetings, and updates your CRM.',
     color: 'from-[#138808] to-[#1a9e0f]',
     iconBg: 'bg-[#138808]/10 text-[#138808]'
   },
   {
     icon: BarChart3,
-    title: 'Industry-Specific CRM',
-    description: 'Pre-built CRM templates for 23+ industries — from Real Estate to Healthcare to SaaS.',
+    title: 'Industry-Specific Sales CRM',
+    description: 'Pre-built CRM software for 23+ industries — Real Estate, Healthcare, Education, Insurance, SaaS, and more.',
     color: 'from-[#e67e22] to-[#f39c12]',
     iconBg: 'bg-[#e67e22]/10 text-[#e67e22]'
   },
   {
     icon: Brain,
-    title: 'AI Transcript Analysis',
-    description: 'Every call is transcribed and analyzed. Auto-detect lead interest, update scores, and trigger actions.',
+    title: 'AI Call Transcript Analysis',
+    description: 'Every call is transcribed and analyzed by AI. Auto-detect buyer intent, update lead scores, and trigger follow-up workflows.',
     color: 'from-[#1a365d] to-[#2a4a7f]',
     iconBg: 'bg-purple-500/10 text-purple-600'
   },
   {
     icon: Zap,
-    title: 'Pipeline Automation',
-    description: 'Auto-create deals from interested leads, schedule follow-ups, and move deals through stages automatically.',
+    title: 'Sales Pipeline Automation',
+    description: 'Automate deal creation from qualified leads, schedule follow-ups, and move opportunities through your sales funnel automatically.',
     color: 'from-[#FF9933] to-[#e67e22]',
     iconBg: 'bg-amber-500/10 text-amber-600'
   },
   {
     icon: Globe,
-    title: 'Multi-Language Support',
-    description: 'Engage leads in English, Hindi, or bilingual mode. Your agents adapt to the conversation.',
+    title: 'Hindi & English Voice Bot',
+    description: 'Multilingual AI voice bot that converses in English, Hindi, or bilingual mode — ideal for Indian businesses and government services.',
     color: 'from-[#138808] to-[#1a9e0f]',
     iconBg: 'bg-teal-500/10 text-teal-600'
   },
   {
     icon: Calendar,
-    title: 'Smart Follow-ups',
-    description: '48-hour no-response detection, auto-scheduled follow-ups, and priority-based task management.',
+    title: 'Smart Follow-up Automation',
+    description: 'Auto-detect no-response leads within 48 hours, schedule AI callback campaigns, and prioritize high-intent prospects.',
     color: 'from-[#e67e22] to-[#f39c12]',
     iconBg: 'bg-rose-500/10 text-rose-500'
   },
   {
     icon: Users,
-    title: 'Lead Scoring',
-    description: 'AI-powered lead scoring that updates in real-time based on call outcomes and engagement history.',
+    title: 'AI Lead Scoring & Qualification',
+    description: 'Real-time AI lead scoring based on call outcomes, engagement frequency, and buying signals — never miss a hot lead.',
     color: 'from-[#1a365d] to-[#2a4a7f]',
     iconBg: 'bg-cyan-500/10 text-cyan-600'
   },
   {
     icon: Shield,
-    title: 'Knowledge Base',
-    description: 'Upload PDFs, docs, and FAQs. Your AI agent uses them to give accurate, contextual responses.',
+    title: 'AI Knowledge Base',
+    description: 'Upload product brochures, FAQs, and sales documents. Your AI calling agent uses them to give accurate, context-aware responses on every call.',
     color: 'from-[#FF9933] to-[#e67e22]',
     iconBg: 'bg-[#FF9933]/10 text-[#FF9933]'
   }
@@ -87,9 +87,9 @@ export default function FeaturesSection() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1a365d]/5 text-[#1a365d] text-sm font-semibold mb-4">
             <Zap className="w-3.5 h-3.5" /> Features
           </div>
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">Everything You Need to Close More Deals</h2>
+          <h2 className="text-4xl font-bold text-gray-900 mb-4">AI Sales Automation Features to Close More Deals</h2>
           <h3 className="text-lg text-gray-500 max-w-2xl mx-auto font-normal">
-            From AI voice calling to pipeline automation — VaaniAI handles your entire sales workflow.
+            From AI voice calling to CRM pipeline automation — VaaniAI is the all-in-one AI calling software for Indian businesses.
           </h3>
         </div>
 

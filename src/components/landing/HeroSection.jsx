@@ -38,22 +38,21 @@ export default function HeroSection() {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[#e67e22]/30 bg-[#e67e22]/10 text-[#f39c12] text-sm font-medium mb-8">
               <Mic className="w-4 h-4" />
-              Your Smart AI Voice Agent
+              #1 AI Voice Agent Platform in India
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
-              Turn Every Call
+              AI Calling Software
               <span className="block mt-2">
-                Into a{' '}
+                That{' '}
                 <span className="bg-gradient-to-r from-[#FF9933] via-[#e67e22] to-[#f39c12] bg-clip-text text-transparent">
-                  Conversion
+                  Sells 24/7
                 </span>
               </span>
             </h1>
 
             <h2 className="text-lg text-slate-300 max-w-xl mb-8 leading-relaxed font-normal">
-              VaaniAI deploys intelligent voice agents that engage leads, qualify prospects,
-              and close deals — 24/7, in English & Hindi, with your custom CRM built-in.
+              VaaniAI is India's leading AI voice agent for sales automation — qualifying leads, making outbound calls, and closing deals round-the-clock in Hindi & English with a built-in CRM.
             </h2>
 
             {/* CTAs */}
@@ -77,9 +76,9 @@ export default function HeroSection() {
             {/* Stats */}
             <div className="grid grid-cols-3 gap-6 mt-12 pt-8 border-t border-white/10">
               {[
-                { icon: PhoneCall, value: '24/7', label: 'AI Calling' },
-                { value: '23+', label: 'Industries' },
-                { icon: TrendingUp, value: '3x', label: 'More Conversions' },
+                { icon: PhoneCall, value: '24/7', label: 'AI Voice Calling' },
+                { value: '23+', label: 'Industry CRMs' },
+                { icon: TrendingUp, value: '3x', label: 'Lead Conversions' },
               ].map((stat) => (
                 <div key={stat.label}>
                   <p className="text-2xl sm:text-3xl font-bold text-white">{stat.value}</p>

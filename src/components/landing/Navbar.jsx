@@ -21,6 +21,7 @@ export default function Navbar() {
     { label: 'How It Works', href: '#how-it-works' },
     { label: 'Industries', href: '#industries' },
     { label: 'Pricing', href: '#pricing' },
+    { label: 'FAQ', href: '#faq' },
   ];
 
   return (

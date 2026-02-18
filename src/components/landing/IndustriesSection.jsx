@@ -38,9 +38,9 @@ export default function IndustriesSection() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#138808]/10 text-[#138808] text-sm font-semibold mb-4">
             Industries
           </div>
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">Built for Your Industry</h2>
+          <h2 className="text-4xl font-bold text-gray-900 mb-4">AI Voice Agents & CRM for Every Industry</h2>
           <p className="text-lg text-gray-500 max-w-2xl mx-auto">
-            Pre-configured CRM templates with industry-specific deal stages, lead sources, and automations.
+            Pre-configured AI calling bots and CRM templates with industry-specific deal stages, lead sources, and sales automation for Indian businesses.
           </p>
         </div>
 

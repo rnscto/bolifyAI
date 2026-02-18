@@ -10,36 +10,44 @@ import {
 
 const faqs = [
   {
-    q: "What is VaaniAI?",
-    a: "VaaniAI is an AI-powered voice agent platform that automates outbound sales calls, qualifies leads, and manages your entire sales pipeline. It works 24/7 in English and Hindi with a built-in industry-specific CRM."
+    q: "What is VaaniAI and how does AI calling work?",
+    a: "VaaniAI is India's leading AI voice agent platform that automates outbound sales calls using artificial intelligence. The AI calling software qualifies leads, books meetings, and manages your sales pipeline 24/7 in Hindi and English — with a built-in industry-specific CRM."
   },
   {
-    q: "Which languages does VaaniAI support?",
-    a: "VaaniAI supports English, Hindi, and bilingual (mixed) conversations. The AI agents automatically adapt to the language preferred by the person on the call."
+    q: "Which languages does the AI voice bot support?",
+    a: "VaaniAI's AI voice bot supports English, Hindi, and bilingual (mixed) conversations. The voice AI agents automatically adapt to the language preferred by the person on the call, making it ideal for Indian businesses."
   },
   {
-    q: "How much does VaaniAI cost?",
-    a: "VaaniAI starts at ₹6,500 per month per channel. You get a 7-day free trial with full access to all features including AI voice agents, CRM, and analytics."
+    q: "How much does AI calling software cost in India?",
+    a: "VaaniAI's AI calling software starts at just ₹6,500 per month per channel — one of the most affordable AI voice agent solutions in India. You get a 7-day free trial with full access to AI calling, CRM, and analytics. No credit card required."
   },
   {
-    q: "Which industries does VaaniAI support?",
-    a: "VaaniAI supports 23+ industries including Real Estate, Healthcare, Education, Gym & Fitness, Insurance, SaaS, Automobile, Hospitality, Legal Services, and more. Each industry comes with pre-built CRM templates and AI prompts."
+    q: "Which industries can use VaaniAI's AI voice agents?",
+    a: "VaaniAI supports 23+ industries including Real Estate, Healthcare, Education, Gym & Fitness, Insurance, SaaS, Automobile, Hospitality, Legal Services, E-Commerce, Banking, and more. Each industry gets pre-built CRM templates, sales workflows, and AI-trained voice agents."
   },
   {
-    q: "Can VaaniAI integrate with my existing CRM?",
-    a: "Yes, VaaniAI integrates with Salesforce, HubSpot, Zoho, and other popular CRMs via webhooks and APIs. You can also use VaaniAI's built-in industry-specific CRM."
+    q: "Can VaaniAI integrate with Salesforce, HubSpot, or Zoho CRM?",
+    a: "Yes, VaaniAI integrates seamlessly with Salesforce, HubSpot, Zoho, and other popular CRM platforms via webhooks and REST APIs. You can also use VaaniAI's built-in industry-specific sales CRM."
   },
   {
-    q: "How does the AI voice agent work?",
-    a: "VaaniAI uses advanced AI for natural language understanding and real-time speech recognition and synthesis. The agent calls leads, has natural conversations, qualifies them, and updates your CRM automatically."
+    q: "How does VaaniAI's AI voice agent qualify leads?",
+    a: "VaaniAI's AI voice agent uses natural language processing (NLP) and real-time speech recognition to call leads, have natural human-like conversations, ask qualifying questions, detect buyer intent, score leads, and automatically update your CRM — all without human intervention."
   },
   {
-    q: "Is there a free trial?",
-    a: "Yes, VaaniAI offers a 7-day free trial with full access to all features. No credit card required. You can deploy AI voice agents, run campaigns, and use the CRM during the trial period."
+    q: "Is there a free trial for the AI calling platform?",
+    a: "Yes, VaaniAI offers a 7-day free trial with full access to all features — AI voice agents, automated outbound calling, lead management, call transcription, and CRM. No credit card required. Deploy your first AI calling campaign within minutes."
   },
   {
-    q: "Can VaaniAI be used for government services?",
-    a: "Yes, VaaniAI has a dedicated e-Governance solution for government departments. It handles citizen queries about schemes, grievance registration, appointment booking, and service tracking in Hindi, English, and regional languages."
+    q: "Can AI voice agents be used for government e-Governance services?",
+    a: "Yes, VaaniAI provides a dedicated AI voice agent solution for e-Governance. Government departments can use it for citizen helplines, scheme information, grievance registration, appointment booking, and service status tracking — available in Hindi, English, and regional Indian languages."
+  },
+  {
+    q: "How is VaaniAI different from other AI calling services in India?",
+    a: "VaaniAI stands out with its combination of AI voice calling + built-in CRM + industry-specific templates. Unlike competitors, VaaniAI offers unlimited outbound calls, real-time AI transcript analysis, automatic lead scoring, pipeline automation, and multilingual support — all starting at ₹6,500/month."
+  },
+  {
+    q: "Can VaaniAI replace my call center team?",
+    a: "VaaniAI's AI voice agents can handle the entire outbound calling process — lead qualification, follow-ups, appointment booking, and CRM updates. While it can replace repetitive calling tasks, it also works alongside your sales team by routing hot leads to human agents for complex conversations."
   }
 ];
 
@@ -52,10 +60,10 @@ export default function FAQSection() {
             <HelpCircle className="w-3.5 h-3.5" /> FAQ
           </div>
           <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">
-            Frequently Asked Questions
+            Frequently Asked Questions About AI Voice Agents
           </h2>
           <p className="text-lg text-gray-500 max-w-xl mx-auto">
-            Everything you need to know about VaaniAI and how it can transform your sales process.
+            Everything you need to know about AI calling software, voice bots, and how VaaniAI automates sales in India.
           </p>
         </div>
 

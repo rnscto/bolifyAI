@@ -13,16 +13,16 @@ const plans = [
     price: '₹6,500',
     period: '/channel/month',
     billing: 'Billed quarterly',
-    description: 'AI-powered outbound calling with smart agents',
+    description: 'AI-powered outbound sales calling software',
     features: [
-      'AI Voice Agent (English + Hindi)',
-      'Dedicated DID Number',
-      'Unlimited outbound calls',
-      'Real-time call transcripts',
-      'AI conversation analysis',
-      'Lead status auto-update',
-      'Knowledge base upload',
-      'Call logs & analytics',
+      'AI Voice Agent (Hindi + English)',
+      'Dedicated DID Number (+91)',
+      'Unlimited AI outbound calls',
+      'Real-time call transcription',
+      'AI conversation analysis & scoring',
+      'Automatic lead status updates',
+      'Custom knowledge base upload',
+      'Call logs, recordings & analytics',
     ],
     cta: 'Get Started',
     popular: false,
@@ -32,17 +32,17 @@ const plans = [
     price: '₹1,999',
     period: '/month',
     billing: '7-day free trial',
-    description: 'Industry-specific CRM with full automation',
+    description: 'AI-powered CRM with sales pipeline automation',
     features: [
       'Everything in Voice AI Agent',
-      'Industry-tailored CRM',
-      'Deal pipeline (Kanban + Table)',
+      'Industry-specific CRM software',
+      'Deal pipeline (Kanban + Table view)',
       'Contact & company management',
-      'Sales reports & forecasting',
-      'Auto lead scoring',
+      'AI sales reports & forecasting',
+      'Automatic lead scoring',
       'Pipeline automation rules',
       '48h follow-up auto-detection',
-      'Proposal tracking',
+      'Proposal tracking & management',
       'Custom fields per industry',
     ],
     cta: 'Start Free Trial',
@@ -58,8 +58,8 @@ export default function PricingSection() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#e67e22]/10 text-[#e67e22] text-sm font-semibold mb-4">
             Pricing
           </div>
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">Simple, Transparent Pricing</h2>
-          <p className="text-lg text-gray-500">No hidden fees. Scale as you grow.</p>
+          <h2 className="text-4xl font-bold text-gray-900 mb-4">Affordable AI Calling Software Pricing</h2>
+          <p className="text-lg text-gray-500">Transparent pricing for AI voice agents in India. No hidden fees. Start with a free trial.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">

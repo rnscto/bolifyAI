@@ -17,8 +17,7 @@ export default function FooterSection() {
               <img src={LOGO_URL} alt="VaaniAI" className="h-[76px] object-contain" />
             </div>
             <p className="text-sm leading-relaxed max-w-sm mb-6 text-gray-500">
-              AI-powered voice sales platform that automates outbound calling, qualifies leads,
-              and manages your entire sales pipeline with an industry-specific CRM.
+              India's leading AI voice agent platform for automated outbound sales calling, AI lead qualification, and CRM pipeline management — available in Hindi & English for 23+ industries.
             </p>
             <div className="space-y-2 text-sm">
               <p className="text-[#1a365d] font-semibold text-xs uppercase tracking-wider mb-3">
