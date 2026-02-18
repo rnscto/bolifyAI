@@ -1,79 +1,25 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, X, Phone, PhoneOff } from 'lucide-react';
+import { Mic, MicOff, X, Phone, PhoneOff, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { base44 } from '@/api/base44Client';
 import LeadCaptureForm from './LeadCaptureForm';
 
 const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/9b1876319_WhatsApp_Image_2026-02-11_at_44923_PM-removebg-preview.png";
 
-// Audio worklet processor code as a blob URL
-const WORKLET_CODE = `
-class PCMRecorderProcessor extends AudioWorkletProcessor {
-  constructor() {
-    super();
-    this._bufferSize = 2400; // 100ms at 24kHz
-    this._buffer = new Float32Array(this._bufferSize);
-    this._writeIndex = 0;
-  }
-  process(inputs) {
-    const input = inputs[0];
-    if (!input || !input[0]) return true;
-    const channelData = input[0];
-    for (let i = 0; i < channelData.length; i++) {
-      this._buffer[this._writeIndex++] = channelData[i];
-      if (this._writeIndex >= this._bufferSize) {
-        // Convert float32 to PCM16 LE
-        const pcm16 = new Int16Array(this._bufferSize);
-        for (let j = 0; j < this._bufferSize; j++) {
-          const s = Math.max(-1, Math.min(1, this._buffer[j]));
-          pcm16[j] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-        }
-        const bytes = new Uint8Array(pcm16.buffer);
-        this.port.postMessage({ pcmBytes: bytes });
-        this._writeIndex = 0;
-      }
-    }
-    return true;
-  }
-}
-registerProcessor('pcm-recorder-processor', PCMRecorderProcessor);
-`;
-
-function arrayBufferToBase64(buffer) {
-  let binary = '';
-  const bytes = new Uint8Array(buffer);
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  return btoa(binary);
-}
-
-function base64ToArrayBuffer(base64) {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes.buffer;
-}
-
 export default function VoiceAgentPopup() {
   const [isOpen, setIsOpen] = useState(false);
-  const [status, setStatus] = useState('idle'); // idle, connecting, ready, listening, processing, speaking, error, session_ended
+  const [status, setStatus] = useState('idle'); // idle, listening, processing, speaking, ended
   const [messages, setMessages] = useState([]);
+  const [textInput, setTextInput] = useState('');
   const [showPulse, setShowPulse] = useState(true);
   const [showLeadForm, setShowLeadForm] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
 
   const messagesEndRef = useRef(null);
-  const wsRef = useRef(null);
-  const audioContextRef = useRef(null);
-  const workletNodeRef = useRef(null);
-  const mediaStreamRef = useRef(null);
-  const playbackContextRef = useRef(null);
-  const audioQueueRef = useRef([]);
-  const isPlayingRef = useRef(false);
-  const sourceNodeRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const synthRef = useRef(window.speechSynthesis);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -81,244 +27,122 @@ export default function VoiceAgentPopup() {
     }
   }, [messages]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      cleanupAudio();
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
+  const startListening = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      addMessage('system', 'Speech recognition not supported in this browser. Please type your message.');
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = 'en-IN';
+    recognition.interimResults = false;
+    recognition.continuous = false;
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+      setStatus('listening');
+    };
+
+    recognition.onresult = (event) => {
+      const text = event.results[0][0].transcript;
+      if (text.trim()) {
+        handleUserMessage(text.trim());
       }
     };
-  }, []);
 
-  const addMessage = useCallback((role, text) => {
+    recognition.onerror = (event) => {
+      console.log('Speech recognition error:', event.error);
+      setIsRecording(false);
+      setStatus('idle');
+      if (event.error === 'not-allowed') {
+        addMessage('system', 'Microphone access denied. Please type your message instead.');
+      }
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      if (status === 'listening') setStatus('idle');
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      recognitionRef.current = null;
+    }
+    setIsRecording(false);
+    setStatus('idle');
+  };
+
+  const speakText = (text) => {
+    if (!synthRef.current) return;
+    synthRef.current.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = 'en-IN';
+    utterance.rate = 1.0;
+    utterance.pitch = 1.0;
+
+    const voices = synthRef.current.getVoices();
+    const indianVoice = voices.find(v => v.lang === 'en-IN') || voices.find(v => v.lang.startsWith('en'));
+    if (indianVoice) utterance.voice = indianVoice;
+
+    utterance.onstart = () => setStatus('speaking');
+    utterance.onend = () => setStatus('idle');
+
+    synthRef.current.speak(utterance);
+  };
+
+  const addMessage = (role, text) => {
     setMessages(prev => [...prev, { role, text }]);
-  }, []);
+  };
 
-  // ─── Audio playback (PCM16 24kHz from Azure Realtime) ───
-  const playAudioChunk = useCallback((base64Audio) => {
-    audioQueueRef.current.push(base64Audio);
-    drainAudioQueue();
-  }, []);
+  const handleUserMessage = async (text) => {
+    addMessage('user', text);
+    setStatus('processing');
 
-  const drainAudioQueue = useCallback(() => {
-    if (isPlayingRef.current || audioQueueRef.current.length === 0) return;
-    isPlayingRef.current = true;
+    const updatedMessages = [...messages, { role: 'user', text }];
 
-    if (!playbackContextRef.current) {
-      playbackContextRef.current = new AudioContext({ sampleRate: 24000 });
-    }
-    const ctx = playbackContextRef.current;
-
-    const chunks = audioQueueRef.current.splice(0, audioQueueRef.current.length);
-    const allBytes = chunks.map(b64 => new Uint8Array(base64ToArrayBuffer(b64)));
-    const totalLen = allBytes.reduce((s, a) => s + a.length, 0);
-    const combined = new Uint8Array(totalLen);
-    let offset = 0;
-    for (const arr of allBytes) {
-      combined.set(arr, offset);
-      offset += arr.length;
-    }
-
-    // PCM16 LE → Float32
-    const numSamples = Math.floor(combined.length / 2);
-    const view = new DataView(combined.buffer, combined.byteOffset, combined.byteLength);
-    const float32 = new Float32Array(numSamples);
-    for (let i = 0; i < numSamples; i++) {
-      float32[i] = view.getInt16(i * 2, true) / 32768;
-    }
-
-    const audioBuffer = ctx.createBuffer(1, numSamples, 24000);
-    audioBuffer.getChannelData(0).set(float32);
-
-    const source = ctx.createBufferSource();
-    source.buffer = audioBuffer;
-    source.connect(ctx.destination);
-    source.onended = () => {
-      isPlayingRef.current = false;
-      drainAudioQueue();
-    };
-    source.start();
-    sourceNodeRef.current = source;
-  }, []);
-
-  const stopPlayback = useCallback(() => {
-    audioQueueRef.current = [];
-    isPlayingRef.current = false;
-    if (sourceNodeRef.current) {
-      try { sourceNodeRef.current.stop(); } catch (_) {}
-      sourceNodeRef.current = null;
-    }
-  }, []);
-
-  // ─── Microphone capture → PCM16 24kHz ───
-  const startMicrophone = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { sampleRate: 24000, channelCount: 1, echoCancellation: true, noiseSuppression: true }
+    const response = await base44.functions.invoke('webVoiceAgent', {
+      action: 'chat',
+      messages: updatedMessages.filter(m => m.role === 'user' || m.role === 'ai')
     });
-    mediaStreamRef.current = stream;
 
-    const ctx = new AudioContext({ sampleRate: 24000 });
-    audioContextRef.current = ctx;
+    const reply = response.data.reply;
+    addMessage('ai', reply);
+    speakText(reply);
+  };
 
-    const blob = new Blob([WORKLET_CODE], { type: 'application/javascript' });
-    const blobUrl = URL.createObjectURL(blob);
-    await ctx.audioWorklet.addModule(blobUrl);
-    URL.revokeObjectURL(blobUrl);
+  const handleTextSubmit = (e) => {
+    e.preventDefault();
+    if (!textInput.trim()) return;
+    handleUserMessage(textInput.trim());
+    setTextInput('');
+  };
 
-    const source = ctx.createMediaStreamSource(stream);
-    const workletNode = new AudioWorkletNode(ctx, 'pcm-recorder-processor');
-    workletNodeRef.current = workletNode;
-
-    workletNode.port.onmessage = (e) => {
-      if (isMuted) return;
-      const pcmBytes = e.data.pcmBytes;
-      const b64 = arrayBufferToBase64(pcmBytes);
-      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-        wsRef.current.send(JSON.stringify({ type: 'audio_append', audio: b64 }));
-      }
-    };
-
-    source.connect(workletNode);
-    workletNode.connect(ctx.destination); // required for worklet to process
-  }, [isMuted]);
-
-  const cleanupAudio = useCallback(() => {
-    if (workletNodeRef.current) {
-      workletNodeRef.current.disconnect();
-      workletNodeRef.current = null;
-    }
-    if (audioContextRef.current) {
-      audioContextRef.current.close();
-      audioContextRef.current = null;
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(t => t.stop());
-      mediaStreamRef.current = null;
-    }
-    if (playbackContextRef.current) {
-      playbackContextRef.current.close();
-      playbackContextRef.current = null;
-    }
-    stopPlayback();
-  }, [stopPlayback]);
-
-  // ─── WebSocket connection ───
-  const connectWebSocket = useCallback(async () => {
-    setStatus('connecting');
-
-    // Determine WebSocket URL
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const wsUrl = `${protocol}//${host}/api/functions/webVoiceAgent`;
-
-    console.log('Connecting to WS:', wsUrl);
-
-    const ws = new WebSocket(wsUrl);
-    wsRef.current = ws;
-
-    ws.onopen = async () => {
-      console.log('WebSocket connected');
-      try {
-        await startMicrophone();
-      } catch (err) {
-        console.error('Mic error:', err);
-        addMessage('system', 'Microphone access denied. Please allow microphone access and try again.');
-        setStatus('error');
-        ws.close();
-      }
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data);
-        handleServerMessage(msg);
-      } catch (err) {
-        console.error('WS message parse error:', err);
-      }
-    };
-
-    ws.onclose = () => {
-      console.log('WebSocket closed');
-      if (status !== 'session_ended' && status !== 'idle') {
-        setStatus('session_ended');
-        setShowLeadForm(true);
-      }
-    };
-
-    ws.onerror = () => {
-      console.error('WebSocket error');
-      setStatus('error');
-      addMessage('system', 'Connection error. Please try again.');
-    };
-  }, [startMicrophone, addMessage, status]);
-
-  const handleServerMessage = useCallback((msg) => {
-    switch (msg.type) {
-      case 'status':
-        if (msg.status === 'ready') {
-          setStatus('listening');
-          addMessage('ai', "Hi! I'm VaaniAI's voice assistant. How can I help you today?");
-        } else if (msg.status === 'session_ended') {
-          setStatus('session_ended');
-          setShowLeadForm(true);
-          cleanupAudio();
-        } else if (msg.status === 'error') {
-          setStatus('error');
-          addMessage('system', msg.message || 'An error occurred');
-        } else if (msg.status === 'listening') {
-          setStatus('listening');
-        } else if (msg.status === 'processing') {
-          setStatus('processing');
-        } else if (msg.status === 'speaking') {
-          setStatus('speaking');
-        } else if (msg.status === 'connecting') {
-          setStatus('connecting');
-        }
-        break;
-
-      case 'audio_delta':
-        playAudioChunk(msg.audio);
-        break;
-
-      case 'barge_in':
-        stopPlayback();
-        break;
-
-      case 'user_transcript':
-        addMessage('user', msg.text);
-        break;
-
-      case 'ai_transcript':
-        addMessage('ai', msg.text);
-        break;
-    }
-  }, [addMessage, playAudioChunk, stopPlayback, cleanupAudio]);
-
-  // ─── Actions ───
   const handleStartConversation = () => {
     setShowPulse(false);
     setMessages([]);
     setShowLeadForm(false);
-    connectWebSocket();
+    const greeting = "Hi! I'm VaaniAI's assistant. I can help you learn about our AI voice agent platform, pricing, and features. What would you like to know?";
+    addMessage('ai', greeting);
+    speakText(greeting);
   };
 
   const handleEndConversation = () => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: 'end_session' }));
-    }
-    cleanupAudio();
-    setStatus('session_ended');
+    synthRef.current?.cancel();
+    stopListening();
+    setStatus('ended');
     setShowLeadForm(true);
   };
 
   const handleClose = () => {
-    if (wsRef.current) {
-      wsRef.current.close();
-      wsRef.current = null;
-    }
-    cleanupAudio();
+    synthRef.current?.cancel();
+    stopListening();
     setStatus('idle');
     setIsOpen(false);
     setMessages([]);
@@ -332,34 +156,23 @@ export default function VoiceAgentPopup() {
     setMessages([]);
   };
 
-  const toggleMute = () => {
-    setIsMuted(prev => !prev);
-  };
-
   const statusText = {
     idle: 'Ready',
-    connecting: '🔄 Connecting...',
-    ready: '✅ Connected',
     listening: '🎙️ Listening...',
-    processing: '💭 Thinking...',
+    processing: 'Thinking...',
     speaking: '🔊 Speaking...',
-    error: '⚠️ Error',
-    session_ended: 'Conversation ended'
+    ended: 'Conversation ended'
   };
 
   const statusColor = {
     idle: 'bg-green-500',
-    connecting: 'bg-yellow-500',
-    ready: 'bg-green-500',
     listening: 'bg-blue-500',
     processing: 'bg-purple-500',
     speaking: 'bg-orange-500',
-    error: 'bg-red-500',
-    session_ended: 'bg-gray-400'
+    ended: 'bg-gray-400'
   };
 
-  const hasStarted = messages.length > 0 || status === 'connecting';
-  const isActive = ['connecting', 'ready', 'listening', 'processing', 'speaking'].includes(status);
+  const hasStarted = messages.length > 0;
 
   return (
     <>
@@ -407,7 +220,7 @@ export default function VoiceAgentPopup() {
                 <div>
                   <p className="text-white text-sm font-semibold leading-tight">Voice Assistant</p>
                   <div className="flex items-center gap-1.5">
-                    <span className={`w-2 h-2 rounded-full ${statusColor[status]} ${status === 'connecting' ? 'animate-pulse' : ''}`} />
+                    <span className={`w-2 h-2 rounded-full ${statusColor[status]}`} />
                     <span className="text-white/70 text-[10px]">{statusText[status]}</span>
                   </div>
                 </div>
@@ -434,14 +247,14 @@ export default function VoiceAgentPopup() {
                       </div>
                       <p className="text-sm font-medium text-gray-800">Talk to VaaniAI</p>
                       <p className="text-xs text-gray-500 mt-1.5 max-w-[240px] mx-auto">
-                        Have a real-time voice conversation about our AI voice agents, pricing, and features!
+                        Ask about our AI voice agents, pricing, features, or how to get started!
                       </p>
                       <Button
                         onClick={handleStartConversation}
                         className="mt-4 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-full px-6 gap-2 shadow-lg shadow-green-200"
                       >
                         <Phone className="w-4 h-4" />
-                        Start Voice Chat
+                        Start Conversation
                       </Button>
                     </div>
                   )}
@@ -469,74 +282,50 @@ export default function VoiceAgentPopup() {
                       </div>
                     </div>
                   )}
-                  {status === 'connecting' && (
-                    <div className="text-center py-4">
-                      <div className="w-10 h-10 mx-auto mb-2 rounded-full bg-blue-100 flex items-center justify-center animate-pulse">
-                        <Phone className="w-5 h-5 text-blue-500" />
-                      </div>
-                      <p className="text-xs text-gray-500">Connecting to VaaniAI...</p>
-                    </div>
-                  )}
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Voice controls */}
-                {isActive && (
-                  <div className="p-3 bg-white border-t border-gray-100 shrink-0">
-                    <div className="flex items-center justify-center gap-4">
+                {/* Input controls */}
+                {hasStarted && (
+                  <div className="p-3 bg-white border-t border-gray-100 shrink-0 space-y-2">
+                    <form onSubmit={handleTextSubmit} className="flex gap-2">
+                      <Input
+                        value={textInput}
+                        onChange={(e) => setTextInput(e.target.value)}
+                        placeholder="Type or tap mic to speak..."
+                        className="flex-1 h-9 text-sm"
+                        disabled={status === 'processing'}
+                      />
                       <button
-                        onClick={toggleMute}
-                        className={`w-12 h-12 rounded-full flex items-center justify-center transition-all ${
-                          isMuted
-                            ? 'bg-red-100 text-red-600 hover:bg-red-200'
-                            : 'bg-blue-100 text-blue-600 hover:bg-blue-200'
+                        type="button"
+                        onClick={isRecording ? stopListening : startListening}
+                        disabled={status === 'processing'}
+                        className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-all ${
+                          isRecording
+                            ? 'bg-red-500 text-white animate-pulse'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                         }`}
-                        title={isMuted ? 'Unmute' : 'Mute'}
                       >
-                        {isMuted ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
+                        {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
                       </button>
-
-                      {status === 'listening' && !isMuted && (
-                        <div className="flex items-center gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <div
-                              key={i}
-                              className="w-1 bg-blue-500 rounded-full animate-pulse"
-                              style={{
-                                height: `${12 + Math.random() * 16}px`,
-                                animationDelay: `${i * 100}ms`,
-                                animationDuration: '0.5s'
-                              }}
-                            />
-                          ))}
-                        </div>
-                      )}
-
-                      {status === 'speaking' && (
-                        <div className="flex items-center gap-1">
-                          {[...Array(5)].map((_, i) => (
-                            <div
-                              key={i}
-                              className="w-1 bg-orange-500 rounded-full animate-pulse"
-                              style={{
-                                height: `${12 + Math.random() * 16}px`,
-                                animationDelay: `${i * 80}ms`,
-                                animationDuration: '0.4s'
-                              }}
-                            />
-                          ))}
-                        </div>
-                      )}
-
+                      <Button
+                        type="submit"
+                        size="icon"
+                        disabled={!textInput.trim() || status === 'processing'}
+                        className="w-9 h-9 shrink-0 bg-[#1a365d] hover:bg-[#2563eb]"
+                      >
+                        <Send className="w-4 h-4" />
+                      </Button>
+                    </form>
+                    <div className="flex justify-between items-center">
+                      <p className="text-[10px] text-gray-400">Powered by VaaniAI</p>
                       <button
                         onClick={handleEndConversation}
-                        className="w-12 h-12 rounded-full bg-red-500 text-white flex items-center justify-center hover:bg-red-600 transition-colors shadow-lg shadow-red-200"
-                        title="End conversation"
+                        className="text-[10px] text-red-500 hover:text-red-600 flex items-center gap-1"
                       >
-                        <PhoneOff className="w-5 h-5" />
+                        <PhoneOff className="w-3 h-3" /> End Chat
                       </button>
                     </div>
-                    <p className="text-[10px] text-gray-400 text-center mt-2">Powered by VaaniAI</p>
                   </div>
                 )}
               </>
