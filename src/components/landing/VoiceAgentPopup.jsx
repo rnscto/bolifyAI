@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, X, Phone, PhoneOff, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,19 +7,24 @@ import { base44 } from '@/api/base44Client';
 import LeadCaptureForm from './LeadCaptureForm';
 
 const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/9b1876319_WhatsApp_Image_2026-02-11_at_44923_PM-removebg-preview.png";
+const SAMPLE_RATE = 24000;
 
 export default function VoiceAgentPopup() {
   const [isOpen, setIsOpen] = useState(false);
-  const [status, setStatus] = useState('idle'); // idle, listening, processing, speaking, ended
+  const [status, setStatus] = useState('idle'); // idle, connecting, listening, speaking, ended
   const [messages, setMessages] = useState([]);
   const [textInput, setTextInput] = useState('');
   const [showPulse, setShowPulse] = useState(true);
   const [showLeadForm, setShowLeadForm] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
 
   const messagesEndRef = useRef(null);
-  const recognitionRef = useRef(null);
-  const synthRef = useRef(window.speechSynthesis);
+  const wsRef = useRef(null);
+  const audioContextRef = useRef(null);
+  const mediaStreamRef = useRef(null);
+  const processorRef = useRef(null);
+  const playbackQueueRef = useRef([]);
+  const isPlayingRef = useRef(false);
+  const sourceNodeRef = useRef(null);
 
   useEffect(() => {
     if (messagesEndRef.current) {
@@ -27,127 +32,247 @@ export default function VoiceAgentPopup() {
     }
   }, [messages]);
 
-  const startListening = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      addMessage('system', 'Speech recognition not supported in this browser. Please type your message.');
+  // ─── Audio Playback: queue PCM16 chunks and play them sequentially ───
+
+  const playNextChunk = useCallback(() => {
+    if (playbackQueueRef.current.length === 0) {
+      isPlayingRef.current = false;
       return;
     }
+    isPlayingRef.current = true;
+    const pcm16Data = playbackQueueRef.current.shift();
 
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-IN';
-    recognition.interimResults = false;
-    recognition.continuous = false;
+    const ctx = audioContextRef.current;
+    if (!ctx || ctx.state === 'closed') return;
 
-    recognition.onstart = () => {
-      setIsRecording(true);
-      setStatus('listening');
-    };
-
-    recognition.onresult = (event) => {
-      const text = event.results[0][0].transcript;
-      if (text.trim()) {
-        handleUserMessage(text.trim());
-      }
-    };
-
-    recognition.onerror = (event) => {
-      console.log('Speech recognition error:', event.error);
-      setIsRecording(false);
-      setStatus('idle');
-      if (event.error === 'not-allowed') {
-        addMessage('system', 'Microphone access denied. Please type your message instead.');
-      }
-    };
-
-    recognition.onend = () => {
-      setIsRecording(false);
-      if (status === 'listening') setStatus('idle');
-    };
-
-    recognitionRef.current = recognition;
-    recognition.start();
-  };
-
-  const stopListening = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      recognitionRef.current = null;
+    // Decode base64 → PCM16 LE → Float32
+    const raw = atob(pcm16Data);
+    const bytes = new Uint8Array(raw.length);
+    for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+    
+    const view = new DataView(bytes.buffer);
+    const numSamples = Math.floor(bytes.length / 2);
+    const float32 = new Float32Array(numSamples);
+    for (let i = 0; i < numSamples; i++) {
+      float32[i] = view.getInt16(i * 2, true) / 32768;
     }
-    setIsRecording(false);
-    setStatus('idle');
-  };
 
-  const speakText = (text) => {
-    if (!synthRef.current) return;
-    synthRef.current.cancel();
+    const buffer = ctx.createBuffer(1, numSamples, SAMPLE_RATE);
+    buffer.getChannelData(0).set(float32);
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'en-IN';
-    utterance.rate = 1.0;
-    utterance.pitch = 1.0;
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+    source.connect(ctx.destination);
+    source.onended = () => playNextChunk();
+    source.start();
+    sourceNodeRef.current = source;
+  }, []);
 
-    const voices = synthRef.current.getVoices();
-    const indianVoice = voices.find(v => v.lang === 'en-IN') || voices.find(v => v.lang.startsWith('en'));
-    if (indianVoice) utterance.voice = indianVoice;
+  const enqueueAudio = useCallback((base64Pcm16) => {
+    playbackQueueRef.current.push(base64Pcm16);
+    if (!isPlayingRef.current) {
+      playNextChunk();
+    }
+  }, [playNextChunk]);
 
-    utterance.onstart = () => setStatus('speaking');
-    utterance.onend = () => setStatus('idle');
+  const clearPlayback = useCallback(() => {
+    playbackQueueRef.current = [];
+    if (sourceNodeRef.current) {
+      try { sourceNodeRef.current.stop(); } catch (_) {}
+      sourceNodeRef.current = null;
+    }
+    isPlayingRef.current = false;
+  }, []);
 
-    synthRef.current.speak(utterance);
-  };
+  // ─── WebSocket connection to backend relay ───
 
-  const addMessage = (role, text) => {
-    setMessages(prev => [...prev, { role, text }]);
-  };
+  const connectWebSocket = useCallback(async () => {
+    setStatus('connecting');
 
-  const handleUserMessage = async (text) => {
-    addMessage('user', text);
-    setStatus('processing');
+    // Determine WS URL from current page host
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const host = window.location.host;
+    const wsUrl = `${protocol}//${host}/functions/webVoiceAgent`;
 
-    const updatedMessages = [...messages, { role: 'user', text }];
+    console.log('Connecting WS:', wsUrl);
 
-    const response = await base44.functions.invoke('webVoiceAgent', {
-      action: 'chat',
-      messages: updatedMessages.filter(m => m.role === 'user' || m.role === 'ai')
-    });
+    const ws = new WebSocket(wsUrl);
+    wsRef.current = ws;
 
-    const reply = response.data.reply;
-    addMessage('ai', reply);
-    speakText(reply);
-  };
+    ws.onopen = () => {
+      console.log('WS connected, waiting for session_ready...');
+    };
 
-  const handleTextSubmit = (e) => {
-    e.preventDefault();
-    if (!textInput.trim()) return;
-    handleUserMessage(textInput.trim());
-    setTextInput('');
-  };
+    ws.onmessage = (event) => {
+      const msg = JSON.parse(event.data);
+
+      if (msg.type === 'session_ready') {
+        console.log('Azure Realtime session ready');
+        setStatus('listening');
+        startMicCapture();
+        return;
+      }
+
+      if (msg.type === 'audio') {
+        setStatus('speaking');
+        enqueueAudio(msg.data);
+        return;
+      }
+
+      if (msg.type === 'audio_done') {
+        // Will go back to listening after playback finishes
+        setTimeout(() => {
+          if (isPlayingRef.current) return;
+          setStatus('listening');
+        }, 500);
+        return;
+      }
+
+      if (msg.type === 'transcript') {
+        setMessages(prev => [...prev, { role: msg.role, text: msg.text }]);
+        return;
+      }
+
+      if (msg.type === 'speech_started') {
+        // User interrupted AI - clear playback
+        clearPlayback();
+        setStatus('listening');
+        return;
+      }
+
+      if (msg.type === 'error') {
+        console.error('Server error:', msg.message);
+        setMessages(prev => [...prev, { role: 'system', text: `Error: ${msg.message}` }]);
+        return;
+      }
+
+      if (msg.type === 'session_ended') {
+        console.log('Session ended by server');
+        return;
+      }
+    };
+
+    ws.onclose = () => {
+      console.log('WS closed');
+    };
+
+    ws.onerror = (err) => {
+      console.error('WS error:', err);
+      setStatus('idle');
+      setMessages(prev => [...prev, { role: 'system', text: 'Connection error. Please try again.' }]);
+    };
+  }, [enqueueAudio, clearPlayback]);
+
+  // ─── Mic capture: stream PCM16 24kHz to WS ───
+
+  const startMicCapture = useCallback(async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: SAMPLE_RATE, channelCount: 1 } });
+      mediaStreamRef.current = stream;
+
+      const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+      audioContextRef.current = ctx;
+
+      const source = ctx.createMediaStreamSource(stream);
+      
+      // Use ScriptProcessorNode for broad compatibility
+      const processor = ctx.createScriptProcessor(4096, 1, 1);
+      processorRef.current = processor;
+
+      processor.onaudioprocess = (e) => {
+        const ws = wsRef.current;
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+        const float32 = e.inputBuffer.getChannelData(0);
+        // Convert Float32 → PCM16 LE → base64
+        const pcm16 = new Int16Array(float32.length);
+        for (let i = 0; i < float32.length; i++) {
+          const s = Math.max(-1, Math.min(1, float32[i]));
+          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        const bytes = new Uint8Array(pcm16.buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+
+        ws.send(JSON.stringify({ type: 'audio', data: base64 }));
+      };
+
+      source.connect(processor);
+      processor.connect(ctx.destination); // needed for ScriptProcessor to work
+
+      console.log('Mic capture started at', ctx.sampleRate, 'Hz');
+    } catch (err) {
+      console.error('Mic error:', err);
+      setMessages(prev => [...prev, { role: 'system', text: 'Microphone access denied. You can type instead.' }]);
+      setStatus('listening');
+    }
+  }, []);
+
+  const stopMicCapture = useCallback(() => {
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(t => t.stop());
+      mediaStreamRef.current = null;
+    }
+    // Don't close audio context — needed for playback
+  }, []);
+
+  // ─── Start / End conversation ───
 
   const handleStartConversation = () => {
     setShowPulse(false);
     setMessages([]);
     setShowLeadForm(false);
-    const greeting = "Hi! I'm VaaniAI's assistant. I can help you learn about our AI voice agent platform, pricing, and features. What would you like to know?";
-    addMessage('ai', greeting);
-    speakText(greeting);
+    setMessages([{ role: 'system', text: 'Connecting to VaaniAI...' }]);
+    connectWebSocket();
   };
 
   const handleEndConversation = () => {
-    synthRef.current?.cancel();
-    stopListening();
+    clearPlayback();
+    stopMicCapture();
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.close();
+    }
+    wsRef.current = null;
     setStatus('ended');
     setShowLeadForm(true);
   };
 
   const handleClose = () => {
-    synthRef.current?.cancel();
-    stopListening();
+    clearPlayback();
+    stopMicCapture();
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.close();
+    }
+    wsRef.current = null;
+    if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
     setStatus('idle');
     setIsOpen(false);
     setMessages([]);
     setShowPulse(true);
     setShowLeadForm(false);
+  };
+
+  const handleTextSubmit = (e) => {
+    e.preventDefault();
+    if (!textInput.trim()) return;
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    
+    const text = textInput.trim();
+    setMessages(prev => [...prev, { role: 'user', text }]);
+    ws.send(JSON.stringify({ type: 'text', text }));
+    setTextInput('');
   };
 
   const handleLeadSubmitted = () => {
@@ -156,27 +281,27 @@ export default function VoiceAgentPopup() {
     setMessages([]);
   };
 
+  const hasStarted = messages.length > 0 && status !== 'idle';
+
   const statusText = {
     idle: 'Ready',
+    connecting: '⏳ Connecting...',
     listening: '🎙️ Listening...',
-    processing: 'Thinking...',
     speaking: '🔊 Speaking...',
     ended: 'Conversation ended'
   };
 
   const statusColor = {
     idle: 'bg-green-500',
+    connecting: 'bg-yellow-500',
     listening: 'bg-blue-500',
-    processing: 'bg-purple-500',
     speaking: 'bg-orange-500',
     ended: 'bg-gray-400'
   };
 
-  const hasStarted = messages.length > 0;
-
   return (
     <>
-      {/* Floating trigger button */}
+      {/* Floating trigger */}
       <AnimatePresence>
         {!isOpen && (
           <motion.button
@@ -197,13 +322,12 @@ export default function VoiceAgentPopup() {
             <Mic className="w-7 h-7 relative z-10" />
             <span className="absolute bottom-full right-0 mb-3 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
               Talk to VaaniAI Assistant
-              <span className="absolute top-full right-6 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
             </span>
           </motion.button>
         )}
       </AnimatePresence>
 
-      {/* Voice agent popup */}
+      {/* Popup */}
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -238,23 +362,23 @@ export default function VoiceAgentPopup() {
               />
             ) : (
               <>
-                {/* Messages area */}
+                {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[200px] max-h-[320px] bg-gray-50">
-                  {!hasStarted && (
+                  {status === 'idle' && messages.length === 0 && (
                     <div className="text-center py-8">
                       <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-50 flex items-center justify-center">
                         <Mic className="w-8 h-8 text-blue-500" />
                       </div>
                       <p className="text-sm font-medium text-gray-800">Talk to VaaniAI</p>
                       <p className="text-xs text-gray-500 mt-1.5 max-w-[240px] mx-auto">
-                        Ask about our AI voice agents, pricing, features, or how to get started!
+                        Real-time AI voice conversation. Ask about our platform, pricing, or features!
                       </p>
                       <Button
                         onClick={handleStartConversation}
                         className="mt-4 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-full px-6 gap-2 shadow-lg shadow-green-200"
                       >
                         <Phone className="w-4 h-4" />
-                        Start Conversation
+                        Start Voice Chat
                       </Button>
                     </div>
                   )}
@@ -271,47 +395,57 @@ export default function VoiceAgentPopup() {
                       </div>
                     </div>
                   ))}
-                  {status === 'processing' && (
-                    <div className="flex justify-start">
-                      <div className="bg-white border border-gray-200 rounded-xl rounded-bl-sm shadow-sm px-4 py-2.5">
-                        <div className="flex gap-1.5">
-                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                          <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                        </div>
+                  {status === 'connecting' && (
+                    <div className="flex justify-center">
+                      <div className="flex gap-1.5 py-2">
+                        <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-2 h-2 bg-blue-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
                       </div>
                     </div>
                   )}
                   <div ref={messagesEndRef} />
                 </div>
 
-                {/* Input controls */}
+                {/* Controls */}
                 {hasStarted && (
                   <div className="p-3 bg-white border-t border-gray-100 shrink-0 space-y-2">
+                    {/* Listening indicator */}
+                    {status === 'listening' && (
+                      <div className="flex items-center justify-center gap-2 py-1">
+                        <div className="flex gap-0.5 items-end h-4">
+                          {[1,2,3,4,5].map(i => (
+                            <div key={i} className="w-1 bg-blue-500 rounded-full animate-pulse" 
+                              style={{ height: `${8 + Math.random() * 10}px`, animationDelay: `${i * 100}ms` }} />
+                          ))}
+                        </div>
+                        <span className="text-xs text-blue-600 font-medium">Listening...</span>
+                      </div>
+                    )}
+                    {status === 'speaking' && (
+                      <div className="flex items-center justify-center gap-2 py-1">
+                        <div className="flex gap-0.5 items-end h-4">
+                          {[1,2,3,4,5].map(i => (
+                            <div key={i} className="w-1 bg-orange-500 rounded-full animate-pulse"
+                              style={{ height: `${8 + Math.random() * 10}px`, animationDelay: `${i * 80}ms` }} />
+                          ))}
+                        </div>
+                        <span className="text-xs text-orange-600 font-medium">AI Speaking...</span>
+                      </div>
+                    )}
+
+                    {/* Text input fallback */}
                     <form onSubmit={handleTextSubmit} className="flex gap-2">
                       <Input
                         value={textInput}
                         onChange={(e) => setTextInput(e.target.value)}
-                        placeholder="Type or tap mic to speak..."
+                        placeholder="Or type a message..."
                         className="flex-1 h-9 text-sm"
-                        disabled={status === 'processing'}
                       />
-                      <button
-                        type="button"
-                        onClick={isRecording ? stopListening : startListening}
-                        disabled={status === 'processing'}
-                        className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-all ${
-                          isRecording
-                            ? 'bg-red-500 text-white animate-pulse'
-                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        }`}
-                      >
-                        {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
-                      </button>
                       <Button
                         type="submit"
                         size="icon"
-                        disabled={!textInput.trim() || status === 'processing'}
+                        disabled={!textInput.trim()}
                         className="w-9 h-9 shrink-0 bg-[#1a365d] hover:bg-[#2563eb]"
                       >
                         <Send className="w-4 h-4" />
