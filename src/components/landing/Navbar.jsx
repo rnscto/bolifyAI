@@ -9,11 +9,25 @@ const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/pub
 export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userRole, setUserRole] = useState(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener('scroll', onScroll);
     return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const authenticated = await base44.auth.isAuthenticated();
+      if (authenticated) {
+        setIsLoggedIn(true);
+        const user = await base44.auth.me();
+        setUserRole(user?.role);
+      }
+    };
+    checkAuth();
   }, []);
 
   const navLinks = [
@@ -48,19 +62,33 @@ export default function Navbar() {
           </div>
 
           <div className="hidden md:flex items-center gap-3">
-            <Button
-              variant="ghost"
-              className="text-gray-700 hover:text-[#1a365d] font-medium"
-              onClick={() => base44.auth.redirectToLogin()}
-            >
-              Log In
-            </Button>
-            <Button
-              className="bg-gradient-to-r from-[#e67e22] to-[#f39c12] hover:from-[#d35400] hover:to-[#e67e22] text-white font-semibold shadow-md shadow-orange-200"
-              onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
-            >
-              Start Free Trial
-            </Button>
+            {isLoggedIn ? (
+              <Button
+                className="bg-gradient-to-r from-[#e67e22] to-[#f39c12] hover:from-[#d35400] hover:to-[#e67e22] text-white font-semibold shadow-md shadow-orange-200"
+                onClick={() => {
+                  const dashPage = userRole === 'admin' ? 'AdminDashboard' : 'ClientDashboard';
+                  window.location.href = createPageUrl(dashPage);
+                }}
+              >
+                Go to Dashboard
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  className="text-gray-700 hover:text-[#1a365d] font-medium"
+                  onClick={() => base44.auth.redirectToLogin()}
+                >
+                  Log In
+                </Button>
+                <Button
+                  className="bg-gradient-to-r from-[#e67e22] to-[#f39c12] hover:from-[#d35400] hover:to-[#e67e22] text-white font-semibold shadow-md shadow-orange-200"
+                  onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
+                >
+                  Start Free Trial
+                </Button>
+              </>
+            )}
           </div>
 
           {/* Mobile menu button */}
@@ -86,19 +114,34 @@ export default function Navbar() {
               </a>
             ))}
             <div className="flex gap-3 mt-4 px-3">
-              <Button
-                variant="outline"
-                className="flex-1 border-gray-300 text-gray-700"
-                onClick={() => base44.auth.redirectToLogin()}
-              >
-                Log In
-              </Button>
-              <Button
-                className="flex-1 bg-gradient-to-r from-[#e67e22] to-[#f39c12] text-white font-semibold"
-                onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
-              >
-                Sign Up
-              </Button>
+              {isLoggedIn ? (
+                <Button
+                  className="flex-1 bg-gradient-to-r from-[#e67e22] to-[#f39c12] text-white font-semibold"
+                  onClick={() => {
+                    const dashPage = userRole === 'admin' ? 'AdminDashboard' : 'ClientDashboard';
+                    window.location.href = createPageUrl(dashPage);
+                    setOpen(false);
+                  }}
+                >
+                  Go to Dashboard
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-gray-300 text-gray-700"
+                    onClick={() => base44.auth.redirectToLogin()}
+                  >
+                    Log In
+                  </Button>
+                  <Button
+                    className="flex-1 bg-gradient-to-r from-[#e67e22] to-[#f39c12] text-white font-semibold"
+                    onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
+                  >
+                    Sign Up
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}
