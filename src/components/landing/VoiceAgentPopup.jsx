@@ -9,6 +9,14 @@ import LeadCaptureForm from './LeadCaptureForm';
 const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/9b1876319_WhatsApp_Image_2026-02-11_at_44923_PM-removebg-preview.png";
 const SAMPLE_RATE = 24000;
 
+function vlog(level, ...args) {
+  const ts = new Date().toISOString().substring(11, 23);
+  const prefix = `[VoiceAgent][${ts}]`;
+  if (level === 'error') console.error(prefix, ...args);
+  else if (level === 'warn') console.warn(prefix, ...args);
+  else console.log(prefix, ...args);
+}
+
 export default function VoiceAgentPopup() {
   const [isOpen, setIsOpen] = useState(false);
   const [status, setStatus] = useState('idle'); // idle, connecting, listening, speaking, ended
@@ -86,41 +94,54 @@ export default function VoiceAgentPopup() {
 
   // ─── WebSocket connection to backend relay ───
 
+  const statsRef = useRef({ audioSent: 0, audioReceived: 0, audioSentBytes: 0, audioRecvBytes: 0 });
+
   const connectWebSocket = useCallback(async () => {
     setStatus('connecting');
+    statsRef.current = { audioSent: 0, audioReceived: 0, audioSentBytes: 0, audioRecvBytes: 0 };
 
-    // Determine WS URL from current page host
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
     const wsUrl = `${protocol}//${host}/functions/webVoiceAgent`;
 
-    console.log('Connecting WS:', wsUrl);
+    vlog('info', `🔌 Connecting WebSocket: ${wsUrl}`);
 
     const ws = new WebSocket(wsUrl);
     wsRef.current = ws;
 
     ws.onopen = () => {
-      console.log('WS connected, waiting for session_ready...');
+      vlog('info', '✅ WebSocket connected, waiting for session_ready from server...');
     };
 
     ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data);
+      let msg;
+      try {
+        msg = JSON.parse(event.data);
+      } catch (err) {
+        vlog('error', '❌ Failed to parse server message:', err.message, event.data?.substring(0, 100));
+        return;
+      }
 
       if (msg.type === 'session_ready') {
-        console.log('Azure Realtime session ready');
+        vlog('info', '✅ Azure Realtime session ready → starting mic capture');
         setStatus('listening');
         startMicCapture();
         return;
       }
 
       if (msg.type === 'audio') {
+        statsRef.current.audioReceived++;
+        statsRef.current.audioRecvBytes += (msg.data?.length || 0);
+        if (statsRef.current.audioReceived <= 3 || statsRef.current.audioReceived % 50 === 0) {
+          vlog('info', `🔊 Audio chunk #${statsRef.current.audioReceived} from server | ${msg.data?.length || 0} b64 chars | total=${(statsRef.current.audioRecvBytes/1024).toFixed(1)}KB`);
+        }
         setStatus('speaking');
         enqueueAudio(msg.data);
         return;
       }
 
       if (msg.type === 'audio_done') {
-        // Will go back to listening after playback finishes
+        vlog('info', `🔊 AI audio complete | total_chunks=${statsRef.current.audioReceived}`);
         setTimeout(() => {
           if (isPlayingRef.current) return;
           setStatus('listening');
@@ -129,35 +150,44 @@ export default function VoiceAgentPopup() {
       }
 
       if (msg.type === 'transcript') {
+        vlog('info', `📝 Transcript [${msg.role}]: "${msg.text?.substring(0, 100)}"`);
         setMessages(prev => [...prev, { role: msg.role, text: msg.text }]);
         return;
       }
 
       if (msg.type === 'speech_started') {
-        // User interrupted AI - clear playback
+        vlog('info', '🛑 Barge-in: user speaking, clearing playback');
         clearPlayback();
         setStatus('listening');
         return;
       }
 
+      if (msg.type === 'speech_stopped') {
+        vlog('info', '🔇 User speech stopped');
+        return;
+      }
+
       if (msg.type === 'error') {
-        console.error('Server error:', msg.message);
+        vlog('error', '❌ Server error:', msg.message);
         setMessages(prev => [...prev, { role: 'system', text: `Error: ${msg.message}` }]);
         return;
       }
 
       if (msg.type === 'session_ended') {
-        console.log('Session ended by server');
+        vlog('info', '📴 Session ended by server');
         return;
       }
+
+      vlog('warn', `⚠️ Unknown message type from server: ${msg.type}`);
     };
 
-    ws.onclose = () => {
-      console.log('WS closed');
+    ws.onclose = (event) => {
+      vlog('info', `🔴 WebSocket closed | code=${event.code} reason="${event.reason || 'none'}" wasClean=${event.wasClean}`);
+      vlog('info', `📊 FRONTEND STATS | audio_sent=${statsRef.current.audioSent} (${(statsRef.current.audioSentBytes/1024).toFixed(1)}KB) | audio_recv=${statsRef.current.audioReceived} (${(statsRef.current.audioRecvBytes/1024).toFixed(1)}KB)`);
     };
 
     ws.onerror = (err) => {
-      console.error('WS error:', err);
+      vlog('error', '❌ WebSocket error event:', err);
       setStatus('idle');
       setMessages(prev => [...prev, { role: 'system', text: 'Connection error. Please try again.' }]);
     };
@@ -166,16 +196,18 @@ export default function VoiceAgentPopup() {
   // ─── Mic capture: stream PCM16 24kHz to WS ───
 
   const startMicCapture = useCallback(async () => {
+    vlog('info', '🎤 Requesting microphone access...');
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: SAMPLE_RATE, channelCount: 1 } });
       mediaStreamRef.current = stream;
+      const tracks = stream.getAudioTracks();
+      vlog('info', `✅ Mic access granted | tracks=${tracks.length} | settings=${JSON.stringify(tracks[0]?.getSettings())}`);
 
       const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
       audioContextRef.current = ctx;
+      vlog('info', `🔊 AudioContext created | sampleRate=${ctx.sampleRate} | state=${ctx.state}`);
 
       const source = ctx.createMediaStreamSource(stream);
-      
-      // Use ScriptProcessorNode for broad compatibility
       const processor = ctx.createScriptProcessor(4096, 1, 1);
       processorRef.current = processor;
 
@@ -184,7 +216,6 @@ export default function VoiceAgentPopup() {
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
 
         const float32 = e.inputBuffer.getChannelData(0);
-        // Convert Float32 → PCM16 LE → base64
         const pcm16 = new Int16Array(float32.length);
         for (let i = 0; i < float32.length; i++) {
           const s = Math.max(-1, Math.min(1, float32[i]));
@@ -198,15 +229,20 @@ export default function VoiceAgentPopup() {
         }
         const base64 = btoa(binary);
 
+        statsRef.current.audioSent++;
+        statsRef.current.audioSentBytes += base64.length;
+        if (statsRef.current.audioSent <= 3 || statsRef.current.audioSent % 100 === 0) {
+          vlog('info', `🎤 Mic→Server audio #${statsRef.current.audioSent} | ${base64.length} b64 chars | ${float32.length} samples | total=${(statsRef.current.audioSentBytes/1024).toFixed(1)}KB`);
+        }
+
         ws.send(JSON.stringify({ type: 'audio', data: base64 }));
       };
 
       source.connect(processor);
-      processor.connect(ctx.destination); // needed for ScriptProcessor to work
-
-      console.log('Mic capture started at', ctx.sampleRate, 'Hz');
+      processor.connect(ctx.destination);
+      vlog('info', `✅ Mic capture pipeline started at ${ctx.sampleRate}Hz`);
     } catch (err) {
-      console.error('Mic error:', err);
+      vlog('error', `❌ Mic error: ${err.name} - ${err.message}`);
       setMessages(prev => [...prev, { role: 'system', text: 'Microphone access denied. You can type instead.' }]);
       setStatus('listening');
     }
@@ -227,6 +263,7 @@ export default function VoiceAgentPopup() {
   // ─── Start / End conversation ───
 
   const handleStartConversation = () => {
+    vlog('info', '▶️ User clicked Start Voice Chat');
     setShowPulse(false);
     setMessages([]);
     setShowLeadForm(false);
@@ -235,6 +272,8 @@ export default function VoiceAgentPopup() {
   };
 
   const handleEndConversation = () => {
+    vlog('info', '⏹️ User ended conversation');
+    vlog('info', `📊 Final stats: audio_sent=${statsRef.current.audioSent} audio_recv=${statsRef.current.audioReceived}`);
     clearPlayback();
     stopMicCapture();
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -246,6 +285,7 @@ export default function VoiceAgentPopup() {
   };
 
   const handleClose = () => {
+    vlog('info', '✖️ User closed popup');
     clearPlayback();
     stopMicCapture();
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
@@ -267,9 +307,13 @@ export default function VoiceAgentPopup() {
     e.preventDefault();
     if (!textInput.trim()) return;
     const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      vlog('warn', '⚠️ Cannot send text: WebSocket not open');
+      return;
+    }
     
     const text = textInput.trim();
+    vlog('info', `💬 User typed: "${text}"`);
     setMessages(prev => [...prev, { role: 'user', text }]);
     ws.send(JSON.stringify({ type: 'text', text }));
     setTextInput('');
