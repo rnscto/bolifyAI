@@ -5,6 +5,7 @@ import FeaturesSection from '../components/landing/FeaturesSection';
 import HowItWorksSection from '../components/landing/HowItWorksSection';
 import IndustriesSection from '../components/landing/IndustriesSection';
 import PricingSection from '../components/landing/PricingSection';
+import FAQSection from '../components/landing/FAQSection';
 import FooterSection from '../components/landing/FooterSection';
 
 export default function Home() {
@@ -20,6 +21,9 @@ export default function Home() {
         <IndustriesSection />
       </div>
       <PricingSection />
+      <div id="faq">
+        <FAQSection />
+      </div>
       <FooterSection />
     </div>
   );

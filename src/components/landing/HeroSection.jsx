@@ -51,10 +51,10 @@ export default function HeroSection() {
               </span>
             </h1>
 
-            <p className="text-lg text-slate-300 max-w-xl mb-8 leading-relaxed">
+            <h2 className="text-lg text-slate-300 max-w-xl mb-8 leading-relaxed font-normal">
               VaaniAI deploys intelligent voice agents that engage leads, qualify prospects,
               and close deals — 24/7, in English & Hindi, with your custom CRM built-in.
-            </p>
+            </h2>
 
             {/* CTAs */}
             <div className="flex flex-col sm:flex-row gap-4">

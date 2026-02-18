@@ -88,9 +88,9 @@ export default function FeaturesSection() {
             <Zap className="w-3.5 h-3.5" /> Features
           </div>
           <h2 className="text-4xl font-bold text-gray-900 mb-4">Everything You Need to Close More Deals</h2>
-          <p className="text-lg text-gray-500 max-w-2xl mx-auto">
+          <h3 className="text-lg text-gray-500 max-w-2xl mx-auto font-normal">
             From AI voice calling to pipeline automation — VaaniAI handles your entire sales workflow.
-          </p>
+          </h3>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
