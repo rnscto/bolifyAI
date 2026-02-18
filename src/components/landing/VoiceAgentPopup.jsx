@@ -192,7 +192,7 @@ export default function VoiceAgentPopup() {
 
       // Session created → configure and start mic
       if (type === 'session.created') {
-        vlog('info', '✅ Session created, sending config...');
+        vlog('info', '✅ Session created, sending config with tools...');
         ws.send(JSON.stringify({
           type: 'session.update',
           session: {
@@ -206,7 +206,9 @@ export default function VoiceAgentPopup() {
               threshold: 0.5,
               prefix_padding_ms: 300,
               silence_duration_ms: 600
-            }
+            },
+            tools: TOOLS,
+            tool_choice: 'auto'
           }
         }));
         setStatus('listening');
