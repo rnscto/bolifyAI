@@ -104,6 +104,9 @@ Deno.serve(async (req) => {
         ...conversationHistory
       ];
 
+      console.log(`Calling Azure OpenAI: ${baseUrl}/openai/deployments/${deployment}/chat/completions`);
+      console.log(`Messages count: ${chatMessages.length}, API key present: ${!!apiKey}`);
+
       const response = await fetch(
         `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`,
         {
@@ -119,8 +122,8 @@ Deno.serve(async (req) => {
 
       if (!response.ok) {
         const errText = await response.text();
-        console.error('Azure OpenAI error:', errText);
-        return Response.json({ error: 'AI service error' }, { status: 500 });
+        console.error('Azure OpenAI error status:', response.status, errText);
+        return Response.json({ error: 'AI service error', details: errText }, { status: 500 });
       }
 
       const data = await response.json();
