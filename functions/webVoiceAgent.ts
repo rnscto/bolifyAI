@@ -49,9 +49,20 @@ ${VAANI_KNOWLEDGE_BASE}`;
 Deno.serve(async (req) => {
   const reqId = Math.random().toString(36).substring(2, 10);
   const upgrade = (req.headers.get('upgrade') || '').toLowerCase();
+  const t0 = Date.now();
+  const log = (level, ...args) => {
+    const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+    const prefix = `[${reqId}][${elapsed}s]`;
+    if (level === 'error') console.error(prefix, ...args);
+    else if (level === 'warn') console.warn(prefix, ...args);
+    else console.log(prefix, ...args);
+  };
+
+  log('info', `📨 ${req.method} ${req.url} | upgrade=${upgrade} | origin=${req.headers.get('origin') || 'none'}`);
 
   // ─── CORS preflight ───
   if (req.method === 'OPTIONS') {
+    log('info', '✅ CORS preflight response');
     return new Response(null, {
       headers: {
         'Access-Control-Allow-Origin': '*',
@@ -65,6 +76,7 @@ Deno.serve(async (req) => {
   if (req.method === 'POST' && upgrade !== 'websocket') {
     try {
       const body = await req.json();
+      log('info', `📋 POST action=${body.action}`);
       if (body.action === 'create_lead') {
         const { createClient } = await import('npm:@base44/sdk@0.8.6');
         const appId = Deno.env.get('BASE44_APP_ID');
@@ -87,18 +99,21 @@ Deno.serve(async (req) => {
         });
 
         try { serviceClient.cleanup(); } catch (_) {}
-        console.log(`[${reqId}] Lead created: ${lead.id}`);
+        log('info', `✅ Lead created: ${lead.id} | name=${body.name} email=${body.email} phone=${body.phone}`);
         return Response.json({ success: true, lead_id: lead.id });
       }
 
+      log('warn', `⚠️ Unknown POST action: ${body.action}`);
       return Response.json({ error: 'Unknown action' }, { status: 400 });
     } catch (err) {
+      log('error', `❌ POST error: ${err.message}`);
       return Response.json({ error: err.message }, { status: 500 });
     }
   }
 
   // ─── HTTP GET (non-WS): return status ───
   if (upgrade !== 'websocket') {
+    log('info', '📋 HTTP GET status check');
     return Response.json({
       status: 'ready',
       version: 'v7.0-web-realtime',
@@ -112,9 +127,9 @@ Deno.serve(async (req) => {
     const upgraded = Deno.upgradeWebSocket(req);
     browserSocket = upgraded.socket;
     response = upgraded.response;
-    console.log(`[${reqId}] ✅ Browser WebSocket upgraded`);
+    log('info', '✅ Browser WebSocket upgraded successfully');
   } catch (err) {
-    console.error(`[${reqId}] ❌ WS upgrade failed: ${err.message}`);
+    log('error', `❌ WS upgrade failed: ${err.message}`);
     return new Response('WebSocket upgrade failed', { status: 500 });
   }
 
@@ -123,7 +138,17 @@ Deno.serve(async (req) => {
     realtimeWs: null,
     realtimeReady: false,
     transcript: [],
-    startTime: Date.now()
+    startTime: Date.now(),
+    stats: {
+      browserAudioPackets: 0,
+      browserAudioBytes: 0,
+      azureAudioDeltas: 0,
+      azureAudioBytes: 0,
+      browserTextMessages: 0,
+      transcriptsReceived: 0,
+      bargeIns: 0,
+      errors: 0
+    }
   };
 
   // ─── Connect to Azure Realtime API ───
@@ -131,10 +156,13 @@ Deno.serve(async (req) => {
     const realtimeUrl = Deno.env.get('AZURE_REALTIME_ENDPOINT');
     const realtimeKey = Deno.env.get('AZURE_REALTIME_KEY');
 
+    log('info', `🔌 Azure config: endpoint=${realtimeUrl ? realtimeUrl.substring(0, 50) + '...' : 'MISSING'}, key=${realtimeKey ? 'SET (' + realtimeKey.length + ' chars)' : 'MISSING'}`);
+
     if (!realtimeUrl || !realtimeKey) {
-      console.error(`[${reqId}] ❌ Missing AZURE_REALTIME_ENDPOINT or AZURE_REALTIME_KEY`);
+      log('error', '❌ Missing AZURE_REALTIME_ENDPOINT or AZURE_REALTIME_KEY');
+      session.stats.errors++;
       if (browserSocket.readyState === WebSocket.OPEN) {
-        browserSocket.send(JSON.stringify({ type: 'error', message: 'Server misconfigured' }));
+        browserSocket.send(JSON.stringify({ type: 'error', message: 'Server misconfigured: missing Azure credentials' }));
       }
       return;
     }
@@ -142,12 +170,12 @@ Deno.serve(async (req) => {
     let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
     const sep = wsUrl.includes('?') ? '&' : '?';
     wsUrl = `${wsUrl}${sep}api-key=${encodeURIComponent(realtimeKey)}`;
-    console.log(`[${reqId}] 🔌 Connecting to Azure Realtime...`);
+    log('info', `🔌 Connecting to Azure Realtime: ${wsUrl.substring(0, 80)}...`);
 
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log(`[${reqId}] ✅ Azure Realtime connected`);
+      log('info', '✅ Azure Realtime WebSocket connected');
     };
 
     ws.onmessage = (event) => {
@@ -155,12 +183,13 @@ Deno.serve(async (req) => {
         const msg = JSON.parse(event.data);
         handleRealtimeMessage(msg);
       } catch (err) {
-        console.error(`[${reqId}] Parse error: ${err.message}`);
+        log('error', `❌ Azure message parse error: ${err.message}`);
+        session.stats.errors++;
       }
     };
 
     ws.onclose = (event) => {
-      console.log(`[${reqId}] 🔴 Azure closed: ${event.code}`);
+      log('info', `🔴 Azure Realtime closed: code=${event.code} reason="${event.reason || 'none'}" wasClean=${event.wasClean}`);
       session.realtimeReady = false;
       if (browserSocket.readyState === WebSocket.OPEN) {
         browserSocket.send(JSON.stringify({ type: 'session_ended' }));
@@ -168,7 +197,8 @@ Deno.serve(async (req) => {
     };
 
     ws.onerror = () => {
-      console.error(`[${reqId}] ❌ Azure Realtime error`);
+      log('error', '❌ Azure Realtime WebSocket error event');
+      session.stats.errors++;
     };
 
     session.realtimeWs = ws;
@@ -179,51 +209,57 @@ Deno.serve(async (req) => {
     const type = msg.type;
 
     if (type === 'session.created') {
-      console.log(`[${reqId}] ✅ Realtime session created`);
+      log('info', `✅ Realtime session created | id=${msg.session?.id || 'unknown'}`);
       session.realtimeReady = true;
 
       // Configure session
-      sendToRealtime({
-        type: 'session.update',
-        session: {
-          instructions: SYSTEM_PROMPT,
-          voice: 'alloy',
-          input_audio_format: 'pcm16',
-          output_audio_format: 'pcm16',
-          input_audio_transcription: { model: 'whisper-1' },
-          turn_detection: {
-            type: 'server_vad',
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 600
-          }
+      const sessionConfig = {
+        instructions: SYSTEM_PROMPT,
+        voice: 'alloy',
+        input_audio_format: 'pcm16',
+        output_audio_format: 'pcm16',
+        input_audio_transcription: { model: 'whisper-1' },
+        turn_detection: {
+          type: 'server_vad',
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 600
         }
-      });
+      };
+
+      log('info', `📤 Sending session.update | prompt_length=${SYSTEM_PROMPT.length} | voice=alloy | format=pcm16 | vad=server`);
+      sendToRealtime({ type: 'session.update', session: sessionConfig });
 
       // Tell browser we're ready
       if (browserSocket.readyState === WebSocket.OPEN) {
         browserSocket.send(JSON.stringify({ type: 'session_ready' }));
+        log('info', '📤 Sent session_ready to browser');
       }
       return;
     }
 
     if (type === 'session.updated') {
-      console.log(`[${reqId}] ✅ Session configured`);
+      log('info', '✅ Session configured successfully');
       return;
     }
 
     // Audio from AI → forward to browser as base64 PCM16 24kHz
     if (type === 'response.audio.delta' && msg.delta) {
+      session.stats.azureAudioDeltas++;
+      session.stats.azureAudioBytes += msg.delta.length;
+      if (session.stats.azureAudioDeltas <= 3 || session.stats.azureAudioDeltas % 50 === 0) {
+        log('info', `🔊 Azure→Browser audio delta #${session.stats.azureAudioDeltas} | ${msg.delta.length} b64 chars | total=${session.stats.azureAudioBytes} | browserWS=${browserSocket.readyState === WebSocket.OPEN ? 'OPEN' : 'CLOSED'}`);
+      }
       if (browserSocket.readyState === WebSocket.OPEN) {
-        browserSocket.send(JSON.stringify({
-          type: 'audio',
-          data: msg.delta  // base64 PCM16 LE 24kHz
-        }));
+        browserSocket.send(JSON.stringify({ type: 'audio', data: msg.delta }));
+      } else {
+        log('warn', `⚠️ Browser socket not open, dropping audio delta #${session.stats.azureAudioDeltas}`);
       }
       return;
     }
 
     if (type === 'response.audio.done') {
+      log('info', `🔊 AI audio response complete | total_deltas=${session.stats.azureAudioDeltas} | total_b64_bytes=${session.stats.azureAudioBytes}`);
       if (browserSocket.readyState === WebSocket.OPEN) {
         browserSocket.send(JSON.stringify({ type: 'audio_done' }));
       }
@@ -234,7 +270,9 @@ Deno.serve(async (req) => {
     if (type === 'conversation.item.input_audio_transcription.completed' && msg.transcript) {
       const text = msg.transcript.trim();
       if (text) {
+        session.stats.transcriptsReceived++;
         session.transcript.push({ speaker: 'user', text });
+        log('info', `🗣️ USER transcript #${session.stats.transcriptsReceived}: "${text.substring(0, 120)}"`);
         if (browserSocket.readyState === WebSocket.OPEN) {
           browserSocket.send(JSON.stringify({ type: 'transcript', role: 'user', text }));
         }
@@ -246,7 +284,9 @@ Deno.serve(async (req) => {
     if (type === 'response.audio_transcript.done' && msg.transcript) {
       const text = msg.transcript.trim();
       if (text) {
+        session.stats.transcriptsReceived++;
         session.transcript.push({ speaker: 'ai', text });
+        log('info', `🤖 AI transcript #${session.stats.transcriptsReceived}: "${text.substring(0, 120)}"`);
         if (browserSocket.readyState === WebSocket.OPEN) {
           browserSocket.send(JSON.stringify({ type: 'transcript', role: 'ai', text }));
         }
@@ -256,6 +296,8 @@ Deno.serve(async (req) => {
 
     // Barge-in
     if (type === 'input_audio_buffer.speech_started') {
+      session.stats.bargeIns++;
+      log('info', `🛑 User speech started (barge-in #${session.stats.bargeIns})`);
       if (browserSocket.readyState === WebSocket.OPEN) {
         browserSocket.send(JSON.stringify({ type: 'speech_started' }));
       }
@@ -263,6 +305,7 @@ Deno.serve(async (req) => {
     }
 
     if (type === 'input_audio_buffer.speech_stopped') {
+      log('info', '🔇 User speech stopped');
       if (browserSocket.readyState === WebSocket.OPEN) {
         browserSocket.send(JSON.stringify({ type: 'speech_stopped' }));
       }
@@ -270,23 +313,42 @@ Deno.serve(async (req) => {
     }
 
     if (type === 'error') {
-      console.error(`[${reqId}] ❌ Realtime error:`, JSON.stringify(msg.error || msg));
+      session.stats.errors++;
+      log('error', `❌ Azure Realtime error #${session.stats.errors}: ${JSON.stringify(msg.error || msg)}`);
       if (browserSocket.readyState === WebSocket.OPEN) {
         browserSocket.send(JSON.stringify({ type: 'error', message: msg.error?.message || 'AI error' }));
       }
       return;
+    }
+
+    // Log all other Azure events for debugging
+    if (!['response.created', 'response.output_item.added', 'response.content_part.added',
+          'response.output_item.done', 'response.content_part.done', 'response.done',
+          'conversation.item.created', 'rate_limits.updated'].includes(type)) {
+      log('info', `📩 Azure event (unhandled): ${type}`);
     }
   }
 
   function sendToRealtime(msg) {
     if (session.realtimeWs && session.realtimeWs.readyState === WebSocket.OPEN) {
       session.realtimeWs.send(JSON.stringify(msg));
+    } else {
+      log('warn', `⚠️ Cannot send to Azure Realtime: ws=${session.realtimeWs ? 'exists' : 'null'} readyState=${session.realtimeWs?.readyState}`);
+    }
+  }
+
+  function logSessionStats() {
+    const duration = ((Date.now() - session.startTime) / 1000).toFixed(1);
+    const s = session.stats;
+    log('info', `📊 SESSION STATS | duration=${duration}s | browser_audio_pkts=${s.browserAudioPackets} (${(s.browserAudioBytes/1024).toFixed(1)}KB) | azure_audio_deltas=${s.azureAudioDeltas} (${(s.azureAudioBytes/1024).toFixed(1)}KB b64) | text_msgs=${s.browserTextMessages} | transcripts=${s.transcriptsReceived} | barge_ins=${s.bargeIns} | errors=${s.errors} | transcript_lines=${session.transcript.length}`);
+    if (session.transcript.length > 0) {
+      log('info', `📝 FULL TRANSCRIPT:\n${session.transcript.map(t => `  ${t.speaker}: ${t.text}`).join('\n')}`);
     }
   }
 
   // ─── Browser WebSocket Handlers ───
   browserSocket.onopen = () => {
-    console.log(`[${reqId}] 🟢 Browser socket opened`);
+    log('info', '🟢 Browser socket opened → connecting to Azure Realtime...');
     connectRealtime();
   };
 
@@ -296,23 +358,35 @@ Deno.serve(async (req) => {
 
       // Browser sends audio as base64 PCM16 24kHz
       if (msg.type === 'audio') {
+        session.stats.browserAudioPackets++;
+        session.stats.browserAudioBytes += (msg.data?.length || 0);
+        if (session.stats.browserAudioPackets <= 3 || session.stats.browserAudioPackets % 100 === 0) {
+          log('info', `🎤 Browser→Azure audio #${session.stats.browserAudioPackets} | ${msg.data?.length || 0} b64 chars | realtimeReady=${session.realtimeReady}`);
+        }
         if (session.realtimeReady) {
           sendToRealtime({
             type: 'input_audio_buffer.append',
             audio: msg.data
           });
+        } else {
+          if (session.stats.browserAudioPackets <= 5) {
+            log('warn', `⏳ Azure not ready yet, dropping browser audio #${session.stats.browserAudioPackets}`);
+          }
         }
         return;
       }
 
       // Browser requests to commit audio buffer (optional)
       if (msg.type === 'commit') {
+        log('info', '📤 Browser requested audio buffer commit');
         sendToRealtime({ type: 'input_audio_buffer.commit' });
         return;
       }
 
       // Browser sends text message
       if (msg.type === 'text') {
+        session.stats.browserTextMessages++;
+        log('info', `💬 Browser text #${session.stats.browserTextMessages}: "${msg.text?.substring(0, 100)}"`);
         sendToRealtime({
           type: 'conversation.item.create',
           item: {
@@ -325,20 +399,26 @@ Deno.serve(async (req) => {
         return;
       }
 
+      log('warn', `⚠️ Unknown browser message type: ${msg.type}`);
     } catch (err) {
-      console.error(`[${reqId}] ❌ Browser msg error: ${err.message}`);
+      log('error', `❌ Browser msg parse/handle error: ${err.message}`);
+      session.stats.errors++;
     }
   };
 
-  browserSocket.onclose = () => {
-    console.log(`[${reqId}] 🔴 Browser socket closed`);
+  browserSocket.onclose = (event) => {
+    log('info', `🔴 Browser socket closed: code=${event.code} reason="${event.reason || 'none'}" wasClean=${event.wasClean}`);
+    logSessionStats();
     if (session.realtimeWs && session.realtimeWs.readyState === WebSocket.OPEN) {
+      log('info', '🔌 Closing Azure Realtime connection...');
       session.realtimeWs.close();
     }
   };
 
   browserSocket.onerror = () => {
-    console.error(`[${reqId}] ❌ Browser socket error`);
+    log('error', '❌ Browser socket error event');
+    session.stats.errors++;
+    logSessionStats();
     if (session.realtimeWs && session.realtimeWs.readyState === WebSocket.OPEN) {
       session.realtimeWs.close();
     }
