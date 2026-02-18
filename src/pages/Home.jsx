@@ -7,6 +7,7 @@ import IndustriesSection from '../components/landing/IndustriesSection';
 import PricingSection from '../components/landing/PricingSection';
 import FAQSection from '../components/landing/FAQSection';
 import FooterSection from '../components/landing/FooterSection';
+import VoiceAgentPopup from '../components/landing/VoiceAgentPopup';
 
 export default function Home() {
   return (
@@ -25,6 +26,7 @@ export default function Home() {
         <FAQSection />
       </div>
       <FooterSection />
+      <VoiceAgentPopup />
     </div>
   );
 }
