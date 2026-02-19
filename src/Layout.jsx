@@ -20,7 +20,8 @@ import {
   IndianRupee,
   UserCog,
   Megaphone,
-  BarChart3
+  BarChart3,
+  Globe
 } from 'lucide-react';
 
 export default function Layout({ children, currentPageName }) {
