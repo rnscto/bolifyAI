@@ -454,18 +454,7 @@ export default function VoiceAgentPopup() {
     setShowLeadForm(false);
     connectToAzure(info);
 
-    // Create lead in background with pre-chat info
-    base44.functions.invoke('webVoiceAgent', {
-      action: 'create_lead',
-      name: info.name,
-      email: info.email,
-      phone: info.phone,
-      solution: info.solution,
-      intent: 'exploring',
-      sentiment: 'neutral',
-      conversation_summary: 'Lead captured via pre-chat form before voice conversation'
-    }).then(() => vlog('info', '✅ Pre-chat lead saved'))
-      .catch(err => vlog('warn', '⚠️ Pre-chat lead save failed:', err.message));
+    // Don't create lead here — will be created after conversation ends with full summary
   };
 
   const handleStartConversation = () => {
