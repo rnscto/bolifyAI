@@ -39,8 +39,8 @@ export default function HowItWorksSection() {
   return (
     <section id="how-it-works" className="py-16 lg:py-20 bg-gradient-to-b from-gray-50 to-white relative overflow-hidden">
       {/* Decorative pulses */}
-      <PulseRings className="absolute top-10 right-[5%] opacity-10" color="#e67e22" size={200} rings={3} />
-      <PulseRings className="absolute bottom-16 left-[3%] opacity-10" color="#1a365d" size={150} rings={2} />
+      <div className="absolute top-10 right-[5%] opacity-10 pointer-events-none"><PulseRings color="#e67e22" size={200} rings={3} /></div>
+      <div className="absolute bottom-16 left-[3%] opacity-10 pointer-events-none"><PulseRings color="#1a365d" size={150} rings={2} /></div>
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#e67e22]/10 text-[#e67e22] text-sm font-semibold mb-4">
@@ -80,9 +80,9 @@ export default function HowItWorksSection() {
           })}
         </div>
 
-        {/* Voice waveform decoration */}
-        <div className="flex justify-center mt-10 opacity-40">
-          <AnimatedWaveform barCount={40} color="rgba(26,54,93,0.3)" height={30} />
+        {/* Voice waveform decoration - compact */}
+        <div className="flex justify-center mt-6 opacity-30">
+          <AnimatedWaveform barCount={30} color="rgba(26,54,93,0.3)" height={20} />
         </div>
       </div>
     </section>
