@@ -177,6 +177,64 @@ export default function VoiceAgentPopup() {
     isPlayingRef.current = false;
   }, []);
 
+  // ─── Mic capture: stream PCM16 24kHz directly to Azure ───
+
+  const startMicCapture = useCallback(async () => {
+    vlog('info', '🎤 Requesting mic...');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: SAMPLE_RATE, channelCount: 1 } });
+      mediaStreamRef.current = stream;
+
+      const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
+      audioContextRef.current = ctx;
+
+      const source = ctx.createMediaStreamSource(stream);
+      const processor = ctx.createScriptProcessor(4096, 1, 1);
+      processorRef.current = processor;
+
+      processor.onaudioprocess = (e) => {
+        const ws = wsRef.current;
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+
+        const float32 = e.inputBuffer.getChannelData(0);
+        const pcm16 = new Int16Array(float32.length);
+        for (let i = 0; i < float32.length; i++) {
+          const s = Math.max(-1, Math.min(1, float32[i]));
+          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        const bytes = new Uint8Array(pcm16.buffer);
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+
+        statsRef.current.audioSent++;
+        ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: base64 }));
+      };
+
+      source.connect(processor);
+      processor.connect(ctx.destination);
+      vlog('info', `✅ Mic started at ${ctx.sampleRate}Hz`);
+    } catch (err) {
+      vlog('error', `❌ Mic error: ${err.message}`);
+      setMessages(prev => [...prev, { role: 'system', text: 'Microphone access denied. You can type instead.' }]);
+      setStatus('listening');
+    }
+  }, []);
+
+  const stopMicCapture = useCallback(() => {
+    if (processorRef.current) {
+      processorRef.current.disconnect();
+      processorRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach(t => t.stop());
+      mediaStreamRef.current = null;
+    }
+  }, []);
+
   // ─── Direct Azure Realtime WebSocket connection ───
 
   const connectToAzure = useCallback(async (currentVisitorInfo) => {
@@ -384,65 +442,7 @@ export default function VoiceAgentPopup() {
       setStatus('idle');
       setMessages(prev => [...prev, { role: 'system', text: 'Connection error. Please try again.' }]);
     };
-  }, [enqueueAudio, clearPlayback]);
-
-  // ─── Mic capture: stream PCM16 24kHz directly to Azure ───
-
-  const startMicCapture = useCallback(async () => {
-    vlog('info', '🎤 Requesting mic...');
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { sampleRate: SAMPLE_RATE, channelCount: 1 } });
-      mediaStreamRef.current = stream;
-
-      const ctx = new AudioContext({ sampleRate: SAMPLE_RATE });
-      audioContextRef.current = ctx;
-
-      const source = ctx.createMediaStreamSource(stream);
-      const processor = ctx.createScriptProcessor(4096, 1, 1);
-      processorRef.current = processor;
-
-      processor.onaudioprocess = (e) => {
-        const ws = wsRef.current;
-        if (!ws || ws.readyState !== WebSocket.OPEN) return;
-
-        const float32 = e.inputBuffer.getChannelData(0);
-        const pcm16 = new Int16Array(float32.length);
-        for (let i = 0; i < float32.length; i++) {
-          const s = Math.max(-1, Math.min(1, float32[i]));
-          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-        }
-
-        const bytes = new Uint8Array(pcm16.buffer);
-        let binary = '';
-        for (let i = 0; i < bytes.length; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        const base64 = btoa(binary);
-
-        statsRef.current.audioSent++;
-        ws.send(JSON.stringify({ type: 'input_audio_buffer.append', audio: base64 }));
-      };
-
-      source.connect(processor);
-      processor.connect(ctx.destination);
-      vlog('info', `✅ Mic started at ${ctx.sampleRate}Hz`);
-    } catch (err) {
-      vlog('error', `❌ Mic error: ${err.message}`);
-      setMessages(prev => [...prev, { role: 'system', text: 'Microphone access denied. You can type instead.' }]);
-      setStatus('listening');
-    }
-  }, []);
-
-  const stopMicCapture = useCallback(() => {
-    if (processorRef.current) {
-      processorRef.current.disconnect();
-      processorRef.current = null;
-    }
-    if (mediaStreamRef.current) {
-      mediaStreamRef.current.getTracks().forEach(t => t.stop());
-      mediaStreamRef.current = null;
-    }
-  }, []);
+  }, [enqueueAudio, clearPlayback, startMicCapture]);
 
   // ─── Start / End conversation ───
 
