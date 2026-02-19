@@ -6,6 +6,7 @@ import { Users, Phone, PhoneCall, TrendingUp, Clock, CreditCard, AlertTriangle, 
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import WebsiteLeadsSection from '../components/admin/WebsiteLeadsSection';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
