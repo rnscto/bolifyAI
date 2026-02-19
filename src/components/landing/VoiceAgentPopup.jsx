@@ -562,28 +562,12 @@ export default function VoiceAgentPopup() {
                 onSubmitted={handleLeadSubmitted}
                 onSkip={handleLeadSubmitted}
               />
+            ) : !visitorInfo && status === 'idle' ? (
+              <PreChatForm onStart={handlePreChatSubmit} />
             ) : (
               <>
                 {/* Messages */}
                 <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-[200px] max-h-[320px] bg-gray-50">
-                  {status === 'idle' && messages.length === 0 && (
-                    <div className="text-center py-8">
-                      <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-50 flex items-center justify-center">
-                        <Mic className="w-8 h-8 text-blue-500" />
-                      </div>
-                      <p className="text-sm font-medium text-gray-800">Talk to VaaniAI</p>
-                      <p className="text-xs text-gray-500 mt-1.5 max-w-[240px] mx-auto">
-                        Real-time AI voice conversation. Ask about our platform, pricing, or features!
-                      </p>
-                      <Button
-                        onClick={handleStartConversation}
-                        className="mt-4 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white rounded-full px-6 gap-2 shadow-lg shadow-green-200"
-                      >
-                        <Phone className="w-4 h-4" />
-                        Start Voice Chat
-                      </Button>
-                    </div>
-                  )}
                   {messages.map((msg, i) => (
                     <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[82%] px-3 py-2 rounded-xl text-sm ${
