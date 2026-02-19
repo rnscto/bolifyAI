@@ -79,6 +79,7 @@ export default function VoiceAgentPopup() {
   const [textInput, setTextInput] = useState('');
   const [showPulse, setShowPulse] = useState(true);
   const [showLeadForm, setShowLeadForm] = useState(false);
+  const [visitorInfo, setVisitorInfo] = useState(null); // null = show pre-chat form
 
   const messagesEndRef = useRef(null);
   const wsRef = useRef(null);
