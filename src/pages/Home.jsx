@@ -8,9 +8,9 @@ import PricingSection from '../components/landing/PricingSection';
 import FAQSection from '../components/landing/FAQSection';
 import FooterSection from '../components/landing/FooterSection';
 import VoiceAgentPopup from '../components/landing/VoiceAgentPopup';
-import SEOHead from '../components/landing/SEOHead';
-import TrustStrip from '../components/landing/TrustStrip';
-import CTABanner from '../components/landing/CTABanner';
+import SEOHead from '../components/landing/SEOHead.jsx';
+import TrustStrip from '../components/landing/TrustStrip.jsx';
+import CTABanner from '../components/landing/CTABanner.jsx';
 
 export default function Home() {
   useEffect(() => {
