@@ -53,9 +53,9 @@ const faqs = [
 
 export default function FAQSection() {
   return (
-    <section id="faq" className="py-24 bg-gray-50">
+    <section id="faq" className="py-16 lg:py-20 bg-gray-50">
       <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-14">
+        <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1a365d]/5 text-[#1a365d] text-sm font-semibold mb-4">
             <HelpCircle className="w-3.5 h-3.5" /> FAQ
           </div>

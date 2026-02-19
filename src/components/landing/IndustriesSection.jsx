@@ -32,9 +32,9 @@ const industries = [
 
 export default function IndustriesSection() {
   return (
-    <section className="py-24 bg-[#fafbfc]">
+    <section className="py-16 lg:py-20 bg-[#fafbfc]">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
+        <div className="text-center mb-10">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#138808]/10 text-[#138808] text-sm font-semibold mb-4">
             Industries
           </div>

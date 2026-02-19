@@ -37,12 +37,12 @@ const steps = [
 
 export default function HowItWorksSection() {
   return (
-    <section id="how-it-works" className="py-24 bg-gradient-to-b from-gray-50 to-white relative overflow-hidden">
+    <section id="how-it-works" className="py-16 lg:py-20 bg-gradient-to-b from-gray-50 to-white relative overflow-hidden">
       {/* Decorative pulses */}
       <PulseRings className="absolute top-10 right-[5%] opacity-10" color="#e67e22" size={200} rings={3} />
       <PulseRings className="absolute bottom-16 left-[3%] opacity-10" color="#1a365d" size={150} rings={2} />
       <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="text-center mb-16">
+        <div className="text-center mb-12">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#e67e22]/10 text-[#e67e22] text-sm font-semibold mb-4">
             How It Works
           </div>
@@ -61,7 +61,7 @@ export default function HowItWorksSection() {
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ delay: i * 0.1, duration: 0.4 }}
+                transition={{ delay: i * 0.08, duration: 0.35 }}
                 className="relative text-center group"
               >
                 {i < steps.length - 1 && (
@@ -81,8 +81,8 @@ export default function HowItWorksSection() {
         </div>
 
         {/* Voice waveform decoration */}
-        <div className="flex justify-center mt-14 opacity-40">
-          <AnimatedWaveform barCount={40} color="rgba(26,54,93,0.3)" height={36} />
+        <div className="flex justify-center mt-10 opacity-40">
+          <AnimatedWaveform barCount={40} color="rgba(26,54,93,0.3)" height={30} />
         </div>
       </div>
     </section>

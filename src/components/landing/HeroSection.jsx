@@ -12,7 +12,7 @@ const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/pub
 
 export default function HeroSection() {
   return (
-    <section className="relative overflow-hidden bg-gradient-to-br from-[#0f1f3d] via-[#1a365d] to-[#1e3a5f] min-h-[92vh] flex items-center pt-16">
+    <section className="relative overflow-hidden bg-gradient-to-br from-[#0f1f3d] via-[#1a365d] to-[#1e3a5f] min-h-[90vh] flex items-center pt-20 pb-8">
       {/* Decorative elements */}
       <div className="absolute inset-0 overflow-hidden">
         <div className="absolute top-20 right-10 w-80 h-80 bg-[#e67e22]/10 rounded-full blur-3xl" />
