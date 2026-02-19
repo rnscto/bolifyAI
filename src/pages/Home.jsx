@@ -9,6 +9,8 @@ import FAQSection from '../components/landing/FAQSection';
 import FooterSection from '../components/landing/FooterSection';
 import VoiceAgentPopup from '../components/landing/VoiceAgentPopup';
 import SEOHead from '../components/landing/SEOHead';
+import TrustStrip from '../components/landing/TrustStrip';
+import CTABanner from '../components/landing/CTABanner';
 
 export default function Home() {
   useEffect(() => {
@@ -29,6 +31,7 @@ export default function Home() {
       <SEOHead />
       <Navbar />
       <HeroSection />
+      <TrustStrip />
       <div id="how-it-works">
         <HowItWorksSection />
       </div>
@@ -37,6 +40,7 @@ export default function Home() {
         <IndustriesSection />
       </div>
       <PricingSection />
+      <CTABanner />
       <div id="faq">
         <FAQSection />
       </div>
