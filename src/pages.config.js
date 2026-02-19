@@ -78,6 +78,7 @@ import Home from './pages/Home';
 import Onboarding from './pages/Onboarding';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
+import AdminWebsiteLeads from './pages/AdminWebsiteLeads';
 import __Layout from './Layout.jsx';
 
 
@@ -113,6 +114,7 @@ export const PAGES = {
     "Onboarding": Onboarding,
     "PrivacyPolicy": PrivacyPolicy,
     "TermsOfService": TermsOfService,
+    "AdminWebsiteLeads": AdminWebsiteLeads,
 }
 
 export const pagesConfig = {
