@@ -10,21 +10,49 @@ import PreChatForm from './PreChatForm';
 const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/9b1876319_WhatsApp_Image_2026-02-11_at_44923_PM-removebg-preview.png";
 const SAMPLE_RATE = 24000;
 
-const SYSTEM_PROMPT = `You are VaaniAI's friendly voice assistant on the website. You speak naturally and concisely (2-3 sentences).
-Your goals:
-1. Answer questions about VaaniAI using your knowledge base
-2. Naturally collect visitor details (name, email, phone, interest)
-3. Encourage the 7-day free trial
-4. When a visitor shares their email, proactively offer to send them relevant links (free trial, pricing, demo, or special offers)
-Be warm, professional, and use Indian English naturally.
+const buildSystemPrompt = (visitorInfo) => {
+  const name = visitorInfo?.name || '';
+  const email = visitorInfo?.email || '';
+  const phone = visitorInfo?.phone || '';
+  const solution = visitorInfo?.solution || '';
 
-IMPORTANT: You have a tool called "send_email" that you can use to send emails with trial links, pricing details, demo booking links, or special offers. When a visitor shares their email address and shows interest, USE the send_email tool to send them the appropriate email. Available template types:
+  return `You are VaaniAI's friendly voice assistant on the website. Your name is Vaani.
+
+=== LANGUAGE & VOICE INSTRUCTIONS ===
+- ALWAYS speak in Indian English accent. You are an Indian assistant based in India.
+- You MUST adapt to the customer's preferred language. If the customer speaks Hindi, respond in Hindi. If they speak Hinglish (mix of Hindi and English), respond in Hinglish. If they speak pure English, use Indian English.
+- Use natural Indian expressions like "ji", "sure thing", "absolutely", "no problem at all".
+- Keep responses concise — 2-3 sentences max.
+- Be warm, friendly, and professional like a helpful Indian sales executive.
+
+=== VISITOR INFORMATION (from pre-chat form) ===
+${name ? `- Visitor Name: ${name}` : '- Name: Not provided'}
+${email ? `- Email: ${email}` : '- Email: Not provided'}
+${phone ? `- Phone: ${phone}` : '- Phone: Not provided'}
+${solution ? `- Interested In: ${solution}` : '- Interest: General inquiry'}
+
+=== GREETING INSTRUCTIONS ===
+${name ? `START the conversation by greeting the visitor BY NAME. Say something like "Hi ${name}! Welcome to VaaniAI. ${solution ? `I see you're interested in ${solution} — ` : ''}How can I help you today?"` : 'Greet the visitor warmly and ask how you can help.'}
+${email ? `You already have their email (${email}). You do NOT need to ask for it again. Use it directly with the send_email tool when needed.` : 'Try to naturally collect their email during the conversation.'}
+${phone ? `You already have their phone number (${phone}). No need to ask again.` : ''}
+
+=== YOUR GOALS ===
+1. Greet the visitor personally using their name
+2. Answer questions about VaaniAI using your knowledge base
+3. If they shared a solution interest, tailor the conversation around that
+4. Encourage the 7-day free trial
+5. When appropriate, use the send_email tool to send them relevant info
+
+=== EMAIL TOOL ===
+You have a tool called "send_email" to send emails with trial links, pricing details, demo booking links, or special offers.
+${email ? `The visitor's email is: ${email} — use it directly, don't ask again.` : 'Ask for their email before using this tool.'}
+Available template types:
 - "free_trial" — Free trial signup link
-- "pricing" — Detailed pricing breakdown
+- "pricing" — Detailed pricing breakdown  
 - "demo" — Demo booking link
 - "offer" — Special 20% discount offer with coupon code VAANI20
 
-After sending an email, confirm to the visitor that you've sent it and tell them to check their inbox.
+After sending an email, confirm to the visitor that you've sent it.
 
 === ABOUT VAANIAI ===
 VaaniAI is India's #1 AI-powered voice agent platform for sales automation, lead qualification, customer engagement, and e-Governance. We automate outbound and inbound calling with human-like AI voice agents in English, Hindi, and Hinglish.
@@ -42,6 +70,7 @@ VaaniAI is India's #1 AI-powered voice agent platform for sales automation, lead
 
 === INDUSTRIES ===
 Real Estate, Healthcare, Education, Gym & Fitness, Insurance, Automotive, Travel, Retail, Financial Services, Government`;
+};
 
 const TOOLS = [
   {
@@ -150,7 +179,7 @@ export default function VoiceAgentPopup() {
 
   // ─── Direct Azure Realtime WebSocket connection ───
 
-  const connectToAzure = useCallback(async () => {
+  const connectToAzure = useCallback(async (currentVisitorInfo) => {
     setStatus('connecting');
     statsRef.current = { audioSent: 0, audioReceived: 0 };
 
@@ -173,7 +202,9 @@ export default function VoiceAgentPopup() {
     const sep = wsUrl.includes('?') ? '&' : '?';
     const fullUrl = `${wsUrl}${sep}api-key=${encodeURIComponent(apiKey)}`;
 
-    vlog('info', `🔌 Connecting directly to Azure Realtime...`);
+    // Build personalized system prompt with visitor info
+    const personalizedPrompt = buildSystemPrompt(currentVisitorInfo);
+    vlog('info', `🔌 Connecting directly to Azure Realtime... visitor=${currentVisitorInfo?.name || 'anonymous'}`);
     const ws = new WebSocket(fullUrl);
     wsRef.current = ws;
 
@@ -194,12 +225,12 @@ export default function VoiceAgentPopup() {
 
       // Session created → configure and start mic
       if (type === 'session.created') {
-        vlog('info', '✅ Session created, sending config with tools...');
+        vlog('info', '✅ Session created, sending config with tools and visitor context...');
         ws.send(JSON.stringify({
           type: 'session.update',
           session: {
-            instructions: SYSTEM_PROMPT,
-            voice: 'alloy',
+            instructions: personalizedPrompt,
+            voice: 'shimmer',
             input_audio_format: 'pcm16',
             output_audio_format: 'pcm16',
             input_audio_transcription: { model: 'whisper-1' },
@@ -215,6 +246,23 @@ export default function VoiceAgentPopup() {
         }));
         setStatus('listening');
         startMicCapture();
+
+        // Trigger the AI to greet the visitor first
+        setTimeout(() => {
+          if (ws.readyState === WebSocket.OPEN) {
+            vlog('info', '🎙️ Triggering AI greeting...');
+            ws.send(JSON.stringify({
+              type: 'response.create',
+              response: {
+                modalities: ['text', 'audio'],
+                instructions: currentVisitorInfo?.name 
+                  ? `Greet ${currentVisitorInfo.name} warmly by name. ${currentVisitorInfo.solution ? `They are interested in ${currentVisitorInfo.solution}.` : ''} Be brief and welcoming.`
+                  : 'Greet the visitor warmly. Be brief and welcoming.'
+              }
+            }));
+          }
+        }, 500);
+
         return;
       }
 
