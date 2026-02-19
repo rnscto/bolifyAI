@@ -108,6 +108,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Knowledge Base', path: 'ClientKnowledgeBase', icon: BookOpen },
     { name: 'Activities', path: 'ClientActivities', icon: Activity },
     { name: 'CRM Integration', path: 'ClientCRM', icon: Database },
+    { name: 'Integrations', path: 'ClientIntegrations', icon: Activity },
     { name: 'Subscription', path: 'ClientSubscription', icon: CreditCard },
     { name: 'Settings', path: 'ClientSettings', icon: UserCog },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
