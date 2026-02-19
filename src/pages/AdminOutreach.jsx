@@ -201,7 +201,7 @@ export default function AdminOutreach() {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-12 text-gray-400">
+                  <TableCell colSpan={8} className="text-center py-12 text-gray-400">
                     No outreach logs found
                   </TableCell>
                 </TableRow>
