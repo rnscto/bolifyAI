@@ -262,6 +262,9 @@ export default function AdminDashboard() {
         </Card>
       </div>
 
+      {/* Website Leads, Trial Clients & Signups */}
+      <WebsiteLeadsSection />
+
       {/* Platform Health */}
       <Card>
         <CardHeader>
