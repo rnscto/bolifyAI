@@ -17,8 +17,13 @@ const SOLUTIONS = [
   { value: 'other', label: 'Other / Custom Solution' },
 ];
 
-export default function LeadCaptureForm({ conversationTranscript, onSubmitted, onSkip }) {
-  const [form, setForm] = useState({ name: '', email: '', phone: '', solution: '' });
+export default function LeadCaptureForm({ conversationTranscript, visitorInfo, onSubmitted, onSkip }) {
+  const [form, setForm] = useState({
+    name: visitorInfo?.name || '',
+    email: visitorInfo?.email || '',
+    phone: visitorInfo?.phone || '',
+    solution: visitorInfo?.solution || ''
+  });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
