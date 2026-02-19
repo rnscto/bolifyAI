@@ -39,8 +39,8 @@ export default function Navbar() {
   ];
 
   return (
-    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-      scrolled ? 'bg-white/95 backdrop-blur-lg shadow-sm border-b border-gray-100' : 'bg-white/80 backdrop-blur-md'
+    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${
+      scrolled ? 'bg-white/97 backdrop-blur-lg shadow-sm border-b border-gray-100' : 'bg-transparent'
     }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-18 py-2">
@@ -54,7 +54,7 @@ export default function Navbar() {
               <a
                 key={link.label}
                 href={link.href}
-                className="text-sm font-medium text-gray-600 hover:text-[#1a365d] transition-colors"
+                className={`text-sm font-medium transition-colors ${scrolled ? 'text-gray-600 hover:text-[#1a365d]' : 'text-white/80 hover:text-white'}`}
               >
                 {link.label}
               </a>
@@ -76,7 +76,7 @@ export default function Navbar() {
               <>
                 <Button
                   variant="ghost"
-                  className="text-gray-700 hover:text-[#1a365d] font-medium"
+                  className={`font-medium ${scrolled ? 'text-gray-700 hover:text-[#1a365d]' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
                   onClick={() => base44.auth.redirectToLogin()}
                 >
                   Log In
