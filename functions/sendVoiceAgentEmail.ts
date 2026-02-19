@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
     }
 
     const template = TEMPLATES[template_type] || TEMPLATES.free_trial;
-    const siteUrl = 'https://app.base44.com/apps/vaaniai'; // adjust as needed
+    const siteUrl = 'https://vaaniai.io';
     const trialLink = siteUrl;
     const demoLink = siteUrl;
 
