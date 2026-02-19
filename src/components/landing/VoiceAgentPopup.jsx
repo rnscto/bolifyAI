@@ -398,6 +398,28 @@ export default function VoiceAgentPopup() {
 
   // ─── Start / End conversation ───
 
+  const handlePreChatSubmit = (info) => {
+    vlog('info', `▶️ Pre-chat form submitted: name=${info.name} email=${info.email} phone=${info.phone} solution=${info.solution}`);
+    setVisitorInfo(info);
+    setShowPulse(false);
+    setMessages([{ role: 'system', text: 'Connecting to VaaniAI...' }]);
+    setShowLeadForm(false);
+    connectToAzure();
+
+    // Create lead in background with pre-chat info
+    base44.functions.invoke('webVoiceAgent', {
+      action: 'create_lead',
+      name: info.name,
+      email: info.email,
+      phone: info.phone,
+      solution: info.solution,
+      intent: 'exploring',
+      sentiment: 'neutral',
+      conversation_summary: 'Lead captured via pre-chat form before voice conversation'
+    }).then(() => vlog('info', '✅ Pre-chat lead saved'))
+      .catch(err => vlog('warn', '⚠️ Pre-chat lead save failed:', err.message));
+  };
+
   const handleStartConversation = () => {
     vlog('info', '▶️ Start Voice Chat');
     setShowPulse(false);
