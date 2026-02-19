@@ -1,0 +1,154 @@
+import React, { useState } from 'react';
+import { base44 } from '@/api/base44Client';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MessageSquare, CheckCircle2, XCircle, Loader2, Send, Eye, EyeOff } from 'lucide-react';
+import { toast } from 'sonner';
+
+const PROVIDERS = [
+  { value: 'none', label: 'Not Connected' },
+  { value: 'meta_cloud', label: 'Meta Cloud API (Official)', fields: ['api_key', 'phone_number_id', 'business_id'] },
+  { value: 'gupshup', label: 'Gupshup', fields: ['api_key', 'phone_number_id', 'business_id'] },
+  { value: 'aisensy', label: 'AiSensy', fields: ['api_key', 'phone_number_id', 'api_endpoint'] },
+  { value: 'wati', label: 'WATI', fields: ['api_key', 'phone_number_id', 'api_endpoint'] },
+  { value: 'interakt', label: 'Interakt', fields: ['api_key', 'phone_number_id', 'api_endpoint'] },
+  { value: 'twilio', label: 'Twilio', fields: ['api_key', 'phone_number_id', 'business_id'] },
+  { value: 'valuefirst', label: 'ValueFirst', fields: ['api_key', 'phone_number_id', 'api_endpoint'] },
+];
+
+const FIELD_LABELS = {
+  api_key: { meta_cloud: 'Access Token', gupshup: 'API Key', twilio: 'Auth Token', default: 'API Key / Token' },
+  phone_number_id: { meta_cloud: 'Phone Number ID', twilio: 'WhatsApp Number (+91...)', default: 'Sender Phone Number' },
+  business_id: { meta_cloud: 'WhatsApp Business Account ID', twilio: 'Account SID', gupshup: 'App Name', default: 'Business / App ID' },
+  api_endpoint: { default: 'API Endpoint URL' },
+};
+
+const getLabel = (field, provider) => FIELD_LABELS[field]?.[provider] || FIELD_LABELS[field]?.default || field;
+
+export default function WhatsAppSetup({ config, onSave }) {
+  const [provider, setProvider] = useState(config?.whatsapp_provider || 'none');
+  const [apiKey, setApiKey] = useState(config?.whatsapp_api_key || '');
+  const [phoneNumberId, setPhoneNumberId] = useState(config?.whatsapp_phone_number_id || '');
+  const [businessId, setBusinessId] = useState(config?.whatsapp_business_id || '');
+  const [apiEndpoint, setApiEndpoint] = useState(config?.whatsapp_api_endpoint || '');
+  const [testRecipient, setTestRecipient] = useState('');
+  const [testing, setTesting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [showKey, setShowKey] = useState(false);
+
+  const currentProvider = PROVIDERS.find(p => p.value === provider);
+  const fields = currentProvider?.fields || [];
+
+  const handleTest = async () => {
+    setTesting(true);
+    const res = await base44.functions.invoke('testMessagingConnection', {
+      channel: 'whatsapp',
+      test_recipient: testRecipient,
+      config: { whatsapp_provider: provider, whatsapp_api_key: apiKey, whatsapp_phone_number_id: phoneNumberId, whatsapp_business_id: businessId, whatsapp_api_endpoint: apiEndpoint }
+    });
+    if (res.data.success) {
+      toast.success(res.data.message);
+    } else {
+      toast.error(res.data.error || 'Connection failed');
+    }
+    setTesting(false);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    await onSave({
+      whatsapp_provider: provider,
+      whatsapp_api_key: apiKey,
+      whatsapp_phone_number_id: phoneNumberId,
+      whatsapp_business_id: businessId,
+      whatsapp_api_endpoint: apiEndpoint,
+      whatsapp_status: provider === 'none' ? 'disconnected' : config?.whatsapp_status || 'disconnected',
+    });
+    setSaving(false);
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <MessageSquare className="w-5 h-5 text-green-600" /> WhatsApp Business API
+          </CardTitle>
+          <Badge className={config?.whatsapp_status === 'connected' ? 'bg-green-100 text-green-800' : config?.whatsapp_status === 'error' ? 'bg-red-100 text-red-800' : 'bg-gray-100 text-gray-600'}>
+            {config?.whatsapp_status === 'connected' ? <><CheckCircle2 className="w-3 h-3 mr-1" /> Connected</> : config?.whatsapp_status === 'error' ? <><XCircle className="w-3 h-3 mr-1" /> Error</> : 'Disconnected'}
+          </Badge>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div>
+          <Label>Provider</Label>
+          <Select value={provider} onValueChange={setProvider}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {PROVIDERS.map(p => <SelectItem key={p.value} value={p.value}>{p.label}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {provider !== 'none' && (
+          <>
+            {fields.includes('api_key') && (
+              <div>
+                <Label>{getLabel('api_key', provider)}</Label>
+                <div className="relative">
+                  <Input type={showKey ? 'text' : 'password'} value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Enter your API key or token" />
+                  <button type="button" onClick={() => setShowKey(!showKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                    {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+            )}
+            {fields.includes('phone_number_id') && (
+              <div>
+                <Label>{getLabel('phone_number_id', provider)}</Label>
+                <Input value={phoneNumberId} onChange={e => setPhoneNumberId(e.target.value)} placeholder="e.g. 919876543210" />
+              </div>
+            )}
+            {fields.includes('business_id') && (
+              <div>
+                <Label>{getLabel('business_id', provider)}</Label>
+                <Input value={businessId} onChange={e => setBusinessId(e.target.value)} placeholder="Business / Account ID" />
+              </div>
+            )}
+            {fields.includes('api_endpoint') && (
+              <div>
+                <Label>{getLabel('api_endpoint', provider)}</Label>
+                <Input value={apiEndpoint} onChange={e => setApiEndpoint(e.target.value)} placeholder="https://api.provider.com/v1/messages" />
+              </div>
+            )}
+
+            <div className="border-t pt-4 space-y-3">
+              <div>
+                <Label className="text-xs text-gray-500">Test Recipient Phone (with country code)</Label>
+                <Input value={testRecipient} onChange={e => setTestRecipient(e.target.value)} placeholder="e.g. 919876543210" />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={handleTest} disabled={testing || !apiKey} className="gap-2 flex-1">
+                  {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  Send Test Message
+                </Button>
+                <Button onClick={handleSave} disabled={saving} className="gap-2 flex-1">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                  Save
+                </Button>
+              </div>
+            </div>
+          </>
+        )}
+
+        {provider === 'none' && (
+          <p className="text-sm text-gray-400 text-center py-4">Select a provider to configure WhatsApp integration</p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
