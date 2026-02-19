@@ -384,7 +384,7 @@ export default function VoiceAgentPopup() {
       setStatus('idle');
       setMessages(prev => [...prev, { role: 'system', text: 'Connection error. Please try again.' }]);
     };
-  }, [enqueueAudio, clearPlayback, startMicCapture]);
+  }, [enqueueAudio, clearPlayback]);
 
   // ─── Mic capture: stream PCM16 24kHz directly to Azure ───
 
