@@ -120,18 +120,29 @@ Deno.serve(async (req) => {
       .replace(/\{\{trial_link\}\}/g, trialLink)
       .replace(/\{\{demo_link\}\}/g, demoLink);
 
-    const { createClient } = await import('npm:@base44/sdk@0.8.6');
-    const appId = Deno.env.get('BASE44_APP_ID');
-    const serviceClient = createClient({ appId, asServiceRole: true });
+    const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
+    if (!RESEND_API_KEY) {
+      return Response.json({ error: 'RESEND_API_KEY not configured' }, { status: 500 });
+    }
 
-    await serviceClient.integrations.Core.SendEmail({
-      to: email,
-      subject: template.subject,
-      body: finalBody,
-      from_name: 'VaaniAI'
+    const resendRes = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        from: 'VaaniAI <onboarding@resend.dev>',
+        to: email,
+        subject: template.subject,
+        html: finalBody
+      })
     });
 
-    try { serviceClient.cleanup(); } catch (_) {}
+    if (!resendRes.ok) {
+      const errData = await resendRes.text();
+      throw new Error(`Resend API error: ${resendRes.status} - ${errData}`);
+    }
 
     console.log(`✅ Email sent: ${template_type} → ${email}`);
     return Response.json({ success: true, template_type });
