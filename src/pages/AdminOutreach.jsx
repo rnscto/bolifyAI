@@ -246,6 +246,24 @@ export default function AdminOutreach() {
                         </span>
                       )}
                     </TableCell>
+                    <TableCell>
+                      {log.channel === 'email' && log.recipient_email && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1 text-xs"
+                          disabled={resending === log.id}
+                          onClick={() => handleResend(log)}
+                        >
+                          {resending === log.id ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <RotateCw className="w-3 h-3" />
+                          )}
+                          Resend
+                        </Button>
+                      )}
+                    </TableCell>
                   </TableRow>
                 );
               })}
