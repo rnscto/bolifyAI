@@ -384,7 +384,7 @@ export default function VoiceAgentPopup() {
       setStatus('idle');
       setMessages(prev => [...prev, { role: 'system', text: 'Connection error. Please try again.' }]);
     };
-  }, [enqueueAudio, clearPlayback]);
+  }, [enqueueAudio, clearPlayback, startMicCapture]);
 
   // ─── Mic capture: stream PCM16 24kHz directly to Azure ───
 
@@ -452,7 +452,7 @@ export default function VoiceAgentPopup() {
     setShowPulse(false);
     setMessages([{ role: 'system', text: 'Connecting to VaaniAI...' }]);
     setShowLeadForm(false);
-    connectToAzure();
+    connectToAzure(info);
 
     // Create lead in background with pre-chat info
     base44.functions.invoke('webVoiceAgent', {
@@ -474,7 +474,7 @@ export default function VoiceAgentPopup() {
     setMessages([]);
     setShowLeadForm(false);
     setMessages([{ role: 'system', text: 'Connecting to VaaniAI...' }]);
-    connectToAzure();
+    connectToAzure(visitorInfo);
   };
 
   const handleEndConversation = () => {
