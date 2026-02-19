@@ -483,7 +483,7 @@ export default function VoiceAgentPopup() {
     setMessages([]);
   };
 
-  const hasStarted = messages.length > 0 && status !== 'idle';
+  const hasStarted = visitorInfo && messages.length > 0 && status !== 'idle';
 
   const statusText = {
     idle: 'Ready',
