@@ -80,6 +80,7 @@ import Onboarding from './pages/Onboarding';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
 import ClientIntegrations from './pages/ClientIntegrations';
+import AdminTrustedClients from './pages/AdminTrustedClients';
 import __Layout from './Layout.jsx';
 
 
@@ -117,6 +118,7 @@ export const PAGES = {
     "PrivacyPolicy": PrivacyPolicy,
     "TermsOfService": TermsOfService,
     "ClientIntegrations": ClientIntegrations,
+    "AdminTrustedClients": AdminTrustedClients,
 }
 
 export const pagesConfig = {
