@@ -596,6 +596,7 @@ export default function VoiceAgentPopup() {
             {showLeadForm ? (
               <LeadCaptureForm
                 conversationTranscript={messages}
+                visitorInfo={visitorInfo}
                 onSubmitted={handleLeadSubmitted}
                 onSkip={handleLeadSubmitted}
               />
