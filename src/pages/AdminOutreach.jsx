@@ -32,6 +32,41 @@ export default function AdminOutreach() {
   const [filterChannel, setFilterChannel] = useState('all');
   const [filterType, setFilterType] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [resending, setResending] = useState(null);
+
+  const handleResend = async (log) => {
+    if (!log.recipient_email || log.channel !== 'email') {
+      toast.error('Can only resend email outreach with a valid recipient');
+      return;
+    }
+    setResending(log.id);
+    try {
+      await base44.integrations.Core.SendEmail({
+        to: log.recipient_email,
+        subject: log.subject || 'Follow-up from VaaniAI',
+        body: log.body || '<p>This is a follow-up from VaaniAI.</p>'
+      });
+      await base44.entities.OutreachLog.create({
+        client_id: log.client_id,
+        lead_id: log.lead_id,
+        channel: 'email',
+        recipient_email: log.recipient_email,
+        subject: log.subject,
+        body: log.body,
+        outreach_type: log.outreach_type,
+        call_outcome: log.call_outcome,
+        ai_summary: log.ai_summary,
+        status: 'sent',
+        is_retention: log.is_retention || false
+      });
+      toast.success(`Email resent to ${log.recipient_email}`);
+      loadData();
+    } catch (err) {
+      toast.error('Failed to resend: ' + err.message);
+    } finally {
+      setResending(null);
+    }
+  };
 
   useEffect(() => { loadData(); }, []);
 
