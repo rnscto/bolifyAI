@@ -195,6 +195,7 @@ export default function AdminOutreach() {
                 <TableHead>Recipient</TableHead>
                 <TableHead>Subject</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
