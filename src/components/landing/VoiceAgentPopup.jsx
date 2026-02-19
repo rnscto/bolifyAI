@@ -457,6 +457,7 @@ export default function VoiceAgentPopup() {
     setMessages([]);
     setShowPulse(true);
     setShowLeadForm(false);
+    setVisitorInfo(null);
   };
 
   const handleTextSubmit = (e) => {
