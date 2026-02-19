@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        from: 'VaaniAI <onboarding@resend.dev>',
+        from: 'VaaniAI <sales@vaaniai.io>',
         to: email,
         subject: template.subject,
         html: finalBody
