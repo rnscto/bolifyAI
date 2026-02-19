@@ -99,12 +99,12 @@ export default function FeaturesSection() {
             return (
               <motion.div
                 key={feature.title}
-                initial={{ opacity: 0, y: 20 }}
+                initial={{ opacity: 0, y: 24 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.05, duration: 0.4 }}
+                viewport={{ once: true, margin: "-50px" }}
+                transition={{ delay: i * 0.04, duration: 0.3, ease: "easeOut" }}
               >
-                <Card className="h-full group hover:shadow-lg transition-all duration-300 border-gray-100 hover:border-[#e67e22]/30 overflow-hidden">
+                <Card className="h-full group hover:shadow-xl hover:-translate-y-1 transition-all duration-200 border-gray-100 hover:border-[#e67e22]/30 overflow-hidden">
                   <CardContent className="p-6 relative">
                     <div className="absolute top-0 right-0 w-24 h-24 bg-gradient-to-br opacity-5 rounded-bl-full group-hover:opacity-10 transition-opacity" 
                          style={{ backgroundImage: `linear-gradient(to bottom right, #e67e22, #FF9933)` }} />

@@ -70,8 +70,8 @@ export default function FAQSection() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
+          viewport={{ once: true, margin: "-40px" }}
+          transition={{ duration: 0.35, ease: "easeOut" }}
         >
           <Accordion type="single" collapsible className="space-y-3">
             {faqs.map((faq, i) => (

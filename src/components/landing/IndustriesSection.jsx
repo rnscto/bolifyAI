@@ -50,10 +50,11 @@ export default function IndustriesSection() {
             return (
               <motion.div
                 key={industry.name}
-                initial={{ opacity: 0, scale: 0.9 }}
+                initial={{ opacity: 0, scale: 0.85 }}
                 whileInView={{ opacity: 1, scale: 1 }}
-                viewport={{ once: true }}
-                transition={{ delay: i * 0.03 }}
+                viewport={{ once: true, margin: "-30px" }}
+                transition={{ delay: i * 0.02, duration: 0.25, ease: "easeOut" }}
+                whileHover={{ scale: 1.05 }}
               >
                 <Badge
                   variant="outline"
