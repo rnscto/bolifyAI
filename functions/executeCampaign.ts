@@ -119,11 +119,13 @@ Deno.serve(async (req) => {
           call_log_id: callLog.id
         });
 
-        // Initiate via Smartflo - use the DID as stored (Smartflo needs exact registered caller_id)
+        // Initiate via Smartflo
+        // Smartflo rejects caller_id with "+" prefix — strip it but keep digits
+        const smartfloCallerID = selectedDID.replace(/^\+/, '');
         const smartfloPayload = {
           api_key: Deno.env.get('SMARTFLO_API_KEY'),
           customer_number: cleanPhone,
-          caller_id: selectedDID,
+          caller_id: smartfloCallerID,
           async: 1
         };
         console.log(`[campaign] Smartflo payload: ${JSON.stringify(smartfloPayload)}`);

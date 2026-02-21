@@ -90,9 +90,9 @@ Deno.serve(async (req) => {
       }
     });
 
-    // Clean phone number (remove + and non-digits)
-    const cleanCallerID = callerDID.replace(/\D/g, '');
-    const cleanPhoneNumber = phone_number.replace(/\D/g, '');
+    // Clean phone number — strip "+" prefix but keep digits (Smartflo rejects "+" in caller_id)
+    const cleanCallerID = callerDID.replace(/^\+/, '');
+    const cleanPhoneNumber = phone_number.replace(/[^0-9]/g, '');
 
     // Initiate call via Smartflo Click-to-Call Support API
     const smartfloResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
