@@ -28,9 +28,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2 } from 'lucide-react';
+import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter } from 'lucide-react';
 import { toast } from 'sonner';
 import CSVImportDialog from '../components/leads/CSVImportDialog';
+import LeadScoreBadge from '../components/leads/LeadScoreBadge';
 
 export default function ClientLeads() {
   const [leads, setLeads] = useState([]);
@@ -40,6 +41,8 @@ export default function ClientLeads() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingLead, setEditingLead] = useState(null);
   const [csvDialogOpen, setCsvDialogOpen] = useState(false);
+  const [tierFilter, setTierFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -270,9 +273,50 @@ export default function ClientLeads() {
         </div>
       </div>
 
+      {/* Tier summary cards */}
+      {leads.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          {[
+            { key: 'hot', label: 'Hot', emoji: '🔥', bg: 'bg-red-50 border-red-200' },
+            { key: 'warm', label: 'Warm', emoji: '🌡️', bg: 'bg-orange-50 border-orange-200' },
+            { key: 'nurture', label: 'Nurture', emoji: '🌱', bg: 'bg-blue-50 border-blue-200' },
+            { key: 'cold', label: 'Cold', emoji: '❄️', bg: 'bg-slate-50 border-slate-200' },
+            { key: 'disqualified', label: 'Disqualified', emoji: '🚫', bg: 'bg-gray-50 border-gray-200' },
+          ].map(t => {
+            const count = leads.filter(l => l.qualification_tier === t.key).length;
+            return (
+              <button key={t.key}
+                onClick={() => setTierFilter(tierFilter === t.key ? 'all' : t.key)}
+                className={`rounded-xl border p-3 text-center transition-all ${t.bg} ${tierFilter === t.key ? 'ring-2 ring-offset-1 ring-blue-500 shadow-md' : 'hover:shadow'}`}>
+                <div className="text-lg">{t.emoji}</div>
+                <div className="text-xl font-bold">{count}</div>
+                <div className="text-xs text-gray-600">{t.label}</div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       <Card>
         <CardHeader>
-          <CardTitle>All Leads ({leads.length})</CardTitle>
+          <div className="flex items-center justify-between flex-wrap gap-3">
+            <CardTitle>
+              {tierFilter === 'all' ? `All Leads (${leads.length})` : `${tierFilter.charAt(0).toUpperCase() + tierFilter.slice(1)} Leads`}
+            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Input
+                placeholder="Search name, phone, company..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-48 h-8 text-sm"
+              />
+              {tierFilter !== 'all' && (
+                <Button size="sm" variant="ghost" onClick={() => setTierFilter('all')}>
+                  <Filter className="w-3 h-3 mr-1" /> Clear filter
+                </Button>
+              )}
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -280,27 +324,44 @@ export default function ClientLeads() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Phone</TableHead>
-                <TableHead>Email</TableHead>
                 <TableHead>Company</TableHead>
+                <TableHead>AI Score</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last Call</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {leads.length === 0 ? (
+              {(() => {
+                const filtered = leads
+                  .filter(l => tierFilter === 'all' || l.qualification_tier === tierFilter)
+                  .filter(l => {
+                    if (!searchTerm) return true;
+                    const s = searchTerm.toLowerCase();
+                    return (l.name || '').toLowerCase().includes(s) || 
+                           (l.phone || '').includes(s) || 
+                           (l.company || '').toLowerCase().includes(s);
+                  });
+                return filtered.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center text-gray-500">
-                    No leads found. Add your first lead to get started.
+                    {leads.length === 0 ? 'No leads found. Add your first lead to get started.' : 'No leads match the current filter.'}
                   </TableCell>
                 </TableRow>
               ) : (
-                leads.map((lead) => (
-                  <TableRow key={lead.id}>
-                    <TableCell className="font-medium">{lead.name}</TableCell>
+                filtered.map((lead) => (
+                  <TableRow key={lead.id} className={lead.qualification_tier === 'disqualified' ? 'opacity-50' : ''}>
+                    <TableCell>
+                      <div>
+                        <span className="font-medium">{lead.name}</span>
+                        {lead.email && <p className="text-xs text-gray-400">{lead.email}</p>}
+                      </div>
+                    </TableCell>
                     <TableCell>{lead.phone}</TableCell>
-                    <TableCell>{lead.email || '-'}</TableCell>
                     <TableCell>{lead.company || '-'}</TableCell>
+                    <TableCell>
+                      <LeadScoreBadge lead={lead} />
+                    </TableCell>
                     <TableCell>
                       <Badge className={statusColors[lead.status]}>
                         {lead.status.replace('_', ' ')}
@@ -338,7 +399,8 @@ export default function ClientLeads() {
                     </TableCell>
                   </TableRow>
                 ))
-              )}
+              );
+              })()}
             </TableBody>
           </Table>
         </CardContent>
