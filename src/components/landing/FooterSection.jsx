@@ -44,6 +44,15 @@ export default function FooterSection() {
               <li><a href="#industries" className="text-gray-500 hover:text-[#e67e22] transition-colors">Industries</a></li>
             </ul>
 
+            <h4 className="text-[#1a365d] font-semibold mt-6 mb-4">Partners</h4>
+            <ul className="space-y-2 text-sm mb-6">
+              <li>
+                <Link to={createPageUrl('PartnerSignup')} className="text-gray-500 hover:text-[#e67e22] transition-colors">
+                  Partner Program
+                </Link>
+              </li>
+            </ul>
+
             <h4 className="text-[#1a365d] font-semibold mt-6 mb-4">Legal</h4>
             <ul className="space-y-2 text-sm">
               <li>

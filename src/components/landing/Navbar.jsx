@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Menu, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '../../utils';
 
@@ -36,6 +37,7 @@ export default function Navbar() {
     { label: 'Industries', href: '#industries' },
     { label: 'Pricing', href: '#pricing' },
     { label: 'FAQ', href: '#faq' },
+    { label: 'Partner Program', href: createPageUrl('PartnerSignup'), isPage: true },
   ];
 
   return (
@@ -51,13 +53,23 @@ export default function Navbar() {
           {/* Desktop nav */}
           <div className="hidden md:flex items-center gap-8">
             {navLinks.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                className={`text-sm font-medium transition-colors ${scrolled ? 'text-gray-600 hover:text-[#1a365d]' : 'text-white/80 hover:text-white'}`}
-              >
-                {link.label}
-              </a>
+              link.isPage ? (
+                <Link
+                  key={link.label}
+                  to={link.href}
+                  className={`text-sm font-medium transition-colors ${scrolled ? 'text-gray-600 hover:text-[#1a365d]' : 'text-white/80 hover:text-white'}`}
+                >
+                  {link.label}
+                </Link>
+              ) : (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  className={`text-sm font-medium transition-colors ${scrolled ? 'text-gray-600 hover:text-[#1a365d]' : 'text-white/80 hover:text-white'}`}
+                >
+                  {link.label}
+                </a>
+              )
             ))}
           </div>
 
@@ -104,14 +116,25 @@ export default function Navbar() {
         {open && (
           <div className="md:hidden pb-4 border-t border-gray-100 mt-2 pt-4 bg-white">
             {navLinks.map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                className="block px-3 py-2.5 text-sm font-medium text-gray-700 hover:text-[#1a365d] hover:bg-gray-50 rounded-lg"
-                onClick={() => setOpen(false)}
-              >
-                {link.label}
-              </a>
+              link.isPage ? (
+                <Link
+                  key={link.label}
+                  to={link.href}
+                  className="block px-3 py-2.5 text-sm font-medium text-gray-700 hover:text-[#1a365d] hover:bg-gray-50 rounded-lg"
+                  onClick={() => setOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              ) : (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  className="block px-3 py-2.5 text-sm font-medium text-gray-700 hover:text-[#1a365d] hover:bg-gray-50 rounded-lg"
+                  onClick={() => setOpen(false)}
+                >
+                  {link.label}
+                </a>
+              )
             ))}
             <div className="flex gap-3 mt-4 px-3">
               {isLoggedIn ? (
