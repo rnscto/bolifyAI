@@ -44,6 +44,19 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Agent has no assigned DID' }, { status: 400 });
     }
 
+    // Pre-fetch knowledge base content for agent config cache
+    let kbContent = '';
+    if (agent.knowledge_base_ids && agent.knowledge_base_ids.length > 0) {
+      for (const kbId of agent.knowledge_base_ids) {
+        try {
+          const doc = await base44.asServiceRole.entities.KnowledgeBase.get(kbId);
+          if (doc && doc.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
+        } catch (e) {
+          console.log(`KB doc ${kbId} fetch failed: ${e.message}`);
+        }
+      }
+    }
+
     // Get pending leads
     const campaignLeads = await base44.asServiceRole.entities.CampaignLead.filter(
       { campaign_id: campaign_id, status: 'pending' }, 'created_date', 50
@@ -74,10 +87,14 @@ Deno.serve(async (req) => {
           attempt_count: (cl.attempt_count || 0) + 1
         });
 
-        const cleanCallerID = selectedDID.replace(/\D/g, '');
-        const cleanPhone = cl.lead_phone.replace(/\D/g, '');
+        // Clean caller ID: Smartflo expects the raw number without + prefix
+        // Some DIDs are stored as "+918065485981", some as "8087390277"
+        let cleanCallerID = selectedDID.replace(/[^0-9]/g, '');
+        // Smartflo needs the DID exactly as registered — typically 10-digit or with country code
+        // Pass as-is after stripping non-digits
+        const cleanPhone = cl.lead_phone.replace(/[^0-9]/g, '');
 
-        // Create call log
+        // Create call log with cached agent config (so streamAudio WebSocket can use it)
         const callSid = `camp_${campaign_id}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
         const callLog = await base44.asServiceRole.entities.CallLog.create({
           client_id: campaign.client_id,
@@ -88,7 +105,13 @@ Deno.serve(async (req) => {
           callee_number: cl.lead_phone,
           direction: 'outbound',
           status: 'initiated',
-          call_start_time: new Date().toISOString()
+          call_start_time: new Date().toISOString(),
+          agent_config_cache: {
+            agent_name: agent.name,
+            system_prompt: agent.system_prompt || '',
+            persona: agent.persona || {},
+            knowledge_base_content: kbContent
+          }
         });
 
         // Update campaign lead with call log ref
@@ -96,16 +119,18 @@ Deno.serve(async (req) => {
           call_log_id: callLog.id
         });
 
-        // Initiate via Smartflo
+        // Initiate via Smartflo - use the DID as stored (Smartflo needs exact registered caller_id)
+        const smartfloPayload = {
+          api_key: Deno.env.get('SMARTFLO_API_KEY'),
+          customer_number: cleanPhone,
+          caller_id: selectedDID,
+          async: 1
+        };
+        console.log(`[campaign] Smartflo payload: ${JSON.stringify(smartfloPayload)}`);
         const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            api_key: Deno.env.get('SMARTFLO_API_KEY'),
-            customer_number: cleanPhone,
-            caller_id: cleanCallerID,
-            async: 1
-          })
+          body: JSON.stringify(smartfloPayload)
         });
 
         const smartfloData = await smartfloResp.json();
