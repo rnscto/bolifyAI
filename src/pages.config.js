@@ -56,6 +56,7 @@ import AdminOutreach from './pages/AdminOutreach';
 import AdminPayments from './pages/AdminPayments';
 import AdminRetention from './pages/AdminRetention';
 import AdminSubscriptions from './pages/AdminSubscriptions';
+import AdminTrustedClients from './pages/AdminTrustedClients';
 import AdminWebsiteLeads from './pages/AdminWebsiteLeads';
 import CampaignDetail from './pages/CampaignDetail';
 import ClientActivities from './pages/ClientActivities';
@@ -70,6 +71,7 @@ import ClientCRMSetup from './pages/ClientCRMSetup';
 import ClientCallLogs from './pages/ClientCallLogs';
 import ClientCampaigns from './pages/ClientCampaigns';
 import ClientDashboard from './pages/ClientDashboard';
+import ClientIntegrations from './pages/ClientIntegrations';
 import ClientKnowledgeBase from './pages/ClientKnowledgeBase';
 import ClientLeads from './pages/ClientLeads';
 import ClientSettings from './pages/ClientSettings';
@@ -79,8 +81,9 @@ import Home from './pages/Home';
 import Onboarding from './pages/Onboarding';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
-import ClientIntegrations from './pages/ClientIntegrations';
-import AdminTrustedClients from './pages/AdminTrustedClients';
+import PartnerSignup from './pages/PartnerSignup';
+import PartnerDashboard from './pages/PartnerDashboard';
+import AdminPartners from './pages/AdminPartners';
 import __Layout from './Layout.jsx';
 
 
@@ -94,6 +97,7 @@ export const PAGES = {
     "AdminPayments": AdminPayments,
     "AdminRetention": AdminRetention,
     "AdminSubscriptions": AdminSubscriptions,
+    "AdminTrustedClients": AdminTrustedClients,
     "AdminWebsiteLeads": AdminWebsiteLeads,
     "CampaignDetail": CampaignDetail,
     "ClientActivities": ClientActivities,
@@ -108,6 +112,7 @@ export const PAGES = {
     "ClientCallLogs": ClientCallLogs,
     "ClientCampaigns": ClientCampaigns,
     "ClientDashboard": ClientDashboard,
+    "ClientIntegrations": ClientIntegrations,
     "ClientKnowledgeBase": ClientKnowledgeBase,
     "ClientLeads": ClientLeads,
     "ClientSettings": ClientSettings,
@@ -117,8 +122,9 @@ export const PAGES = {
     "Onboarding": Onboarding,
     "PrivacyPolicy": PrivacyPolicy,
     "TermsOfService": TermsOfService,
-    "ClientIntegrations": ClientIntegrations,
-    "AdminTrustedClients": AdminTrustedClients,
+    "PartnerSignup": PartnerSignup,
+    "PartnerDashboard": PartnerDashboard,
+    "AdminPartners": AdminPartners,
 }
 
 export const pagesConfig = {
