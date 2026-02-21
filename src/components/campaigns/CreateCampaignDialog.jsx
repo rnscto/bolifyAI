@@ -24,11 +24,15 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
     agent_id: '',
     max_concurrent_calls: 5,
     interested_email: true,
+    interested_ai_email: true,
     interested_callback_days: 2,
     callback_email: true,
+    callback_create_task: true,
+    callback_ai_talking_points: true,
     not_interested_email: false,
     no_answer_retry: true,
     no_answer_retry_hours: 4,
+    no_answer_max_retries: 3,
   });
 
   useEffect(() => {
@@ -79,11 +83,15 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
         total_leads: selectedLeads.length,
         followup_rules: {
           interested_email: form.interested_email,
+          interested_ai_email: form.interested_ai_email,
           interested_callback_days: form.interested_callback_days,
           callback_email: form.callback_email,
+          callback_create_task: form.callback_create_task,
+          callback_ai_talking_points: form.callback_ai_talking_points,
           not_interested_email: form.not_interested_email,
           no_answer_retry: form.no_answer_retry,
           no_answer_retry_hours: form.no_answer_retry_hours,
+          no_answer_max_retries: form.no_answer_max_retries,
         },
         status: 'draft'
       });
@@ -157,25 +165,67 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
           </div>
 
           {/* Follow-up Rules */}
-          <div className="border rounded-lg p-4 space-y-3">
-            <p className="font-semibold text-sm text-gray-700">Follow-up Rules</p>
-            <div className="flex items-center gap-2">
-              <Checkbox checked={form.interested_email} onCheckedChange={v => setForm({...form, interested_email: v})} />
-              <span className="text-sm">Send email if interested</span>
+          <div className="border rounded-lg p-4 space-y-4">
+            <p className="font-semibold text-sm text-gray-700">AI-Driven Follow-up Rules</p>
+
+            {/* Interested section */}
+            <div className="space-y-2 pb-3 border-b">
+              <p className="text-xs font-semibold text-green-700 uppercase tracking-wide">When Interested</p>
+              <div className="flex items-center gap-2">
+                <Checkbox checked={form.interested_email} onCheckedChange={v => setForm({...form, interested_email: v})} />
+                <span className="text-sm">Send follow-up email</span>
+              </div>
+              {form.interested_email && (
+                <div className="flex items-center gap-2 ml-6">
+                  <Checkbox checked={form.interested_ai_email} onCheckedChange={v => setForm({...form, interested_ai_email: v})} />
+                  <span className="text-sm text-gray-600">✨ AI-personalize email from call transcript</span>
+                </div>
+              )}
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-600">Schedule callback after</span>
+                <Input type="number" className="w-16" min={1} max={14} value={form.interested_callback_days}
+                  onChange={e => setForm({...form, interested_callback_days: parseInt(e.target.value) || 2})} />
+                <span className="text-sm text-gray-600">days</span>
+              </div>
             </div>
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-gray-600">Schedule callback after</span>
-              <Input type="number" className="w-16" min={1} max={14} value={form.interested_callback_days}
-                onChange={e => setForm({...form, interested_callback_days: parseInt(e.target.value) || 2})} />
-              <span className="text-sm text-gray-600">days if interested</span>
+
+            {/* Callback section */}
+            <div className="space-y-2 pb-3 border-b">
+              <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide">When Callback Requested</p>
+              <div className="flex items-center gap-2">
+                <Checkbox checked={form.callback_create_task} onCheckedChange={v => setForm({...form, callback_create_task: v})} />
+                <span className="text-sm">Auto-create callback task for agent</span>
+              </div>
+              {form.callback_create_task && (
+                <div className="flex items-center gap-2 ml-6">
+                  <Checkbox checked={form.callback_ai_talking_points} onCheckedChange={v => setForm({...form, callback_ai_talking_points: v})} />
+                  <span className="text-sm text-gray-600">✨ Generate AI talking points from transcript</span>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <Checkbox checked={form.callback_email} onCheckedChange={v => setForm({...form, callback_email: v})} />
+                <span className="text-sm">Send confirmation email</span>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Checkbox checked={form.callback_email} onCheckedChange={v => setForm({...form, callback_email: v})} />
-              <span className="text-sm">Send confirmation email for callbacks</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Checkbox checked={form.no_answer_retry} onCheckedChange={v => setForm({...form, no_answer_retry: v})} />
-              <span className="text-sm">Retry no-answer leads</span>
+
+            {/* No-answer section */}
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">When No Answer</p>
+              <div className="flex items-center gap-2">
+                <Checkbox checked={form.no_answer_retry} onCheckedChange={v => setForm({...form, no_answer_retry: v})} />
+                <span className="text-sm">Auto-retry no-answer leads</span>
+              </div>
+              {form.no_answer_retry && (
+                <div className="flex items-center gap-3 ml-6">
+                  <span className="text-sm text-gray-600">Retry after</span>
+                  <Input type="number" className="w-16" min={1} max={48} value={form.no_answer_retry_hours}
+                    onChange={e => setForm({...form, no_answer_retry_hours: parseInt(e.target.value) || 4})} />
+                  <span className="text-sm text-gray-600">hours, max</span>
+                  <Input type="number" className="w-16" min={1} max={10} value={form.no_answer_max_retries}
+                    onChange={e => setForm({...form, no_answer_max_retries: parseInt(e.target.value) || 3})} />
+                  <span className="text-sm text-gray-600">retries</span>
+                </div>
+              )}
             </div>
           </div>
 

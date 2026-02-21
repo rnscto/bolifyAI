@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
 
 Deno.serve(async (req) => {
   try {
@@ -94,31 +94,54 @@ Rules:
     const campaign = await base44.asServiceRole.entities.Campaign.get(campaignId);
     const rules = campaign?.followup_rules || {};
 
-    // === AUTOMATED FOLLOW-UPS ===
+    // Pre-fetch lead and client for follow-ups (shared across actions)
+    const lead = campaignLead.lead_id ? await base44.asServiceRole.entities.Lead.get(campaignLead.lead_id) : null;
+    const client = await base44.asServiceRole.entities.Client.get(campaign.client_id);
+
     let emailSent = false;
     let callbackScheduled = false;
 
-    // 1. If interested → send email + schedule callback in 2 days
-    if (outcome === 'interested' && rules.interested_email !== false) {
-      const lead = await base44.asServiceRole.entities.Lead.get(campaignLead.lead_id);
-      const client = await base44.asServiceRole.entities.Client.get(campaign.client_id);
-
-      if (lead?.email) {
+    // ============================================================
+    // 1. INTERESTED: AI-personalized follow-up email + callback
+    // ============================================================
+    if (outcome === 'interested') {
+      // 1a. AI-personalized email using transcript context
+      if (rules.interested_email !== false && lead?.email) {
         try {
-          const emailContent = await base44.asServiceRole.integrations.Core.InvokeLLM({
-            prompt: `Write a follow-up email for an interested lead after a sales call.
-Lead: ${lead.name || 'Valued Customer'}
-Company calling: ${client?.company_name || 'Our company'}
-Industry: ${client?.industry || 'General'}
-Call summary: ${summary}
+          const useAI = rules.interested_ai_email !== false;
+          const emailPrompt = useAI
+            ? `You are a follow-up email writer for ${client?.company_name || 'our company'} (Industry: ${client?.industry || 'General'}).
 
-Write a warm, professional follow-up that:
-- Thanks them for their time
-- References specific points from the conversation
-- Provides clear next steps
-- Includes a call-to-action
-- Under 150 words
-- HTML format (just body content, no html/head tags)`,
+Write a highly personalized follow-up email to a lead who just expressed INTEREST in a sales call.
+
+LEAD INFO:
+- Name: ${lead.name || 'Valued Customer'}
+- Company: ${lead.company || 'N/A'}
+- Source: ${lead.source || 'N/A'}
+
+CALL TRANSCRIPT:
+${callLog.transcript || 'Not available'}
+
+CALL SUMMARY:
+${summary}
+
+INSTRUCTIONS:
+- Reference SPECIFIC topics, questions, or concerns the lead raised during the call
+- If they asked about pricing, include a mention of next steps for pricing info
+- If they asked about features, highlight the relevant features discussed
+- Include a personalized call-to-action based on what they showed interest in
+- Tone: Warm, professional, and consultative
+- Keep under 200 words
+- HTML format (just body content, no html/head/body tags)
+- Include a clear next-step CTA (book demo, schedule meeting, etc.)`
+            : `Write a standard follow-up email for an interested lead.
+Lead: ${lead.name || 'Valued Customer'}
+Company: ${client?.company_name}
+Summary: ${summary}
+Under 150 words. HTML format.`;
+
+          const emailContent = await base44.asServiceRole.integrations.Core.InvokeLLM({
+            prompt: emailPrompt,
             response_json_schema: {
               type: "object",
               properties: {
@@ -158,24 +181,24 @@ Write a warm, professional follow-up that:
           });
 
           emailSent = true;
-          console.log(`[campaignPostCall] Follow-up email sent to ${lead.email}`);
+          console.log(`[campaignPostCall] AI-personalized follow-up email sent to ${lead.email}`);
         } catch (emailErr) {
-          console.error(`[campaignPostCall] Email failed:`, emailErr.message);
+          console.error(`[campaignPostCall] Interested email failed:`, emailErr.message);
         }
       }
 
-      // Schedule callback in X days
+      // 1b. Schedule callback with AI context
       const callbackDays = rules.interested_callback_days || 2;
       const callbackDate = new Date();
       callbackDate.setDate(callbackDate.getDate() + callbackDays);
-      callbackDate.setHours(10, 0, 0, 0); // 10 AM
+      callbackDate.setHours(10, 0, 0, 0);
 
       await base44.asServiceRole.entities.Activity.create({
         client_id: campaign.client_id,
         lead_id: campaignLead.lead_id,
         type: 'followup',
-        title: `Campaign follow-up: ${lead?.name || campaignLead.lead_phone}`,
-        description: `Auto-scheduled from campaign "${campaign.name}". Outcome: interested.\n\nSummary: ${summary}`,
+        title: `Follow-up call: ${lead?.name || campaignLead.lead_phone} (Interested)`,
+        description: `Auto-scheduled from campaign "${campaign.name}".\nOutcome: Interested\n\nCall Summary:\n${summary}\n\nKey Discussion Points:\n- Review transcript for specific interests mentioned\n- Prepare pricing/demo materials based on call context`,
         scheduled_date: callbackDate.toISOString(),
         status: 'scheduled',
         priority: 'high',
@@ -183,22 +206,96 @@ Write a warm, professional follow-up that:
       });
 
       callbackScheduled = true;
-      console.log(`[campaignPostCall] Callback scheduled for ${callbackDate.toISOString()}`);
+      console.log(`[campaignPostCall] Interested callback scheduled for ${callbackDate.toISOString()}`);
     }
 
-    // 2. If callback → send confirmation email
-    if (outcome === 'callback' && rules.callback_email !== false) {
-      const lead = await base44.asServiceRole.entities.Lead.get(campaignLead.lead_id);
-      const client = await base44.asServiceRole.entities.Client.get(campaign.client_id);
+    // ============================================================
+    // 2. CALLBACK: AI talking points + task + confirmation email
+    // ============================================================
+    if (outcome === 'callback') {
+      // 2a. Create task with AI-generated talking points
+      if (rules.callback_create_task !== false) {
+        let talkingPoints = '';
 
-      if (lead?.email) {
+        if (rules.callback_ai_talking_points !== false && (callLog.transcript || summary)) {
+          try {
+            const tpResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
+              prompt: `You are a sales coach. Based on this call transcript and summary, generate concise talking points for the agent's next callback with this lead.
+
+LEAD: ${lead?.name || 'Unknown'} (${lead?.company || 'N/A'})
+CALL TRANSCRIPT:
+${callLog.transcript || 'Not available'}
+
+CALL SUMMARY:
+${summary}
+
+Generate:
+1. talking_points: Array of 3-5 bullet points the agent should cover in the next call
+2. recommended_approach: One sentence describing the best approach for the callback
+3. callback_time_suggestion: Best suggested time context (e.g. "Lead mentioned mornings work best" or "Try afternoon as they were busy in AM")
+4. objections_to_address: Array of any objections or concerns raised that need addressing`,
+              response_json_schema: {
+                type: "object",
+                properties: {
+                  talking_points: { type: "array", items: { type: "string" } },
+                  recommended_approach: { type: "string" },
+                  callback_time_suggestion: { type: "string" },
+                  objections_to_address: { type: "array", items: { type: "string" } }
+                }
+              }
+            });
+
+            const tp = tpResult.talking_points || [];
+            const objections = tpResult.objections_to_address || [];
+            talkingPoints = `\n\n🎯 AI-Generated Talking Points:\n${tp.map((p, i) => `${i + 1}. ${p}`).join('\n')}`;
+            if (tpResult.recommended_approach) {
+              talkingPoints += `\n\n📋 Recommended Approach:\n${tpResult.recommended_approach}`;
+            }
+            if (tpResult.callback_time_suggestion) {
+              talkingPoints += `\n\n🕐 Timing Insight:\n${tpResult.callback_time_suggestion}`;
+            }
+            if (objections.length > 0) {
+              talkingPoints += `\n\n⚠️ Objections to Address:\n${objections.map((o, i) => `${i + 1}. ${o}`).join('\n')}`;
+            }
+          } catch (tpErr) {
+            console.error(`[campaignPostCall] AI talking points failed:`, tpErr.message);
+            talkingPoints = '\n\n(AI talking points generation failed - review transcript manually)';
+          }
+        }
+
+        // Determine callback time - default to next business day at 10 AM
+        const callbackDate = new Date();
+        callbackDate.setDate(callbackDate.getDate() + 1);
+        // Skip weekends
+        if (callbackDate.getDay() === 0) callbackDate.setDate(callbackDate.getDate() + 1);
+        if (callbackDate.getDay() === 6) callbackDate.setDate(callbackDate.getDate() + 2);
+        callbackDate.setHours(10, 0, 0, 0);
+
+        await base44.asServiceRole.entities.Activity.create({
+          client_id: campaign.client_id,
+          lead_id: campaignLead.lead_id,
+          type: 'call',
+          title: `Callback: ${lead?.name || campaignLead.lead_phone} (Requested)`,
+          description: `Lead requested callback from campaign "${campaign.name}".\n\nCall Summary:\n${summary}${talkingPoints}`,
+          scheduled_date: callbackDate.toISOString(),
+          status: 'scheduled',
+          priority: 'high',
+          auto_created: true
+        });
+
+        callbackScheduled = true;
+        console.log(`[campaignPostCall] Callback task with AI talking points created for ${callbackDate.toISOString()}`);
+      }
+
+      // 2b. Send callback confirmation email
+      if (rules.callback_email !== false && lead?.email) {
         try {
           const emailContent = await base44.asServiceRole.integrations.Core.InvokeLLM({
-            prompt: `Write a brief callback confirmation email.
+            prompt: `Write a brief, warm callback confirmation email.
 Lead: ${lead.name || 'there'}
 Company: ${client?.company_name}
-Summary: ${summary}
-Keep it under 80 words. HTML format.`,
+Call summary: ${summary}
+Let them know we'll call back soon. Keep under 80 words. HTML format (body content only).`,
             response_json_schema: {
               type: "object",
               properties: {
@@ -216,25 +313,85 @@ Keep it under 80 words. HTML format.`,
           });
 
           emailSent = true;
+          console.log(`[campaignPostCall] Callback confirmation email sent to ${lead.email}`);
         } catch (e) {
           console.error(`[campaignPostCall] Callback email failed:`, e.message);
         }
       }
     }
 
+    // ============================================================
+    // 3. NO ANSWER: Auto-retry mechanism
+    // ============================================================
+    if (outcome === 'no_answer' && rules.no_answer_retry !== false) {
+      const maxRetries = rules.no_answer_max_retries || 3;
+      const currentAttempts = (campaignLead.attempt_count || 0) + 1;
+
+      if (currentAttempts < maxRetries) {
+        const retryHours = rules.no_answer_retry_hours || 4;
+        const retryDate = new Date(Date.now() + retryHours * 3600000);
+
+        // Re-add lead to campaign queue as pending for retry
+        await base44.asServiceRole.entities.CampaignLead.update(campaignLead.id, {
+          status: 'pending',
+          outcome: 'no_answer',
+          attempt_count: currentAttempts,
+          call_log_id: null,
+          followup_call_date: retryDate.toISOString()
+        });
+
+        console.log(`[campaignPostCall] No-answer retry ${currentAttempts}/${maxRetries} scheduled for ${retryDate.toISOString()}`);
+
+        // Don't count this as completed in campaign stats yet
+        // Update campaign to reflect the retry
+        const allLeads = await base44.asServiceRole.entities.CampaignLead.filter({ campaign_id: campaignId });
+        const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
+        const completedCount = allLeads.filter(l => l.status === 'completed').length;
+        const failedCount = allLeads.filter(l => l.status === 'failed').length;
+        allLeads.forEach(l => {
+          if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++;
+        });
+
+        await base44.asServiceRole.entities.Campaign.update(campaignId, {
+          outcomes_summary: outcomes,
+          calls_completed: completedCount,
+          calls_failed: failedCount
+        });
+
+        return Response.json({
+          success: true,
+          outcome,
+          retry_scheduled: true,
+          attempt: currentAttempts,
+          max_retries: maxRetries,
+          retry_at: retryDate.toISOString()
+        });
+      } else {
+        // Max retries exhausted - mark as final no_answer
+        console.log(`[campaignPostCall] No-answer max retries (${maxRetries}) exhausted for lead ${campaignLead.lead_id}`);
+        await base44.asServiceRole.entities.CampaignLead.update(campaignLead.id, {
+          attempt_count: currentAttempts
+        });
+      }
+    }
+
     // Update campaign lead with follow-up status
-    await base44.asServiceRole.entities.CampaignLead.update(campaignLead.id, {
+    const updatePayload = {
       followup_email_sent: emailSent,
       followup_scheduled: callbackScheduled,
-      followup_call_date: callbackScheduled ? new Date(Date.now() + (rules.interested_callback_days || 2) * 86400000).toISOString() : undefined
-    });
+    };
+    if (callbackScheduled) {
+      const cbDays = outcome === 'interested' ? (rules.interested_callback_days || 2) : 1;
+      updatePayload.followup_call_date = new Date(Date.now() + cbDays * 86400000).toISOString();
+    }
+    await base44.asServiceRole.entities.CampaignLead.update(campaignLead.id, updatePayload);
 
     // Update campaign outcomes summary
     const allLeads = await base44.asServiceRole.entities.CampaignLead.filter({ campaign_id: campaignId });
     const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
     const completedCount = allLeads.filter(l => l.status === 'completed').length;
     const failedCount = allLeads.filter(l => l.status === 'failed').length;
-    
+
     allLeads.forEach(l => {
       if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++;
     });
@@ -245,7 +402,7 @@ Keep it under 80 words. HTML format.`,
       calls_failed: failedCount
     };
 
-    // Check if campaign is done
+    // Check if campaign is done (no pending or calling leads)
     const pending = allLeads.filter(l => ['pending', 'calling'].includes(l.status)).length;
     if (pending === 0) {
       updateData.status = 'completed';
