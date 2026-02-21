@@ -33,8 +33,13 @@ export default function Onboarding() {
     system_prompt: '',
   });
   const [selectedDID, setSelectedDID] = useState(null);
+  const [referralCode, setReferralCode] = useState('');
 
   useEffect(() => {
+    // Capture referral code from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const ref = urlParams.get('ref') || '';
+    if (ref) setReferralCode(ref);
     loadUser();
   }, []);
 
@@ -101,6 +106,31 @@ export default function Onboarding() {
     }
 
     await base44.entities.Agent.create(agentPayload);
+
+    // Track referral if referral code was used
+    if (referralCode) {
+      try {
+        const partners = await base44.entities.Partner.filter({ referral_code: referralCode });
+        if (partners.length > 0) {
+          const partner = partners[0];
+          await base44.entities.Referral.create({
+            partner_id: partner.id,
+            client_id: client.id,
+            client_name: profileData.company_name,
+            client_email: profileData.email,
+            client_phone: profileData.phone,
+            referral_code_used: referralCode,
+            status: 'trial',
+            commission_rate: partner.commission_rate || 20,
+            signup_date: new Date().toISOString(),
+          });
+          await base44.entities.Partner.update(partner.id, {
+            total_referrals: (partner.total_referrals || 0) + 1,
+            active_referrals: (partner.active_referrals || 0) + 1,
+          });
+        }
+      } catch (e) { console.log('Referral tracking error:', e.message); }
+    }
 
     toast.success('Account created successfully!');
     setSaving(false);
