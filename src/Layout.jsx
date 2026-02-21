@@ -21,7 +21,8 @@ import {
   UserCog,
   Megaphone,
   BarChart3,
-  Globe
+  Globe,
+  Handshake
 } from 'lucide-react';
 
 export default function Layout({ children, currentPageName }) {
@@ -30,7 +31,7 @@ export default function Layout({ children, currentPageName }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const isPublicPage = ['Home', 'PrivacyPolicy', 'TermsOfService'].includes(currentPageName);
+  const isPublicPage = ['Home', 'PrivacyPolicy', 'TermsOfService', 'PartnerSignup'].includes(currentPageName);
   const isOnboardingPage = currentPageName === 'Onboarding';
 
   useEffect(() => {
@@ -97,6 +98,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
     { name: 'Concept Note', path: 'ConceptNote', icon: FileText },
     { name: 'Trusted Logos', path: 'AdminTrustedClients', icon: Globe },
+    { name: 'Partners', path: 'AdminPartners', icon: Handshake },
     ];
 
     const clientNav = [
