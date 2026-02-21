@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     const sttData = await sttResponse.json();
     const transcript = sttData.DisplayText || sttData.NBest?.[0]?.Display || '';
 
-    // Use Azure OpenAI to analyze conversation
+    // Use Azure OpenAI to analyze conversation + score lead
     const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
     const analysisResponse = await fetch(
       `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`,
@@ -73,15 +73,29 @@ Deno.serve(async (req) => {
           messages: [
             {
               role: 'system',
-              content: 'You are an AI assistant that analyzes sales call transcripts. Provide a summary, identify lead interest level, and suggest next actions.'
+              content: `You are an expert sales call analyst AI. Analyze call transcripts to extract:
+1. A brief summary of the conversation
+2. Lead status classification
+3. Sentiment analysis
+4. Intent signals (buying signals, objections, questions)
+5. A lead score from 0-100 based on conversion likelihood
+
+SCORING CRITERIA (total 100):
+- Sentiment (0-25): very_negative=0, negative=5, neutral=12, positive=20, very_positive=25
+- Intent signals (0-30): pricing_inquiry=+10, demo_request=+15, competitor_mention=+5, budget_confirmed=+15, timeline_mentioned=+10, decision_maker=+10, referral=+8 (cap at 30)
+- Engagement (0-25): short_answers_only=5, asked_questions=15, extended_conversation=20, highly_engaged=25
+- Keywords (0-20): positive keywords like "interested","sign up","let's go","sounds good","when can we start"=+5 each (cap 20); negative keywords like "not interested","too expensive","no need","don't call"=-5 each (min 0)
+
+Respond ONLY in valid JSON with this exact structure.`
             },
             {
               role: 'user',
-              content: `Analyze this call transcript and provide:\n1. Brief summary\n2. Lead status (interested/not_interested/callback/converted)\n3. Key points discussed\n\nTranscript:\n${transcript}`
+              content: `Analyze this sales call transcript:\n\n${transcript}\n\nReturn JSON with: summary (string), lead_status (one of: interested, not_interested, callback, converted, contacted), sentiment (one of: very_positive, positive, neutral, negative, very_negative), intent_signals (array of strings like: pricing_inquiry, demo_request, competitor_mention, budget_confirmed, timeline_mentioned, decision_maker, referral, objection_price, objection_timing, objection_need, follow_up_requested), lead_score (number 0-100), score_breakdown (object with: sentiment_score number, intent_score number, engagement_score number, keyword_score number, reasoning string), key_keywords (array of important words/phrases from the conversation)`
             }
           ],
-          max_tokens: 500,
-          temperature: 0.3
+          max_tokens: 800,
+          temperature: 0.2,
+          response_format: { type: "json_object" }
         })
       }
     );
@@ -91,29 +105,57 @@ Deno.serve(async (req) => {
     }
 
     const analysisData = await analysisResponse.json();
-    const summary = analysisData.choices?.[0]?.message?.content || 'Analysis not available';
+    const rawContent = analysisData.choices?.[0]?.message?.content || '{}';
+    
+    let analysis;
+    try {
+      analysis = JSON.parse(rawContent);
+    } catch (_) {
+      console.error('Failed to parse analysis JSON, using fallback');
+      analysis = { summary: rawContent, lead_status: 'contacted', sentiment: 'neutral', lead_score: 0, intent_signals: [], score_breakdown: {}, key_keywords: [] };
+    }
 
-    // Extract lead status from summary
-    let leadStatus = 'contacted';
-    if (summary.toLowerCase().includes('not interested')) leadStatus = 'not_interested';
-    else if (summary.toLowerCase().includes('interested')) leadStatus = 'interested';
-    else if (summary.toLowerCase().includes('callback')) leadStatus = 'callback';
-    else if (summary.toLowerCase().includes('converted')) leadStatus = 'converted';
+    const summary = analysis.summary || 'Analysis not available';
+    const leadStatus = analysis.lead_status || 'contacted';
+    const sentiment = analysis.sentiment || 'neutral';
+    const leadScore = Math.min(100, Math.max(0, analysis.lead_score || 0));
+    const intentSignals = analysis.intent_signals || [];
+    const scoreBreakdown = analysis.score_breakdown || {};
+    const keyKeywords = analysis.key_keywords || [];
 
-    // Update call log with transcript and summary
+    console.log(`[processTranscript] Lead Score: ${leadScore} | Sentiment: ${sentiment} | Status: ${leadStatus} | Intents: ${intentSignals.join(', ')}`);
+
+    // Update call log with transcript, summary, and analysis
     await base44.asServiceRole.entities.CallLog.update(call_log_id, {
       transcript,
-      conversation_summary: summary,
+      conversation_summary: `${summary}\n\n---\nScore: ${leadScore}/100 | Sentiment: ${sentiment} | Signals: ${intentSignals.join(', ')}`,
       lead_status_updated: leadStatus
     });
 
-    // Update lead status
+    // Update lead with status, score, sentiment, and intent signals
     if (callLog.lead_id) {
+      // Get existing lead to merge engagement count
+      let existingLead = {};
+      try { existingLead = await base44.asServiceRole.entities.Lead.get(callLog.lead_id); } catch (_) {}
+      
+      const updatedEngagement = (existingLead.engagement_count || 0) + 1;
+      // Merge existing tags with new keywords (deduplicate)
+      const existingTags = existingLead.tags || [];
+      const mergedTags = [...new Set([...existingTags, ...keyKeywords.slice(0, 10)])];
+
       await base44.asServiceRole.entities.Lead.update(callLog.lead_id, {
         status: leadStatus,
+        score: leadScore,
+        sentiment: sentiment,
+        intent_signals: intentSignals,
+        score_breakdown: scoreBreakdown,
+        tags: mergedTags,
         last_call_date: new Date().toISOString(),
-        notes: `Last call: ${summary.substring(0, 200)}...`
+        last_engagement_date: new Date().toISOString(),
+        engagement_count: updatedEngagement,
+        notes: `[Score: ${leadScore}/100 | ${sentiment}] ${summary.substring(0, 300)}`
       });
+      console.log(`[processTranscript] Lead ${callLog.lead_id} updated — Score: ${leadScore}, Sentiment: ${sentiment}`);
     }
 
     // Trigger post-call follow-up emails & RCS
@@ -130,7 +172,11 @@ Deno.serve(async (req) => {
       success: true,
       transcript,
       summary,
-      lead_status: leadStatus
+      lead_status: leadStatus,
+      lead_score: leadScore,
+      sentiment,
+      intent_signals: intentSignals,
+      score_breakdown: scoreBreakdown
     });
 
   } catch (error) {
