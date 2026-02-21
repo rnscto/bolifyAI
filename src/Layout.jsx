@@ -114,6 +114,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Integrations', path: 'ClientIntegrations', icon: Activity },
     { name: 'Subscription', path: 'ClientSubscription', icon: CreditCard },
     { name: 'Settings', path: 'ClientSettings', icon: UserCog },
+    { name: 'Partner Dashboard', path: 'PartnerDashboard', icon: Handshake },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
     ];
 
