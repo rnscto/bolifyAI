@@ -53,6 +53,7 @@ import AdminClients from './pages/AdminClients';
 import AdminDIDs from './pages/AdminDIDs';
 import AdminDashboard from './pages/AdminDashboard';
 import AdminOutreach from './pages/AdminOutreach';
+import AdminPartners from './pages/AdminPartners';
 import AdminPayments from './pages/AdminPayments';
 import AdminRetention from './pages/AdminRetention';
 import AdminSubscriptions from './pages/AdminSubscriptions';
@@ -79,11 +80,10 @@ import ClientSubscription from './pages/ClientSubscription';
 import ConceptNote from './pages/ConceptNote';
 import Home from './pages/Home';
 import Onboarding from './pages/Onboarding';
+import PartnerDashboard from './pages/PartnerDashboard';
+import PartnerSignup from './pages/PartnerSignup';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
-import PartnerSignup from './pages/PartnerSignup';
-import PartnerDashboard from './pages/PartnerDashboard';
-import AdminPartners from './pages/AdminPartners';
 import __Layout from './Layout.jsx';
 
 
@@ -94,6 +94,7 @@ export const PAGES = {
     "AdminDIDs": AdminDIDs,
     "AdminDashboard": AdminDashboard,
     "AdminOutreach": AdminOutreach,
+    "AdminPartners": AdminPartners,
     "AdminPayments": AdminPayments,
     "AdminRetention": AdminRetention,
     "AdminSubscriptions": AdminSubscriptions,
@@ -120,11 +121,10 @@ export const PAGES = {
     "ConceptNote": ConceptNote,
     "Home": Home,
     "Onboarding": Onboarding,
+    "PartnerDashboard": PartnerDashboard,
+    "PartnerSignup": PartnerSignup,
     "PrivacyPolicy": PrivacyPolicy,
     "TermsOfService": TermsOfService,
-    "PartnerSignup": PartnerSignup,
-    "PartnerDashboard": PartnerDashboard,
-    "AdminPartners": AdminPartners,
 }
 
 export const pagesConfig = {

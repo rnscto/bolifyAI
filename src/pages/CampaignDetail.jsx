@@ -197,21 +197,35 @@ export default function CampaignDetail() {
         <CampaignOutcomeChart outcomes={outcomes} />
         <Card>
           <CardHeader>
-            <CardTitle className="text-base">Follow-up Rules</CardTitle>
+            <CardTitle className="text-base">AI Follow-up Rules</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2 text-sm">
-            {campaign.followup_rules?.interested_email && (
-              <p className="text-green-700">✓ Send email if interested</p>
-            )}
-            {campaign.followup_rules?.interested_callback_days && (
-              <p className="text-blue-700">✓ Schedule callback in {campaign.followup_rules.interested_callback_days} days</p>
-            )}
-            {campaign.followup_rules?.callback_email && (
-              <p className="text-yellow-700">✓ Confirmation email for callbacks</p>
-            )}
-            {campaign.followup_rules?.no_answer_retry && (
-              <p className="text-gray-600">✓ Retry no-answer leads after {campaign.followup_rules.no_answer_retry_hours || 4}h</p>
-            )}
+          <CardContent className="space-y-3 text-sm">
+            <div>
+              <p className="text-xs font-semibold text-green-700 uppercase mb-1">Interested</p>
+              {campaign.followup_rules?.interested_email && (
+                <p className="text-green-600">✓ AI-personalized follow-up email{campaign.followup_rules?.interested_ai_email ? ' ✨' : ''}</p>
+              )}
+              {campaign.followup_rules?.interested_callback_days && (
+                <p className="text-green-600">✓ Callback in {campaign.followup_rules.interested_callback_days} days</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-yellow-700 uppercase mb-1">Callback</p>
+              {campaign.followup_rules?.callback_create_task !== false && (
+                <p className="text-yellow-600">✓ Auto-create agent task{campaign.followup_rules?.callback_ai_talking_points !== false ? ' with AI talking points ✨' : ''}</p>
+              )}
+              {campaign.followup_rules?.callback_email && (
+                <p className="text-yellow-600">✓ Confirmation email</p>
+              )}
+            </div>
+            <div>
+              <p className="text-xs font-semibold text-gray-600 uppercase mb-1">No Answer</p>
+              {campaign.followup_rules?.no_answer_retry ? (
+                <p className="text-gray-600">✓ Auto-retry every {campaign.followup_rules.no_answer_retry_hours || 4}h, max {campaign.followup_rules.no_answer_max_retries || 3} retries</p>
+              ) : (
+                <p className="text-gray-400">✗ No retry</p>
+              )}
+            </div>
           </CardContent>
         </Card>
       </div>
