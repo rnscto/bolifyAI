@@ -329,14 +329,15 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
       }
     }
 
-    // If call is completed, trigger transcript processing if recording available
+    // Handle terminal call statuses
     if (status === 'completed' || status === 'no_answer' || status === 'failed' || status === 'busy' || status === 'cancelled') {
-      // Mark terminal statuses
+      // Set end time
       if (!updateData.call_end_time) {
         updateData.call_end_time = new Date().toISOString();
         await base44.asServiceRole.entities.CallLog.update(callLog.id, { call_end_time: new Date().toISOString() });
       }
 
+      // If recording available, process transcript (this will update CallLog which triggers campaignPostCall)
       if (recording_url) {
         try {
           await base44.asServiceRole.functions.invoke('processTranscript', {
@@ -347,6 +348,19 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
         } catch (error) {
           console.error('[smartfloWebhook] Error triggering transcript:', error);
         }
+      }
+
+      // For calls WITHOUT recording (no_answer, failed, busy, cancelled),
+      // ensure CallLog status is set to a terminal value so campaignPostCall automation triggers
+      if (!recording_url && (status === 'no_answer' || status === 'failed' || status === 'busy' || status === 'cancelled')) {
+        // The CallLog update above already set the status, and the entity automation
+        // on CallLog update will fire campaignPostCall. But we also set a summary.
+        const statusLabel = status === 'no_answer' ? 'No Answer' : status === 'busy' ? 'Busy' : status === 'cancelled' ? 'Cancelled' : 'Failed';
+        await base44.asServiceRole.entities.CallLog.update(callLog.id, {
+          conversation_summary: `Call ended: ${statusLabel}. No recording available.`,
+          lead_status_updated: status === 'no_answer' ? 'no_answer' : 'callback'
+        });
+        console.log(`[smartfloWebhook] Terminal status ${status} without recording — updated CallLog for campaign processing`);
       }
     }
 
