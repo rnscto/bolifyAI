@@ -84,6 +84,7 @@ import PartnerDashboard from './pages/PartnerDashboard';
 import PartnerSignup from './pages/PartnerSignup';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
+import AgentDashboard from './pages/AgentDashboard';
 import __Layout from './Layout.jsx';
 
 
@@ -125,6 +126,7 @@ export const PAGES = {
     "PartnerSignup": PartnerSignup,
     "PrivacyPolicy": PrivacyPolicy,
     "TermsOfService": TermsOfService,
+    "AgentDashboard": AgentDashboard,
 }
 
 export const pagesConfig = {
