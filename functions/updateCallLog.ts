@@ -111,6 +111,9 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Invalid status' }, { status: 400 });
     }
 
+    // Get current call log to check previous status
+    const currentCallLog = await base44.asServiceRole.entities.CallLog.get(call_log_id);
+
     const updateData = {};
     if (status) updateData.status = status;
     if (transcript) updateData.transcript = transcript;
@@ -119,6 +122,122 @@ Deno.serve(async (req) => {
     if (conversation_summary) updateData.conversation_summary = conversation_summary;
 
     await base44.asServiceRole.entities.CallLog.update(call_log_id, updateData);
+
+    // If this call just reached a terminal status, check if it's a campaign call
+    // and update CampaignLead + Lead + Campaign directly
+    const terminalStatuses = ['completed', 'failed', 'no_answer'];
+    const isNewlyTerminal = status && terminalStatuses.includes(status) && !terminalStatuses.includes(currentCallLog?.status);
+
+    if (isNewlyTerminal) {
+      console.log(`[updateCallLog] Call ${call_log_id} reached terminal status: ${status}. Checking for campaign link...`);
+
+      const campaignLeads = await base44.asServiceRole.entities.CampaignLead.filter({ call_log_id: call_log_id });
+
+      if (campaignLeads.length > 0) {
+        const cl = campaignLeads[0];
+        console.log(`[updateCallLog] Found campaign lead ${cl.id} for campaign ${cl.campaign_id}`);
+
+        // Determine outcome
+        let outcome = 'contacted';
+        let summaryText = conversation_summary || currentCallLog?.conversation_summary || '';
+
+        if (status === 'no_answer' || status === 'failed') {
+          outcome = 'no_answer';
+          summaryText = summaryText || (status === 'no_answer' ? 'Call was not answered.' : 'Call failed to connect.');
+        } else if (transcript || summaryText) {
+          // Use LLM to analyze the call
+          try {
+            const analysis = await base44.asServiceRole.integrations.Core.InvokeLLM({
+              prompt: `Analyze this sales call and determine the outcome.
+
+TRANSCRIPT:
+${transcript || currentCallLog?.transcript || 'No transcript available'}
+
+SUMMARY:
+${summaryText}
+
+Determine:
+1. outcome: one of "interested", "not_interested", "callback", "no_answer", "converted", "contacted"
+2. summary: A brief 2-3 sentence summary.
+
+Rules:
+- "interested" = expressed clear interest, asked about pricing/details, wanted next steps
+- "callback" = asked to be called back later, was busy
+- "not_interested" = explicitly declined
+- "no_answer" = no real conversation, voicemail, cut off quickly
+- "converted" = agreed to sign up/purchase/commit
+- "contacted" = had a conversation but no clear outcome yet`,
+              response_json_schema: {
+                type: "object",
+                properties: {
+                  outcome: { type: "string" },
+                  summary: { type: "string" }
+                }
+              }
+            });
+            outcome = analysis.outcome || 'contacted';
+            summaryText = analysis.summary || summaryText;
+          } catch (llmErr) {
+            console.error(`[updateCallLog] LLM analysis failed:`, llmErr.message);
+          }
+        }
+
+        // Update CampaignLead
+        await base44.asServiceRole.entities.CampaignLead.update(cl.id, {
+          status: 'completed',
+          outcome: outcome,
+          conversation_summary: summaryText,
+          transcript: transcript || currentCallLog?.transcript || '',
+          call_duration: duration || currentCallLog?.duration || 0
+        });
+        console.log(`[updateCallLog] CampaignLead ${cl.id} → completed, outcome: ${outcome}`);
+
+        // Update Lead entity
+        if (cl.lead_id) {
+          const leadStatusMap = {
+            'interested': 'interested',
+            'not_interested': 'not_interested',
+            'callback': 'callback',
+            'no_answer': 'callback',
+            'converted': 'converted',
+            'contacted': 'contacted'
+          };
+          await base44.asServiceRole.entities.Lead.update(cl.lead_id, {
+            status: leadStatusMap[outcome] || 'contacted',
+            last_call_date: new Date().toISOString()
+          });
+          console.log(`[updateCallLog] Lead ${cl.lead_id} status → ${leadStatusMap[outcome] || 'contacted'}`);
+        }
+
+        // Update Campaign outcome counts
+        const allCampaignLeads = await base44.asServiceRole.entities.CampaignLead.filter({ campaign_id: cl.campaign_id });
+        const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
+        let completedCount = 0;
+        let failedCount = 0;
+
+        allCampaignLeads.forEach(l => {
+          if (l.status === 'completed') completedCount++;
+          if (l.status === 'failed') failedCount++;
+          if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++;
+        });
+
+        const campaignUpdate = {
+          outcomes_summary: outcomes,
+          calls_completed: completedCount,
+          calls_failed: failedCount
+        };
+
+        // Check if all leads are done
+        const pendingCount = allCampaignLeads.filter(l => ['pending', 'calling'].includes(l.status)).length;
+        if (pendingCount === 0) {
+          campaignUpdate.status = 'completed';
+          campaignUpdate.completed_at = new Date().toISOString();
+        }
+
+        await base44.asServiceRole.entities.Campaign.update(cl.campaign_id, campaignUpdate);
+        console.log(`[updateCallLog] Campaign ${cl.campaign_id} updated: completed=${completedCount}, failed=${failedCount}, pending=${pendingCount}`);
+      }
+    }
 
     return Response.json({ success: true });
   } catch (error) {
