@@ -125,8 +125,10 @@ Respond ONLY in valid JSON with this exact structure.`
 
     console.log(`[processTranscript] Lead Score: ${leadScore} | Sentiment: ${sentiment} | Status: ${leadStatus} | Intents: ${intentSignals.join(', ')}`);
 
-    // Update call log with transcript, summary, and analysis
+    // Update call log with transcript, summary, analysis, and mark as completed
+    // This update triggers the CallLog entity automation → campaignPostCall
     await base44.asServiceRole.entities.CallLog.update(call_log_id, {
+      status: 'completed',
       transcript,
       conversation_summary: `${summary}\n\n---\nScore: ${leadScore}/100 | Sentiment: ${sentiment} | Signals: ${intentSignals.join(', ')}`,
       lead_status_updated: leadStatus
