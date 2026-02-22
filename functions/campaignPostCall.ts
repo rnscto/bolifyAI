@@ -37,11 +37,19 @@ Deno.serve(async (req) => {
 
     console.log(`[campaignPostCall] Processing call ${callLogId} for campaign ${campaignId}`);
 
-    // Determine outcome from transcript using LLM
+    // Determine outcome based on call status and transcript
     let outcome = 'contacted';
     let summary = callLog.conversation_summary || '';
 
-    if (callLog.transcript || callLog.conversation_summary) {
+    // For calls that never connected (no_answer, failed), set outcome directly
+    if (callLog.status === 'no_answer') {
+      outcome = 'no_answer';
+      summary = summary || 'Call was not answered.';
+    } else if (callLog.status === 'failed') {
+      outcome = 'no_answer';
+      summary = summary || 'Call failed to connect.';
+    } else if (callLog.transcript || callLog.conversation_summary) {
+      // For calls with conversation data, analyze with LLM
       try {
         const analysis = await base44.asServiceRole.integrations.Core.InvokeLLM({
           prompt: `Analyze this sales call and determine the outcome.
