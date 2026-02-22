@@ -134,7 +134,59 @@ Deno.serve(async (req) => {
       );
 
       if (pendingLeads.length === 0) {
-        // No more pending leads — mark campaign completed
+        // Check if any leads are still in 'calling' (calls in progress)
+        const callingLeads = await base44.asServiceRole.entities.CampaignLead.filter(
+          { campaign_id: campaign_id, status: 'calling' }, 'created_date', 1
+        );
+        if (callingLeads.length > 0) {
+          console.log(`[campaign] No pending leads but ${callingLeads.length} still calling. Waiting...`);
+          // Wait and retry — calls may still be in progress
+          await new Promise(r => setTimeout(r, 15000));
+          // After waiting, try to fix any stuck calling leads
+          const stillCalling = await base44.asServiceRole.entities.CampaignLead.filter(
+            { campaign_id: campaign_id, status: 'calling' }, 'created_date', 100
+          );
+          for (const stk of stillCalling) {
+            try {
+              if (stk.call_log_id) {
+                const cl2 = await base44.asServiceRole.entities.CallLog.get(stk.call_log_id);
+                const terms = ['completed', 'failed', 'no_answer'];
+                if (cl2 && terms.includes(cl2.status)) {
+                  let out = 'contacted';
+                  if (cl2.status === 'no_answer' || cl2.status === 'failed') out = 'no_answer';
+                  else if (cl2.transcript || cl2.conversation_summary) {
+                    try {
+                      const a = await base44.asServiceRole.integrations.Core.InvokeLLM({
+                        prompt: `Analyze this call briefly. TRANSCRIPT: ${cl2.transcript || 'N/A'}\nSUMMARY: ${cl2.conversation_summary || 'N/A'}\nDetermine outcome: "interested","not_interested","callback","no_answer","converted","contacted"`,
+                        response_json_schema: { type: "object", properties: { outcome: { type: "string" }, summary: { type: "string" } } }
+                      });
+                      out = a.outcome || 'contacted';
+                    } catch(e) {}
+                  }
+                  await base44.asServiceRole.entities.CampaignLead.update(stk.id, {
+                    status: 'completed', outcome: out,
+                    conversation_summary: cl2.conversation_summary || '',
+                    transcript: cl2.transcript || '',
+                    call_duration: cl2.duration || 0
+                  });
+                  if (stk.lead_id) {
+                    const lsm = { interested:'interested', not_interested:'not_interested', callback:'callback', no_answer:'callback', converted:'converted', contacted:'contacted' };
+                    await base44.asServiceRole.entities.Lead.update(stk.lead_id, { status: lsm[out] || 'contacted', last_call_date: new Date().toISOString() });
+                  }
+                  console.log(`[campaign] Fixed in-flight lead ${stk.lead_name}: ${out}`);
+                } else {
+                  // Call still in progress or stuck without terminal status — mark failed
+                  await base44.asServiceRole.entities.CampaignLead.update(stk.id, { status: 'failed', outcome: 'no_answer', conversation_summary: 'Call did not complete within expected time.' });
+                  console.log(`[campaign] Timed out lead ${stk.lead_name}`);
+                }
+              } else {
+                await base44.asServiceRole.entities.CampaignLead.update(stk.id, { status: 'failed', outcome: 'no_answer' });
+              }
+            } catch(e) { console.error(`[campaign] Fix in-flight error:`, e.message); }
+          }
+          continue; // re-check for pending leads
+        }
+        // All leads truly done — mark campaign completed
         await base44.asServiceRole.entities.Campaign.update(campaign_id, {
           status: 'completed',
           completed_at: new Date().toISOString()
