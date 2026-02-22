@@ -59,6 +59,7 @@ import AdminRetention from './pages/AdminRetention';
 import AdminSubscriptions from './pages/AdminSubscriptions';
 import AdminTrustedClients from './pages/AdminTrustedClients';
 import AdminWebsiteLeads from './pages/AdminWebsiteLeads';
+import AgentDashboard from './pages/AgentDashboard';
 import CampaignDetail from './pages/CampaignDetail';
 import ClientActivities from './pages/ClientActivities';
 import ClientAgents from './pages/ClientAgents';
@@ -84,7 +85,7 @@ import PartnerDashboard from './pages/PartnerDashboard';
 import PartnerSignup from './pages/PartnerSignup';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import TermsOfService from './pages/TermsOfService';
-import AgentDashboard from './pages/AgentDashboard';
+import RefundPolicy from './pages/RefundPolicy';
 import __Layout from './Layout.jsx';
 
 
@@ -101,6 +102,7 @@ export const PAGES = {
     "AdminSubscriptions": AdminSubscriptions,
     "AdminTrustedClients": AdminTrustedClients,
     "AdminWebsiteLeads": AdminWebsiteLeads,
+    "AgentDashboard": AgentDashboard,
     "CampaignDetail": CampaignDetail,
     "ClientActivities": ClientActivities,
     "ClientAgents": ClientAgents,
@@ -126,7 +128,7 @@ export const PAGES = {
     "PartnerSignup": PartnerSignup,
     "PrivacyPolicy": PrivacyPolicy,
     "TermsOfService": TermsOfService,
-    "AgentDashboard": AgentDashboard,
+    "RefundPolicy": RefundPolicy,
 }
 
 export const pagesConfig = {

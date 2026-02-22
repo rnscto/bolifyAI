@@ -65,6 +65,11 @@ export default function FooterSection() {
                   Terms of Service
                 </Link>
               </li>
+              <li>
+                <Link to={createPageUrl('RefundPolicy')} className="text-gray-500 hover:text-[#e67e22] transition-colors">
+                  Refund Policy
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -107,6 +112,9 @@ export default function FooterSection() {
             </Link>
             <Link to={createPageUrl('TermsOfService')} className="text-slate-300 hover:text-[#FF9933] transition-colors">
               Terms of Service
+            </Link>
+            <Link to={createPageUrl('RefundPolicy')} className="text-slate-300 hover:text-[#FF9933] transition-colors">
+              Refund Policy
             </Link>
           </div>
         </div>
