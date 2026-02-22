@@ -321,12 +321,21 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
     await base44.asServiceRole.entities.CallLog.update(callLog.id, updateData);
 
     // Update lead status based on call outcome (only for outbound client calls with valid lead_id)
+    // Note: For 'answered' we just mark 'contacted' — the real outcome is set later 
+    // by processTranscript → campaignPostCall after AI analyzes the conversation
     if (callLog.lead_id && callLog.lead_id !== 'unknown') {
-      if (status === 'answered' || status === 'completed') {
-        await base44.asServiceRole.entities.Lead.update(callLog.lead_id, { status: 'interested' });
-      } else if (status === 'no_answer' || status === 'failed') {
-        await base44.asServiceRole.entities.Lead.update(callLog.lead_id, { status: 'callback' });
+      if (status === 'answered') {
+        await base44.asServiceRole.entities.Lead.update(callLog.lead_id, { 
+          status: 'contacted',
+          last_call_date: new Date().toISOString()
+        });
+      } else if (status === 'no_answer') {
+        await base44.asServiceRole.entities.Lead.update(callLog.lead_id, { 
+          status: 'callback',
+          last_call_date: new Date().toISOString()
+        });
       }
+      // Don't update for 'completed' here — let processTranscript/campaignPostCall handle final status
     }
 
     // Handle terminal call statuses
