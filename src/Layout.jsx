@@ -103,6 +103,7 @@ export default function Layout({ children, currentPageName }) {
 
     const clientNav = [
     { name: 'Dashboard', path: 'ClientDashboard', icon: LayoutDashboard },
+    { name: 'Agent Performance', path: 'AgentDashboard', icon: BarChart3 },
     { name: 'Agents', path: 'ClientAgents', icon: Cpu },
     { name: 'Leads', path: 'ClientLeads', icon: Users },
     { name: 'Campaigns', path: 'ClientCampaigns', icon: Megaphone },
