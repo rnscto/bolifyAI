@@ -7,12 +7,17 @@ Deno.serve(async (req) => {
 
     const { event, data, old_data } = payload;
 
-    // Only process CallLog updates that just completed
+    // Only process CallLog updates with terminal statuses
     if (!event || event.entity_name !== 'CallLog') {
       return Response.json({ success: true, skipped: 'not_call_log' });
     }
-    if (data.status !== 'completed' || old_data?.status === 'completed') {
-      return Response.json({ success: true, skipped: 'not_newly_completed' });
+
+    const terminalStatuses = ['completed', 'failed', 'no_answer'];
+    const isTerminal = terminalStatuses.includes(data.status);
+    const wasAlreadyTerminal = terminalStatuses.includes(old_data?.status);
+
+    if (!isTerminal || wasAlreadyTerminal) {
+      return Response.json({ success: true, skipped: 'not_newly_terminal' });
     }
 
     const callLog = data;
