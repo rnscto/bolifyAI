@@ -60,6 +60,64 @@ Deno.serve(async (req) => {
     const maxConcurrent = campaign.max_concurrent_calls || 5;
     const totalResults = { initiated: 0, failed: 0, errors: [], batches: 0 };
 
+    // First, fix any stuck 'calling' leads from previous runs
+    // (leads that were set to 'calling' but their calls ended without updating CampaignLead)
+    const stuckLeads = await base44.asServiceRole.entities.CampaignLead.filter(
+      { campaign_id: campaign_id, status: 'calling' }, 'created_date', 100
+    );
+    for (const stuckLead of stuckLeads) {
+      try {
+        if (stuckLead.call_log_id) {
+          const callLog = await base44.asServiceRole.entities.CallLog.get(stuckLead.call_log_id);
+          const terminalStatuses = ['completed', 'failed', 'no_answer'];
+          if (callLog && terminalStatuses.includes(callLog.status)) {
+            // Call already finished — determine outcome
+            let outcome = 'contacted';
+            if (callLog.status === 'no_answer' || callLog.status === 'failed') {
+              outcome = 'no_answer';
+            } else if (callLog.transcript || callLog.conversation_summary) {
+              try {
+                const analysis = await base44.asServiceRole.integrations.Core.InvokeLLM({
+                  prompt: `Analyze this call briefly. TRANSCRIPT: ${callLog.transcript || 'N/A'}\nSUMMARY: ${callLog.conversation_summary || 'N/A'}\nDetermine outcome: "interested","not_interested","callback","no_answer","converted","contacted"`,
+                  response_json_schema: { type: "object", properties: { outcome: { type: "string" }, summary: { type: "string" } } }
+                });
+                outcome = analysis.outcome || 'contacted';
+              } catch (e) { /* use default */ }
+            }
+            await base44.asServiceRole.entities.CampaignLead.update(stuckLead.id, {
+              status: 'completed',
+              outcome: outcome,
+              conversation_summary: callLog.conversation_summary || '',
+              transcript: callLog.transcript || '',
+              call_duration: callLog.duration || 0
+            });
+            console.log(`[campaign] Fixed stuck lead ${stuckLead.lead_name}: ${outcome}`);
+            // Also update the Lead entity
+            if (stuckLead.lead_id) {
+              const leadStatusMap = { interested: 'interested', not_interested: 'not_interested', callback: 'callback', no_answer: 'callback', converted: 'converted', contacted: 'contacted' };
+              await base44.asServiceRole.entities.Lead.update(stuckLead.lead_id, {
+                status: leadStatusMap[outcome] || 'contacted',
+                last_call_date: new Date().toISOString()
+              });
+            }
+          } else {
+            // Call didn't finish or no callLog — reset to pending for retry
+            await base44.asServiceRole.entities.CampaignLead.update(stuckLead.id, { status: 'pending', call_log_id: null });
+            console.log(`[campaign] Reset stuck lead ${stuckLead.lead_name} to pending`);
+          }
+        } else {
+          // No call_log_id — reset to pending
+          await base44.asServiceRole.entities.CampaignLead.update(stuckLead.id, { status: 'pending', call_log_id: null });
+          console.log(`[campaign] Reset stuck lead ${stuckLead.lead_name} (no call_log) to pending`);
+        }
+      } catch (stuckErr) {
+        console.error(`[campaign] Error fixing stuck lead ${stuckLead.id}:`, stuckErr.message);
+      }
+    }
+    if (stuckLeads.length > 0) {
+      console.log(`[campaign] Fixed ${stuckLeads.length} stuck 'calling' leads`);
+    }
+
     // Process ALL pending leads in batches
     let hasMore = true;
     while (hasMore) {
