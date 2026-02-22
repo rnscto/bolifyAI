@@ -142,7 +142,7 @@ export default function CampaignDetail() {
       <Card>
         <CardContent className="pt-6">
           <div className="flex justify-between text-sm text-gray-600 mb-2">
-            <span>Progress: {campaign.calls_completed + campaign.calls_failed} / {campaign.total_leads} calls</span>
+            <span>Progress: {processedLeads} / {totalLeads} calls</span>
             <span className="font-semibold">{progress}%</span>
           </div>
           <div className="h-3 bg-gray-100 rounded-full overflow-hidden">
@@ -163,7 +163,7 @@ export default function CampaignDetail() {
           <CardContent className="pt-4 pb-4 flex items-center gap-3">
             <Users className="w-6 h-6 text-blue-600" />
             <div>
-              <p className="text-xl font-bold">{campaign.total_leads}</p>
+              <p className="text-xl font-bold">{totalLeads}</p>
               <p className="text-xs text-gray-500">Total Leads</p>
             </div>
           </CardContent>
@@ -172,7 +172,7 @@ export default function CampaignDetail() {
           <CardContent className="pt-4 pb-4 flex items-center gap-3">
             <Phone className="w-6 h-6 text-green-600" />
             <div>
-              <p className="text-xl font-bold">{campaign.calls_completed}</p>
+              <p className="text-xl font-bold">{completedLeads}</p>
               <p className="text-xs text-gray-500">Completed</p>
             </div>
           </CardContent>
@@ -181,7 +181,7 @@ export default function CampaignDetail() {
           <CardContent className="pt-4 pb-4 flex items-center gap-3">
             <Phone className="w-6 h-6 text-red-600" />
             <div>
-              <p className="text-xl font-bold">{campaign.calls_failed}</p>
+              <p className="text-xl font-bold">{failedLeads}</p>
               <p className="text-xs text-gray-500">Failed</p>
             </div>
           </CardContent>
