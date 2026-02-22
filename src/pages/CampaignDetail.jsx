@@ -79,11 +79,25 @@ export default function CampaignDetail() {
     return <div className="text-center py-16 text-gray-500">Campaign not found</div>;
   }
 
-  const outcomes = campaign.outcomes_summary || {};
+  // Calculate stats from actual CampaignLead data (more accurate than campaign counters)
+  const completedLeads = campaignLeads.filter(cl => cl.status === 'completed').length;
+  const failedLeads = campaignLeads.filter(cl => cl.status === 'failed').length;
+  const callingLeads = campaignLeads.filter(cl => cl.status === 'calling').length;
+  const processedLeads = completedLeads + failedLeads + callingLeads;
+  const totalLeads = campaignLeads.length || campaign.total_leads || 0;
+
+  // Build outcomes from lead data
+  const outcomes = {};
+  campaignLeads.forEach(cl => {
+    if (cl.outcome) {
+      outcomes[cl.outcome] = (outcomes[cl.outcome] || 0) + 1;
+    }
+  });
+
   const emailsSent = campaignLeads.filter(cl => cl.followup_email_sent).length;
   const callbacksScheduled = campaignLeads.filter(cl => cl.followup_scheduled).length;
-  const progress = campaign.total_leads > 0
-    ? Math.round(((campaign.calls_completed + campaign.calls_failed) / campaign.total_leads) * 100)
+  const progress = totalLeads > 0
+    ? Math.round((processedLeads / totalLeads) * 100)
     : 0;
 
   return (
