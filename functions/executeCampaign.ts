@@ -287,15 +287,21 @@ Deno.serve(async (req) => {
       await new Promise(r => setTimeout(r, 10000));
     }
 
-    // Final counts update
+    // Final counts update with outcomes
     const allLeadsFinal = await base44.asServiceRole.entities.CampaignLead.filter({ campaign_id: campaign_id });
     const finalCompleted = allLeadsFinal.filter(l => l.status === 'completed').length;
     const finalFailed = allLeadsFinal.filter(l => l.status === 'failed').length;
     const finalPending = allLeadsFinal.filter(l => ['pending', 'calling'].includes(l.status)).length;
 
+    const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
+    allLeadsFinal.forEach(l => {
+      if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++;
+    });
+
     await base44.asServiceRole.entities.Campaign.update(campaign_id, {
       calls_completed: finalCompleted,
-      calls_failed: finalFailed
+      calls_failed: finalFailed,
+      outcomes_summary: outcomes
     });
 
     return Response.json({
