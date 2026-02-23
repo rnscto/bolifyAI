@@ -12,7 +12,8 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Upload, Loader2, FileSpreadsheet, CheckCircle2, AlertCircle, ArrowRight, ArrowLeft, X } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Upload, Loader2, FileSpreadsheet, CheckCircle2, AlertCircle, ArrowRight, ArrowLeft, X, ClipboardPaste } from 'lucide-react';
 import { toast } from 'sonner';
 
 const LEAD_FIELDS = [
