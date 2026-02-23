@@ -131,16 +131,17 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
         json_schema: {
           type: "object",
           properties: {
-            rows: {
+            data: {
               type: "array",
               items: {
-                type: "object",
-                additionalProperties: { type: "string" }
+                type: "object"
               }
             }
           }
         }
       });
+
+      console.log("Excel extraction result:", JSON.stringify(extracted).substring(0, 1000));
 
       if (extracted.status === 'error') {
         toast.error('Failed to read file: ' + (extracted.details || 'Unknown error'));
@@ -149,8 +150,25 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
         return;
       }
 
-      const rawRows = Array.isArray(extracted.output?.rows) ? extracted.output.rows :
-                   Array.isArray(extracted.output) ? extracted.output : [];
+      // Handle various response shapes from ExtractDataFromUploadedFile
+      let rawRows = [];
+      if (Array.isArray(extracted.output)) {
+        rawRows = extracted.output;
+      } else if (extracted.output && typeof extracted.output === 'object') {
+        // Try common wrapper keys
+        const possibleKeys = ['data', 'rows', 'items', 'records'];
+        for (const key of possibleKeys) {
+          if (Array.isArray(extracted.output[key])) {
+            rawRows = extracted.output[key];
+            break;
+          }
+        }
+        // If still empty, try the first array-valued property
+        if (rawRows.length === 0) {
+          const firstArrayKey = Object.keys(extracted.output).find(k => Array.isArray(extracted.output[k]));
+          if (firstArrayKey) rawRows = extracted.output[firstArrayKey];
+        }
+      }
       if (rawRows.length === 0) {
         toast.error('No data found in file');
         setFile(null);
