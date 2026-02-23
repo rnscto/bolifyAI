@@ -12,7 +12,8 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Upload, FileText, Trash2, Loader2 } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
+import { Upload, FileText, Trash2, Loader2, Type } from 'lucide-react';
 import { toast } from 'sonner';
 import FeatureGate from '../components/FeatureGate';
 
@@ -23,10 +24,12 @@ export default function ClientKnowledgeBase() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [inputMode, setInputMode] = useState('file'); // 'file' or 'text'
   const [formData, setFormData] = useState({
     title: '',
     category: '',
-    file: null
+    file: null,
+    textContent: ''
   });
 
   useEffect(() => {
@@ -65,23 +68,46 @@ export default function ClientKnowledgeBase() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.file) {
+    if (inputMode === 'file' && !formData.file) {
       toast.error('Please select a file');
+      return;
+    }
+    if (inputMode === 'text' && !formData.textContent.trim()) {
+      toast.error('Please enter some text content');
       return;
     }
 
     setUploading(true);
     try {
-      const uploadResponse = await base44.integrations.Core.UploadFile({ file: formData.file });
-      
-      const docData = {
-        client_id: client.id,
-        title: formData.title,
-        category: formData.category,
-        file_url: uploadResponse.file_url,
-        file_type: formData.file.type.includes('pdf') ? 'pdf' : 'txt',
-        status: 'processing'
-      };
+      let docData;
+
+      if (inputMode === 'text') {
+        // Create a text file from pasted content and upload it
+        const blob = new Blob([formData.textContent], { type: 'text/plain' });
+        const file = new File([blob], `${formData.title || 'knowledge'}.txt`, { type: 'text/plain' });
+        const uploadResponse = await base44.integrations.Core.UploadFile({ file });
+        
+        docData = {
+          client_id: client.id,
+          title: formData.title,
+          category: formData.category,
+          file_url: uploadResponse.file_url,
+          content: formData.textContent,
+          file_type: 'txt',
+          status: 'ready'
+        };
+      } else {
+        const uploadResponse = await base44.integrations.Core.UploadFile({ file: formData.file });
+        
+        docData = {
+          client_id: client.id,
+          title: formData.title,
+          category: formData.category,
+          file_url: uploadResponse.file_url,
+          file_type: formData.file.type.includes('pdf') ? 'pdf' : 'txt',
+          status: 'processing'
+        };
+      }
 
       const kbDoc = await base44.entities.KnowledgeBase.create(docData);
       
@@ -100,7 +126,8 @@ export default function ClientKnowledgeBase() {
         toast.success('Document uploaded (no agent assigned yet)');
       }
       setDialogOpen(false);
-      setFormData({ title: '', category: '', file: null });
+      setFormData({ title: '', category: '', file: null, textContent: '' });
+      setInputMode('file');
       loadData();
     } catch (error) {
       console.error('Error uploading document:', error);
@@ -165,6 +192,28 @@ export default function ClientKnowledgeBase() {
               <DialogTitle>Upload Training Document</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Mode toggle */}
+              <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+                <button
+                  type="button"
+                  onClick={() => setInputMode('file')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                    inputMode === 'file' ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <Upload className="w-4 h-4" /> Upload File
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setInputMode('text')}
+                  className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                    inputMode === 'text' ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'
+                  }`}
+                >
+                  <Type className="w-4 h-4" /> Paste Text
+                </button>
+              </div>
+
               <div>
                 <Label htmlFor="title">Document Title</Label>
                 <Input
@@ -184,16 +233,32 @@ export default function ClientKnowledgeBase() {
                   placeholder="FAQs, Product Info, Scripts, etc."
                 />
               </div>
-              <div>
-                <Label htmlFor="file">File (PDF, TXT, DOCX)</Label>
-                <Input
-                  id="file"
-                  type="file"
-                  accept=".pdf,.txt,.docx"
-                  onChange={(e) => setFormData({ ...formData, file: e.target.files[0] })}
-                  required
-                />
-              </div>
+
+              {inputMode === 'file' ? (
+                <div>
+                  <Label htmlFor="file">File (PDF, TXT, DOCX)</Label>
+                  <Input
+                    id="file"
+                    type="file"
+                    accept=".pdf,.txt,.docx"
+                    onChange={(e) => setFormData({ ...formData, file: e.target.files[0] })}
+                    required
+                  />
+                </div>
+              ) : (
+                <div>
+                  <Label htmlFor="textContent">Paste your content below</Label>
+                  <Textarea
+                    id="textContent"
+                    value={formData.textContent}
+                    onChange={(e) => setFormData({ ...formData, textContent: e.target.value })}
+                    placeholder="Paste your product info, FAQs, scripts, or any training content here..."
+                    className="min-h-[200px]"
+                    required
+                  />
+                  <p className="text-xs text-gray-400 mt-1">{formData.textContent.length} characters</p>
+                </div>
+              )}
               <div className="flex gap-3 justify-end">
                 <Button
                   type="button"
@@ -211,10 +276,10 @@ export default function ClientKnowledgeBase() {
                   {uploading ? (
                     <>
                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Uploading...
+                      Saving...
                     </>
                   ) : (
-                    'Upload'
+                    inputMode === 'text' ? 'Save' : 'Upload'
                   )}
                 </Button>
               </div>

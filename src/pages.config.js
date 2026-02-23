@@ -84,8 +84,8 @@ import Onboarding from './pages/Onboarding';
 import PartnerDashboard from './pages/PartnerDashboard';
 import PartnerSignup from './pages/PartnerSignup';
 import PrivacyPolicy from './pages/PrivacyPolicy';
-import TermsOfService from './pages/TermsOfService';
 import RefundPolicy from './pages/RefundPolicy';
+import TermsOfService from './pages/TermsOfService';
 import __Layout from './Layout.jsx';
 
 
@@ -127,8 +127,8 @@ export const PAGES = {
     "PartnerDashboard": PartnerDashboard,
     "PartnerSignup": PartnerSignup,
     "PrivacyPolicy": PrivacyPolicy,
-    "TermsOfService": TermsOfService,
     "RefundPolicy": RefundPolicy,
+    "TermsOfService": TermsOfService,
 }
 
 export const pagesConfig = {
