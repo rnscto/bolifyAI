@@ -112,6 +112,23 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
   const [inputMode, setInputMode] = useState('file'); // 'file' or 'paste'
   const [pasteText, setPasteText] = useState('');
 
+  const handlePasteSubmit = () => {
+    if (!pasteText.trim()) {
+      toast.error('Please paste some data first');
+      return;
+    }
+    const { headers, rows } = parseCSVLocally(pasteText);
+    if (rows.length === 0) {
+      toast.error('No data found. Make sure you copy rows with headers from Excel.');
+      return;
+    }
+    const mapping = autoMapFields(headers);
+    setFileHeaders(headers);
+    setRawData(rows);
+    setFieldMapping(mapping);
+    setStep(2);
+  };
+
   const handleFileSelect = async (e) => {
     const selectedFile = e.target.files[0];
     if (!selectedFile) return;
