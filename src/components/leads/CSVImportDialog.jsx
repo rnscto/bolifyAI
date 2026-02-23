@@ -356,23 +356,66 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
         {/* Step 1: Upload */}
         {step === 1 && (
           <div className="space-y-4">
-            <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-blue-300 transition-colors">
-              <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
-              <p className="text-sm font-medium text-gray-700 mb-1">Upload CSV or Excel file</p>
-              <p className="text-xs text-gray-400 mb-4">Supports .csv, .xlsx, .xls</p>
-              <label className="cursor-pointer">
-                <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileSelect} className="hidden" />
-                <Button variant="outline" asChild disabled={uploading}>
-                  <span>{uploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Reading file...</> : 'Choose File'}</span>
-                </Button>
-              </label>
+            {/* Mode toggle */}
+            <div className="flex gap-2 p-1 bg-gray-100 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setInputMode('file')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                  inputMode === 'file' ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Upload className="w-4 h-4" /> Upload File
+              </button>
+              <button
+                type="button"
+                onClick={() => setInputMode('paste')}
+                className={`flex-1 flex items-center justify-center gap-2 py-2 px-3 rounded-md text-sm font-medium transition-colors ${
+                  inputMode === 'paste' ? 'bg-white shadow text-blue-700' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <ClipboardPaste className="w-4 h-4" /> Paste from Excel
+              </button>
             </div>
+
+            {inputMode === 'file' ? (
+              <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-blue-300 transition-colors">
+                <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                <p className="text-sm font-medium text-gray-700 mb-1">Upload CSV or Excel file</p>
+                <p className="text-xs text-gray-400 mb-4">Supports .csv, .xlsx, .xls</p>
+                <label className="cursor-pointer">
+                  <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileSelect} className="hidden" />
+                  <Button variant="outline" asChild disabled={uploading}>
+                    <span>{uploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Reading file...</> : 'Choose File'}</span>
+                  </Button>
+                </label>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 hover:border-blue-300 transition-colors">
+                  <Textarea
+                    value={pasteText}
+                    onChange={(e) => setPasteText(e.target.value)}
+                    placeholder={"Copy rows from Excel (with headers) and paste here.\n\nExample:\nName\tPhone\tEmail\tCompany\nJohn\t9876543210\tjohn@test.com\tAcme Inc\nJane\t9123456789\tjane@test.com\tGlobe Ltd"}
+                    className="min-h-[180px] font-mono text-xs border-0 focus-visible:ring-0 p-0 resize-none"
+                  />
+                </div>
+                {pasteText.trim() && (
+                  <p className="text-xs text-gray-400">{pasteText.trim().split('\n').length - 1} data row(s) detected</p>
+                )}
+                <Button onClick={handlePasteSubmit} disabled={!pasteText.trim()} className="w-full bg-blue-600 hover:bg-blue-700">
+                  <ArrowRight className="w-4 h-4 mr-2" /> Continue to Mapping
+                </Button>
+              </div>
+            )}
+
             <div className="bg-blue-50 rounded-lg p-4">
               <p className="text-sm font-medium text-blue-800 mb-2">💡 Tips</p>
               <ul className="text-xs text-blue-700 space-y-1">
                 <li>• All fields are optional — map only what you have</li>
                 <li>• Your file needs at least one of: Name, Phone, or Email per row</li>
                 <li>• Column names are auto-detected and matched</li>
+                {inputMode === 'paste' && <li>• Select rows in Excel <strong>including headers</strong>, then Ctrl+C and Ctrl+V here</li>}
               </ul>
             </div>
           </div>
