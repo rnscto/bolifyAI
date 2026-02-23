@@ -11,6 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { toast } from 'sonner';
+import CallScriptEditor from './CallScriptEditor';
 
 export default function CreateCampaignDialog({ open, onOpenChange, client, onCreated }) {
   const [agents, setAgents] = useState([]);
@@ -33,6 +34,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
     no_answer_retry: true,
     no_answer_retry_hours: 4,
     no_answer_max_retries: 3,
+    call_script: { opening: '', pitch: '', objection_handling: '', closing: '' },
   });
 
   useEffect(() => {
@@ -74,6 +76,9 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
 
     setLoading(true);
     try {
+      // Only include call_script if any section has content
+      const hasScript = form.call_script && Object.values(form.call_script).some(v => v && v.trim());
+
       const campaign = await base44.entities.Campaign.create({
         client_id: client.id,
         name: form.name,
@@ -81,6 +86,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
         agent_id: form.agent_id,
         max_concurrent_calls: form.max_concurrent_calls,
         total_leads: selectedLeads.length,
+        ...(hasScript ? { call_script: form.call_script } : {}),
         followup_rules: {
           interested_email: form.interested_email,
           interested_ai_email: form.interested_ai_email,
@@ -163,6 +169,14 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
                 onChange={e => setForm({...form, max_concurrent_calls: parseInt(e.target.value) || 5})} />
             </div>
           </div>
+
+          {/* Call Script */}
+          <CallScriptEditor
+            script={form.call_script}
+            onChange={(script) => setForm({ ...form, call_script: script })}
+            agentName={agents.find(a => a.id === form.agent_id)?.name}
+            campaignType={form.type}
+          />
 
           {/* Follow-up Rules */}
           <div className="border rounded-lg p-4 space-y-4">
