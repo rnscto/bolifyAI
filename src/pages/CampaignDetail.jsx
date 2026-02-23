@@ -209,6 +209,33 @@ export default function CampaignDetail() {
       {/* Outcome chart + follow-up rules */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <CampaignOutcomeChart outcomes={outcomes} />
+
+        {/* Call Script */}
+        {campaign.call_script && Object.values(campaign.call_script).some(v => v && v.trim()) && (
+          <Card className="md:col-span-2">
+            <CardHeader>
+              <CardTitle className="text-base">📋 Call Script</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {[
+                  { key: 'opening', label: 'Opening / Greeting', color: 'border-l-blue-500' },
+                  { key: 'pitch', label: 'Main Pitch', color: 'border-l-green-500' },
+                  { key: 'objection_handling', label: 'Objection Handling', color: 'border-l-yellow-500' },
+                  { key: 'closing', label: 'Closing / CTA', color: 'border-l-purple-500' },
+                ].filter(s => campaign.call_script[s.key]?.trim()).map(section => (
+                  <div key={section.key} className={`border-l-4 ${section.color} pl-3`}>
+                    <p className="text-xs font-semibold text-gray-600 uppercase mb-1">{section.label}</p>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{campaign.call_script[section.key]}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
             <CardTitle className="text-base">AI Follow-up Rules</CardTitle>
