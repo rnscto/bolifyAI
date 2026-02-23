@@ -82,16 +82,10 @@ export default function ClientKnowledgeBase() {
       let docData;
 
       if (inputMode === 'text') {
-        // Create a text file from pasted content and upload it
-        const blob = new Blob([formData.textContent], { type: 'text/plain' });
-        const file = new File([blob], `${formData.title || 'knowledge'}.txt`, { type: 'text/plain' });
-        const uploadResponse = await base44.integrations.Core.UploadFile({ file });
-        
         docData = {
           client_id: client.id,
           title: formData.title,
           category: formData.category,
-          file_url: uploadResponse.file_url,
           content: formData.textContent,
           file_type: 'txt',
           status: 'ready'
