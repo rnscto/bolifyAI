@@ -321,6 +321,8 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
     setRawData([]);
     setFieldMapping({});
     setResult(null);
+    setInputMode('file');
+    setPasteText('');
     onOpenChange(false);
   };
 
