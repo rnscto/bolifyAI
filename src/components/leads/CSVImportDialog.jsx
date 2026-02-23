@@ -108,6 +108,8 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
   const [rawData, setRawData] = useState([]);
   const [fieldMapping, setFieldMapping] = useState({});
   const [result, setResult] = useState(null);
+  const [inputMode, setInputMode] = useState('file'); // 'file' or 'paste'
+  const [pasteText, setPasteText] = useState('');
 
   const handleFileSelect = async (e) => {
     const selectedFile = e.target.files[0];
