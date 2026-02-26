@@ -256,8 +256,8 @@ export default function AdminAgents() {
                       </SelectItem>
                       <SelectItem value="azure_speech">
                         <span className="flex items-center gap-2">
-                          Azure Speech TTS
-                          <span className="text-xs text-gray-400">400+ voices, Dragon HD</span>
+                          GPT-5-nano + Azure TTS
+                          <span className="text-xs text-gray-400">400+ voices, custom</span>
                         </span>
                       </SelectItem>
                     </SelectContent>
@@ -420,7 +420,7 @@ export default function AdminAgents() {
                     <TableCell className="text-sm">{agent.industry || '-'}</TableCell>
                     <TableCell className="text-sm">
                       <Badge variant="outline" className={agent.persona?.voice_engine === 'azure_speech' ? 'border-purple-300 text-purple-700' : 'border-blue-300 text-blue-700'}>
-                        {agent.persona?.voice_engine === 'azure_speech' ? 'Speech TTS' : 'Realtime'}
+                        {agent.persona?.voice_engine === 'azure_speech' ? 'GPT-5-nano' : 'Realtime'}
                       </Badge>
                       <span className="block text-xs text-gray-500 mt-1">{agent.persona?.voice_type || 'alloy'}</span>
                     </TableCell>
