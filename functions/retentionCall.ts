@@ -149,7 +149,33 @@ Deno.serve(async (req) => {
       const azureData = await azureResponse.json();
       const scriptResponse = JSON.parse(azureData.choices[0].message.content);
 
-      // Create call log
+      // Pre-fetch knowledge base content for agent config cache
+      let kbContent = '';
+      if (retentionAgent.knowledge_base_ids && retentionAgent.knowledge_base_ids.length > 0) {
+        const kbDocs = [];
+        for (const kbId of retentionAgent.knowledge_base_ids) {
+          try {
+            const doc = await base44.asServiceRole.entities.KnowledgeBase.get(kbId);
+            if (doc && doc.content) kbDocs.push({ title: doc.title, content: doc.content });
+          } catch (e) {
+            console.log(`KB doc ${kbId} fetch failed: ${e.message}`);
+          }
+        }
+        if (kbDocs.length > 0) {
+          kbContent = kbDocs.map(doc => `[${doc.title}]\n${doc.content}`).join('\n\n---\n\n');
+        }
+      }
+
+      // Build retention-specific system prompt that includes agent intro + script
+      const retentionSystemPrompt = [
+        retentionAgent.system_prompt || '',
+        `\nYou are ${retentionAgent.name}, an AI voice agent from VaaniAI.`,
+        `IMPORTANT: Always start the call by greeting the customer warmly and introducing yourself by name and that you are calling from VaaniAI.`,
+        `\nRetention call script to follow:\n${scriptResponse?.script || 'Standard retention script'}`,
+        scriptResponse?.key_objection_handlers ? `\nKey objection handlers:\n${scriptResponse.key_objection_handlers.join('\n')}` : '',
+      ].filter(Boolean).join('\n');
+
+      // Create call log with agent_config_cache (so WebSocket voice agent knows the greeting/persona)
       const callSid = `ret_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const callLog = await base44.asServiceRole.entities.CallLog.create({
         client_id: client.id,
@@ -161,6 +187,12 @@ Deno.serve(async (req) => {
         status: 'initiated',
         call_start_time: new Date().toISOString(),
         conversation_summary: `Retention call - Day ${daysSinceExpiry}. ${config.active_offer ? 'Offer: ' + config.active_offer + '. ' : ''}Script: ${scriptResponse?.script?.substring(0, 200) || 'Standard retention'}`,
+        agent_config_cache: {
+          agent_name: retentionAgent.name,
+          system_prompt: retentionSystemPrompt,
+          persona: retentionAgent.persona || {},
+          knowledge_base_content: kbContent
+        }
       });
 
       // Initiate call via Smartflo
