@@ -524,15 +524,14 @@ Deno.serve(async (req) => {
           }
           console.log(`[${reqId}] ✅ Agent config loaded (${session.systemPrompt.length} chars)`);
         }
-        // Load voice type from agent persona
+        // Load voice type from agent persona (Realtime API voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse, marin, cedar)
         if (cache && cache.persona && cache.persona.voice_type) {
-          // Azure Realtime API (gpt-4o-realtime) supports specific voice IDs.
-          // Map display names to the correct Azure Realtime voice deployment name.
-          // Dragon HD / Turbo / Multilingual voices use: en-IN-{Name}DragonHDLatest format
-          const displayName = cache.persona.voice_type;
-          const realtimeVoiceId = mapVoiceToRealtimeId(displayName);
-          session.voiceType = realtimeVoiceId;
-          console.log(`[${reqId}] 🎙️ Voice set: ${displayName} → ${realtimeVoiceId}`);
+          const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
+          const voice = cache.persona.voice_type.toLowerCase();
+          if (validVoices.includes(voice)) {
+            session.voiceType = voice;
+          }
+          console.log(`[${reqId}] 🎙️ Voice set: ${cache.persona.voice_type} → ${session.voiceType}`);
         }
       } else {
         console.log(`[${reqId}] ⚠️ No call log found, using default prompt`);

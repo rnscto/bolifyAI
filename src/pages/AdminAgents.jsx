@@ -42,7 +42,7 @@ export default function AdminAgents() {
   const [formData, setFormData] = useState({
     name: '',
     client_id: '',
-    voice_type: 'Meera Dragon HD Latest',
+    voice_type: 'alloy',
     tone: 'professional',
     language: 'en-US',
     system_prompt: '',
@@ -81,7 +81,7 @@ export default function AdminAgents() {
         name: formData.name,
         client_id: formData.client_id,
         persona: {
-          voice_type: formData.voice_type || 'Meera Dragon HD Latest',
+          voice_type: formData.voice_type || 'alloy',
           tone: formData.tone,
           language: formData.language
         },
@@ -129,7 +129,7 @@ export default function AdminAgents() {
     setFormData({
       name: agent.name,
       client_id: agent.client_id,
-      voice_type: agent.persona?.voice_type || 'Meera Dragon HD Latest',
+      voice_type: agent.persona?.voice_type || 'alloy',
       tone: agent.persona?.tone || 'professional',
       language: agent.persona?.language || 'en-US',
       system_prompt: agent.system_prompt || '',
@@ -245,7 +245,7 @@ export default function AdminAgents() {
                         <span className="flex items-center gap-2">
                           {v.name}
                           <span className="text-xs text-gray-400">
-                            {v.gender} • {v.lang}
+                            {v.gender} • {v.style}
                           </span>
                         </span>
                       </SelectItem>
