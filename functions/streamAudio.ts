@@ -741,6 +741,7 @@ Deno.serve(async (req) => {
 
         // Load agent config, then connect to Realtime API
         await loadAgentConfig();
+        console.log(`[${reqId}] 🚀 Connecting Realtime with engine=${session.voiceEngine}, voice=${session.voiceType}`);
         connectRealtime();
         return;
       }
