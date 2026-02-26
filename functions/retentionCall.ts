@@ -129,8 +129,9 @@ Deno.serve(async (req) => {
 
       if (!azureResponse.ok) {
         const errText = await azureResponse.text();
-        console.error('Azure GPT-5.2 error:', errText);
-        throw new Error('Azure OpenAI call failed: ' + azureResponse.status);
+        console.error('Azure GPT-5.2 error:', azureResponse.status, errText);
+        console.error('Azure URI used:', Deno.env.get('AZURE_GPT52_TARGET_URI'));
+        throw new Error('Azure OpenAI call failed: ' + azureResponse.status + ' - ' + errText);
       }
 
       const azureData = await azureResponse.json();
