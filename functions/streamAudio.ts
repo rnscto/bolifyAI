@@ -249,7 +249,7 @@ Deno.serve(async (req) => {
     const protocol = req.headers.get('x-forwarded-proto') === 'https' ? 'wss' : 'ws';
     return new Response(JSON.stringify({
       status: 'ready',
-      version: 'v6.0-realtime-mini',
+      version: 'v7.0-hybrid-gpt5nano',
       wss_url: `${protocol}://${host}/functions/streamAudio`
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
