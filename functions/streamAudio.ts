@@ -339,7 +339,6 @@ Deno.serve(async (req) => {
       // Configure session based on voice engine
       const isHybrid = session.voiceEngine === 'azure_speech';
       const sessionConfig = {
-        instructions: session.systemPrompt,
         input_audio_format: 'pcm16',
         input_audio_transcription: {
           model: 'whisper-1'
@@ -353,12 +352,16 @@ Deno.serve(async (req) => {
       };
 
       if (isHybrid) {
-        // Hybrid mode: text-only output, we'll pipe text through Azure Speech TTS
+        // Hybrid mode: Realtime API for STT/VAD only → GPT-5-nano for LLM → Azure Speech TTS
+        sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
         sessionConfig.modalities = ['text'];
-        sessionConfig.voice = 'alloy'; // still needed but won't produce audio
-        console.log(`[${reqId}] 🔀 Hybrid mode: text-only + Azure Speech TTS (${session.voiceType})`);
+        sessionConfig.voice = 'alloy';
+        // Initialize chat history with system prompt
+        session.chatHistory = [{ role: 'system', content: session.systemPrompt }];
+        console.log(`[${reqId}] 🔀 Hybrid mode: Realtime STT → GPT-5-nano → Azure Speech TTS (${session.voiceType})`);
       } else {
         // Standard Realtime API with built-in voice
+        sessionConfig.instructions = session.systemPrompt;
         sessionConfig.voice = session.voiceType;
         sessionConfig.output_audio_format = 'pcm16';
       }
