@@ -274,11 +274,13 @@ Deno.serve(async (req) => {
     transcript: [],
     startTime: Date.now(),
     systemPrompt: 'You are a friendly AI voice assistant. Be professional and concise. Keep responses to 1-3 sentences.',
+    voiceEngine: 'realtime',  // 'realtime' or 'azure_speech'
     voiceType: 'alloy',       // Default voice, overridden from agent config
     _saved: false,
     realtimeWs: null,         // WebSocket connection to Azure Realtime API
     realtimeReady: false,     // Whether session.created has been received
-    isSpeaking: false         // Track if model is currently outputting audio
+    isSpeaking: false,        // Track if model is currently outputting audio
+    _ttsAbort: null           // AbortController for Azure Speech TTS (hybrid mode)
   };
 
   // ─── Connect to Azure Realtime API ───
@@ -333,26 +335,35 @@ Deno.serve(async (req) => {
       console.log(`[${reqId}] ✅ Realtime session created`);
       session.realtimeReady = true;
 
-      // Configure session: audio format, turn detection, instructions
-      sendToRealtime({
-        type: 'session.update',
-        session: {
-          instructions: session.systemPrompt,
-          voice: session.voiceType,
-          input_audio_format: 'pcm16',
-          output_audio_format: 'pcm16',
-          input_audio_transcription: {
-            model: 'whisper-1'
-          },
-          turn_detection: {
-            type: 'server_vad',
-            threshold: 0.5,
-            prefix_padding_ms: 300,
-            silence_duration_ms: 500
-          }
+      // Configure session based on voice engine
+      const isHybrid = session.voiceEngine === 'azure_speech';
+      const sessionConfig = {
+        instructions: session.systemPrompt,
+        input_audio_format: 'pcm16',
+        input_audio_transcription: {
+          model: 'whisper-1'
+        },
+        turn_detection: {
+          type: 'server_vad',
+          threshold: 0.5,
+          prefix_padding_ms: 300,
+          silence_duration_ms: 500
         }
-      });
-      console.log(`[${reqId}] 📤 Session configured with system prompt (${session.systemPrompt.length} chars)`);
+      };
+
+      if (isHybrid) {
+        // Hybrid mode: text-only output, we'll pipe text through Azure Speech TTS
+        sessionConfig.modalities = ['text'];
+        sessionConfig.voice = 'alloy'; // still needed but won't produce audio
+        console.log(`[${reqId}] 🔀 Hybrid mode: text-only + Azure Speech TTS (${session.voiceType})`);
+      } else {
+        // Standard Realtime API with built-in voice
+        sessionConfig.voice = session.voiceType;
+        sessionConfig.output_audio_format = 'pcm16';
+      }
+
+      sendToRealtime({ type: 'session.update', session: sessionConfig });
+      console.log(`[${reqId}] 📤 Session configured: engine=${session.voiceEngine}, voice=${session.voiceType}`);
       return;
     }
 
@@ -424,6 +435,17 @@ Deno.serve(async (req) => {
       return;
     }
 
+    // ─── Hybrid mode: text response → Azure Speech TTS ───
+    if (type === 'response.text.done' && msg.text && session.voiceEngine === 'azure_speech') {
+      const text = msg.text.trim();
+      if (text) {
+        console.log(`[${reqId}] 🤖 AI (text): "${text.substring(0, 100)}"`);
+        session.transcript.push({ speaker: 'AI', text });
+        synthesizeWithAzureSpeech(text);
+      }
+      return;
+    }
+
     // ─── Barge-in: user started speaking while model is responding ───
     if (type === 'input_audio_buffer.speech_started') {
       console.log(`[${reqId}] 🛑 Barge-in: user speaking, clearing Smartflo buffer`);
@@ -432,6 +454,11 @@ Deno.serve(async (req) => {
           event: 'clear',
           streamSid: session.streamSid
         }));
+      }
+      // Cancel any ongoing Azure Speech TTS
+      if (session._ttsAbort) {
+        session._ttsAbort.abort();
+        session._ttsAbort = null;
       }
       session.isSpeaking = false;
       return;
@@ -459,6 +486,87 @@ Deno.serve(async (req) => {
   function sendToRealtime(msg) {
     if (session.realtimeWs && session.realtimeWs.readyState === WebSocket.OPEN) {
       session.realtimeWs.send(JSON.stringify(msg));
+    }
+  }
+
+  // ─── Azure Speech TTS (hybrid mode) ───
+  async function synthesizeWithAzureSpeech(text) {
+    const speechKey = Deno.env.get('AZURE_SPEECH_KEY');
+    const speechRegion = Deno.env.get('AZURE_SPEECH_REGION');
+
+    if (!speechKey || !speechRegion) {
+      console.error(`[${reqId}] ❌ Missing AZURE_SPEECH_KEY or AZURE_SPEECH_REGION for TTS`);
+      return;
+    }
+
+    const voiceName = session.voiceType;
+    const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>
+      <voice name='${voiceName}'>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</voice>
+    </speak>`;
+
+    const controller = new AbortController();
+    session._ttsAbort = controller;
+    session.isSpeaking = true;
+
+    try {
+      const ttsUrl = `https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/v1`;
+      const response = await fetch(ttsUrl, {
+        method: 'POST',
+        headers: {
+          'Ocp-Apim-Subscription-Key': speechKey,
+          'Content-Type': 'application/ssml+xml',
+          'X-Microsoft-OutputFormat': 'raw-8khz-8bit-mono-mulaw',
+        },
+        body: ssml,
+        signal: controller.signal
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`[${reqId}] ❌ Azure Speech TTS error: ${response.status} ${errText}`);
+        session.isSpeaking = false;
+        return;
+      }
+
+      // Stream the mu-law 8kHz audio directly to Smartflo (no conversion needed)
+      const audioBuffer = new Uint8Array(await response.arrayBuffer());
+      console.log(`[${reqId}] 🔊 Azure Speech TTS: ${audioBuffer.length} bytes of mu-law audio`);
+
+      if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
+        const CHUNK_SIZE = 800;
+        for (let i = 0; i < audioBuffer.length; i += CHUNK_SIZE) {
+          if (controller.signal.aborted) {
+            console.log(`[${reqId}] 🛑 TTS playback aborted (barge-in)`);
+            break;
+          }
+          const end = Math.min(i + CHUNK_SIZE, audioBuffer.length);
+          let chunk = audioBuffer.slice(i, end);
+
+          if (chunk.length % 160 !== 0) {
+            const paddedLen = Math.ceil(chunk.length / 160) * 160;
+            const padded = new Uint8Array(paddedLen);
+            padded.set(chunk);
+            padded.fill(0xFF, chunk.length);
+            chunk = padded;
+          }
+
+          const payload = btoa(String.fromCharCode(...chunk));
+          smartfloSocket.send(JSON.stringify({
+            event: 'media',
+            streamSid: session.streamSid,
+            media: { payload }
+          }));
+        }
+      }
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        console.log(`[${reqId}] 🛑 TTS aborted`);
+      } else {
+        console.error(`[${reqId}] ❌ Azure Speech TTS failed: ${err.message}`);
+      }
+    } finally {
+      session.isSpeaking = false;
+      session._ttsAbort = null;
     }
   }
 
@@ -524,14 +632,24 @@ Deno.serve(async (req) => {
           }
           console.log(`[${reqId}] ✅ Agent config loaded (${session.systemPrompt.length} chars)`);
         }
-        // Load voice type from agent persona (Realtime API voices: alloy, ash, ballad, coral, echo, sage, shimmer, verse, marin, cedar)
-        if (cache && cache.persona && cache.persona.voice_type) {
-          const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
-          const voice = cache.persona.voice_type.toLowerCase();
-          if (validVoices.includes(voice)) {
-            session.voiceType = voice;
+        // Load voice engine and voice type from agent persona
+        if (cache && cache.persona) {
+          if (cache.persona.voice_engine) {
+            session.voiceEngine = cache.persona.voice_engine;
           }
-          console.log(`[${reqId}] 🎙️ Voice set: ${cache.persona.voice_type} → ${session.voiceType}`);
+          if (cache.persona.voice_type) {
+            if (session.voiceEngine === 'realtime') {
+              const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
+              const voice = cache.persona.voice_type.toLowerCase();
+              if (validVoices.includes(voice)) {
+                session.voiceType = voice;
+              }
+            } else {
+              // Azure Speech TTS - use voice name directly
+              session.voiceType = cache.persona.voice_type;
+            }
+          }
+          console.log(`[${reqId}] 🎙️ Voice: engine=${session.voiceEngine}, voice=${session.voiceType}`);
         }
       } else {
         console.log(`[${reqId}] ⚠️ No call log found, using default prompt`);
