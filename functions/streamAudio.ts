@@ -625,38 +625,76 @@ Deno.serve(async (req) => {
   // ─── Load agent config from CallLog cache ───
   async function loadAgentConfig() {
     try {
-      // Use the base44 client (created from the upgrade request) with service role
-      const svc = base44.asServiceRole;
+      // Use direct REST API calls to fetch CallLog (WebSocket doesn't have proper auth headers for SDK)
+      const appId = Deno.env.get('BASE44_APP_ID');
+      const apiBase = 'https://app.base44.com/api';
+
+      // Helper: fetch entities via REST API with service role
+      async function fetchCallLogs(query, sort, limit) {
+        const params = new URLSearchParams();
+        if (query) params.set('query', JSON.stringify(query));
+        if (sort) params.set('sort', sort);
+        if (limit) params.set('limit', String(limit));
+        const url = `${apiBase}/entities/CallLog?${params.toString()}`;
+        const res = await fetch(url, {
+          headers: {
+            'Base44-App-Id': appId,
+            'X-Service-Role': 'true',
+            'Content-Type': 'application/json'
+          }
+        });
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`API ${res.status}: ${errText}`);
+        }
+        return await res.json();
+      }
+
+      async function updateCallLog(id, data) {
+        const url = `${apiBase}/entities/CallLog/${id}`;
+        await fetch(url, {
+          method: 'PUT',
+          headers: {
+            'Base44-App-Id': appId,
+            'X-Service-Role': 'true',
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(data)
+        });
+      }
 
       let callLog = null;
 
+      // Strategy 1: Look up by call_sid from Smartflo
       if (session.callSid) {
         try {
-          const logs = await svc.entities.CallLog.filter({ call_sid: session.callSid });
+          const logs = await fetchCallLogs({ call_sid: session.callSid }, '-created_date', 1);
           if (logs.length > 0) callLog = logs[0];
-          console.log(`[${reqId}] 🔍 call_sid lookup: found=${!!callLog}, callSid=${session.callSid}`);
+          console.log(`[${reqId}] 🔍 call_sid lookup (${session.callSid}): found=${!!callLog}`);
         } catch (e) {
           console.log(`[${reqId}] ⚠️ call_sid filter failed: ${e.message}`);
         }
       }
 
+      // Strategy 2: Look up by stream_sid
       if (!callLog && session.streamSid) {
         try {
-          const logs = await svc.entities.CallLog.filter({ stream_sid: session.streamSid });
+          const logs = await fetchCallLogs({ stream_sid: session.streamSid }, '-created_date', 1);
           if (logs.length > 0) callLog = logs[0];
           console.log(`[${reqId}] 🔍 stream_sid lookup: found=${!!callLog}`);
         } catch (e) { /* ignore */ }
       }
 
+      // Strategy 3: Look for most recent ringing/initiated call (fallback)
       if (!callLog) {
         try {
-          const logs = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 1);
+          const logs = await fetchCallLogs({ status: 'ringing' }, '-created_date', 1);
           if (logs.length > 0) callLog = logs[0];
           console.log(`[${reqId}] 🔍 ringing lookup: found=${!!callLog}`);
         } catch (e) { /* ignore */ }
         if (!callLog) {
           try {
-            const logs = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 1);
+            const logs = await fetchCallLogs({ status: 'initiated' }, '-created_date', 1);
             if (logs.length > 0) callLog = logs[0];
             console.log(`[${reqId}] 🔍 initiated lookup: found=${!!callLog}`);
           } catch (e) { /* ignore */ }
@@ -665,7 +703,7 @@ Deno.serve(async (req) => {
 
       if (callLog) {
         session.callLogId = callLog.id;
-        console.log(`[${reqId}] 📍 Found call log: ${callLog.id}`);
+        console.log(`[${reqId}] 📍 Found call log: ${callLog.id}, agent_config_cache keys: ${callLog.agent_config_cache ? Object.keys(callLog.agent_config_cache).join(',') : 'NONE'}`);
 
         // Update call log with stream/call sid
         const updateFields = {};
@@ -673,7 +711,7 @@ Deno.serve(async (req) => {
         if (session.callSid && callLog.call_sid !== session.callSid) updateFields.call_sid = session.callSid;
         if (Object.keys(updateFields).length > 0) {
           try {
-            await base44.asServiceRole.entities.CallLog.update(callLog.id, updateFields);
+            await updateCallLog(callLog.id, updateFields);
           } catch (e) { /* ignore */ }
         }
 
