@@ -574,6 +574,54 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ─── GPT-5-nano text generation (hybrid mode) ───
+  async function generateGpt5NanoResponse(userText) {
+    const nanoEndpoint = Deno.env.get('AZURE_GPT5_NANO_ENDPOINT')?.replace(/\/+$/, '');
+    const nanoKey = Deno.env.get('AZURE_GPT5_NANO_API_KEY');
+    const nanoDeployment = Deno.env.get('AZURE_GPT5_NANO_DEPLOYMENT');
+
+    if (!nanoEndpoint || !nanoKey || !nanoDeployment) {
+      console.error(`[${reqId}] ❌ Missing GPT-5-nano secrets`);
+      return;
+    }
+
+    // Add user message to chat history
+    session.chatHistory.push({ role: 'user', content: userText });
+
+    try {
+      const url = `${nanoEndpoint}/openai/deployments/${nanoDeployment}/chat/completions?api-version=2024-08-01-preview`;
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'api-key': nanoKey,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          messages: session.chatHistory,
+          max_completion_tokens: 300
+        })
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        console.error(`[${reqId}] ❌ GPT-5-nano error: ${response.status} ${errText}`);
+        return;
+      }
+
+      const data = await response.json();
+      const aiText = data.choices?.[0]?.message?.content?.trim();
+
+      if (aiText) {
+        console.log(`[${reqId}] 🧠 GPT-5-nano: "${aiText.substring(0, 100)}"`);
+        session.chatHistory.push({ role: 'assistant', content: aiText });
+        session.transcript.push({ speaker: 'AI', text: aiText });
+        synthesizeWithAzureSpeech(aiText);
+      }
+    } catch (err) {
+      console.error(`[${reqId}] ❌ GPT-5-nano failed: ${err.message}`);
+    }
+  }
+
   // ─── Load agent config from CallLog cache (same as before) ───
   async function loadAgentConfig() {
     try {
