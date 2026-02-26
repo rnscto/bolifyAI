@@ -110,16 +110,31 @@ Deno.serve(async (req) => {
 
       promptParts.push(`\nDefault points to cover:\n1. Greet warmly\n2. Ask about their trial experience\n3. Highlight that their setup is preserved\n4. Mention pricing: ₹6,500/month per channel (quarterly billing)\n5. Be respectful if not interested\n\nKeep it conversational and under 200 words. Indian business context.`);
 
-      const scriptResponse = await base44.asServiceRole.integrations.Core.InvokeLLM({
-        prompt: promptParts.join('\n'),
-        response_json_schema: {
-          type: "object",
-          properties: {
-            script: { type: "string" },
-            key_objection_handlers: { type: "array", items: { type: "string" } }
-          }
-        }
+      // Use Azure GPT-5.2 directly (no Base44 credits)
+      const azureResponse = await fetch(Deno.env.get('AZURE_GPT52_TARGET_URI'), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'api-key': Deno.env.get('AZURE_GPT52_API_KEY'),
+        },
+        body: JSON.stringify({
+          messages: [
+            { role: 'system', content: 'You are a helpful assistant that generates cold call scripts. Always respond in valid JSON.' },
+            { role: 'user', content: promptParts.join('\n') + '\n\nRespond in JSON format with keys: "script" (string) and "key_objection_handlers" (array of strings).' }
+          ],
+          temperature: 0.7,
+          response_format: { type: "json_object" }
+        })
       });
+
+      if (!azureResponse.ok) {
+        const errText = await azureResponse.text();
+        console.error('Azure GPT-5.2 error:', errText);
+        throw new Error('Azure OpenAI call failed: ' + azureResponse.status);
+      }
+
+      const azureData = await azureResponse.json();
+      const scriptResponse = JSON.parse(azureData.choices[0].message.content);
 
       // Create call log
       const callSid = `ret_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -193,10 +208,8 @@ Deno.serve(async (req) => {
         </div>
       ` : '';
 
-      await base44.asServiceRole.integrations.Core.SendEmail({
-        to: client.email,
-        subject: `Following up on our call — VaaniAI`,
-        body: `
+      // Send email via Resend directly (no Base44 credits)
+      const emailBody = `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
             <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
               <h1 style="color: white; margin: 0;">VaaniAI</h1>
@@ -213,8 +226,20 @@ Deno.serve(async (req) => {
                 <a href="https://vaaniai.in" style="background: linear-gradient(135deg, #e67e22, #f39c12); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Subscribe Now</a>
               </div>
             </div>
-          </div>
-        `,
+          </div>`;
+
+      await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`,
+        },
+        body: JSON.stringify({
+          from: 'VaaniAI <noreply@vaaniai.in>',
+          to: client.email,
+          subject: 'Following up on our call — VaaniAI',
+          html: emailBody,
+        })
       });
       results.emails_sent.push({ client_id: client.id, email: client.email });
     }
