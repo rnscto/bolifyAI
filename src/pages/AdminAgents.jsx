@@ -30,6 +30,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Plus, Edit, Trash2, Bot } from 'lucide-react';
 import { toast } from 'sonner';
+import AZURE_VOICES from '../components/agents/VoiceData';
 
 export default function AdminAgents() {
   const [agents, setAgents] = useState([]);
@@ -41,6 +42,7 @@ export default function AdminAgents() {
   const [formData, setFormData] = useState({
     name: '',
     client_id: '',
+    voice_type: 'Meera Dragon HD Latest',
     tone: 'professional',
     language: 'en-US',
     system_prompt: '',
@@ -79,7 +81,7 @@ export default function AdminAgents() {
         name: formData.name,
         client_id: formData.client_id,
         persona: {
-          voice_type: 'Surbhi-English-India',
+          voice_type: formData.voice_type || 'Meera Dragon HD Latest',
           tone: formData.tone,
           language: formData.language
         },
@@ -112,6 +114,7 @@ export default function AdminAgents() {
     setFormData({
       name: '',
       client_id: '',
+      voice_type: 'Meera Dragon HD Latest',
       tone: 'professional',
       language: 'en-US',
       system_prompt: '',
@@ -126,6 +129,7 @@ export default function AdminAgents() {
     setFormData({
       name: agent.name,
       client_id: agent.client_id,
+      voice_type: agent.persona?.voice_type || 'Meera Dragon HD Latest',
       tone: agent.persona?.tone || 'professional',
       language: agent.persona?.language || 'en-US',
       system_prompt: agent.system_prompt || '',
@@ -228,9 +232,26 @@ export default function AdminAgents() {
               
               <div>
                 <Label>Voice</Label>
-                <div className="px-3 py-2 border rounded-md bg-gray-50 text-sm text-gray-700">
-                  Surbhi-English-India (Supports Hindi & English)
-                </div>
+                <Select
+                  value={formData.voice_type}
+                  onValueChange={(value) => setFormData({ ...formData, voice_type: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select voice" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-64">
+                    {AZURE_VOICES.map((v) => (
+                      <SelectItem key={v.name} value={v.name}>
+                        <span className="flex items-center gap-2">
+                          {v.name}
+                          <span className="text-xs text-gray-400">
+                            {v.gender} • {v.lang}
+                          </span>
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
