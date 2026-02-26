@@ -687,8 +687,10 @@ Deno.serve(async (req) => {
         }
         // Load voice engine and voice type from agent persona
         if (cache && cache.persona) {
+          console.log(`[${reqId}] 📋 Persona from cache: ${JSON.stringify(cache.persona)}`);
           if (cache.persona.voice_engine) {
             session.voiceEngine = cache.persona.voice_engine;
+            console.log(`[${reqId}] 🔧 Set voiceEngine = ${session.voiceEngine}`);
           }
           if (cache.persona.voice_type) {
             if (session.voiceEngine === 'realtime') {
@@ -696,13 +698,17 @@ Deno.serve(async (req) => {
               const voice = cache.persona.voice_type.toLowerCase();
               if (validVoices.includes(voice)) {
                 session.voiceType = voice;
+              } else {
+                console.log(`[${reqId}] ⚠️ Voice '${cache.persona.voice_type}' not valid for realtime, keeping default '${session.voiceType}'`);
               }
             } else {
               // Azure Speech TTS - use voice name directly
               session.voiceType = cache.persona.voice_type;
             }
           }
-          console.log(`[${reqId}] 🎙️ Voice: engine=${session.voiceEngine}, voice=${session.voiceType}`);
+          console.log(`[${reqId}] 🎙️ FINAL Voice config: engine=${session.voiceEngine}, voice=${session.voiceType}`);
+        } else {
+          console.log(`[${reqId}] ⚠️ No persona in cache, using defaults: engine=${session.voiceEngine}, voice=${session.voiceType}`);
         }
       } else {
         console.log(`[${reqId}] ⚠️ No call log found, using default prompt`);
