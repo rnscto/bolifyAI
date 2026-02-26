@@ -280,7 +280,8 @@ Deno.serve(async (req) => {
     realtimeWs: null,         // WebSocket connection to Azure Realtime API
     realtimeReady: false,     // Whether session.created has been received
     isSpeaking: false,        // Track if model is currently outputting audio
-    _ttsAbort: null           // AbortController for Azure Speech TTS (hybrid mode)
+    _ttsAbort: null,          // AbortController for Azure Speech TTS (hybrid mode)
+    chatHistory: []           // GPT-5-nano conversation history (azure_speech mode)
   };
 
   // ─── Connect to Azure Realtime API ───
