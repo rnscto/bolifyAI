@@ -274,6 +274,7 @@ Deno.serve(async (req) => {
     transcript: [],
     startTime: Date.now(),
     systemPrompt: 'You are a friendly AI voice assistant. Be professional and concise. Keep responses to 1-3 sentences.',
+    voiceType: 'alloy',       // Default voice, overridden from agent config
     _saved: false,
     realtimeWs: null,         // WebSocket connection to Azure Realtime API
     realtimeReady: false,     // Whether session.created has been received
@@ -337,7 +338,7 @@ Deno.serve(async (req) => {
         type: 'session.update',
         session: {
           instructions: session.systemPrompt,
-          voice: 'alloy',
+          voice: session.voiceType,
           input_audio_format: 'pcm16',
           output_audio_format: 'pcm16',
           input_audio_transcription: {
@@ -522,6 +523,14 @@ Deno.serve(async (req) => {
             session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
           }
           console.log(`[${reqId}] ✅ Agent config loaded (${session.systemPrompt.length} chars)`);
+        }
+        // Load voice type from agent persona
+        if (cache && cache.persona && cache.persona.voice_type) {
+          // Convert display name to Azure Realtime API voice ID
+          // e.g. "Meera Dragon HD Latest" → "meera" (lowercase first name)
+          const voiceName = cache.persona.voice_type.split(' ')[0].toLowerCase();
+          session.voiceType = voiceName;
+          console.log(`[${reqId}] 🎙️ Voice set: ${cache.persona.voice_type} → ${voiceName}`);
         }
       } else {
         console.log(`[${reqId}] ⚠️ No call log found, using default prompt`);
