@@ -17,9 +17,18 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, message: 'Retention system is paused', skipped: true });
     }
 
+    // Parse request body for manual trigger flag
+    let requestBody = {};
+    try {
+      requestBody = await req.json();
+    } catch (e) {
+      // No body or invalid JSON - that's fine
+    }
+    const forceRun = requestBody.force === true;
+
     const callDays = config.call_days_after_expiry || [2, 5];
     const maxCallsPerClient = config.max_calls_per_client || 3;
-    const results = { calls_initiated: [], emails_sent: [], errors: [], skipped: [] };
+    const results = { calls_initiated: [], emails_sent: [], errors: [], skipped: [], force_mode: forceRun };
 
     // Get all expired clients
     const expiredClients = await base44.asServiceRole.entities.Client.filter({ account_status: 'expired' });
@@ -40,14 +49,14 @@ Deno.serve(async (req) => {
       const now = new Date();
       const daysSinceExpiry = Math.floor((now - trialEnd) / (1000 * 60 * 60 * 24));
 
-      // Check if today matches any configured call day
-      if (!callDays.includes(daysSinceExpiry)) continue;
+      // Check if today matches any configured call day (skip check in force mode)
+      if (!forceRun && !callDays.includes(daysSinceExpiry)) continue;
 
-      // Check max calls per client
+      // Check max calls per client (skip check in force mode)
       const clientRetentionCalls = allCallLogs.filter(l => 
         l.client_id === client.id && (l.call_sid?.startsWith('ret_') || l.conversation_summary?.includes('Retention'))
       );
-      if (clientRetentionCalls.length >= maxCallsPerClient) {
+      if (!forceRun && clientRetentionCalls.length >= maxCallsPerClient) {
         results.skipped.push({ client_id: client.id, reason: 'max_calls_reached', count: clientRetentionCalls.length });
         continue;
       }
