@@ -76,7 +76,7 @@ export default function AdminRetention() {
 
   const handleManualTrigger = async () => {
     setTriggeringManual(true);
-    const response = await base44.functions.invoke('retentionCall', {});
+    const response = await base44.functions.invoke('retentionCall', { force: true });
     if (response.data?.success) {
       const initiated = response.data.calls_initiated?.length || 0;
       const errors = response.data.errors?.length || 0;
