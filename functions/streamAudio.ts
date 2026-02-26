@@ -622,20 +622,19 @@ Deno.serve(async (req) => {
     }
   }
 
-  // ─── Load agent config from CallLog cache (same as before) ───
+  // ─── Load agent config from CallLog cache ───
   async function loadAgentConfig() {
     try {
-      const { createClient } = await import('npm:@base44/sdk@0.8.18');
-      const appId = Deno.env.get('BASE44_APP_ID');
-      const serviceClient = createClient({ appId, asServiceRole: true });
+      // Use the base44 client (created from the upgrade request) with service role
+      const svc = base44.asServiceRole;
 
       let callLog = null;
 
       if (session.callSid) {
         try {
-          const logs = await serviceClient.entities.CallLog.filter({ call_sid: session.callSid });
+          const logs = await svc.entities.CallLog.filter({ call_sid: session.callSid });
           if (logs.length > 0) callLog = logs[0];
-          console.log(`[${reqId}] 🔍 call_sid lookup: found=${!!callLog}`);
+          console.log(`[${reqId}] 🔍 call_sid lookup: found=${!!callLog}, callSid=${session.callSid}`);
         } catch (e) {
           console.log(`[${reqId}] ⚠️ call_sid filter failed: ${e.message}`);
         }
@@ -643,25 +642,26 @@ Deno.serve(async (req) => {
 
       if (!callLog && session.streamSid) {
         try {
-          const logs = await serviceClient.entities.CallLog.filter({ stream_sid: session.streamSid });
+          const logs = await svc.entities.CallLog.filter({ stream_sid: session.streamSid });
           if (logs.length > 0) callLog = logs[0];
+          console.log(`[${reqId}] 🔍 stream_sid lookup: found=${!!callLog}`);
         } catch (e) { /* ignore */ }
       }
 
       if (!callLog) {
         try {
-          const logs = await serviceClient.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 1);
+          const logs = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 1);
           if (logs.length > 0) callLog = logs[0];
+          console.log(`[${reqId}] 🔍 ringing lookup: found=${!!callLog}`);
         } catch (e) { /* ignore */ }
         if (!callLog) {
           try {
-            const logs = await serviceClient.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 1);
+            const logs = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 1);
             if (logs.length > 0) callLog = logs[0];
+            console.log(`[${reqId}] 🔍 initiated lookup: found=${!!callLog}`);
           } catch (e) { /* ignore */ }
         }
       }
-
-      try { serviceClient.cleanup(); } catch (_) { /* ignore */ }
 
       if (callLog) {
         session.callLogId = callLog.id;
