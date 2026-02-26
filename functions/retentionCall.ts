@@ -110,12 +110,25 @@ Deno.serve(async (req) => {
 
       promptParts.push(`\nDefault points to cover:\n1. Greet warmly\n2. Ask about their trial experience\n3. Highlight that their setup is preserved\n4. Mention pricing: ₹6,500/month per channel (quarterly billing)\n5. Be respectful if not interested\n\nKeep it conversational and under 200 words. Indian business context.`);
 
-      // Use Azure GPT-5.2 directly (no Base44 credits)
-      const azureResponse = await fetch(Deno.env.get('AZURE_GPT52_TARGET_URI'), {
+      // Use Azure OpenAI directly (no Base44 credits)
+      // Build URI: use AZURE_GPT52_TARGET_URI if it contains /deployments/, otherwise construct from parts
+      let azureUri = Deno.env.get('AZURE_GPT52_TARGET_URI') || '';
+      const azureApiKey = Deno.env.get('AZURE_GPT52_API_KEY') || Deno.env.get('AZURE_OPENAI_KEY');
+      
+      // If the URI doesn't contain /deployments/, construct it properly
+      if (!azureUri.includes('/deployments/')) {
+        const endpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT') || azureUri.replace(/\/+$/, '');
+        const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT') || 'gpt-4o';
+        azureUri = `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=2024-12-01-preview`;
+      }
+      
+      console.log('Azure URI:', azureUri);
+      
+      const azureResponse = await fetch(azureUri, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'api-key': Deno.env.get('AZURE_GPT52_API_KEY'),
+          'api-key': azureApiKey,
         },
         body: JSON.stringify({
           messages: [
