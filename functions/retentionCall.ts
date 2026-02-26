@@ -175,8 +175,9 @@ Deno.serve(async (req) => {
         scriptResponse?.key_objection_handlers ? `\nKey objection handlers:\n${scriptResponse.key_objection_handlers.join('\n')}` : '',
       ].filter(Boolean).join('\n');
 
-      // Create call log with agent_config_cache (so WebSocket voice agent knows the greeting/persona)
+      // Create call log with agent_config_cache (so WebSocket voice agent knows the greeting/persona/voice_engine)
       const callSid = `ret_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const agentPersona = retentionAgent.persona || {};
       const callLog = await base44.asServiceRole.entities.CallLog.create({
         client_id: client.id,
         agent_id: retentionAgent.id,
@@ -190,7 +191,7 @@ Deno.serve(async (req) => {
         agent_config_cache: {
           agent_name: retentionAgent.name,
           system_prompt: retentionSystemPrompt,
-          persona: retentionAgent.persona || {},
+          persona: agentPersona,
           knowledge_base_content: kbContent
         }
       });
