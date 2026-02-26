@@ -444,14 +444,9 @@ Deno.serve(async (req) => {
       return;
     }
 
-    // ─── Hybrid mode: text response → Azure Speech TTS ───
-    if (type === 'response.text.done' && msg.text && session.voiceEngine === 'azure_speech') {
-      const text = msg.text.trim();
-      if (text) {
-        console.log(`[${reqId}] 🤖 AI (text): "${text.substring(0, 100)}"`);
-        session.transcript.push({ speaker: 'AI', text });
-        synthesizeWithAzureSpeech(text);
-      }
+    // ─── Hybrid mode: ignore Realtime text responses (GPT-5-nano handles this) ───
+    if (type === 'response.text.done' && session.voiceEngine === 'azure_speech') {
+      // Ignore - we use GPT-5-nano for text generation in hybrid mode
       return;
     }
 
