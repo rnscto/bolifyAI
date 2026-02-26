@@ -398,6 +398,7 @@ export default function AdminAgents() {
                 <TableHead>Name</TableHead>
                 <TableHead>Client</TableHead>
                 <TableHead>Industry</TableHead>
+                <TableHead>Voice</TableHead>
                 <TableHead>Tone/Language</TableHead>
                 <TableHead>DID</TableHead>
                 <TableHead>Status</TableHead>
@@ -407,7 +408,7 @@ export default function AdminAgents() {
             <TableBody>
               {agents.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-gray-500">
+                  <TableCell colSpan={8} className="text-center text-gray-500">
                     No agents found. Create your first agent to get started.
                   </TableCell>
                 </TableRow>
@@ -417,6 +418,12 @@ export default function AdminAgents() {
                     <TableCell className="font-medium">{agent.name}</TableCell>
                     <TableCell>{getClientName(agent.client_id)}</TableCell>
                     <TableCell className="text-sm">{agent.industry || '-'}</TableCell>
+                    <TableCell className="text-sm">
+                      <Badge variant="outline" className={agent.persona?.voice_engine === 'azure_speech' ? 'border-purple-300 text-purple-700' : 'border-blue-300 text-blue-700'}>
+                        {agent.persona?.voice_engine === 'azure_speech' ? 'Speech TTS' : 'Realtime'}
+                      </Badge>
+                      <span className="block text-xs text-gray-500 mt-1">{agent.persona?.voice_type || 'alloy'}</span>
+                    </TableCell>
                     <TableCell className="text-sm">
                       {agent.persona?.tone || 'professional'} / {agent.persona?.language || 'en-IN'}
                     </TableCell>
