@@ -526,11 +526,13 @@ Deno.serve(async (req) => {
         }
         // Load voice type from agent persona
         if (cache && cache.persona && cache.persona.voice_type) {
-          // Convert display name to Azure Realtime API voice ID
-          // e.g. "Meera Dragon HD Latest" → "meera" (lowercase first name)
-          const voiceName = cache.persona.voice_type.split(' ')[0].toLowerCase();
-          session.voiceType = voiceName;
-          console.log(`[${reqId}] 🎙️ Voice set: ${cache.persona.voice_type} → ${voiceName}`);
+          // Azure Realtime API (gpt-4o-realtime) supports specific voice IDs.
+          // Map display names to the correct Azure Realtime voice deployment name.
+          // Dragon HD / Turbo / Multilingual voices use: en-IN-{Name}DragonHDLatest format
+          const displayName = cache.persona.voice_type;
+          const realtimeVoiceId = mapVoiceToRealtimeId(displayName);
+          session.voiceType = realtimeVoiceId;
+          console.log(`[${reqId}] 🎙️ Voice set: ${displayName} → ${realtimeVoiceId}`);
         }
       } else {
         console.log(`[${reqId}] ⚠️ No call log found, using default prompt`);
