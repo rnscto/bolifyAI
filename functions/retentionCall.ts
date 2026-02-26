@@ -135,7 +135,6 @@ Deno.serve(async (req) => {
             { role: 'system', content: 'You are a helpful assistant that generates cold call scripts. Always respond in valid JSON.' },
             { role: 'user', content: promptParts.join('\n') + '\n\nRespond in JSON format with keys: "script" (string) and "key_objection_handlers" (array of strings).' }
           ],
-          temperature: 0.7,
           response_format: { type: "json_object" }
         })
       });
