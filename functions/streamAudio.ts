@@ -425,6 +425,11 @@ Deno.serve(async (req) => {
       if (text) {
         console.log(`[${reqId}] 🗣️ Customer: "${text.substring(0, 100)}"`);
         session.transcript.push({ speaker: 'Customer', text });
+
+        // In hybrid mode, send transcribed text to GPT-5-nano for response
+        if (session.voiceEngine === 'azure_speech') {
+          generateGpt5NanoResponse(text);
+        }
       }
       return;
     }
