@@ -106,10 +106,10 @@ async function saveCallRecord(session, reqId, duration) {
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
+    const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
     let summary = '';
     if (transcript && transcript.trim().length > 20) {
       try {
-        const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
         const summaryRes = await fetch(
           `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`,
           {
