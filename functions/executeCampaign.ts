@@ -218,19 +218,23 @@ Deno.serve(async (req) => {
 
         await svc.entities.CampaignLead.update(cl.id, { call_log_id: callLog.id });
 
+        // Clean the phone number for Smartflo (must be digits only, no spaces)
+        const smartfloPhone = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
+        console.log(`[campaign] Calling ${cl.lead_name}: original=${cl.lead_phone}, clean=${cleanPhone}, smartflo=${smartfloPhone}, DID=${selectedDID}`);
+
         const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             api_key: Deno.env.get('SMARTFLO_API_KEY'),
-            customer_number: cleanPhone,
+            customer_number: smartfloPhone,
             caller_id: selectedDID.replace(/^\+/, ''),
             async: 1
           })
         });
 
         const smartfloData = await smartfloResp.json();
-        console.log(`[campaign] Call to ${cl.lead_phone} (${cl.lead_name}): ${JSON.stringify(smartfloData)}`);
+        console.log(`[campaign] Smartflo response for ${cl.lead_name}: ${JSON.stringify(smartfloData)}`);
 
         if (smartfloResp.ok && smartfloData.success !== false) {
           const newCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
