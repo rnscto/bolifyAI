@@ -55,18 +55,22 @@ Deno.serve(async (req) => {
         return Response.json({ success: false, error: 'Zixflow RCS not configured. Set ZIXFLOW_API_KEY and ZIXFLOW_WORKSPACE_ID.' });
       }
 
+      if (!botId) {
+        console.log('[sendRCS] No Zixflow Bot ID configured, skipping');
+        return Response.json({ success: false, error: 'Zixflow Bot ID not configured. Set ZIXFLOW_BOT_ID.' });
+      }
+
       const zixflowBody = {
-        recipient: cleanPhone,
+        to: cleanPhone,
+        botId: botId,
         text: message,
       };
-      if (botId) zixflowBody.bot_id = botId;
 
-      const res = await fetch('https://api-ai.zixflow.com/api/ingest/rcs/v1/message/text/send', {
+      const res = await fetch(`https://api.zixflow.com/api/v1/campaign/rcs/message/text`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'x-workspace-id': workspaceId
+          'Authorization': `Bearer ${apiKey}`
         },
         body: JSON.stringify(zixflowBody)
       });
@@ -74,12 +78,11 @@ Deno.serve(async (req) => {
       const data = await res.json();
       console.log(`[sendRCS] Zixflow response for ${cleanPhone}:`, JSON.stringify(data));
 
-      if (res.ok && data.success) {
+      if (res.ok && data.status) {
         return Response.json({ 
           success: true, 
           provider: 'zixflow',
-          request_id: data.request_id,
-          message: 'RCS message queued via Zixflow' 
+          message: data.message || 'RCS message sent via Zixflow' 
         });
       }
       return Response.json({ 
