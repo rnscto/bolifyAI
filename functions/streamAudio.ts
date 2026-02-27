@@ -150,9 +150,124 @@ async function saveCallRecord(session, reqId, duration) {
 
     console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}, duration=${duration}s`);
 
+    // ─── Post-call pipeline: Lead scoring, sentiment, follow-ups, activities ───
+    // streamAudio captures transcripts in real-time (no recording_url), so processTranscript
+    // is not triggered by smartfloWebhook. We must run the AI analysis and follow-ups here.
+    if (transcript && transcript.trim().length > 20) {
+      try {
+        // Get the call log to find lead_id
+        const savedCallLog = await serviceClient.entities.CallLog.get(session.callLogId);
+        const leadId = savedCallLog?.lead_id;
+        const clientId = savedCallLog?.client_id;
+
+        // ── AI Analysis: Lead scoring, sentiment, intent signals ──
+        const analysisResponse = await fetch(
+          `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`,
+          {
+            method: 'POST',
+            headers: {
+              'api-key': Deno.env.get('AZURE_OPENAI_KEY'),
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              messages: [
+                {
+                  role: 'system',
+                  content: `You are an expert sales call analyst AI. Analyze call transcripts to extract:
+1. Lead status classification
+2. Sentiment analysis
+3. Intent signals (buying signals, objections, questions)
+4. A lead score from 0-100 based on conversion likelihood
+
+SCORING CRITERIA (total 100):
+- Sentiment (0-25): very_negative=0, negative=5, neutral=12, positive=20, very_positive=25
+- Intent signals (0-30): pricing_inquiry=+10, demo_request=+15, competitor_mention=+5, budget_confirmed=+15, timeline_mentioned=+10, decision_maker=+10, referral=+8 (cap at 30)
+- Engagement (0-25): short_answers_only=5, asked_questions=15, extended_conversation=20, highly_engaged=25
+- Keywords (0-20): positive keywords like "interested","sign up","let's go","sounds good","when can we start"=+5 each (cap 20); negative like "not interested","too expensive"=-5 each (min 0)
+
+Respond ONLY in valid JSON.`
+                },
+                {
+                  role: 'user',
+                  content: `Analyze this sales call transcript:\n\n${transcript}\n\nReturn JSON with: lead_status (one of: interested, not_interested, callback, converted, contacted), sentiment (one of: very_positive, positive, neutral, negative, very_negative), intent_signals (array of strings), lead_score (number 0-100), score_breakdown (object with: sentiment_score, intent_score, engagement_score, keyword_score, reasoning), key_keywords (array of strings)`
+                }
+              ],
+              max_tokens: 600,
+              temperature: 0.2,
+              response_format: { type: "json_object" }
+            })
+          }
+        );
+
+        let analysis = {};
+        if (analysisResponse.ok) {
+          const analysisData = await analysisResponse.json();
+          const rawContent = analysisData.choices?.[0]?.message?.content || '{}';
+          try { analysis = JSON.parse(rawContent); } catch (_) { analysis = {}; }
+        }
+
+        const leadStatus = analysis.lead_status || 'contacted';
+        const sentiment = analysis.sentiment || 'neutral';
+        const leadScore = Math.min(100, Math.max(0, analysis.lead_score || 0));
+        const intentSignals = analysis.intent_signals || [];
+        const scoreBreakdown = analysis.score_breakdown || {};
+        const keyKeywords = analysis.key_keywords || [];
+
+        console.log(`[${reqId}] 📊 AI Analysis: Score=${leadScore}, Sentiment=${sentiment}, Status=${leadStatus}, Intents=${intentSignals.join(', ')}`);
+
+        // Update CallLog with enriched summary and lead status
+        await serviceClient.entities.CallLog.update(session.callLogId, {
+          conversation_summary: `${summary}\n\n---\nScore: ${leadScore}/100 | Sentiment: ${sentiment} | Signals: ${intentSignals.join(', ')}`,
+          lead_status_updated: leadStatus
+        });
+
+        // Update Lead with score, sentiment, intent signals
+        if (leadId && leadId !== 'unknown') {
+          let existingLead = {};
+          try { existingLead = await serviceClient.entities.Lead.get(leadId); } catch (_) {}
+          
+          const updatedEngagement = (existingLead.engagement_count || 0) + 1;
+          const existingTags = existingLead.tags || [];
+          const mergedTags = [...new Set([...existingTags, ...keyKeywords.slice(0, 10)])];
+
+          await serviceClient.entities.Lead.update(leadId, {
+            status: leadStatus,
+            score: leadScore,
+            sentiment: sentiment,
+            intent_signals: intentSignals,
+            score_breakdown: scoreBreakdown,
+            tags: mergedTags,
+            last_call_date: new Date().toISOString(),
+            last_engagement_date: new Date().toISOString(),
+            engagement_count: updatedEngagement,
+            notes: `[${new Date().toISOString().split('T')[0]}] [Score: ${leadScore}/100 | ${sentiment}] ${summary.substring(0, 300)}`
+          });
+          console.log(`[${reqId}] ✅ Lead ${leadId} updated — Score: ${leadScore}, Sentiment: ${sentiment}, Status: ${leadStatus}`);
+        }
+
+        // ── Trigger post-call follow-up (emails + RCS) ──
+        try {
+          await serviceClient.functions.invoke('postCallFollowup', { call_log_id: session.callLogId });
+          console.log(`[${reqId}] ✅ postCallFollowup triggered`);
+        } catch (fErr) {
+          console.error(`[${reqId}] ⚠️ postCallFollowup error: ${fErr.message}`);
+        }
+
+        // ── Trigger post-call action extraction (activities, tasks) ──
+        try {
+          await serviceClient.functions.invoke('postCallActionExtractor', { call_log_id: session.callLogId });
+          console.log(`[${reqId}] ✅ postCallActionExtractor triggered`);
+        } catch (aErr) {
+          console.error(`[${reqId}] ⚠️ postCallActionExtractor error: ${aErr.message}`);
+        }
+
+      } catch (pipelineErr) {
+        console.error(`[${reqId}] ❌ Post-call pipeline error: ${pipelineErr.message}`);
+      }
+    }
+
     // NOTE: Campaign lead updates and next-batch triggers are handled by
-    // smartfloWebhook (no-recording calls) and campaignPostCall (entity automation on CallLog update).
-    // streamAudio only saves the CallLog — no campaign logic here to avoid race conditions.
+    // campaignPostCall (entity automation on CallLog update).
 
     try { serviceClient.cleanup(); } catch (_) { /* ignore */ }
   } catch (err) {
