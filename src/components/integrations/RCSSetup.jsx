@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Smartphone, CheckCircle2, XCircle, Loader2, Send, Eye, EyeOff } from 'lucide-react';
+import { Smartphone, CheckCircle2, XCircle, Loader2, Send, Eye, EyeOff, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '@/utils';
 
 const PROVIDERS = [
   { value: 'none', label: 'Not Connected' },
@@ -126,6 +128,9 @@ export default function RCSSetup({ config, onSave }) {
                   Save
                 </Button>
               </div>
+              <Link to={createPageUrl('ClientRCSTemplates')} className="flex items-center gap-2 text-sm text-purple-600 hover:text-purple-800 mt-2">
+                <FileText className="w-4 h-4" /> Manage RCS Templates →
+              </Link>
             </div>
           </>
         )}
