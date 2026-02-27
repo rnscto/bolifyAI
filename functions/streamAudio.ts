@@ -773,10 +773,14 @@ Deno.serve(async (req) => {
         session.callSid = startData.callSid;
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}, call=${session.callSid}`);
 
-        // Load agent config, then connect to Realtime API
-        await loadAgentConfig();
-        console.log(`[${reqId}] 🚀 Connecting Realtime with engine=${session.voiceEngine}, voice=${session.voiceType}`);
+        // Start Realtime connection immediately (don't wait for agent config)
+        // This saves ~1-2s since WebSocket handshake happens in parallel with DB lookups
         connectRealtime();
+        // Load agent config in parallel - will reconfigure session once loaded
+        loadAgentConfig().then(() => {
+          console.log(`[${reqId}] 🚀 Agent config loaded, reconfiguring session: engine=${session.voiceEngine}, voice=${session.voiceType}`);
+          reconfigureRealtimeSession();
+        });
         return;
       }
 
