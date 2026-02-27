@@ -140,18 +140,33 @@ async function saveCallRecord(session, reqId, duration) {
     const appId = Deno.env.get('BASE44_APP_ID');
     const serviceClient = createClient({ appId, asServiceRole: true });
 
-    await serviceClient.entities.CallLog.update(session.callLogId, {
-      status: 'completed',
-      transcript: transcript || '',
-      duration: duration,
-      call_end_time: new Date().toISOString(),
-      ...(summary ? { conversation_summary: summary } : {})
-    });
+    // First update with transcript/summary but keep current status to avoid premature terminal
+    // Then set status to completed as a separate update to ensure entity automation fires correctly
+    const currentLog = await serviceClient.entities.CallLog.get(session.callLogId);
+    const wasAlreadyCompleted = currentLog && ['completed', 'failed', 'no_answer'].includes(currentLog.status);
 
-    console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}, duration=${duration}s`);
+    if (wasAlreadyCompleted) {
+      // CallLog already terminal (smartfloWebhook beat us) — just add transcript/summary
+      await serviceClient.entities.CallLog.update(session.callLogId, {
+        transcript: transcript || '',
+        duration: duration,
+        ...(summary ? { conversation_summary: summary } : {})
+      });
+      console.log(`[${reqId}] 💾 Call already ${currentLog.status}, added transcript: ${session.callLogId}`);
+    } else {
+      // Set to completed — this triggers campaignPostCall entity automation
+      await serviceClient.entities.CallLog.update(session.callLogId, {
+        status: 'completed',
+        transcript: transcript || '',
+        duration: duration,
+        call_end_time: new Date().toISOString(),
+        ...(summary ? { conversation_summary: summary } : {})
+      });
+      console.log(`[${reqId}] 💾 Call saved as completed: ${session.callLogId}, duration=${duration}s`);
+    }
 
     // NOTE: Campaign lead updates and next-batch triggers are handled by
-    // smartfloWebhook (no-recording calls) and campaignPostCall (entity automation on CallLog update).
+    // campaignPostCall (entity automation on CallLog update).
     // streamAudio only saves the CallLog — no campaign logic here to avoid race conditions.
 
     try { serviceClient.cleanup(); } catch (_) { /* ignore */ }
