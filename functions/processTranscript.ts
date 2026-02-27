@@ -289,7 +289,9 @@ Respond ONLY in valid JSON with this exact structure.`
       lead_score: leadScore,
       sentiment,
       intent_signals: intentSignals,
-      score_breakdown: scoreBreakdown
+      score_breakdown: scoreBreakdown,
+      qualification_tier: qualificationTier,
+      qualification_reason: qualificationReason
     });
 
   } catch (error) {
