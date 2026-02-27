@@ -519,7 +519,7 @@ Deno.serve(async (req) => {
     const nanoDeployment = Deno.env.get('AZURE_GPT5_NANO_DEPLOYMENT');
 
     if (!nanoEndpoint || !nanoKey || !nanoDeployment) {
-      console.error(`[${reqId}] ❌ Missing GPT-5-nano secrets`);
+      console.error(`[${reqId}] ❌ Missing GPT-5-nano secrets: endpoint=${!!nanoEndpoint}, key=${!!nanoKey}, deployment=${!!nanoDeployment}`);
       return;
     }
 
@@ -527,7 +527,9 @@ Deno.serve(async (req) => {
     session.chatHistory.push({ role: 'user', content: userText });
 
     try {
-      const url = `${nanoEndpoint}/openai/deployments/${nanoDeployment}/chat/completions?api-version=2024-08-01-preview`;
+      // Try multiple API versions for compatibility
+      const url = `${nanoEndpoint}/openai/deployments/${nanoDeployment}/chat/completions?api-version=2024-12-01-preview`;
+      console.log(`[${reqId}] 🧠 GPT-5-nano URL: ${url.substring(0, 120)}...`);
       const response = await fetch(url, {
         method: 'POST',
         headers: {
