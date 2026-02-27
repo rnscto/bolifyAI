@@ -83,6 +83,10 @@ Deno.serve(async (req) => {
     // Determine outcome based on call status and transcript
     let outcome = 'contacted';
     let summary = callLog.conversation_summary || '';
+    // Clean up internal metadata from conversation_summary
+    if (summary.startsWith('[ref_id:') || summary.startsWith('[LEAD CONTEXT]') || summary.startsWith('[internal_id:')) {
+      summary = '';
+    }
 
     // For calls that never connected (no_answer, failed), set outcome directly
     if (callLog.status === 'no_answer') {
