@@ -543,7 +543,7 @@ Deno.serve(async (req) => {
 
       if (!response.ok) {
         const errText = await response.text();
-        console.error(`[${reqId}] ❌ GPT-5-nano error: ${response.status} ${errText}`);
+        console.error(`[${reqId}] ❌ LLM error: ${response.status} ${errText}`);
         return;
       }
 
@@ -551,13 +551,13 @@ Deno.serve(async (req) => {
       const aiText = data.choices?.[0]?.message?.content?.trim();
 
       if (aiText) {
-        console.log(`[${reqId}] 🧠 GPT-5-nano: "${aiText.substring(0, 100)}"`);
+        console.log(`[${reqId}] 🧠 LLM: "${aiText.substring(0, 100)}"`);
         session.chatHistory.push({ role: 'assistant', content: aiText });
         session.transcript.push({ speaker: 'AI', text: aiText });
         synthesizeWithAzureSpeech(aiText);
       }
     } catch (err) {
-      console.error(`[${reqId}] ❌ GPT-5-nano failed: ${err.message}`);
+      console.error(`[${reqId}] ❌ LLM failed: ${err.message}`);
     }
   }
 
