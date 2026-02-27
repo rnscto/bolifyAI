@@ -238,8 +238,12 @@ Deno.serve(async (req) => {
 
         if (smartfloResp.ok && smartfloData.success !== false) {
           const newCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
+          console.log(`[campaign] Smartflo call_id for ${cl.lead_name}: ${newCallSid} (original: ${callSid})`);
+          // Store BOTH the Smartflo call_id (as call_sid) and our internal ID (in conversation_summary for reference)
           await svc.entities.CallLog.update(callLog.id, {
-            call_sid: newCallSid, status: 'ringing'
+            call_sid: newCallSid,
+            status: 'ringing',
+            conversation_summary: callLog.conversation_summary ? `${callLog.conversation_summary}\n[internal_id: ${callSid}]` : `[internal_id: ${callSid}]`
           });
           results.initiated++;
         } else {
