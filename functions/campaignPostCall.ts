@@ -40,6 +40,26 @@ Deno.serve(async (req) => {
     // Idempotency guard: skip if CampaignLead is already completed/failed
     if (campaignLead.status === 'completed' || campaignLead.status === 'failed') {
       console.log(`[campaignPostCall] Skipping — CampaignLead ${campaignLead.id} already ${campaignLead.status}`);
+      
+      // Even though this lead is already processed, check if there are stuck leads
+      // and trigger next batch if needed (belt-and-suspenders approach)
+      try {
+        const campaign = await svc.entities.Campaign.get(campaignId);
+        if (campaign && campaign.status === 'running') {
+          const allLeads = await svc.entities.CampaignLead.filter({ campaign_id: campaignId });
+          const pendingCount = allLeads.filter(l => l.status === 'pending').length;
+          const callingCount = allLeads.filter(l => l.status === 'calling').length;
+          const maxConcurrent = campaign.max_concurrent_calls || 5;
+          
+          if (pendingCount > 0 && callingCount < maxConcurrent) {
+            console.log(`[campaignPostCall] Already processed but triggering next batch: ${pendingCount} pending, ${callingCount} calling`);
+            await svc.functions.invoke('executeCampaign', { campaign_id: campaignId, action: 'start', _internal: true });
+          }
+        }
+      } catch (e) {
+        console.error(`[campaignPostCall] Belt-and-suspenders trigger failed: ${e.message}`);
+      }
+      
       return Response.json({ success: true, skipped: 'already_processed' });
     }
 
