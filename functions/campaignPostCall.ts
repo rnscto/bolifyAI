@@ -26,7 +26,7 @@ Deno.serve(async (req) => {
     const callLogId = event.entity_id;
 
     // Check if this call belongs to a campaign
-    const campaignLeads = await base44.asServiceRole.entities.CampaignLead.filter({
+    const campaignLeads = await base44.entities.CampaignLead.filter({
       call_log_id: callLogId
     });
 
@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     } else if (callLog.transcript || callLog.conversation_summary) {
       // For calls with conversation data, analyze with LLM
       try {
-        const analysis = await base44.asServiceRole.integrations.Core.InvokeLLM({
+        const analysis = await base44.integrations.Core.InvokeLLM({
           prompt: `Analyze this sales call and determine the outcome.
 
 TRANSCRIPT:
@@ -89,7 +89,7 @@ Rules:
     }
 
     // Update campaign lead
-    await base44.asServiceRole.entities.CampaignLead.update(campaignLead.id, {
+    await base44.entities.CampaignLead.update(campaignLead.id, {
       status: 'completed',
       outcome: outcome,
       conversation_summary: summary,
@@ -99,19 +99,19 @@ Rules:
 
     // Update lead status
     if (campaignLead.lead_id) {
-      await base44.asServiceRole.entities.Lead.update(campaignLead.lead_id, {
+      await base44.entities.Lead.update(campaignLead.lead_id, {
         status: outcome,
         last_call_date: new Date().toISOString()
       });
     }
 
     // Fetch campaign for follow-up rules
-    const campaign = await base44.asServiceRole.entities.Campaign.get(campaignId);
+    const campaign = await base44.entities.Campaign.get(campaignId);
     const rules = campaign?.followup_rules || {};
 
     // Pre-fetch lead and client for follow-ups (shared across actions)
-    const lead = campaignLead.lead_id ? await base44.asServiceRole.entities.Lead.get(campaignLead.lead_id) : null;
-    const client = await base44.asServiceRole.entities.Client.get(campaign.client_id);
+    const lead = campaignLead.lead_id ? await base44.entities.Lead.get(campaignLead.lead_id) : null;
+    const client = await base44.entities.Client.get(campaign.client_id);
 
     let emailSent = false;
     let callbackScheduled = false;
@@ -155,7 +155,7 @@ Company: ${client?.company_name}
 Summary: ${summary}
 Under 150 words. HTML format.`;
 
-          const emailContent = await base44.asServiceRole.integrations.Core.InvokeLLM({
+          const emailContent = await base44.integrations.Core.InvokeLLM({
             prompt: emailPrompt,
             response_json_schema: {
               type: "object",
@@ -166,7 +166,7 @@ Under 150 words. HTML format.`;
             }
           });
 
-          await base44.asServiceRole.integrations.Core.SendEmail({
+          await base44.integrations.Core.SendEmail({
             to: lead.email,
             from_name: client?.company_name || 'VaaniAI',
             subject: emailContent.subject,
@@ -180,7 +180,7 @@ Under 150 words. HTML format.`;
             </div>`
           });
 
-          await base44.asServiceRole.entities.OutreachLog.create({
+          await base44.entities.OutreachLog.create({
             client_id: campaign.client_id,
             lead_id: campaignLead.lead_id,
             call_log_id: callLogId,
@@ -208,7 +208,7 @@ Under 150 words. HTML format.`;
       callbackDate.setDate(callbackDate.getDate() + callbackDays);
       callbackDate.setHours(10, 0, 0, 0);
 
-      await base44.asServiceRole.entities.Activity.create({
+      await base44.entities.Activity.create({
         client_id: campaign.client_id,
         lead_id: campaignLead.lead_id,
         type: 'followup',
@@ -234,7 +234,7 @@ Under 150 words. HTML format.`;
 
         if (rules.callback_ai_talking_points !== false && (callLog.transcript || summary)) {
           try {
-            const tpResult = await base44.asServiceRole.integrations.Core.InvokeLLM({
+            const tpResult = await base44.integrations.Core.InvokeLLM({
               prompt: `You are a sales coach. Based on this call transcript and summary, generate concise talking points for the agent's next callback with this lead.
 
 LEAD: ${lead?.name || 'Unknown'} (${lead?.company || 'N/A'})
@@ -286,7 +286,7 @@ Generate:
         if (callbackDate.getDay() === 6) callbackDate.setDate(callbackDate.getDate() + 2);
         callbackDate.setHours(10, 0, 0, 0);
 
-        await base44.asServiceRole.entities.Activity.create({
+        await base44.entities.Activity.create({
           client_id: campaign.client_id,
           lead_id: campaignLead.lead_id,
           type: 'call',
@@ -305,7 +305,7 @@ Generate:
       // 2b. Send callback confirmation email
       if (rules.callback_email !== false && lead?.email) {
         try {
-          const emailContent = await base44.asServiceRole.integrations.Core.InvokeLLM({
+          const emailContent = await base44.integrations.Core.InvokeLLM({
             prompt: `Write a brief, warm callback confirmation email.
 Lead: ${lead.name || 'there'}
 Company: ${client?.company_name}
@@ -320,7 +320,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
             }
           });
 
-          await base44.asServiceRole.integrations.Core.SendEmail({
+          await base44.integrations.Core.SendEmail({
             to: lead.email,
             from_name: client?.company_name || 'VaaniAI',
             subject: emailContent.subject,
@@ -347,7 +347,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
         const retryDate = new Date(Date.now() + retryHours * 3600000);
 
         // Re-add lead to campaign queue as pending for retry
-        await base44.asServiceRole.entities.CampaignLead.update(campaignLead.id, {
+        await base44.entities.CampaignLead.update(campaignLead.id, {
           status: 'pending',
           outcome: 'no_answer',
           attempt_count: currentAttempts,
@@ -359,7 +359,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
 
         // Don't count this as completed in campaign stats yet
         // Update campaign to reflect the retry
-        const allLeads = await base44.asServiceRole.entities.CampaignLead.filter({ campaign_id: campaignId });
+        const allLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId });
         const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
         const completedCount = allLeads.filter(l => l.status === 'completed').length;
         const failedCount = allLeads.filter(l => l.status === 'failed').length;
@@ -367,7 +367,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
           if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++;
         });
 
-        await base44.asServiceRole.entities.Campaign.update(campaignId, {
+        await base44.entities.Campaign.update(campaignId, {
           outcomes_summary: outcomes,
           calls_completed: completedCount,
           calls_failed: failedCount
@@ -384,7 +384,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
       } else {
         // Max retries exhausted - mark as final no_answer
         console.log(`[campaignPostCall] No-answer max retries (${maxRetries}) exhausted for lead ${campaignLead.lead_id}`);
-        await base44.asServiceRole.entities.CampaignLead.update(campaignLead.id, {
+        await base44.entities.CampaignLead.update(campaignLead.id, {
           attempt_count: currentAttempts
         });
       }
@@ -399,10 +399,10 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
       const cbDays = outcome === 'interested' ? (rules.interested_callback_days || 2) : 1;
       updatePayload.followup_call_date = new Date(Date.now() + cbDays * 86400000).toISOString();
     }
-    await base44.asServiceRole.entities.CampaignLead.update(campaignLead.id, updatePayload);
+    await base44.entities.CampaignLead.update(campaignLead.id, updatePayload);
 
     // Update campaign outcomes summary
-    const allLeads = await base44.asServiceRole.entities.CampaignLead.filter({ campaign_id: campaignId });
+    const allLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId });
     const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
     const completedCount = allLeads.filter(l => l.status === 'completed').length;
     const failedCount = allLeads.filter(l => l.status === 'failed').length;
@@ -424,7 +424,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
       updateData.completed_at = new Date().toISOString();
     }
 
-    await base44.asServiceRole.entities.Campaign.update(campaignId, updateData);
+    await base44.entities.Campaign.update(campaignId, updateData);
 
     // === AUTO-TRIGGER NEXT BATCH ===
     // If campaign is still running and there are pending leads with available slots,
@@ -437,7 +437,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
       if (pendingLeads > 0 && callingLeads < maxConcurrent) {
         console.log(`[campaignPostCall] 🚀 Auto-triggering next batch: ${pendingLeads} pending, ${callingLeads}/${maxConcurrent} calling`);
         try {
-          await base44.asServiceRole.functions.invoke('executeCampaign', {
+          await base44.functions.invoke('executeCampaign', {
             campaign_id: campaignId,
             action: 'start',
             _internal: true

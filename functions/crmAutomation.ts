@@ -26,14 +26,14 @@ Deno.serve(async (req) => {
         console.log(`[CRM Automation] Proposal uploaded for deal ${entityId}, checking for stage update`);
 
         if (data.client_id) {
-          const configs = await base44.asServiceRole.entities.CRMConfig.filter({ client_id: data.client_id });
+          const configs = await base44.entities.CRMConfig.filter({ client_id: data.client_id });
           if (configs.length > 0) {
             const config = configs[0];
             const proposalStage = (config.deal_stages || []).find(s =>
               s.name.toLowerCase().includes('proposal')
             );
             if (proposalStage && data.stage !== proposalStage.name) {
-              await base44.asServiceRole.entities.Deal.update(entityId, {
+              await base44.entities.Deal.update(entityId, {
                 stage: proposalStage.name,
                 last_activity_date: new Date().toISOString()
               });
@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
       // Auto-create follow-up activity when deal is created
       if (eventType === 'create' && data.client_id) {
         const followupDate = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
-        await base44.asServiceRole.entities.Activity.create({
+        await base44.entities.Activity.create({
           client_id: data.client_id,
           deal_id: entityId,
           lead_id: data.lead_id || '',
@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
         };
         const newScore = scoreMap[data.status] || data.score || 0;
 
-        await base44.asServiceRole.entities.Lead.update(entityId, {
+        await base44.entities.Lead.update(entityId, {
           score: newScore,
           last_engagement_date: new Date().toISOString(),
           engagement_count: (data.engagement_count || 0) + 1
@@ -93,13 +93,13 @@ Deno.serve(async (req) => {
       if (eventType === 'update' && data.status === 'interested' && old_data?.status !== 'interested') {
         if (data.client_id) {
           // Check if client has CRM enabled
-          const configs = await base44.asServiceRole.entities.CRMConfig.filter({ client_id: data.client_id });
+          const configs = await base44.entities.CRMConfig.filter({ client_id: data.client_id });
           if (configs.length === 0) {
             console.log(`[CRM Automation] Client ${data.client_id} has no CRM config, skipping deal creation`);
             return Response.json({ success: true, skipped: 'no_crm_config' });
           }
 
-          const existingDeals = await base44.asServiceRole.entities.Deal.filter({
+          const existingDeals = await base44.entities.Deal.filter({
             client_id: data.client_id,
             lead_id: entityId
           });
@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
           if (existingDeals.length === 0) {
             const firstStage = configs[0]?.deal_stages?.[0]?.name || 'new';
 
-            await base44.asServiceRole.entities.Deal.create({
+            await base44.entities.Deal.create({
               client_id: data.client_id,
               title: `Deal with ${data.name || data.phone}`,
               lead_id: entityId,
@@ -129,10 +129,10 @@ Deno.serve(async (req) => {
       if (eventType === 'update' && data.status === 'completed' && old_data?.status !== 'completed') {
         if (data.client_id && data.lead_id) {
           // Only create if client has CRM
-          const configs = await base44.asServiceRole.entities.CRMConfig.filter({ client_id: data.client_id });
+          const configs = await base44.entities.CRMConfig.filter({ client_id: data.client_id });
           if (configs.length > 0) {
             const followupDate = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
-            await base44.asServiceRole.entities.Activity.create({
+            await base44.entities.Activity.create({
               client_id: data.client_id,
               lead_id: data.lead_id,
               call_log_id: entityId,

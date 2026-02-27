@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
 
       console.log(`[extractKB] Extracting content from KB ${kbId}: ${fileUrl}`);
 
-      const extracted = await base44.asServiceRole.integrations.Core.ExtractDataFromUploadedFile({
+      const extracted = await base44.integrations.Core.ExtractDataFromUploadedFile({
         file_url: fileUrl,
         json_schema: {
           type: "object",
@@ -39,7 +39,7 @@ Deno.serve(async (req) => {
           ? extracted.output 
           : extracted.output.text_content || JSON.stringify(extracted.output);
 
-        await base44.asServiceRole.entities.KnowledgeBase.update(kbId, {
+        await base44.entities.KnowledgeBase.update(kbId, {
           content: content.substring(0, 50000), // Limit to 50k chars
           status: 'ready'
         });
@@ -48,7 +48,7 @@ Deno.serve(async (req) => {
         return Response.json({ success: true, chars: content.length });
       } else {
         console.error(`[extractKB] Extraction failed for KB ${kbId}:`, extracted.details);
-        await base44.asServiceRole.entities.KnowledgeBase.update(kbId, {
+        await base44.entities.KnowledgeBase.update(kbId, {
           status: 'failed'
         });
         return Response.json({ success: false, error: extracted.details });
@@ -57,12 +57,12 @@ Deno.serve(async (req) => {
 
     // Direct invocation fallback
     if (payload.kb_id) {
-      const kb = await base44.asServiceRole.entities.KnowledgeBase.get(payload.kb_id);
+      const kb = await base44.entities.KnowledgeBase.get(payload.kb_id);
       if (!kb || !kb.file_url) {
         return Response.json({ error: 'KB not found or no file' }, { status: 400 });
       }
 
-      const extracted = await base44.asServiceRole.integrations.Core.ExtractDataFromUploadedFile({
+      const extracted = await base44.integrations.Core.ExtractDataFromUploadedFile({
         file_url: kb.file_url,
         json_schema: {
           type: "object",
@@ -80,13 +80,13 @@ Deno.serve(async (req) => {
           ? extracted.output
           : extracted.output.text_content || JSON.stringify(extracted.output);
 
-        await base44.asServiceRole.entities.KnowledgeBase.update(payload.kb_id, {
+        await base44.entities.KnowledgeBase.update(payload.kb_id, {
           content: content.substring(0, 50000),
           status: 'ready'
         });
         return Response.json({ success: true, chars: content.length });
       } else {
-        await base44.asServiceRole.entities.KnowledgeBase.update(payload.kb_id, {
+        await base44.entities.KnowledgeBase.update(payload.kb_id, {
           status: 'failed'
         });
         return Response.json({ success: false, error: extracted.details });

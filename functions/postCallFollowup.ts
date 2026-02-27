@@ -24,7 +24,7 @@ Deno.serve(async (req) => {
       }
     } else if (payload.call_log_id) {
       // Direct invocation
-      callLog = await base44.asServiceRole.entities.CallLog.get(payload.call_log_id);
+      callLog = await base44.entities.CallLog.get(payload.call_log_id);
     } else {
       return Response.json({ error: 'Invalid payload' }, { status: 400 });
     }
@@ -54,25 +54,25 @@ Deno.serve(async (req) => {
     }
 
     // ===== LOAD CONTEXT =====
-    const client = await base44.asServiceRole.entities.Client.get(clientId);
+    const client = await base44.entities.Client.get(clientId);
     if (!client) {
       return Response.json({ success: true, skipped: 'client_not_found' });
     }
 
     let lead = null;
     if (leadId && leadId !== 'unknown') {
-      try { lead = await base44.asServiceRole.entities.Lead.get(leadId); } catch (_) {}
+      try { lead = await base44.entities.Lead.get(leadId); } catch (_) {}
     }
 
     // Load retention config
-    const configs = await base44.asServiceRole.entities.RetentionConfig.list('-created_date', 1);
+    const configs = await base44.entities.RetentionConfig.list('-created_date', 1);
     const retentionConfig = configs[0] || {};
 
     // ===================================================================
     // PART 1: CLIENT LEAD FOLLOW-UP EMAILS (for all client leads)
     // ===================================================================
     if (lead && lead.email) {
-      const aiContent = await base44.asServiceRole.integrations.Core.InvokeLLM({
+      const aiContent = await base44.integrations.Core.InvokeLLM({
         prompt: `You are an AI email copywriter for "${client.company_name}", a business in the ${client.industry || 'general'} industry.
 A call just ended with a lead. Based on the call transcript/summary, write a personalized follow-up email.
 
@@ -113,7 +113,7 @@ Generate the subject line and HTML body.`,
 
       // Send the email
       try {
-        await base44.asServiceRole.integrations.Core.SendEmail({
+        await base44.integrations.Core.SendEmail({
           to: lead.email,
           from_name: client.company_name,
           subject: aiContent.subject,
@@ -133,7 +133,7 @@ Generate the subject line and HTML body.`,
         });
 
         // Log the outreach
-        await base44.asServiceRole.entities.OutreachLog.create({
+        await base44.entities.OutreachLog.create({
           client_id: clientId,
           lead_id: leadId,
           call_log_id: callLogId,
@@ -161,7 +161,7 @@ Generate the subject line and HTML body.`,
 
       } catch (emailErr) {
         console.error(`[postCallFollowup] Email failed for lead ${leadId}:`, emailErr.message);
-        await base44.asServiceRole.entities.OutreachLog.create({
+        await base44.entities.OutreachLog.create({
           client_id: clientId,
           lead_id: leadId,
           call_log_id: callLogId,
@@ -179,7 +179,7 @@ Generate the subject line and HTML body.`,
       // Also send RCS if lead has phone (via Smartflo SMS/RCS API)
       if (lead.phone) {
         try {
-          const rcsContent = await base44.asServiceRole.integrations.Core.InvokeLLM({
+          const rcsContent = await base44.integrations.Core.InvokeLLM({
             prompt: `Write a short follow-up RCS/SMS message (max 160 chars) for a lead after a call.
 Lead: ${lead.name || 'there'}
 Company: ${client.company_name}
@@ -215,7 +215,7 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
             const smsResult = await smsResponse.json();
             console.log(`[postCallFollowup] RCS/SMS sent to ${lead.phone}:`, smsResult);
 
-            await base44.asServiceRole.entities.OutreachLog.create({
+            await base44.entities.OutreachLog.create({
               client_id: clientId,
               lead_id: leadId,
               call_log_id: callLogId,
@@ -257,7 +257,7 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
     if (isExpiredClient || isRetentionCall) {
       console.log(`[postCallFollowup] Retention outreach for expired client: ${client.company_name}`);
 
-      const retentionEmail = await base44.asServiceRole.integrations.Core.InvokeLLM({
+      const retentionEmail = await base44.integrations.Core.InvokeLLM({
         prompt: `You are VaaniAI's retention email specialist. Write a personalized retention email for a platform client who hasn't subscribed.
 
 CLIENT CONTEXT:
@@ -304,7 +304,7 @@ INSTRUCTIONS:
 
       // Send retention email
       try {
-        await base44.asServiceRole.integrations.Core.SendEmail({
+        await base44.integrations.Core.SendEmail({
           to: client.email,
           from_name: 'VaaniAI',
           subject: retentionEmail.subject,
@@ -328,7 +328,7 @@ INSTRUCTIONS:
 </div>`
         });
 
-        await base44.asServiceRole.entities.OutreachLog.create({
+        await base44.entities.OutreachLog.create({
           client_id: clientId,
           call_log_id: callLogId,
           channel: 'email',
@@ -352,7 +352,7 @@ INSTRUCTIONS:
 
       } catch (retErr) {
         console.error(`[postCallFollowup] Retention email failed:`, retErr.message);
-        await base44.asServiceRole.entities.OutreachLog.create({
+        await base44.entities.OutreachLog.create({
           client_id: clientId,
           call_log_id: callLogId,
           channel: 'email',
@@ -368,7 +368,7 @@ INSTRUCTIONS:
       // Send retention RCS to client phone
       if (client.phone) {
         try {
-          const retentionRCS = await base44.asServiceRole.integrations.Core.InvokeLLM({
+          const retentionRCS = await base44.integrations.Core.InvokeLLM({
             prompt: `Write a short retention RCS/SMS (max 160 chars) for ${client.company_name}. Account expired. ${retentionConfig.active_offer ? 'Offer: ' + retentionConfig.active_offer : ''} Mention VaaniAI. Include urgency.`,
             response_json_schema: {
               type: "object",
@@ -395,7 +395,7 @@ INSTRUCTIONS:
             const rcsResult = await rcsResp.json();
             console.log(`[postCallFollowup] Retention RCS to ${client.phone}:`, rcsResult);
 
-            await base44.asServiceRole.entities.OutreachLog.create({
+            await base44.entities.OutreachLog.create({
               client_id: clientId,
               call_log_id: callLogId,
               channel: 'rcs',

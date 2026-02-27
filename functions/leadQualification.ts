@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
           const dueDate = new Date();
           dueDate.setHours(dueDate.getHours() + 4); // 4-hour SLA
 
-          await base44.asServiceRole.entities.Activity.create({
+          await base44.entities.Activity.create({
             client_id: clientId,
             lead_id: leadId,
             type: 'task',
@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
             demoDate.setDate(demoDate.getDate() + 1);
             demoDate.setHours(10, 0, 0, 0);
 
-            await base44.asServiceRole.entities.Activity.create({
+            await base44.entities.Activity.create({
               client_id: clientId,
               lead_id: leadId,
               type: 'demo',
@@ -138,7 +138,7 @@ Deno.serve(async (req) => {
           const followupDate = new Date();
           followupDate.setDate(followupDate.getDate() + 1);
 
-          await base44.asServiceRole.entities.Activity.create({
+          await base44.entities.Activity.create({
             client_id: clientId,
             lead_id: leadId,
             type: 'followup',
@@ -162,7 +162,7 @@ Deno.serve(async (req) => {
         const enrollKey = `nurture_enrolled_${new Date().toISOString().slice(0, 10)}`;
         if (!existingActions.includes(enrollKey)) {
           // Find an active re_engagement or lead_followup sequence for this client
-          const sequences = await base44.asServiceRole.entities.EmailSequence.filter({
+          const sequences = await base44.entities.EmailSequence.filter({
             status: 'active'
           });
           
@@ -172,7 +172,7 @@ Deno.serve(async (req) => {
 
           if (targetSequence) {
             // Check not already enrolled
-            const existing = await base44.asServiceRole.entities.SequenceEnrollment.filter({
+            const existing = await base44.entities.SequenceEnrollment.filter({
               sequence_id: targetSequence.id,
               lead_id: leadId,
               status: 'active'
@@ -184,7 +184,7 @@ Deno.serve(async (req) => {
               const nextSend = new Date();
               nextSend.setDate(nextSend.getDate() + firstDelay);
 
-              await base44.asServiceRole.entities.SequenceEnrollment.create({
+              await base44.entities.SequenceEnrollment.create({
                 sequence_id: targetSequence.id,
                 client_id: clientId,
                 lead_id: leadId,
@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
               });
 
               // Update sequence enrollment count
-              await base44.asServiceRole.entities.EmailSequence.update(targetSequence.id, {
+              await base44.entities.EmailSequence.update(targetSequence.id, {
                 total_enrolled: (targetSequence.total_enrolled || 0) + 1
               });
 
@@ -220,7 +220,7 @@ Deno.serve(async (req) => {
       if (tier === 'disqualified') {
         const actionKey = `flagged_removal_${new Date().toISOString().slice(0, 10)}`;
         if (!existingActions.includes(actionKey)) {
-          await base44.asServiceRole.entities.Activity.create({
+          await base44.entities.Activity.create({
             client_id: clientId,
             lead_id: leadId,
             type: 'task',
@@ -246,7 +246,7 @@ Deno.serve(async (req) => {
           const reengageDate = new Date();
           reengageDate.setDate(reengageDate.getDate() + 7);
 
-          await base44.asServiceRole.entities.Activity.create({
+          await base44.entities.Activity.create({
             client_id: clientId,
             lead_id: leadId,
             type: 'followup',
@@ -266,7 +266,7 @@ Deno.serve(async (req) => {
     }
 
     // ===== UPDATE LEAD WITH TIER =====
-    await base44.asServiceRole.entities.Lead.update(leadId, {
+    await base44.entities.Lead.update(leadId, {
       qualification_tier: tier,
       qualification_reason: reason,
       auto_actions_taken: newActions.slice(-20) // Keep last 20 actions
