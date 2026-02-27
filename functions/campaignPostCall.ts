@@ -462,22 +462,109 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
 
     await base44.entities.Campaign.update(campaignId, updateData);
 
-    // === AUTO-TRIGGER NEXT BATCH ===
-    // If campaign is still running and there are pending leads with available slots,
-    // immediately trigger the next batch instead of waiting for the 5-min poller.
+    // === AUTO-TRIGGER NEXT BATCH (inline to avoid 403 on function invoke) ===
     if (!updateData.status || updateData.status === 'running') {
       const pendingLeads = allLeads.filter(l => l.status === 'pending').length;
       const callingLeads = allLeads.filter(l => l.status === 'calling').length;
       const maxConcurrent = campaign.max_concurrent_calls || 5;
 
       if (pendingLeads > 0 && callingLeads < maxConcurrent) {
-        console.log(`[campaignPostCall] 🚀 Auto-triggering next batch: ${pendingLeads} pending, ${callingLeads}/${maxConcurrent} calling`);
+        const slotsAvailable = Math.min(maxConcurrent - callingLeads, pendingLeads);
+        console.log(`[campaignPostCall] 🚀 Auto-triggering next ${slotsAvailable} calls: ${pendingLeads} pending, ${callingLeads}/${maxConcurrent} calling`);
+
         try {
-          await base44.functions.invoke('executeCampaign', {
-            campaign_id: campaignId,
-            action: 'start',
-            _internal: true
-          });
+          const agent = await base44.entities.Agent.get(campaign.agent_id);
+          const agentDIDs = (agent?.assigned_dids?.length > 0)
+            ? agent.assigned_dids
+            : (agent?.assigned_did ? [agent.assigned_did] : []);
+
+          if (agent && agentDIDs.length > 0) {
+            let kbContent = '';
+            if (agent.knowledge_base_ids?.length > 0) {
+              for (const kbId of agent.knowledge_base_ids) {
+                try {
+                  const doc = await base44.entities.KnowledgeBase.get(kbId);
+                  if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
+                } catch (_) {}
+              }
+            }
+
+            const pendingBatch = allLeads.filter(l => l.status === 'pending').slice(0, slotsAvailable);
+            for (let i = 0; i < pendingBatch.length; i++) {
+              const cl = pendingBatch[i];
+              try {
+                const selectedDID = agentDIDs[i % agentDIDs.length];
+                await base44.entities.CampaignLead.update(cl.id, {
+                  status: 'calling', attempt_count: (cl.attempt_count || 0) + 1
+                });
+
+                const cleanPhone = (cl.lead_phone || '').replace(/[^0-9]/g, '');
+                const callSid = `camp_${campaignId.slice(-8)}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+                let leadContext = '';
+                try {
+                  const ctxRes = await base44.functions.invoke('buildLeadContext', {
+                    lead_id: cl.lead_id, client_id: campaign.client_id, phone_number: cl.lead_phone
+                  });
+                  if (ctxRes?.context_text) leadContext = ctxRes.context_text;
+                } catch (_) {}
+
+                const personalizedPrompt = [
+                  agent.system_prompt || '',
+                  campaign.call_script?.opening ? `\nCALL SCRIPT - Opening: ${campaign.call_script.opening}` : '',
+                  campaign.call_script?.pitch ? `\nCALL SCRIPT - Pitch: ${campaign.call_script.pitch}` : '',
+                  campaign.call_script?.objection_handling ? `\nCALL SCRIPT - Objections: ${campaign.call_script.objection_handling}` : '',
+                  campaign.call_script?.closing ? `\nCALL SCRIPT - Closing: ${campaign.call_script.closing}` : '',
+                  leadContext ? `\n\n--- LEAD CONTEXT ---\n${leadContext}` : ''
+                ].filter(Boolean).join('\n');
+
+                const newCallLog = await base44.entities.CallLog.create({
+                  client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
+                  call_sid: callSid, caller_id: selectedDID, callee_number: cl.lead_phone,
+                  direction: 'outbound', status: 'initiated', call_start_time: new Date().toISOString(),
+                  agent_config_cache: {
+                    agent_name: agent.name, system_prompt: personalizedPrompt,
+                    persona: agent.persona || {}, knowledge_base_content: kbContent,
+                    lead_context: leadContext
+                  }
+                });
+
+                await base44.entities.CampaignLead.update(cl.id, { call_log_id: newCallLog.id });
+
+                const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    api_key: Deno.env.get('SMARTFLO_API_KEY'),
+                    customer_number: cleanPhone,
+                    caller_id: selectedDID.replace(/^\+/, ''),
+                    async: 1
+                  })
+                });
+
+                const smartfloData = await smartfloResp.json();
+                if (smartfloResp.ok && smartfloData.success !== false) {
+                  const newSid = smartfloData.call_id || smartfloData.call_sid || callSid;
+                  await base44.entities.CallLog.update(newCallLog.id, { call_sid: newSid, status: 'ringing' });
+                  console.log(`[campaignPostCall] Call initiated: ${cl.lead_name} → ${cleanPhone}`);
+                } else {
+                  await base44.entities.CallLog.update(newCallLog.id, { status: 'failed' });
+                  await base44.entities.CampaignLead.update(cl.id, {
+                    status: 'completed', outcome: 'no_answer',
+                    conversation_summary: `Smartflo error: ${smartfloData.message || 'Unknown'}`
+                  });
+                }
+
+                if (i < pendingBatch.length - 1) await new Promise(r => setTimeout(r, 500));
+              } catch (callErr) {
+                console.error(`[campaignPostCall] Call error for ${cl.lead_name}: ${callErr.message}`);
+                await base44.entities.CampaignLead.update(cl.id, {
+                  status: 'completed', outcome: 'no_answer',
+                  conversation_summary: `Error: ${callErr.message}`
+                });
+              }
+            }
+          }
         } catch (batchErr) {
           console.error(`[campaignPostCall] Next batch trigger failed: ${batchErr.message}`);
         }
