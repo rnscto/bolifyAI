@@ -4,6 +4,7 @@ Deno.serve(async (req) => {
   try {
     // Entity automation — use createClientFromRequest to get proper auth context
     const base44 = createClientFromRequest(req);
+    const svc = base44.asServiceRole;
     const payload = await req.json();
 
     const { event, data, old_data } = payload;
@@ -25,7 +26,7 @@ Deno.serve(async (req) => {
     const callLogId = event.entity_id;
 
     // Check if this call belongs to a campaign
-    const campaignLeads = await base44.entities.CampaignLead.filter({
+    const campaignLeads = await svc.entities.CampaignLead.filter({
       call_log_id: callLogId
     });
 
