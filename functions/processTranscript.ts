@@ -121,14 +121,42 @@ Respond ONLY in valid JSON with this exact structure.`
       lead_status_updated: leadStatus
     });
 
-    // Update lead with status, score, sentiment, and intent signals
+    // ===== AI-DRIVEN QUALIFICATION TIER =====
+    const highIntents = ['demo_request', 'budget_confirmed', 'timeline_mentioned', 'decision_maker']
+      .filter(s => intentSignals.includes(s));
+    let qualificationTier = 'cold';
+    let qualificationReason = '';
+
+    if (leadScore >= 75 && ['very_positive', 'positive'].includes(sentiment)) {
+      qualificationTier = 'hot';
+      qualificationReason = `Score ${leadScore}/100, ${sentiment} sentiment, strong signals: ${highIntents.join(', ') || 'high engagement'}`;
+    } else if (leadScore >= 75 && sentiment === 'neutral') {
+      qualificationTier = 'warm';
+      qualificationReason = `High score ${leadScore}/100 but neutral sentiment`;
+    } else if (leadScore >= 50) {
+      qualificationTier = 'warm';
+      qualificationReason = `Moderate score ${leadScore}/100, ${sentiment} sentiment`;
+    } else if (leadScore >= 25) {
+      qualificationTier = 'nurture';
+      qualificationReason = `Low-moderate score ${leadScore}/100 — needs nurturing`;
+    } else if (['negative', 'very_negative'].includes(sentiment)) {
+      qualificationTier = 'disqualified';
+      qualificationReason = `Very low score ${leadScore}/100 with ${sentiment} sentiment`;
+    } else {
+      qualificationTier = 'cold';
+      qualificationReason = `Low score ${leadScore}/100 — minimal engagement`;
+    }
+    if (leadStatus === 'converted') { qualificationTier = 'hot'; qualificationReason = 'Lead converted'; }
+    if (leadStatus === 'do_not_call') { qualificationTier = 'disqualified'; qualificationReason = 'Marked do not call'; }
+
+    console.log(`[processTranscript] Tier: ${qualificationTier} — ${qualificationReason}`);
+
+    // Update lead with status, score, sentiment, tier, and intent signals
     if (callLog.lead_id) {
-      // Get existing lead to merge engagement count
       let existingLead = {};
       try { existingLead = await base44.entities.Lead.get(callLog.lead_id); } catch (_) {}
       
       const updatedEngagement = (existingLead.engagement_count || 0) + 1;
-      // Merge existing tags with new keywords (deduplicate)
       const existingTags = existingLead.tags || [];
       const mergedTags = [...new Set([...existingTags, ...keyKeywords.slice(0, 10)])];
 
@@ -138,13 +166,15 @@ Respond ONLY in valid JSON with this exact structure.`
         sentiment: sentiment,
         intent_signals: intentSignals,
         score_breakdown: scoreBreakdown,
+        qualification_tier: qualificationTier,
+        qualification_reason: qualificationReason,
         tags: mergedTags,
         last_call_date: new Date().toISOString(),
         last_engagement_date: new Date().toISOString(),
         engagement_count: updatedEngagement,
-        notes: `[Score: ${leadScore}/100 | ${sentiment}] ${summary.substring(0, 300)}`
+        notes: `[Score: ${leadScore}/100 | ${sentiment} | ${qualificationTier}] ${summary.substring(0, 300)}`
       });
-      console.log(`[processTranscript] Lead ${callLog.lead_id} updated — Score: ${leadScore}, Sentiment: ${sentiment}`);
+      console.log(`[processTranscript] Lead ${callLog.lead_id} updated — Score: ${leadScore}, Tier: ${qualificationTier}`);
     }
 
     // Trigger post-call follow-up emails & RCS
