@@ -17,11 +17,23 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Missing Azure OpenAI credentials' }, { status: 500 });
     }
 
-    // Get all completed call logs with transcripts
-    const allCallLogs = await svc.entities.CallLog.filter({ status: 'completed' }, '-created_date', 100);
+    // Get all completed call logs with transcripts, newest first
+    const allCallLogs = await svc.entities.CallLog.filter({ status: 'completed' }, '-created_date', 200);
     const callLogsWithTranscripts = allCallLogs.filter(cl => cl.transcript && cl.transcript.trim().length > 30);
 
     console.log(`[bulkUpdate] Found ${callLogsWithTranscripts.length} call logs with transcripts out of ${allCallLogs.length} total`);
+
+    // De-duplicate: keep only the MOST RECENT call per lead_id (first occurrence since sorted by -created_date)
+    const seenLeads = new Set();
+    const uniqueCallLogs = [];
+    for (const cl of callLogsWithTranscripts) {
+      const key = cl.lead_id || cl.id;
+      if (!seenLeads.has(key)) {
+        seenLeads.add(key);
+        uniqueCallLogs.push(cl);
+      }
+    }
+    console.log(`[bulkUpdate] De-duplicated to ${uniqueCallLogs.length} unique leads`);
 
     const results = {
       total_processed: 0,
