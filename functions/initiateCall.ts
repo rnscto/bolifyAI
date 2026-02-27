@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
     });
 
     // Clean phone number — strip non-digits and country code for Smartflo
-    const cleanCallerID = callerDID.replace(/[^0-9]/g, '').replace(/^91/, '');
+    const cleanCallerID = callerDID.replace(/[^0-9]/g, ''); // Smartflo expects format: 91XXXXXXXXXX
     const cleanPhoneNumber = phone_number.replace(/[^0-9]/g, '');
     const smartfloCustomerNumber = cleanPhoneNumber.startsWith('91') ? cleanPhoneNumber : `91${cleanPhoneNumber}`;
 
