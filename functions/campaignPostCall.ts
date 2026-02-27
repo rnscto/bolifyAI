@@ -437,7 +437,8 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
         try {
           await base44.asServiceRole.functions.invoke('executeCampaign', {
             campaign_id: campaignId,
-            action: 'start'
+            action: 'start',
+            _internal: true
           });
         } catch (batchErr) {
           console.error(`[campaignPostCall] Next batch trigger failed: ${batchErr.message}`);

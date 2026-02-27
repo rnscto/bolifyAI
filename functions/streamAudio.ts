@@ -223,7 +223,8 @@ async function saveCallRecord(session, reqId, duration) {
               try {
                 await serviceClient.functions.invoke('executeCampaign', {
                   campaign_id: cl.campaign_id,
-                  action: 'start'
+                  action: 'start',
+                  _internal: true
                 });
               } catch (batchErr) {
                 console.log(`[${reqId}] ⚠️ Next batch trigger failed: ${batchErr.message}`);

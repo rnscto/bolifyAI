@@ -120,7 +120,8 @@ Deno.serve(async (req) => {
           try {
             await svc.functions.invoke('executeCampaign', {
               campaign_id: campaignId,
-              action: 'start'
+              action: 'start',
+              _internal: true
             });
             results.batches_triggered++;
           } catch (e) {

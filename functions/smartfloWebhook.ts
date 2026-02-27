@@ -403,7 +403,8 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
               console.log(`[smartfloWebhook] 🚀 Triggering next batch: ${pendingCount} pending, ${callingCount}/${maxConcurrent} calling`);
               await base44.asServiceRole.functions.invoke('executeCampaign', {
                 campaign_id: cl.campaign_id,
-                action: 'start'
+                action: 'start',
+                _internal: true
               });
             }
           }
