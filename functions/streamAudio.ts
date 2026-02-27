@@ -854,7 +854,7 @@ Deno.serve(async (req) => {
           session.realtimeWs.close();
         }
 
-        await saveCallRecord(session, reqId, duration);
+        await saveCallRecord(session, reqId, duration, base44);
         return;
       }
     } catch (err) {
@@ -872,7 +872,7 @@ Deno.serve(async (req) => {
     }
 
     if (session.callLogId) {
-      await saveCallRecord(session, reqId, duration);
+      await saveCallRecord(session, reqId, duration, base44);
     }
   };
 
