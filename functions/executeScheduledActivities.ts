@@ -330,44 +330,37 @@ Keep under 80 words. HTML body only. Professional and warm.`,
 
         // Send RCS/SMS reminder if lead has phone
         if (lead?.phone) {
-          const smartfloApiKey = Deno.env.get('SMARTFLO_API_KEY');
-          if (smartfloApiKey) {
-            const smsContent = await svc.integrations.Core.InvokeLLM({
-              prompt: `Write a short reminder SMS (max 160 chars) for ${lead.name || 'customer'} about their ${activityType}: "${activity.title || activityType}" scheduled at ${scheduledDate.toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}. From ${client?.company_name || 'VaaniAI'}. Friendly and brief.`,
-              response_json_schema: {
-                type: "object",
-                properties: { message: { type: "string" } }
-              }
-            });
+          const smsContent = await svc.integrations.Core.InvokeLLM({
+            prompt: `Write a short reminder SMS (max 160 chars) for ${lead.name || 'customer'} about their ${activityType}: "${activity.title || activityType}" scheduled at ${scheduledDate.toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}. From ${client?.company_name || 'VaaniAI'}. Friendly and brief.`,
+            response_json_schema: {
+              type: "object",
+              properties: { message: { type: "string" } }
+            }
+          });
 
-            await fetch('https://api.smartflo.in/v1/messages/send', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${smartfloApiKey}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                to: lead.phone,
-                message: smsContent.message,
-                type: 'rcs',
-                fallback: 'sms'
-              })
-            });
+          const rcsResult = await svc.functions.invoke('sendRCS', {
+            client_id: activity.client_id,
+            recipient: lead.phone,
+            message: smsContent.message
+          });
 
-            await svc.entities.OutreachLog.create({
-              client_id: activity.client_id,
-              lead_id: lead.id,
-              channel: 'rcs',
-              recipient_phone: lead.phone,
-              subject: `${activityType} reminder`,
-              body: smsContent.message,
-              outreach_type: 'callback_reminder',
-              status: 'sent',
-              is_retention: false
-            });
+          await svc.entities.OutreachLog.create({
+            client_id: activity.client_id,
+            lead_id: lead.id,
+            channel: 'rcs',
+            recipient_phone: lead.phone,
+            subject: `${activityType} reminder`,
+            body: smsContent.message,
+            outreach_type: 'callback_reminder',
+            status: rcsResult.success ? 'sent' : 'failed',
+            is_retention: false
+          });
 
+          if (rcsResult.success) {
             results.reminders_sent++;
             console.log(`[ActivityEngine] RCS reminder for ${activityType} → ${lead.phone}`);
+          } else {
+            console.log(`[ActivityEngine] RCS reminder failed for ${lead.phone}: ${rcsResult.error}`);
           }
         }
 

@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 
 const PROVIDERS = [
   { value: 'none', label: 'Not Connected' },
+  { value: 'zixflow', label: 'Zixflow RCS (Recommended)', fields: ['api_key', 'sender_id', 'api_endpoint'] },
   { value: 'gupshup', label: 'Gupshup SMS', fields: ['api_key', 'sender_id', 'api_endpoint'] },
   { value: 'smartflo', label: 'Smartflo (Tata)', fields: ['api_key', 'api_endpoint'] },
   { value: 'kaleyra', label: 'Kaleyra', fields: ['api_key', 'sender_id', 'api_endpoint'] },
@@ -80,9 +81,15 @@ export default function RCSSetup({ config, onSave }) {
 
         {provider !== 'none' && (
           <>
+            {provider === 'zixflow' && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800">
+                <p className="font-medium mb-1">Zixflow Setup</p>
+                <p className="text-xs text-blue-600">Get credentials from <a href="https://app.zixflow.com" target="_blank" rel="noopener" className="underline">Zixflow Dashboard</a> → Workspace Settings → Developer → API Keys</p>
+              </div>
+            )}
             {fields.includes('api_key') && (
               <div>
-                <Label>API Key / Auth Token</Label>
+                <Label>{provider === 'zixflow' ? 'API Key (x-api-key)' : 'API Key / Auth Token'}</Label>
                 <div className="relative">
                   <Input type={showKey ? 'text' : 'password'} value={apiKey} onChange={e => setApiKey(e.target.value)} placeholder="Enter API key" />
                   <button type="button" onClick={() => setShowKey(!showKey)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -93,14 +100,14 @@ export default function RCSSetup({ config, onSave }) {
             )}
             {fields.includes('sender_id') && (
               <div>
-                <Label>{provider === 'twilio' ? 'Account SID / From Number' : 'Sender ID / DLT Header'}</Label>
-                <Input value={senderId} onChange={e => setSenderId(e.target.value)} placeholder="Sender ID" />
+                <Label>{provider === 'zixflow' ? 'RCS Bot ID' : provider === 'twilio' ? 'Account SID / From Number' : 'Sender ID / DLT Header'}</Label>
+                <Input value={senderId} onChange={e => setSenderId(e.target.value)} placeholder={provider === 'zixflow' ? 'Bot ID from Zixflow RCS Settings' : 'Sender ID'} />
               </div>
             )}
             {fields.includes('api_endpoint') && (
               <div>
-                <Label>API Endpoint URL</Label>
-                <Input value={apiEndpoint} onChange={e => setApiEndpoint(e.target.value)} placeholder="https://api.provider.com/v1/send" />
+                <Label>{provider === 'zixflow' ? 'Workspace ID (x-workspace-id)' : 'API Endpoint URL'}</Label>
+                <Input value={apiEndpoint} onChange={e => setApiEndpoint(e.target.value)} placeholder={provider === 'zixflow' ? 'Your Zixflow workspace ID' : 'https://api.provider.com/v1/send'} />
               </div>
             )}
 
@@ -112,7 +119,7 @@ export default function RCSSetup({ config, onSave }) {
               <div className="flex gap-2">
                 <Button variant="outline" onClick={handleTest} disabled={testing || !apiKey} className="gap-2 flex-1">
                   {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Send Test SMS
+                  {provider === 'zixflow' ? 'Send Test RCS' : 'Send Test SMS'}
                 </Button>
                 <Button onClick={handleSave} disabled={saving} className="gap-2 flex-1">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}

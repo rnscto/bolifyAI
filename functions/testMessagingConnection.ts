@@ -136,6 +136,33 @@ Deno.serve(async (req) => {
 
       if (!apiKey) return Response.json({ success: false, error: 'API key is required' });
 
+      // ===== ZIXFLOW RCS =====
+      if (provider === 'zixflow') {
+        const zixApiKey = config.rcs_api_key;
+        const zixWorkspaceId = config.rcs_api_endpoint; // workspace ID stored in api_endpoint field
+        const zixBotId = config.rcs_sender_id; // bot ID stored in sender_id field
+
+        if (!zixWorkspaceId) return Response.json({ success: false, error: 'Workspace ID is required' });
+
+        const zixBody = { recipient: test_recipient, text: '✅ VaaniAI RCS connection test via Zixflow!' };
+        if (zixBotId) zixBody.bot_id = zixBotId;
+
+        const res = await fetch('https://api-ai.zixflow.com/api/ingest/rcs/v1/message/text/send', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': zixApiKey,
+            'x-workspace-id': zixWorkspaceId
+          },
+          body: JSON.stringify(zixBody)
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          return Response.json({ success: true, message: `RCS (Zixflow) connected! Test sent. Request ID: ${data.request_id}` });
+        }
+        return Response.json({ success: false, error: data.message || JSON.stringify(data) });
+      }
+
       if (provider === 'gupshup') {
         const endpoint = config.rcs_api_endpoint || 'https://enterprise.smsgupshup.com/GatewayAPI/rest';
         const res = await fetch(endpoint, {

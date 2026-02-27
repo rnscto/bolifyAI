@@ -205,47 +205,32 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
             }
           });
 
-          // Send RCS/SMS via Smartflo API
-          const smartfloApiKey = Deno.env.get('SMARTFLO_API_KEY');
-          if (smartfloApiKey) {
-            const smsResponse = await fetch('https://api.smartflo.in/v1/messages/send', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${smartfloApiKey}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                to: lead.phone,
-                message: rcsContent.message,
-                type: 'rcs',
-                fallback: 'sms'
-              })
-            });
+          // Send RCS via centralized sendRCS function
+          const rcsResult = await base44.functions.invoke('sendRCS', {
+            client_id: clientId,
+            recipient: lead.phone,
+            message: rcsContent.message
+          });
 
-            const smsResult = await smsResponse.json();
-            console.log(`[postCallFollowup] RCS/SMS sent to ${lead.phone}:`, smsResult);
+          console.log(`[postCallFollowup] RCS sent to ${lead.phone}:`, JSON.stringify(rcsResult));
 
-            await base44.entities.OutreachLog.create({
-              client_id: clientId,
-              lead_id: leadId,
-              call_log_id: callLogId,
-              channel: 'rcs',
-              recipient_phone: lead.phone,
-              subject: 'Post-call follow-up',
-              body: rcsContent.message,
-              outreach_type: 'lead_followup',
-              call_outcome: leadStatusAfterCall,
-              status: smsResponse.ok ? 'sent' : 'failed',
-              error_message: smsResponse.ok ? '' : JSON.stringify(smsResult),
-              is_retention: false
-            });
+          await base44.entities.OutreachLog.create({
+            client_id: clientId,
+            lead_id: leadId,
+            call_log_id: callLogId,
+            channel: 'rcs',
+            recipient_phone: lead.phone,
+            subject: 'Post-call follow-up',
+            body: rcsContent.message,
+            outreach_type: 'lead_followup',
+            call_outcome: leadStatusAfterCall,
+            status: rcsResult.success ? 'sent' : 'failed',
+            error_message: rcsResult.success ? '' : (rcsResult.error || ''),
+            is_retention: false
+          });
 
-            if (smsResponse.ok) {
-              results.rcs_sent.push({ lead_id: leadId, phone: lead.phone });
-            }
-          } else {
-            console.log('[postCallFollowup] SMARTFLO_API_KEY not set, skipping RCS');
-            results.skipped.push({ lead_id: leadId, reason: 'no_smartflo_key_for_rcs' });
+          if (rcsResult.success) {
+            results.rcs_sent.push({ lead_id: leadId, phone: lead.phone });
           }
         } catch (rcsErr) {
           console.error(`[postCallFollowup] RCS failed for ${lead.phone}:`, rcsErr.message);
@@ -386,42 +371,30 @@ INSTRUCTIONS:
             }
           });
 
-          const smartfloApiKey = Deno.env.get('SMARTFLO_API_KEY');
-          if (smartfloApiKey) {
-            const rcsResp = await fetch('https://api.smartflo.in/v1/messages/send', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${smartfloApiKey}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                to: client.phone,
-                message: retentionRCS.message,
-                type: 'rcs',
-                fallback: 'sms'
-              })
-            });
+          const retRcsResult = await base44.functions.invoke('sendRCS', {
+            client_id: clientId,
+            recipient: client.phone,
+            message: retentionRCS.message
+          });
 
-            const rcsResult = await rcsResp.json();
-            console.log(`[postCallFollowup] Retention RCS to ${client.phone}:`, rcsResult);
+          console.log(`[postCallFollowup] Retention RCS to ${client.phone}:`, JSON.stringify(retRcsResult));
 
-            await base44.entities.OutreachLog.create({
-              client_id: clientId,
-              call_log_id: callLogId,
-              channel: 'rcs',
-              recipient_phone: client.phone,
-              subject: 'Retention follow-up',
-              body: retentionRCS.message,
-              outreach_type: 'retention',
-              call_outcome: callLog.status,
-              status: rcsResp.ok ? 'sent' : 'failed',
-              error_message: rcsResp.ok ? '' : JSON.stringify(rcsResult),
-              is_retention: true
-            });
+          await base44.entities.OutreachLog.create({
+            client_id: clientId,
+            call_log_id: callLogId,
+            channel: 'rcs',
+            recipient_phone: client.phone,
+            subject: 'Retention follow-up',
+            body: retentionRCS.message,
+            outreach_type: 'retention',
+            call_outcome: callLog.status,
+            status: retRcsResult.success ? 'sent' : 'failed',
+            error_message: retRcsResult.success ? '' : (retRcsResult.error || ''),
+            is_retention: true
+          });
 
-            if (rcsResp.ok) {
-              results.rcs_sent.push({ client_id: clientId, phone: client.phone, type: 'retention' });
-            }
+          if (retRcsResult.success) {
+            results.rcs_sent.push({ client_id: clientId, phone: client.phone, type: 'retention' });
           }
         } catch (rcsErr) {
           console.error(`[postCallFollowup] Retention RCS failed:`, rcsErr.message);
