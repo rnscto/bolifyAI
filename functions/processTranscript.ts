@@ -178,6 +178,12 @@ Respond ONLY in valid JSON with this exact structure.`
     }
 
     // ===== CREATE AI-DRIVEN ACTIVITIES BASED ON TIER =====
+    // existingLead was fetched above in the lead update block
+    let leadForActivities = null;
+    if (callLog.lead_id) {
+      try { leadForActivities = await base44.entities.Lead.get(callLog.lead_id); } catch (_) {}
+    }
+
     if (callLog.lead_id && qualificationTier && leadStatus !== 'do_not_call') {
       const actionsCreated = [];
 
@@ -187,7 +193,7 @@ Respond ONLY in valid JSON with this exact structure.`
         await base44.entities.Activity.create({
           client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
           type: 'task',
-          title: `🔥 HOT LEAD: Call ${existingLead?.name || callLog.callee_number} immediately`,
+          title: `🔥 HOT LEAD: Call ${leadForActivities?.name || callLog.callee_number} immediately`,
           description: `AI Score: ${leadScore}/100 | Tier: HOT | ${qualificationReason}\n\nSummary: ${summary}\nSignals: ${intentSignals.join(', ')}`,
           scheduled_date: new Date().toISOString(), due_date: dueDate.toISOString(),
           status: 'scheduled', priority: 'high', auto_created: true
@@ -203,7 +209,7 @@ Respond ONLY in valid JSON with this exact structure.`
           await base44.entities.Activity.create({
             client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
             type: 'demo',
-            title: `Schedule demo for ${existingLead?.name || callLog.callee_number}`,
+            title: `Schedule demo for ${leadForActivities?.name || callLog.callee_number}`,
             description: `Lead requested a demo. Score: ${leadScore}/100.`,
             scheduled_date: demoDate.toISOString(), due_date: demoDate.toISOString(),
             status: 'scheduled', priority: 'high', auto_created: true
@@ -221,7 +227,7 @@ Respond ONLY in valid JSON with this exact structure.`
         await base44.entities.Activity.create({
           client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
           type: 'followup',
-          title: `Follow up with warm lead: ${existingLead?.name || callLog.callee_number}`,
+          title: `Follow up with warm lead: ${leadForActivities?.name || callLog.callee_number}`,
           description: `AI Score: ${leadScore}/100 | Tier: WARM | ${qualificationReason}\nSummary: ${summary}`,
           scheduled_date: followupDate.toISOString(), due_date: followupDate.toISOString(),
           status: 'scheduled', priority: 'medium', auto_created: true
@@ -235,7 +241,7 @@ Respond ONLY in valid JSON with this exact structure.`
         await base44.entities.Activity.create({
           client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
           type: 'followup',
-          title: `Nurture lead: ${existingLead?.name || callLog.callee_number}`,
+          title: `Nurture lead: ${leadForActivities?.name || callLog.callee_number}`,
           description: `AI Score: ${leadScore}/100 | Tier: NURTURE | ${qualificationReason}`,
           scheduled_date: reengageDate.toISOString(),
           status: 'scheduled', priority: 'low', auto_created: true
