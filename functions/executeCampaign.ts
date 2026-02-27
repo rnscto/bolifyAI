@@ -236,7 +236,14 @@ Deno.serve(async (req) => {
         const smartfloData = await smartfloResp.json();
         console.log(`[campaign] Smartflo response for ${cl.lead_name}: ${JSON.stringify(smartfloData)}`);
 
-        if (smartfloResp.ok && smartfloData.success !== false) {
+        // Smartflo sometimes returns errors as {"caller_id": "Provide a vaild caller_id."} 
+        // without a proper error structure. Detect this pattern.
+        const isSmartfloError = !smartfloResp.ok || 
+          smartfloData.success === false || 
+          (typeof smartfloData.caller_id === 'string' && smartfloData.caller_id.toLowerCase().includes('provide')) ||
+          (!smartfloData.ref_id && !smartfloData.call_id && !smartfloData.call_sid);
+        
+        if (!isSmartfloError) {
           // Smartflo returns call_id (sometimes null), ref_id, and sometimes call_sid
           // We store our internal callSid as the identifier since Smartflo call_id is often null
           // and the WebSocket start event will provide the real Smartflo call_sid
