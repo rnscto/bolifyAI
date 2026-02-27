@@ -93,7 +93,7 @@ function base64PCM16_24kToMulaw(base64Pcm16) {
 
 // ─── Save call record (reused from original) ───
 
-async function saveCallRecord(session, reqId, duration) {
+async function saveCallRecord(session, reqId, duration, base44Client) {
   if (!session.callLogId) {
     console.log(`[${reqId}] ⚠️ No callLogId, skipping save`);
     return;
@@ -112,33 +112,14 @@ async function saveCallRecord(session, reqId, duration) {
       try {
         const summaryRes = await fetch(
           `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`,
-          {
-            method: 'POST',
-            headers: {
-              'api-key': Deno.env.get('AZURE_OPENAI_KEY'),
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              messages: [
-                { role: 'system', content: 'Summarize this call transcript in 2-3 sentences. Mention the outcome and key points discussed.' },
-                { role: 'user', content: transcript }
-              ],
-              max_completion_tokens: 200
-            })
-          }
-        );
-        if (summaryRes.ok) {
-          const summaryData = await summaryRes.json();
-          summary = summaryData.choices?.[0]?.message?.content || '';
-        }
+...
       } catch (sumErr) {
         console.error(`[${reqId}] ⚠️ Summary generation failed: ${sumErr.message}`);
       }
     }
 
-    const { createClient } = await import('npm:@base44/sdk@0.8.18');
-    const appId = Deno.env.get('BASE44_APP_ID');
-    const serviceClient = createClient({ appId, asServiceRole: true });
+    // Use the request-based client's service role for authenticated entity operations
+    const serviceClient = base44Client.asServiceRole;
 
     await serviceClient.entities.CallLog.update(session.callLogId, {
       status: 'completed',
