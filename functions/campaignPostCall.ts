@@ -94,7 +94,7 @@ Rules:
       }
     }
 
-    // Update campaign lead
+    // Update campaign lead to completed FIRST (this frees up the slot for next batch)
     await base44.entities.CampaignLead.update(campaignLead.id, {
       status: 'completed',
       outcome: outcome,
@@ -102,6 +102,7 @@ Rules:
       transcript: callLog.transcript || '',
       call_duration: callLog.duration || 0
     });
+    console.log(`[campaignPostCall] CampaignLead ${campaignLead.id} (${campaignLead.lead_name}) → completed, outcome=${outcome}`);
 
     // Update lead status (map outcome to valid Lead status enum)
     if (campaignLead.lead_id) {
@@ -109,10 +110,14 @@ Rules:
         interested: 'interested', not_interested: 'not_interested', callback: 'callback',
         no_answer: 'callback', converted: 'converted', contacted: 'contacted', do_not_call: 'do_not_call'
       };
-      await base44.entities.Lead.update(campaignLead.lead_id, {
-        status: leadStatusMap[outcome] || 'contacted',
-        last_call_date: new Date().toISOString()
-      });
+      try {
+        await base44.entities.Lead.update(campaignLead.lead_id, {
+          status: leadStatusMap[outcome] || 'contacted',
+          last_call_date: new Date().toISOString()
+        });
+      } catch (leadErr) {
+        console.error(`[campaignPostCall] Lead update failed: ${leadErr.message}`);
+      }
     }
 
     // Fetch campaign for follow-up rules
