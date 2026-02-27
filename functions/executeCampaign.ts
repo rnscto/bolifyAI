@@ -228,7 +228,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             api_key: Deno.env.get('SMARTFLO_API_KEY'),
             customer_number: smartfloPhone,
-            caller_id: selectedDID.replace(/[^0-9]/g, '').replace(/^91/, ''),
+            caller_id: selectedDID.replace(/[^0-9]/g, ''),
             async: 1
           })
         });
