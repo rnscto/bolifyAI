@@ -118,12 +118,116 @@ Deno.serve(async (req) => {
         if (pendingCount > 0 && callingCount < (campaign.max_concurrent_calls || 5)) {
           console.log(`[campaignPoller] Campaign "${campaign.name}": ${pendingCount} pending, ${callingCount} calling — triggering next batch`);
           try {
-            await svc.functions.invoke('executeCampaign', {
-              campaign_id: campaignId,
-              action: 'start',
-              _internal: true
-            });
-            results.batches_triggered++;
+            // Execute the batch logic inline instead of invoking executeCampaign
+            // to avoid 403 errors from service-role function invocation
+            const agent = await svc.entities.Agent.get(campaign.agent_id);
+            const agentDIDs = (agent?.assigned_dids?.length > 0)
+              ? agent.assigned_dids
+              : (agent?.assigned_did ? [agent.assigned_did] : []);
+
+            if (agent && agentDIDs.length > 0) {
+              // Get pending leads
+              const maxConcurrent = campaign.max_concurrent_calls || 5;
+              const currentlyCallingNow = allLeads.filter(l => l.status === 'calling').length;
+              const slotsAvailable = Math.max(0, maxConcurrent - currentlyCallingNow);
+
+              if (slotsAvailable > 0) {
+                const pendingBatch = allLeads.filter(l => l.status === 'pending').slice(0, slotsAvailable);
+                let kbContent = '';
+                if (agent.knowledge_base_ids?.length > 0) {
+                  for (const kbId of agent.knowledge_base_ids) {
+                    try {
+                      const doc = await svc.entities.KnowledgeBase.get(kbId);
+                      if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
+                    } catch (_) {}
+                  }
+                }
+
+                for (let i = 0; i < pendingBatch.length; i++) {
+                  const cl = pendingBatch[i];
+                  try {
+                    const selectedDID = agentDIDs[i % agentDIDs.length];
+                    await svc.entities.CampaignLead.update(cl.id, {
+                      status: 'calling', attempt_count: (cl.data?.attempt_count || cl.attempt_count || 0) + 1
+                    });
+
+                    const cleanPhone = (cl.data?.lead_phone || cl.lead_phone || '').replace(/[^0-9]/g, '');
+                    const callSid = `camp_${campaignId.slice(-8)}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+                    let leadContext = '';
+                    try {
+                      const ctxRes = await svc.functions.invoke('buildLeadContext', {
+                        lead_id: cl.data?.lead_id || cl.lead_id,
+                        client_id: campaign.client_id,
+                        phone_number: cl.data?.lead_phone || cl.lead_phone
+                      });
+                      if (ctxRes?.context_text) leadContext = ctxRes.context_text;
+                    } catch (_) {}
+
+                    const personalizedPrompt = [
+                      agent.system_prompt || '',
+                      campaign.call_script?.opening ? `\nCALL SCRIPT - Opening: ${campaign.call_script.opening}` : '',
+                      campaign.call_script?.pitch ? `\nCALL SCRIPT - Pitch: ${campaign.call_script.pitch}` : '',
+                      campaign.call_script?.objection_handling ? `\nCALL SCRIPT - Objections: ${campaign.call_script.objection_handling}` : '',
+                      campaign.call_script?.closing ? `\nCALL SCRIPT - Closing: ${campaign.call_script.closing}` : '',
+                      leadContext ? `\n\n--- LEAD CONTEXT ---\n${leadContext}` : ''
+                    ].filter(Boolean).join('\n');
+
+                    const callLog = await svc.entities.CallLog.create({
+                      client_id: campaign.client_id, agent_id: campaign.agent_id,
+                      lead_id: cl.data?.lead_id || cl.lead_id,
+                      call_sid: callSid, caller_id: selectedDID,
+                      callee_number: cl.data?.lead_phone || cl.lead_phone,
+                      direction: 'outbound', status: 'initiated',
+                      call_start_time: new Date().toISOString(),
+                      agent_config_cache: {
+                        agent_name: agent.name, system_prompt: personalizedPrompt,
+                        persona: agent.persona || {}, knowledge_base_content: kbContent,
+                        lead_context: leadContext
+                      }
+                    });
+
+                    await svc.entities.CampaignLead.update(cl.id, { call_log_id: callLog.id });
+
+                    const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        api_key: Deno.env.get('SMARTFLO_API_KEY'),
+                        customer_number: cleanPhone,
+                        caller_id: selectedDID.replace(/^\+/, ''),
+                        async: 1
+                      })
+                    });
+
+                    const smartfloData = await smartfloResp.json();
+                    if (smartfloResp.ok && smartfloData.success !== false) {
+                      const newCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
+                      await svc.entities.CallLog.update(callLog.id, { call_sid: newCallSid, status: 'ringing' });
+                      console.log(`[campaignPoller] Call initiated: ${cl.data?.lead_name || cl.lead_name} → ${cleanPhone}`);
+                    } else {
+                      await svc.entities.CallLog.update(callLog.id, { status: 'failed' });
+                      await svc.entities.CampaignLead.update(cl.id, {
+                        status: 'completed', outcome: 'no_answer',
+                        conversation_summary: `Smartflo error: ${smartfloData.message || 'Unknown'}`
+                      });
+                    }
+
+                    if (i < pendingBatch.length - 1) await new Promise(r => setTimeout(r, 500));
+                  } catch (e) {
+                    console.error(`[campaignPoller] Call error for ${cl.data?.lead_name || cl.lead_name}: ${e.message}`);
+                    await svc.entities.CampaignLead.update(cl.id, {
+                      status: 'completed', outcome: 'no_answer',
+                      conversation_summary: `Error: ${e.message}`
+                    });
+                  }
+                }
+                results.batches_triggered++;
+                console.log(`[campaignPoller] Triggered ${pendingBatch.length} calls for "${campaign.name}"`);
+              }
+            } else {
+              console.log(`[campaignPoller] Agent has no DIDs for "${campaign.name}"`);
+            }
           } catch (e) {
             console.error(`[campaignPoller] Failed to trigger batch for "${campaign.name}": ${e.message}`);
             results.errors.push({ campaign: campaign.name, error: e.message });
