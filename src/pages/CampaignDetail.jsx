@@ -31,6 +31,39 @@ export default function CampaignDetail() {
     if (campaignId) loadData();
   }, [campaignId]);
 
+  // Real-time subscriptions for live status updates
+  useEffect(() => {
+    if (!campaignId) return;
+
+    // Subscribe to CampaignLead changes (status, outcome, transcript updates)
+    const unsubLeads = base44.entities.CampaignLead.subscribe((event) => {
+      if (event.data?.campaign_id !== campaignId) return;
+      
+      if (event.type === 'update') {
+        setCampaignLeads(prev => prev.map(cl => cl.id === event.id ? { ...cl, ...event.data } : cl));
+      } else if (event.type === 'create') {
+        setCampaignLeads(prev => {
+          if (prev.some(cl => cl.id === event.id)) return prev;
+          return [...prev, event.data];
+        });
+      } else if (event.type === 'delete') {
+        setCampaignLeads(prev => prev.filter(cl => cl.id !== event.id));
+      }
+    });
+
+    // Subscribe to Campaign changes (status, counters, completion)
+    const unsubCampaign = base44.entities.Campaign.subscribe((event) => {
+      if (event.id === campaignId && event.type === 'update') {
+        setCampaign(prev => prev ? { ...prev, ...event.data } : prev);
+      }
+    });
+
+    return () => {
+      unsubLeads();
+      unsubCampaign();
+    };
+  }, [campaignId]);
+
   const loadData = async () => {
     try {
       const [campaignData, leadsData] = await Promise.all([
