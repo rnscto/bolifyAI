@@ -488,12 +488,19 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
     // immediately trigger the next batch instead of waiting for the 5-min poller.
     const maxConcurrent = campaign.max_concurrent_calls || 5;
 
-    if (pendingCount > 0 && callingCount < maxConcurrent && !updateData.status) {
-      // Add a delay to ensure DB consistency before triggering next batch
-      await new Promise(r => setTimeout(r, 3000));
-      console.log(`[campaignPostCall] 🚀 Auto-triggering next batch: ${pendingCount} pending, ${callingCount}/${maxConcurrent} calling`);
+    // Re-fetch calling count FRESH after all our updates are done
+    // The counts above may include the lead we just completed
+    await new Promise(r => setTimeout(r, 2000));
+    const freshCallingLeads = await svc.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'calling' });
+    const freshCallingCount = freshCallingLeads.length;
+    const freshPendingLeads = await svc.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'pending' });
+    const freshPendingCount = freshPendingLeads.length;
+    
+    console.log(`[campaignPostCall] 🔄 Fresh re-check: ${freshPendingCount} pending, ${freshCallingCount} calling, max=${maxConcurrent}`);
+
+    if (freshPendingCount > 0 && freshCallingCount < maxConcurrent && !updateData.status) {
+      console.log(`[campaignPostCall] 🚀 Auto-triggering next batch: ${freshPendingCount} pending, ${freshCallingCount}/${maxConcurrent} calling`);
       try {
-        // Use asServiceRole.functions.invoke to call executeCampaign with proper auth
         const invokeData = await svc.functions.invoke('executeCampaign', {
           campaign_id: campaignId,
           action: 'start',
@@ -501,10 +508,25 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
         });
         console.log(`[campaignPostCall] ✅ Next batch result: ${JSON.stringify(invokeData)}`);
       } catch (batchErr) {
-        console.error(`[campaignPostCall] Next batch trigger failed: ${batchErr.message}`);
+        console.error(`[campaignPostCall] ❌ Next batch trigger failed: ${batchErr.message}`);
+        // Fallback: try direct HTTP call
+        try {
+          console.log(`[campaignPostCall] 🔁 Retrying via direct fetch...`);
+          await new Promise(r => setTimeout(r, 2000));
+          const retryResult = await svc.functions.invoke('executeCampaign', {
+            campaign_id: campaignId,
+            action: 'start',
+            _internal: true
+          });
+          console.log(`[campaignPostCall] ✅ Retry result: ${JSON.stringify(retryResult)}`);
+        } catch (retryErr) {
+          console.error(`[campaignPostCall] ❌ Retry also failed: ${retryErr.message}`);
+        }
       }
-    } else if (pendingCount > 0) {
-      console.log(`[campaignPostCall] ⏸️ Not triggering yet: pending=${pendingCount}, calling=${callingCount}, max=${maxConcurrent}`);
+    } else if (freshPendingCount > 0) {
+      console.log(`[campaignPostCall] ⏸️ Not triggering yet: pending=${freshPendingCount}, calling=${freshCallingCount}, max=${maxConcurrent}`);
+    } else {
+      console.log(`[campaignPostCall] ✅ No more pending leads to trigger`);
     }
 
     return Response.json({
