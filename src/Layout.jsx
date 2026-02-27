@@ -22,8 +22,7 @@ import {
   Megaphone,
   BarChart3,
   Globe,
-  Handshake,
-  FileText
+  Handshake
 } from 'lucide-react';
 
 export default function Layout({ children, currentPageName }) {
