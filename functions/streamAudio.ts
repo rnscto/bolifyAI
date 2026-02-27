@@ -712,6 +712,9 @@ Deno.serve(async (req) => {
           if (cache.knowledge_base_content) {
             session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
           }
+          if (cache.lead_context) {
+            console.log(`[${reqId}] 👤 Lead context loaded (${cache.lead_context.length} chars)`);
+          }
           console.log(`[${reqId}] ✅ Agent config loaded (${session.systemPrompt.length} chars)`);
         }
         // Load voice engine and voice type from agent persona
