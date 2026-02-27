@@ -69,7 +69,6 @@ Respond ONLY in valid JSON.`
                 }
               ],
               max_completion_tokens: 700,
-              temperature: 0.2,
               response_format: { type: "json_object" }
             })
           }
