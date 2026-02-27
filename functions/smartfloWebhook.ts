@@ -351,10 +351,9 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
       }
 
       // For calls WITHOUT recording (no_answer, failed, busy, cancelled),
-      // ensure CallLog status is set to a terminal value so campaignPostCall automation triggers
+      // the CallLog update above already sets the terminal status, which triggers
+      // the campaignPostCall entity automation. Add a summary for context.
       if (!recording_url && (status === 'no_answer' || status === 'failed' || status === 'busy' || status === 'cancelled')) {
-        // The CallLog update above already set the status, and the entity automation
-        // on CallLog update will fire campaignPostCall. But we also set a summary.
         const statusLabel = status === 'no_answer' ? 'No Answer' : status === 'busy' ? 'Busy' : status === 'cancelled' ? 'Cancelled' : 'Failed';
         await base44.entities.CallLog.update(callLog.id, {
           conversation_summary: `Call ended: ${statusLabel}. No recording available.`,
