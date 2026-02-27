@@ -61,14 +61,14 @@ Deno.serve(async (req) => {
         const last10 = cleanNumber.slice(-10);
 
         // Match caller to registered client (scoped outside so unknown caller block can access it)
-        const allClients = await base44.asServiceRole.entities.Client.list();
+        const allClients = await base44.entities.Client.list();
         const matchedClient = allClients.find(c => {
           if (!c.phone) return false;
           return c.phone.replace(/\D/g, '').slice(-10) === last10;
         });
 
         // Load retention config
-        const configs = await base44.asServiceRole.entities.RetentionConfig.list('-created_date', 1);
+        const configs = await base44.entities.RetentionConfig.list('-created_date', 1);
         const retentionConfig = configs[0] || {};
 
         // ----- KNOWN CLIENT -----
@@ -77,11 +77,11 @@ Deno.serve(async (req) => {
 
           // Gather full client context in parallel
           const [clientAgents, clientLeads, clientSubs, clientCallHistory, clientActivities] = await Promise.all([
-            base44.asServiceRole.entities.Agent.filter({ client_id: matchedClient.id }),
-            base44.asServiceRole.entities.Lead.filter({ client_id: matchedClient.id }),
-            base44.asServiceRole.entities.Subscription.filter({ client_id: matchedClient.id }),
-            base44.asServiceRole.entities.CallLog.filter({ client_id: matchedClient.id }),
-            base44.asServiceRole.entities.Activity.filter({ client_id: matchedClient.id }),
+            base44.entities.Agent.filter({ client_id: matchedClient.id }),
+            base44.entities.Lead.filter({ client_id: matchedClient.id }),
+            base44.entities.Subscription.filter({ client_id: matchedClient.id }),
+            base44.entities.CallLog.filter({ client_id: matchedClient.id }),
+            base44.entities.Activity.filter({ client_id: matchedClient.id }),
           ]);
 
           const recentCalls = clientCallHistory
@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
           const pendingActivities = clientActivities.filter(a => a.status === 'scheduled');
 
           // AI: classify intent + generate personalized greeting
-          const aiAnalysis = await base44.asServiceRole.integrations.Core.InvokeLLM({
+          const aiAnalysis = await base44.integrations.Core.InvokeLLM({
             prompt: `You are VaaniAI's intelligent call routing assistant. An incoming call has been received from a KNOWN registered client. Analyze their context and generate an appropriate response.
 
 CALLER CONTEXT:
@@ -152,7 +152,7 @@ Be specific and Indian business context aware. If the account is expired, priori
           console.log('[smartfloWebhook] AI Analysis - Intent:', aiAnalysis.intent, 'Routing:', aiAnalysis.routing, 'Priority:', aiAnalysis.priority);
 
           // Create detailed call log
-          const inboundLog = await base44.asServiceRole.entities.CallLog.create({
+          const inboundLog = await base44.entities.CallLog.create({
             client_id: matchedClient.id,
             agent_id: 'system_inbound',
             call_sid: call_id,
@@ -165,7 +165,7 @@ Be specific and Indian business context aware. If the account is expired, priori
           });
 
           // Create activity with routing info
-          await base44.asServiceRole.entities.Activity.create({
+          await base44.entities.Activity.create({
             client_id: matchedClient.id,
             type: 'call',
             title: `Inbound: ${aiAnalysis.intent.replace('_', ' ')} — ${matchedClient.company_name}`,
@@ -180,7 +180,7 @@ Be specific and Indian business context aware. If the account is expired, priori
           if (aiAnalysis.follow_up_needed) {
             const followUpDate = new Date();
             followUpDate.setDate(followUpDate.getDate() + 1);
-            await base44.asServiceRole.entities.Activity.create({
+            await base44.entities.Activity.create({
               client_id: matchedClient.id,
               type: 'followup',
               title: `Follow-up: ${aiAnalysis.follow_up_reason || aiAnalysis.intent}`,
@@ -205,7 +205,7 @@ Be specific and Indian business context aware. If the account is expired, priori
           console.log('[smartfloWebhook] Unknown caller:', incomingNumber);
 
           // AI: handle unknown caller with general greeting + lead qualification
-          const unknownAnalysis = await base44.asServiceRole.integrations.Core.InvokeLLM({
+          const unknownAnalysis = await base44.integrations.Core.InvokeLLM({
             prompt: `You are VaaniAI's intelligent call routing assistant. An incoming call has been received from an UNKNOWN number (not a registered client).
 
 Caller Number: ${incomingNumber}
@@ -244,7 +244,7 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
           console.log('[smartfloWebhook] Unknown caller AI - Intent:', unknownAnalysis.likely_intent, 'Potential lead:', unknownAnalysis.is_potential_lead);
 
           // Log the unknown call
-          const unknownLog = await base44.asServiceRole.entities.CallLog.create({
+          const unknownLog = await base44.entities.CallLog.create({
             client_id: 'unknown',
             agent_id: 'system_inbound',
             call_sid: call_id,
@@ -269,7 +269,7 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
               priority: 'high',
               auto_created: true,
             };
-            await base44.asServiceRole.entities.Activity.create(adminActivity);
+            await base44.entities.Activity.create(adminActivity);
           }
 
           return Response.json({
@@ -290,7 +290,7 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
     }
 
     // Find call log by call_sid
-    const callLogs = await base44.asServiceRole.entities.CallLog.filter({ call_sid: call_id });
+    const callLogs = await base44.entities.CallLog.filter({ call_sid: call_id });
 
     if (callLogs.length === 0) {
       console.log('[smartfloWebhook] Call log not found:', call_id);
@@ -305,19 +305,19 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
     if (recording_url) updateData.recording_url = recording_url;
     if (status === 'completed') updateData.call_end_time = new Date().toISOString();
 
-    await base44.asServiceRole.entities.CallLog.update(callLog.id, updateData);
+    await base44.entities.CallLog.update(callLog.id, updateData);
 
     // Update lead status based on call outcome (only for outbound client calls with valid lead_id)
     // Note: For 'answered' we just mark 'contacted' — the real outcome is set later 
     // by processTranscript → campaignPostCall after AI analyzes the conversation
     if (callLog.lead_id && callLog.lead_id !== 'unknown') {
       if (status === 'answered') {
-        await base44.asServiceRole.entities.Lead.update(callLog.lead_id, { 
+        await base44.entities.Lead.update(callLog.lead_id, { 
           status: 'contacted',
           last_call_date: new Date().toISOString()
         });
       } else if (status === 'no_answer') {
-        await base44.asServiceRole.entities.Lead.update(callLog.lead_id, { 
+        await base44.entities.Lead.update(callLog.lead_id, { 
           status: 'callback',
           last_call_date: new Date().toISOString()
         });
@@ -330,13 +330,13 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
       // Set end time
       if (!updateData.call_end_time) {
         updateData.call_end_time = new Date().toISOString();
-        await base44.asServiceRole.entities.CallLog.update(callLog.id, { call_end_time: new Date().toISOString() });
+        await base44.entities.CallLog.update(callLog.id, { call_end_time: new Date().toISOString() });
       }
 
       // If recording available, process transcript (this will update CallLog which triggers campaignPostCall)
       if (recording_url) {
         try {
-          await base44.asServiceRole.functions.invoke('processTranscript', {
+          await base44.functions.invoke('processTranscript', {
             call_log_id: callLog.id,
             recording_url: recording_url
           });
@@ -352,7 +352,7 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
         // The CallLog update above already set the status, and the entity automation
         // on CallLog update will fire campaignPostCall. But we also set a summary.
         const statusLabel = status === 'no_answer' ? 'No Answer' : status === 'busy' ? 'Busy' : status === 'cancelled' ? 'Cancelled' : 'Failed';
-        await base44.asServiceRole.entities.CallLog.update(callLog.id, {
+        await base44.entities.CallLog.update(callLog.id, {
           conversation_summary: `Call ended: ${statusLabel}. No recording available.`,
           lead_status_updated: status === 'no_answer' ? 'no_answer' : 'callback'
         });
@@ -363,13 +363,13 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
       // For faster campaign progression, directly update CampaignLead and trigger next batch
       // instead of waiting for the entity automation chain (CallLog update → campaignPostCall)
       try {
-        const campaignLeads = await base44.asServiceRole.entities.CampaignLead.filter({ call_log_id: callLog.id });
+        const campaignLeads = await base44.entities.CampaignLead.filter({ call_log_id: callLog.id });
         if (campaignLeads.length > 0) {
           const cl = campaignLeads[0];
           // Only handle no-recording terminal calls here (completed+recording is handled by processTranscript → campaignPostCall)
           if (!recording_url && cl.status === 'calling') {
             const directOutcome = (status === 'no_answer' || status === 'busy' || status === 'cancelled') ? 'no_answer' : 'no_answer';
-            await base44.asServiceRole.entities.CampaignLead.update(cl.id, {
+            await base44.entities.CampaignLead.update(cl.id, {
               status: 'completed',
               outcome: directOutcome,
               conversation_summary: `Call ${status}. No recording available.`,
@@ -379,16 +379,16 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
           }
 
           // Trigger next batch immediately
-          const campaign = await base44.asServiceRole.entities.Campaign.get(cl.campaign_id);
+          const campaign = await base44.entities.Campaign.get(cl.campaign_id);
           if (campaign && campaign.status === 'running') {
-            const allCampaignLeads = await base44.asServiceRole.entities.CampaignLead.filter({ campaign_id: cl.campaign_id });
+            const allCampaignLeads = await base44.entities.CampaignLead.filter({ campaign_id: cl.campaign_id });
             const pendingCount = allCampaignLeads.filter(l => l.status === 'pending').length;
             const callingCount = allCampaignLeads.filter(l => l.status === 'calling').length;
             const maxConcurrent = campaign.max_concurrent_calls || 5;
 
             if (pendingCount > 0 && callingCount < maxConcurrent) {
               console.log(`[smartfloWebhook] 🚀 Triggering next batch: ${pendingCount} pending, ${callingCount}/${maxConcurrent} calling`);
-              await base44.asServiceRole.functions.invoke('executeCampaign', {
+              await base44.functions.invoke('executeCampaign', {
                 campaign_id: cl.campaign_id,
                 action: 'start',
                 _internal: true
