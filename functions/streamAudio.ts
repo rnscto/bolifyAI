@@ -512,7 +512,31 @@ Deno.serve(async (req) => {
     }
   }
 
-  // ─── LLM text generation (hybrid mode) ───
+  // ─── Clean text for TTS (remove markdown, emojis, special chars) ───
+  function cleanTextForTTS(text) {
+    return text
+      .replace(/\*\*([^*]+)\*\*/g, '$1')  // **bold** → bold
+      .replace(/\*([^*]+)\*/g, '$1')       // *italic* → italic
+      .replace(/__([^_]+)__/g, '$1')       // __underline__ → underline
+      .replace(/_([^_]+)_/g, '$1')         // _italic_ → italic
+      .replace(/#{1,6}\s*/g, '')           // # headers
+      .replace(/```[\s\S]*?```/g, '')      // code blocks
+      .replace(/`([^`]+)`/g, '$1')         // inline code
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [link](url) → link
+      .replace(/[😊🙏👋✅❌🎯📋🕐⚠️💡🔊🎙️]/gu, '') // common emojis
+      .replace(/[\u{1F600}-\u{1F64F}]/gu, '') // emoticons
+      .replace(/[\u{1F300}-\u{1F5FF}]/gu, '') // misc symbols
+      .replace(/[\u{1F680}-\u{1F6FF}]/gu, '') // transport
+      .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '') // flags
+      .replace(/[\u{2600}-\u{26FF}]/gu, '')   // misc symbols
+      .replace(/[\u{2700}-\u{27BF}]/gu, '')   // dingbats
+      .replace(/\n{2,}/g, '. ')            // multiple newlines → pause
+      .replace(/\n/g, ' ')                 // single newline → space
+      .replace(/\s{2,}/g, ' ')            // multiple spaces
+      .trim();
+  }
+
+  // ─── LLM text generation with streaming (hybrid mode) ───
   async function generateGpt5NanoResponse(userText) {
     const nanoEndpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
     const nanoKey = Deno.env.get('AZURE_OPENAI_KEY');
@@ -536,8 +560,13 @@ Deno.serve(async (req) => {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          messages: session.chatHistory,
-          max_completion_tokens: 300
+          messages: [
+            ...session.chatHistory.slice(0, 1), // system prompt
+            { role: 'system', content: 'CRITICAL: You are speaking on a VOICE CALL. Your response will be read aloud by text-to-speech. NEVER use markdown formatting (**, *, #, ```, [], etc.), emojis, or special characters. Write in plain conversational text only. Keep responses short (2-3 sentences max). Speak naturally as a human would on a phone call.' },
+            ...session.chatHistory.slice(1) // rest of conversation
+          ],
+          max_completion_tokens: 200,
+          stream: true
         })
       });
 
@@ -547,15 +576,60 @@ Deno.serve(async (req) => {
         return;
       }
 
-      const data = await response.json();
-      const aiText = data.choices?.[0]?.message?.content?.trim();
+      // Stream the response - send first sentence to TTS immediately for lower latency
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let sentenceBuffer = '';
+      let sentencesSent = 0;
 
-      if (aiText) {
-        console.log(`[${reqId}] 🧠 LLM: "${aiText.substring(0, 100)}"`);
-        session.chatHistory.push({ role: 'assistant', content: aiText });
-        session.transcript.push({ speaker: 'AI', text: aiText });
-        synthesizeWithAzureSpeech(aiText);
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, { stream: true });
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ') || line === 'data: [DONE]') continue;
+          try {
+            const json = JSON.parse(line.slice(6));
+            const delta = json.choices?.[0]?.delta?.content;
+            if (!delta) continue;
+
+            fullText += delta;
+            sentenceBuffer += delta;
+
+            // Check for sentence boundaries to send early TTS
+            const sentenceMatch = sentenceBuffer.match(/^(.*?[.?!।\n])\s*(.*)/s);
+            if (sentenceMatch) {
+              const sentence = cleanTextForTTS(sentenceMatch[1]);
+              sentenceBuffer = sentenceMatch[2] || '';
+
+              if (sentence && sentence.length > 3) {
+                sentencesSent++;
+                if (sentencesSent === 1) {
+                  console.log(`[${reqId}] 🧠 LLM first sentence: "${sentence.substring(0, 80)}"`);
+                }
+                // Fire TTS for this sentence without awaiting (parallel playback)
+                synthesizeWithAzureSpeech(sentence);
+              }
+            }
+          } catch (_) { /* skip parse errors in SSE */ }
+        }
       }
+
+      // Send any remaining text
+      const remaining = cleanTextForTTS(sentenceBuffer);
+      if (remaining && remaining.length > 3) {
+        synthesizeWithAzureSpeech(remaining);
+      }
+
+      const cleanFull = cleanTextForTTS(fullText);
+      console.log(`[${reqId}] 🧠 LLM complete: "${cleanFull.substring(0, 100)}" (${sentencesSent} sentences streamed)`);
+      session.chatHistory.push({ role: 'assistant', content: fullText });
+      session.transcript.push({ speaker: 'AI', text: cleanFull });
+
     } catch (err) {
       console.error(`[${reqId}] ❌ LLM failed: ${err.message}`);
     }
