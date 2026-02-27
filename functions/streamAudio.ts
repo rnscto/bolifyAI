@@ -145,7 +145,11 @@ async function saveCallRecord(session, reqId, duration) {
     // that sets status='completed' + all enriched data at once. This ensures the
     // campaignPostCall entity automation fires only ONCE with complete data.
 
+    // Clean up any internal metadata from conversation_summary (set during call initiation)
     let enrichedSummary = summary;
+    if (enrichedSummary && (enrichedSummary.startsWith('[ref_id:') || enrichedSummary.startsWith('[LEAD CONTEXT]'))) {
+      enrichedSummary = '';
+    }
     let leadStatusUpdated = null;
     let leadId = null;
     let clientId = null;
