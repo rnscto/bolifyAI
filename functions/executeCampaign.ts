@@ -237,14 +237,24 @@ Deno.serve(async (req) => {
         console.log(`[campaign] Smartflo response for ${cl.lead_name}: ${JSON.stringify(smartfloData)}`);
 
         if (smartfloResp.ok && smartfloData.success !== false) {
-          const newCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
-          console.log(`[campaign] Smartflo call_id for ${cl.lead_name}: ${newCallSid} (original: ${callSid})`);
-          // Store BOTH the Smartflo call_id (as call_sid) and our internal ID (in conversation_summary for reference)
-          await svc.entities.CallLog.update(callLog.id, {
-            call_sid: newCallSid,
+          // Smartflo returns call_id (sometimes null), ref_id, and sometimes call_sid
+          // We store our internal callSid as the identifier since Smartflo call_id is often null
+          // and the WebSocket start event will provide the real Smartflo call_sid
+          const smartfloCallId = smartfloData.call_id || smartfloData.call_sid;
+          const refId = smartfloData.ref_id;
+          console.log(`[campaign] Smartflo IDs for ${cl.lead_name}: call_id=${smartfloCallId}, ref_id=${refId}, our_id=${callSid}`);
+          
+          // Keep our internal callSid as primary identifier — streamAudio will match by 
+          // recent initiated/ringing CallLog if Smartflo doesn't provide a matching call_sid
+          const updateFields = {
             status: 'ringing',
-            conversation_summary: callLog.conversation_summary ? `${callLog.conversation_summary}\n[internal_id: ${callSid}]` : `[internal_id: ${callSid}]`
-          });
+            conversation_summary: `[ref_id: ${refId || 'none'}] [internal_id: ${callSid}]`
+          };
+          // Only replace call_sid if Smartflo actually returned one
+          if (smartfloCallId) {
+            updateFields.call_sid = smartfloCallId;
+          }
+          await svc.entities.CallLog.update(callLog.id, updateFields);
           results.initiated++;
         } else {
           await svc.entities.CallLog.update(callLog.id, { status: 'failed' });
