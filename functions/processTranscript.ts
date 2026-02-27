@@ -170,6 +170,16 @@ Respond ONLY in valid JSON with this exact structure.`
       console.error('[processTranscript] Post-call follow-up error:', followupErr.message);
     }
 
+    // Trigger post-call action extraction (notes, scheduled activities, emails)
+    try {
+      await base44.asServiceRole.functions.invoke('postCallActionExtractor', {
+        call_log_id: call_log_id
+      });
+      console.log('[processTranscript] Post-call action extraction triggered');
+    } catch (actionErr) {
+      console.error('[processTranscript] Post-call action extraction error:', actionErr.message);
+    }
+
     return Response.json({ 
       success: true,
       transcript,
