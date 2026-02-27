@@ -118,7 +118,8 @@ RULES:
     if (!extractionResponse.ok) {
       const errText = await extractionResponse.text();
       console.error('[ActionExtractor] AI extraction failed:', extractionResponse.status, errText);
-      return Response.json({ error: 'AI extraction failed' }, { status: 500 });
+      console.error('[ActionExtractor] URL used:', `${baseUrl}/openai/deployments/${deployment}/chat/completions`);
+      return Response.json({ error: 'AI extraction failed', status: extractionResponse.status, detail: errText.substring(0, 500) }, { status: 500 });
     }
 
     const extractionData = await extractionResponse.json();
