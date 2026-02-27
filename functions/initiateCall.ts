@@ -71,6 +71,23 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Build personalized lead context (name, history, score, sentiment, notes)
+    let leadContext = '';
+    try {
+      const ctxRes = await base44.asServiceRole.functions.invoke('buildLeadContext', {
+        lead_id, client_id: agent.client_id, phone_number
+      });
+      if (ctxRes?.context_text) leadContext = ctxRes.context_text;
+    } catch (e) {
+      console.log('Lead context build failed:', e.message);
+    }
+
+    // Combine agent system prompt with lead personalization
+    const personalizedPrompt = [
+      agent.system_prompt || '',
+      leadContext ? `\n\n--- LEAD CONTEXT (use this to personalize the conversation) ---\n${leadContext}` : ''
+    ].filter(Boolean).join('\n');
+
     // Create call log with cached agent config (so streamAudio WebSocket can read it without cross-function calls)
     const callLog = await base44.asServiceRole.entities.CallLog.create({
       client_id: agent.client_id,
@@ -82,11 +99,13 @@ Deno.serve(async (req) => {
       direction: 'outbound',
       status: 'initiated',
       call_start_time: new Date().toISOString(),
+      conversation_summary: leadContext ? `[LEAD CONTEXT]\n${leadContext}` : '',
       agent_config_cache: {
         agent_name: agent.name,
-        system_prompt: agent.system_prompt || '',
+        system_prompt: personalizedPrompt,
         persona: agent.persona || {},
-        knowledge_base_content: kbContent
+        knowledge_base_content: kbContent,
+        lead_context: leadContext
       }
     });
 
