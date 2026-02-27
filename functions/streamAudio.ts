@@ -527,8 +527,7 @@ Deno.serve(async (req) => {
     session.chatHistory.push({ role: 'user', content: userText });
 
     try {
-      // Try multiple API versions for compatibility
-      const url = `${nanoEndpoint}/openai/deployments/${nanoDeployment}/chat/completions?api-version=2024-12-01-preview`;
+      const url = `${nanoEndpoint}/openai/deployments/${nanoDeployment}/chat/completions?api-version=2025-01-01-preview`;
       console.log(`[${reqId}] 🧠 GPT-5-nano URL: ${url.substring(0, 120)}...`);
       const response = await fetch(url, {
         method: 'POST',
