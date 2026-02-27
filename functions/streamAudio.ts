@@ -249,8 +249,6 @@ Respond ONLY in valid JSON.`
 
     // NOTE: Campaign lead updates and next-batch triggers are handled by
     // campaignPostCall (entity automation on CallLog update).
-
-    try { serviceClient.cleanup(); } catch (_) { /* ignore */ }
   } catch (err) {
     console.error(`[${reqId}] ❌ Save failed:`, err.message);
   }
