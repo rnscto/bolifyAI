@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
     } else if (callLog.transcript || callLog.conversation_summary) {
       // For calls with conversation data, analyze with LLM
       try {
-        const analysis = await base44.integrations.Core.InvokeLLM({
+        const analysis = await svc.integrations.Core.InvokeLLM({
           prompt: `Analyze this sales call and determine the outcome.
 
 TRANSCRIPT:
@@ -170,7 +170,7 @@ Company: ${client?.company_name}
 Summary: ${summary}
 Under 150 words. HTML format.`;
 
-          const emailContent = await base44.integrations.Core.InvokeLLM({
+          const emailContent = await svc.integrations.Core.InvokeLLM({
             prompt: emailPrompt,
             response_json_schema: {
               type: "object",
@@ -181,7 +181,7 @@ Under 150 words. HTML format.`;
             }
           });
 
-          await base44.integrations.Core.SendEmail({
+          await svc.integrations.Core.SendEmail({
             to: lead.email,
             from_name: client?.company_name || 'VaaniAI',
             subject: emailContent.subject,
@@ -249,7 +249,7 @@ Under 150 words. HTML format.`;
 
         if (rules.callback_ai_talking_points !== false && (callLog.transcript || summary)) {
           try {
-            const tpResult = await base44.integrations.Core.InvokeLLM({
+            const tpResult = await svc.integrations.Core.InvokeLLM({
               prompt: `You are a sales coach. Based on this call transcript and summary, generate concise talking points for the agent's next callback with this lead.
 
 LEAD: ${lead?.name || 'Unknown'} (${lead?.company || 'N/A'})
@@ -320,7 +320,7 @@ Generate:
       // 2b. Send callback confirmation email
       if (rules.callback_email !== false && lead?.email) {
         try {
-          const emailContent = await base44.integrations.Core.InvokeLLM({
+          const emailContent = await svc.integrations.Core.InvokeLLM({
             prompt: `Write a brief, warm callback confirmation email.
 Lead: ${lead.name || 'there'}
 Company: ${client?.company_name}
@@ -335,7 +335,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
             }
           });
 
-          await base44.integrations.Core.SendEmail({
+          await svc.integrations.Core.SendEmail({
             to: lead.email,
             from_name: client?.company_name || 'VaaniAI',
             subject: emailContent.subject,
