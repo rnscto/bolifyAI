@@ -110,7 +110,7 @@ Deno.serve(async (req) => {
     });
 
     // Clean phone number — strip "+" prefix but keep digits (Smartflo rejects "+" in caller_id)
-    const cleanCallerID = callerDID.replace(/^\+/, '');
+    const cleanCallerID = callerDID.replace(/[^0-9]/g, '').replace(/^91/, '');
     const cleanPhoneNumber = phone_number.replace(/[^0-9]/g, '');
 
     // Initiate call via Smartflo Click-to-Call Support API
