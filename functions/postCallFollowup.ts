@@ -29,6 +29,16 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Invalid payload' }, { status: 400 });
     }
 
+    // Skip campaign calls — campaignPostCall handles their follow-up emails to avoid duplicates
+    const callLogId_check = callLog.id || event?.entity_id;
+    if (callLogId_check) {
+      const campaignLeadCheck = await base44.entities.CampaignLead.filter({ call_log_id: callLogId_check });
+      if (campaignLeadCheck.length > 0) {
+        console.log('[postCallFollowup] Skipping campaign call — handled by campaignPostCall');
+        return Response.json({ success: true, skipped: 'campaign_call' });
+      }
+    }
+
     const results = {
       emails_sent: [],
       rcs_sent: [],

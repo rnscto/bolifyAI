@@ -60,8 +60,12 @@ Deno.serve(async (req) => {
         const cleanNumber = incomingNumber.replace(/\D/g, '');
         const last10 = cleanNumber.slice(-10);
 
-        // Match caller to registered client (scoped outside so unknown caller block can access it)
-        const allClients = await base44.entities.Client.list();
+        // Match caller to registered client by phone number
+        // Filter by status to avoid loading cancelled clients, then match by last 10 digits
+        const activeClients = await base44.entities.Client.filter({ status: 'active' });
+        const trialClients = await base44.entities.Client.filter({ account_status: 'trial' });
+        const expiredClients = await base44.entities.Client.filter({ account_status: 'expired' });
+        const allClients = [...activeClients, ...trialClients, ...expiredClients];
         const matchedClient = allClients.find(c => {
           if (!c.phone) return false;
           return c.phone.replace(/\D/g, '').slice(-10) === last10;

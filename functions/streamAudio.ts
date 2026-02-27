@@ -150,92 +150,9 @@ async function saveCallRecord(session, reqId, duration) {
 
     console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}, duration=${duration}s`);
 
-    // Also directly update CampaignLead if this was a campaign call
-    try {
-      const campaignLeads = await serviceClient.entities.CampaignLead.filter({ call_log_id: session.callLogId });
-      if (campaignLeads.length > 0) {
-        const cl = campaignLeads[0];
-        console.log(`[${reqId}] 📊 Found campaign lead ${cl.id}, updating status...`);
-        
-        // Determine outcome from transcript
-        let outcome = 'contacted';
-        if (!transcript || transcript.trim().length < 30) {
-          outcome = 'no_answer';
-        } else if (summary) {
-          try {
-            const analysis = await serviceClient.integrations.Core.InvokeLLM({
-              prompt: `Analyze this call briefly and determine the outcome.\nTRANSCRIPT: ${transcript}\nSUMMARY: ${summary}\nDetermine outcome: "interested","not_interested","callback","no_answer","converted","contacted".\nRules: "interested"=clear interest/pricing ask, "callback"=asked to call later, "not_interested"=declined, "no_answer"=no real conversation/voicemail, "converted"=committed, "contacted"=spoke but unclear`,
-              response_json_schema: { type: "object", properties: { outcome: { type: "string" }, summary: { type: "string" } } }
-            });
-            outcome = analysis.outcome || 'contacted';
-            if (analysis.summary) summary = analysis.summary;
-          } catch (e) {
-            console.log(`[${reqId}] ⚠️ LLM analysis failed, using default: ${e.message}`);
-          }
-        }
-
-        await serviceClient.entities.CampaignLead.update(cl.id, {
-          status: 'completed',
-          outcome: outcome,
-          conversation_summary: summary || '',
-          transcript: transcript || '',
-          call_duration: duration || 0
-        });
-        console.log(`[${reqId}] ✅ CampaignLead ${cl.id} → completed, outcome: ${outcome}`);
-
-        // Update Lead entity
-        if (cl.lead_id) {
-          const leadStatusMap = { interested: 'interested', not_interested: 'not_interested', callback: 'callback', no_answer: 'callback', converted: 'converted', contacted: 'contacted' };
-          await serviceClient.entities.Lead.update(cl.lead_id, {
-            status: leadStatusMap[outcome] || 'contacted',
-            last_call_date: new Date().toISOString()
-          });
-          console.log(`[${reqId}] ✅ Lead ${cl.lead_id} → ${leadStatusMap[outcome] || 'contacted'}`);
-        }
-
-        // Update Campaign counts
-        const allLeads = await serviceClient.entities.CampaignLead.filter({ campaign_id: cl.campaign_id });
-        const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
-        let completedCount = 0, failedCount = 0;
-        allLeads.forEach(l => {
-          if (l.status === 'completed') completedCount++;
-          if (l.status === 'failed') failedCount++;
-          if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++;
-        });
-        
-        const campaignUpdate = { outcomes_summary: outcomes, calls_completed: completedCount, calls_failed: failedCount };
-        const pendingCount = allLeads.filter(l => ['pending', 'calling'].includes(l.status)).length;
-        if (pendingCount === 0) {
-          campaignUpdate.status = 'completed';
-          campaignUpdate.completed_at = new Date().toISOString();
-        }
-        await serviceClient.entities.Campaign.update(cl.campaign_id, campaignUpdate);
-        console.log(`[${reqId}] ✅ Campaign ${cl.campaign_id} updated: completed=${completedCount}, pending=${pendingCount}`);
-
-        // Auto-trigger next batch if slots are available
-        if (pendingCount > 0) {
-          const campaign = await serviceClient.entities.Campaign.get(cl.campaign_id);
-          if (campaign && campaign.status === 'running') {
-            const callingCount = allLeads.filter(l => l.status === 'calling').length;
-            const maxConcurrent = campaign.max_concurrent_calls || 5;
-            if (callingCount < maxConcurrent) {
-              console.log(`[${reqId}] 🚀 Auto-triggering next batch: ${pendingCount} pending, ${callingCount}/${maxConcurrent} calling`);
-              try {
-                await serviceClient.functions.invoke('executeCampaign', {
-                  campaign_id: cl.campaign_id,
-                  action: 'start',
-                  _internal: true
-                });
-              } catch (batchErr) {
-                console.log(`[${reqId}] ⚠️ Next batch trigger failed: ${batchErr.message}`);
-              }
-            }
-          }
-        }
-      }
-    } catch (clErr) {
-      console.error(`[${reqId}] ⚠️ CampaignLead update failed: ${clErr.message}`);
-    }
+    // NOTE: Campaign lead updates and next-batch triggers are handled by
+    // smartfloWebhook (no-recording calls) and campaignPostCall (entity automation on CallLog update).
+    // streamAudio only saves the CallLog — no campaign logic here to avoid race conditions.
 
     try { serviceClient.cleanup(); } catch (_) { /* ignore */ }
   } catch (err) {

@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
 
 const VAANI_KNOWLEDGE_BASE = `
 === ABOUT VAANIAI ===
