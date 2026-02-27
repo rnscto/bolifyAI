@@ -363,46 +363,9 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
         console.log(`[smartfloWebhook] Terminal status ${status} without recording — updated CallLog for campaign processing`);
       }
 
-      // === DIRECT CAMPAIGN LEAD UPDATE + NEXT BATCH TRIGGER ===
-      // For faster campaign progression, directly update CampaignLead and trigger next batch
-      // instead of waiting for the entity automation chain (CallLog update → campaignPostCall)
-      try {
-        const campaignLeads = await base44.entities.CampaignLead.filter({ call_log_id: callLog.id });
-        if (campaignLeads.length > 0) {
-          const cl = campaignLeads[0];
-          // Only handle no-recording terminal calls here (completed+recording is handled by processTranscript → campaignPostCall)
-          if (!recording_url && cl.status === 'calling') {
-            const directOutcome = (status === 'no_answer' || status === 'busy' || status === 'cancelled') ? 'no_answer' : 'no_answer';
-            await base44.entities.CampaignLead.update(cl.id, {
-              status: 'completed',
-              outcome: directOutcome,
-              conversation_summary: `Call ${status}. No recording available.`,
-              call_duration: parseInt(duration) || 0
-            });
-            console.log(`[smartfloWebhook] Direct CampaignLead update: ${cl.lead_name} → ${directOutcome}`);
-          }
-
-          // Trigger next batch immediately
-          const campaign = await base44.entities.Campaign.get(cl.campaign_id);
-          if (campaign && campaign.status === 'running') {
-            const allCampaignLeads = await base44.entities.CampaignLead.filter({ campaign_id: cl.campaign_id });
-            const pendingCount = allCampaignLeads.filter(l => l.status === 'pending').length;
-            const callingCount = allCampaignLeads.filter(l => l.status === 'calling').length;
-            const maxConcurrent = campaign.max_concurrent_calls || 5;
-
-            if (pendingCount > 0 && callingCount < maxConcurrent) {
-              console.log(`[smartfloWebhook] 🚀 Triggering next batch: ${pendingCount} pending, ${callingCount}/${maxConcurrent} calling`);
-              await base44.functions.invoke('executeCampaign', {
-                campaign_id: cl.campaign_id,
-                action: 'start',
-                _internal: true
-              });
-            }
-          }
-        }
-      } catch (nextBatchErr) {
-        console.error(`[smartfloWebhook] Campaign batch trigger failed: ${nextBatchErr.message}`);
-      }
+      // NOTE: Campaign lead updates and next-batch triggers are handled by
+      // the campaignPostCall entity automation (triggered by CallLog status changes).
+      // No duplicate campaign logic here to avoid race conditions.
     }
 
     return Response.json({ success: true, message: 'Webhook processed' });

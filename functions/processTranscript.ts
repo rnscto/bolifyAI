@@ -1,23 +1,10 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.18';
 
 Deno.serve(async (req) => {
   try {
-    // Inject Base44-App-Id if missing (called from other functions/webhooks)
-    let base44Req = req;
-    if (!req.headers.get('Base44-App-Id')) {
-      const appId = Deno.env.get('BASE44_APP_ID');
-      if (appId) {
-        const newHeaders = new Headers(req.headers);
-        newHeaders.set('Base44-App-Id', appId);
-        base44Req = new Request(req.url, {
-          method: req.method,
-          headers: newHeaders,
-          body: req.body,
-          duplex: 'half'
-        });
-      }
-    }
-    const base44 = createClientFromRequest(base44Req);
+    // Called from smartfloWebhook (no user session) — use service role
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const base44 = createClient({ appId, asServiceRole: true });
 
     const { call_log_id, recording_url } = await req.json();
 
@@ -32,7 +19,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Invalid recording URL' }, { status: 400 });
     }
 
-    const callLog = await base44.asServiceRole.entities.CallLog.get(call_log_id);
+    const callLog = await base44.entities.CallLog.get(call_log_id);
     if (!callLog) {
       return Response.json({ error: 'Call log not found' }, { status: 404 });
     }
@@ -127,7 +114,7 @@ Respond ONLY in valid JSON with this exact structure.`
 
     // Update call log with transcript, summary, analysis, and mark as completed
     // This update triggers the CallLog entity automation → campaignPostCall
-    await base44.asServiceRole.entities.CallLog.update(call_log_id, {
+    await base44.entities.CallLog.update(call_log_id, {
       status: 'completed',
       transcript,
       conversation_summary: `${summary}\n\n---\nScore: ${leadScore}/100 | Sentiment: ${sentiment} | Signals: ${intentSignals.join(', ')}`,
@@ -138,14 +125,14 @@ Respond ONLY in valid JSON with this exact structure.`
     if (callLog.lead_id) {
       // Get existing lead to merge engagement count
       let existingLead = {};
-      try { existingLead = await base44.asServiceRole.entities.Lead.get(callLog.lead_id); } catch (_) {}
+      try { existingLead = await base44.entities.Lead.get(callLog.lead_id); } catch (_) {}
       
       const updatedEngagement = (existingLead.engagement_count || 0) + 1;
       // Merge existing tags with new keywords (deduplicate)
       const existingTags = existingLead.tags || [];
       const mergedTags = [...new Set([...existingTags, ...keyKeywords.slice(0, 10)])];
 
-      await base44.asServiceRole.entities.Lead.update(callLog.lead_id, {
+      await base44.entities.Lead.update(callLog.lead_id, {
         status: leadStatus,
         score: leadScore,
         sentiment: sentiment,
@@ -162,7 +149,7 @@ Respond ONLY in valid JSON with this exact structure.`
 
     // Trigger post-call follow-up emails & RCS
     try {
-      await base44.asServiceRole.functions.invoke('postCallFollowup', {
+      await base44.functions.invoke('postCallFollowup', {
         call_log_id: call_log_id
       });
       console.log('[processTranscript] Post-call follow-up triggered');
@@ -172,7 +159,7 @@ Respond ONLY in valid JSON with this exact structure.`
 
     // Trigger post-call action extraction (notes, scheduled activities, emails)
     try {
-      await base44.asServiceRole.functions.invoke('postCallActionExtractor', {
+      await base44.functions.invoke('postCallActionExtractor', {
         call_log_id: call_log_id
       });
       console.log('[processTranscript] Post-call action extraction triggered');

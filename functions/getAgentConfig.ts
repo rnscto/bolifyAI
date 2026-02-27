@@ -1,23 +1,12 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.18';
+
+// DEPRECATED: This function duplicates updateCallLog's get_agent_config action.
+// Kept for backward compatibility but streamAudio now loads config directly from CallLog.agent_config_cache.
 
 Deno.serve(async (req) => {
   try {
-    // Inject Base44-App-Id if missing (called from streamAudio WebSocket context)
-    let base44Req = req;
-    if (!req.headers.get('Base44-App-Id')) {
-      const appId = Deno.env.get('BASE44_APP_ID');
-      if (appId) {
-        const newHeaders = new Headers(req.headers);
-        newHeaders.set('Base44-App-Id', appId);
-        base44Req = new Request(req.url, {
-          method: req.method,
-          headers: newHeaders,
-          body: req.body,
-          duplex: 'half'
-        });
-      }
-    }
-    const base44 = createClientFromRequest(base44Req);
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const base44 = createClient({ appId, asServiceRole: true });
 
     const { call_sid, stream_sid, agent_id } = await req.json();
 
@@ -34,20 +23,20 @@ Deno.serve(async (req) => {
 
       // Strategy 1: Match by call_sid
       if (call_sid) {
-        const logs = await base44.asServiceRole.entities.CallLog.filter({ call_sid });
+        const logs = await base44.entities.CallLog.filter({ call_sid });
         if (logs.length > 0) callLog = logs[0];
       }
 
       // Strategy 2: Match by stream_sid
       if (!callLog && stream_sid) {
-        const logs = await base44.asServiceRole.entities.CallLog.filter({ stream_sid });
+        const logs = await base44.entities.CallLog.filter({ stream_sid });
         if (logs.length > 0) callLog = logs[0];
       }
 
       // Strategy 3: Find most recent active (initiated/ringing) call log
       if (!callLog) {
         console.log('Trying fallback: most recent active call log');
-        const recentLogs = await base44.asServiceRole.entities.CallLog.filter(
+        const recentLogs = await base44.entities.CallLog.filter(
           { status: 'ringing' }, '-created_date', 1
         );
         if (recentLogs.length > 0) {
@@ -55,7 +44,7 @@ Deno.serve(async (req) => {
           console.log(`Fallback matched call log ${callLog.id} (status: ${callLog.status}, call_sid: ${callLog.call_sid})`);
         }
         if (!callLog) {
-          const initiatedLogs = await base44.asServiceRole.entities.CallLog.filter(
+          const initiatedLogs = await base44.entities.CallLog.filter(
             { status: 'initiated' }, '-created_date', 1
           );
           if (initiatedLogs.length > 0) {
@@ -74,7 +63,7 @@ Deno.serve(async (req) => {
         if (stream_sid && !callLog.stream_sid) updateData.stream_sid = stream_sid;
         if (call_sid && callLog.call_sid !== call_sid) updateData.call_sid = call_sid;
         if (Object.keys(updateData).length > 0) {
-          await base44.asServiceRole.entities.CallLog.update(callLog.id, updateData);
+          await base44.entities.CallLog.update(callLog.id, updateData);
           console.log(`Updated call log ${callLog.id} with:`, JSON.stringify(updateData));
         }
       } else {
@@ -99,7 +88,7 @@ Deno.serve(async (req) => {
     }
 
     // Fetch agent
-    const agent = await base44.asServiceRole.entities.Agent.get(resolvedAgentId);
+    const agent = await base44.entities.Agent.get(resolvedAgentId);
     if (!agent) {
       return Response.json({ 
         success: false, 
@@ -115,7 +104,7 @@ Deno.serve(async (req) => {
     if (agent.knowledge_base_ids && agent.knowledge_base_ids.length > 0) {
       for (const kbId of agent.knowledge_base_ids) {
         try {
-          const doc = await base44.asServiceRole.entities.KnowledgeBase.get(kbId);
+          const doc = await base44.entities.KnowledgeBase.get(kbId);
           if (doc && doc.content) {
             knowledgeDocs.push({ title: doc.title, content: doc.content });
           }

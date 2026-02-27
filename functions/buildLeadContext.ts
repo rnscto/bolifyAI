@@ -1,18 +1,18 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.18';
 
 // Builds a rich personalization context for AI voice calls
 // Returns { context_text, lead_data } where context_text is injected into agent system prompt
 
 Deno.serve(async (req) => {
   try {
-    const base44 = createClientFromRequest(req);
+    // Called from other backend functions (no user session) — use service role
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const svc = createClient({ appId, asServiceRole: true });
     const { lead_id, client_id, phone_number } = await req.json();
 
     if (!lead_id && !phone_number) {
       return Response.json({ error: 'lead_id or phone_number required' }, { status: 400 });
     }
-
-    const svc = base44.asServiceRole;
     let lead = null;
 
     // Fetch lead by ID or by phone number
