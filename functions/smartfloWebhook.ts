@@ -17,12 +17,12 @@ Deno.serve(async (req) => {
     const appId = Deno.env.get('BASE44_APP_ID');
     const base44 = createClient({ appId, asServiceRole: true });
 
-    // Webhook authentication: verify shared secret
+    // Webhook authentication: verify shared secret (always required)
     const url = new URL(req.url);
     const webhookSecret = url.searchParams.get('secret');
     const expectedSecret = Deno.env.get('SMARTFLO_WEBHOOK_SECRET');
-    if (expectedSecret && webhookSecret !== expectedSecret) {
-      console.error('[smartfloWebhook] Invalid webhook secret');
+    if (!expectedSecret || webhookSecret !== expectedSecret) {
+      console.error('[smartfloWebhook] Invalid or missing webhook secret');
       return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
 
@@ -303,6 +303,13 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
 
     const callLog = callLogs[0];
     const mappedStatus = STATUS_MAP[status] || status;
+
+    // Idempotency guard: don't regress a terminal status
+    const terminalStatuses = ['completed', 'failed', 'no_answer'];
+    if (terminalStatuses.includes(callLog.status) && !terminalStatuses.includes(mappedStatus)) {
+      console.log(`[smartfloWebhook] Ignoring status ${status} — CallLog already terminal (${callLog.status})`);
+      return Response.json({ success: true, message: 'Ignoring — call already terminal' });
+    }
 
     const updateData = { status: mappedStatus };
     if (duration) updateData.duration = parseInt(duration);

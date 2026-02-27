@@ -37,6 +37,12 @@ Deno.serve(async (req) => {
     const campaignLead = campaignLeads[0];
     const campaignId = campaignLead.campaign_id;
 
+    // Idempotency guard: skip if CampaignLead is already completed/failed
+    if (campaignLead.status === 'completed' || campaignLead.status === 'failed') {
+      console.log(`[campaignPostCall] Skipping — CampaignLead ${campaignLead.id} already ${campaignLead.status}`);
+      return Response.json({ success: true, skipped: 'already_processed' });
+    }
+
     console.log(`[campaignPostCall] Processing call ${callLogId} for campaign ${campaignId}`);
 
     // Determine outcome based on call status and transcript
@@ -97,10 +103,14 @@ Rules:
       call_duration: callLog.duration || 0
     });
 
-    // Update lead status
+    // Update lead status (map outcome to valid Lead status enum)
     if (campaignLead.lead_id) {
+      const leadStatusMap = {
+        interested: 'interested', not_interested: 'not_interested', callback: 'callback',
+        no_answer: 'callback', converted: 'converted', contacted: 'contacted', do_not_call: 'do_not_call'
+      };
       await base44.entities.Lead.update(campaignLead.lead_id, {
-        status: outcome,
+        status: leadStatusMap[outcome] || 'contacted',
         last_call_date: new Date().toISOString()
       });
     }
