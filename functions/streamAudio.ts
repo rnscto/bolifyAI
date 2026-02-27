@@ -512,14 +512,14 @@ Deno.serve(async (req) => {
     }
   }
 
-  // ─── GPT-5-nano text generation (hybrid mode) ───
+  // ─── LLM text generation (hybrid mode) ───
   async function generateGpt5NanoResponse(userText) {
-    const nanoEndpoint = Deno.env.get('AZURE_GPT5_NANO_ENDPOINT')?.replace(/\/+$/, '');
-    const nanoKey = Deno.env.get('AZURE_GPT5_NANO_API_KEY');
-    const nanoDeployment = Deno.env.get('AZURE_GPT5_NANO_DEPLOYMENT');
+    const nanoEndpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+    const nanoKey = Deno.env.get('AZURE_OPENAI_KEY');
+    const nanoDeployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
 
     if (!nanoEndpoint || !nanoKey || !nanoDeployment) {
-      console.error(`[${reqId}] ❌ Missing GPT-5-nano secrets: endpoint=${!!nanoEndpoint}, key=${!!nanoKey}, deployment=${!!nanoDeployment}`);
+      console.error(`[${reqId}] ❌ Missing Azure OpenAI secrets: endpoint=${!!nanoEndpoint}, key=${!!nanoKey}, deployment=${!!nanoDeployment}`);
       return;
     }
 
@@ -528,7 +528,7 @@ Deno.serve(async (req) => {
 
     try {
       const url = `${nanoEndpoint}/openai/deployments/${nanoDeployment}/chat/completions?api-version=2025-01-01-preview`;
-      console.log(`[${reqId}] 🧠 GPT-5-nano URL: ${url.substring(0, 120)}...`);
+      console.log(`[${reqId}] 🧠 LLM URL: ${url.substring(0, 120)}...`);
       const response = await fetch(url, {
         method: 'POST',
         headers: {
