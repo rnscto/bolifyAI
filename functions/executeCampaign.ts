@@ -155,13 +155,36 @@ Deno.serve(async (req) => {
 
         const cleanPhone = cl.lead_phone.replace(/[^0-9]/g, '');
         const callSid = `camp_${campaign_id.slice(-8)}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+        // Build personalized lead context
+        let leadContext = '';
+        try {
+          const ctxRes = await base44.asServiceRole.functions.invoke('buildLeadContext', {
+            lead_id: cl.lead_id, client_id: campaign.client_id, phone_number: cl.lead_phone
+          });
+          if (ctxRes?.context_text) leadContext = ctxRes.context_text;
+        } catch (e) {
+          console.log(`[campaign] Lead context failed for ${cl.lead_name}: ${e.message}`);
+        }
+
+        const personalizedPrompt = [
+          agent.system_prompt || '',
+          campaign.call_script?.opening ? `\nCALL SCRIPT - Opening: ${campaign.call_script.opening}` : '',
+          campaign.call_script?.pitch ? `\nCALL SCRIPT - Pitch: ${campaign.call_script.pitch}` : '',
+          campaign.call_script?.objection_handling ? `\nCALL SCRIPT - Objections: ${campaign.call_script.objection_handling}` : '',
+          campaign.call_script?.closing ? `\nCALL SCRIPT - Closing: ${campaign.call_script.closing}` : '',
+          leadContext ? `\n\n--- LEAD CONTEXT (use this to personalize the conversation) ---\n${leadContext}` : ''
+        ].filter(Boolean).join('\n');
+
         const callLog = await base44.asServiceRole.entities.CallLog.create({
           client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
           call_sid: callSid, caller_id: selectedDID, callee_number: cl.lead_phone,
           direction: 'outbound', status: 'initiated', call_start_time: new Date().toISOString(),
+          conversation_summary: leadContext ? `[LEAD CONTEXT] ${cl.lead_name}\n${leadContext}` : '',
           agent_config_cache: {
-            agent_name: agent.name, system_prompt: agent.system_prompt || '',
-            persona: agent.persona || {}, knowledge_base_content: kbContent
+            agent_name: agent.name, system_prompt: personalizedPrompt,
+            persona: agent.persona || {}, knowledge_base_content: kbContent,
+            lead_context: leadContext
           }
         });
 
