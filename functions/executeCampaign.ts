@@ -220,7 +220,8 @@ Deno.serve(async (req) => {
 
         // Clean the phone number for Smartflo (must be digits only, no spaces)
         const smartfloPhone = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
-        console.log(`[campaign] Calling ${cl.lead_name}: original=${cl.lead_phone}, clean=${cleanPhone}, smartflo=${smartfloPhone}, DID=${selectedDID}`);
+        const smartfloCallerId = selectedDID.replace(/[^0-9]/g, '').replace(/^91/, '');
+        console.log(`[campaign] Calling ${cl.lead_name}: original=${cl.lead_phone}, clean=${cleanPhone}, smartflo=${smartfloPhone}, DID=${selectedDID}, caller_id=${smartfloCallerId}`);
 
         const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
           method: 'POST',
@@ -228,7 +229,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             api_key: Deno.env.get('SMARTFLO_API_KEY'),
             customer_number: smartfloPhone,
-            caller_id: selectedDID.replace(/[^0-9]/g, '').replace(/^91/, ''),
+            caller_id: smartfloCallerId,
             async: 1
           })
         });
