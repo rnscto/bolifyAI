@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClient, createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
 
 // Map Smartflo call statuses to internal statuses
 const STATUS_MAP = {
@@ -13,22 +13,9 @@ const STATUS_MAP = {
 
 Deno.serve(async (req) => {
   try {
-    // Inject Base44-App-Id if missing (external webhook calls won't have it)
-    let base44Req = req;
-    if (!req.headers.get('Base44-App-Id')) {
-      const appId = Deno.env.get('BASE44_APP_ID');
-      if (appId) {
-        const newHeaders = new Headers(req.headers);
-        newHeaders.set('Base44-App-Id', appId);
-        base44Req = new Request(req.url, {
-          method: req.method,
-          headers: newHeaders,
-          body: req.body,
-          duplex: 'half'
-        });
-      }
-    }
-    const base44 = createClientFromRequest(base44Req);
+    // For webhooks, use a service-role client directly (no user session available)
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const base44 = createClient({ appId, asServiceRole: true });
 
     // Webhook authentication: verify shared secret
     const url = new URL(req.url);
