@@ -100,30 +100,30 @@ Deno.serve(async (req) => {
               transcript: callLog.transcript || '',
               call_duration: callLog.duration || 0
             });
-            console.log(`[campaign] Fixed stuck lead ${stuckLead.lead_name}: ${outcome}`);
+            console.log(`[campaign] Fixed stuck lead ${stuckLead.lead_name}: CallLog already ${callLog.status} → ${outcome}`);
           } else {
-            // Call is still ringing or stuck — check age. If > 5 min, mark failed.
+            // Call is still ringing/initiated — check age. If > 3 min, mark as no_answer.
             const callAge = Date.now() - new Date(stuckLead.updated_date || stuckLead.created_date).getTime();
-            if (callAge > 5 * 60 * 1000) {
+            if (callAge > 3 * 60 * 1000) {
+              // Directly mark CampaignLead as completed (don't rely on automation)
               await svc.entities.CampaignLead.update(stuckLead.id, {
                 status: 'completed', outcome: 'no_answer',
-                conversation_summary: 'Call timed out — no response from Smartflo within 5 minutes.'
+                conversation_summary: 'Call timed out — no response within 3 minutes.'
               });
               if (stuckLead.call_log_id) {
                 await svc.entities.CallLog.update(stuckLead.call_log_id, {
                   status: 'no_answer', call_end_time: new Date().toISOString(),
-                  conversation_summary: 'Call timed out — no Smartflo webhook callback received within 5 minutes.'
+                  conversation_summary: 'Call timed out — no Smartflo webhook callback received.'
                 });
               }
-              console.log(`[campaign] Timed out stuck lead ${stuckLead.lead_name}`);
-            } else {
-              // Still fresh — reset to pending for retry
-              await svc.entities.CampaignLead.update(stuckLead.id, { status: 'pending', call_log_id: null });
-              console.log(`[campaign] Reset stuck lead ${stuckLead.lead_name} to pending`);
+              console.log(`[campaign] Timed out stuck lead ${stuckLead.lead_name} (age=${Math.round(callAge/1000)}s)`);
             }
+            // If < 3 min, leave it as calling — it may still be active
           }
         } else {
+          // No call_log_id — just reset to pending
           await svc.entities.CampaignLead.update(stuckLead.id, { status: 'pending', call_log_id: null });
+          console.log(`[campaign] Reset orphan stuck lead ${stuckLead.lead_name} to pending`);
         }
       } catch (e) {
         console.error(`[campaign] Error fixing stuck lead:`, e.message);
