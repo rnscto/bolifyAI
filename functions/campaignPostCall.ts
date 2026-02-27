@@ -545,6 +545,95 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
       }
     }
 
+    // ============================================================
+    // 4. AI-DRIVEN ACTIVITIES & FOLLOW-UPS based on scoring
+    // ============================================================
+    if (campaignLead.lead_id && qualificationTier && outcome !== 'no_answer') {
+      const actionsCreated = [];
+
+      // HOT lead → urgent task (4h SLA)
+      if (qualificationTier === 'hot' && !callbackScheduled) {
+        const dueDate = new Date();
+        dueDate.setHours(dueDate.getHours() + 4);
+        await base44.entities.Activity.create({
+          client_id: campaign.client_id, lead_id: campaignLead.lead_id,
+          type: 'task',
+          title: `🔥 HOT LEAD: ${lead?.name || campaignLead.lead_phone} — Contact immediately`,
+          description: `AI Score: ${aiScore}/100 | Tier: HOT | ${qualificationReason}\n\nCall Summary:\n${summary}\n\nRecommended: ${aiScoreBreakdown.recommended_next_action || 'Follow up within 4 hours'}\nKey Topics: ${(aiScoreBreakdown.key_topics || []).join(', ')}\nObjections: ${(aiScoreBreakdown.objections || []).join(', ') || 'None detected'}`,
+          scheduled_date: new Date().toISOString(),
+          due_date: dueDate.toISOString(),
+          status: 'scheduled', priority: 'high', auto_created: true
+        });
+        actionsCreated.push('hot_task');
+
+        // Demo request detected → schedule demo
+        if (aiIntentSignals.includes('demo_request')) {
+          const demoDate = new Date();
+          demoDate.setDate(demoDate.getDate() + 1);
+          if (demoDate.getDay() === 0) demoDate.setDate(demoDate.getDate() + 1);
+          if (demoDate.getDay() === 6) demoDate.setDate(demoDate.getDate() + 2);
+          demoDate.setHours(10, 0, 0, 0);
+          await base44.entities.Activity.create({
+            client_id: campaign.client_id, lead_id: campaignLead.lead_id,
+            type: 'demo',
+            title: `Schedule demo for ${lead?.name || campaignLead.lead_phone}`,
+            description: `Lead requested a demo during the campaign call.\nAI Score: ${aiScore}/100\nKey Topics: ${(aiScoreBreakdown.key_topics || []).join(', ')}`,
+            scheduled_date: demoDate.toISOString(), due_date: demoDate.toISOString(),
+            status: 'scheduled', priority: 'high', auto_created: true
+          });
+          actionsCreated.push('demo_scheduled');
+        }
+      }
+
+      // WARM lead → follow-up within 24h
+      if (qualificationTier === 'warm' && !callbackScheduled) {
+        const followupDate = new Date();
+        followupDate.setDate(followupDate.getDate() + 1);
+        if (followupDate.getDay() === 0) followupDate.setDate(followupDate.getDate() + 1);
+        if (followupDate.getDay() === 6) followupDate.setDate(followupDate.getDate() + 2);
+        followupDate.setHours(11, 0, 0, 0);
+        await base44.entities.Activity.create({
+          client_id: campaign.client_id, lead_id: campaignLead.lead_id,
+          type: 'followup',
+          title: `Follow up with warm lead: ${lead?.name || campaignLead.lead_phone}`,
+          description: `AI Score: ${aiScore}/100 | Tier: WARM | ${qualificationReason}\n\nRecommended: ${aiScoreBreakdown.recommended_next_action || 'Engage with more information'}\nObjections to address: ${(aiScoreBreakdown.objections || []).join(', ') || 'None'}`,
+          scheduled_date: followupDate.toISOString(), due_date: followupDate.toISOString(),
+          status: 'scheduled', priority: 'medium', auto_created: true
+        });
+        actionsCreated.push('warm_followup');
+      }
+
+      // NURTURE lead → longer-term re-engagement
+      if (qualificationTier === 'nurture') {
+        const reengageDate = new Date();
+        reengageDate.setDate(reengageDate.getDate() + 5);
+        await base44.entities.Activity.create({
+          client_id: campaign.client_id, lead_id: campaignLead.lead_id,
+          type: 'followup',
+          title: `Nurture lead: ${lead?.name || campaignLead.lead_phone}`,
+          description: `AI Score: ${aiScore}/100 | Tier: NURTURE | ${qualificationReason}\n\nTry different value proposition or channel.\nKey Topics: ${(aiScoreBreakdown.key_topics || []).join(', ')}`,
+          scheduled_date: reengageDate.toISOString(),
+          status: 'scheduled', priority: 'low', auto_created: true
+        });
+        actionsCreated.push('nurture_followup');
+      }
+
+      // Update lead next_followup_date
+      if (actionsCreated.length > 0) {
+        const nextFollowup = qualificationTier === 'hot' ? new Date(Date.now() + 4 * 3600000) :
+          qualificationTier === 'warm' ? new Date(Date.now() + 24 * 3600000) :
+          new Date(Date.now() + 5 * 86400000);
+        await base44.entities.Lead.update(campaignLead.lead_id, {
+          next_followup_date: nextFollowup.toISOString(),
+          engagement_count: (lead?.engagement_count || 0) + 1
+        });
+      }
+
+      if (actionsCreated.length > 0) {
+        console.log(`[campaignPostCall] AI activities created: ${actionsCreated.join(', ')}`);
+      }
+    }
+
     // Update campaign lead with follow-up status
     const updatePayload = {
       followup_email_sent: emailSent,
