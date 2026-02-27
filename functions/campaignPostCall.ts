@@ -18,8 +18,49 @@ Deno.serve(async (req) => {
     const isTerminal = terminalStatuses.includes(data.status);
     const wasAlreadyTerminal = terminalStatuses.includes(old_data?.status);
 
-    if (!isTerminal || wasAlreadyTerminal) {
-      return Response.json({ success: true, skipped: 'not_newly_terminal' });
+    if (!isTerminal) {
+      return Response.json({ success: true, skipped: 'not_terminal' });
+    }
+
+    // Check if this call belongs to a campaign BEFORE skipping duplicates
+    // This ensures we always process campaign leads even on duplicate terminal updates
+    const callLogId = event.entity_id;
+    const campaignLeadsCheck = await base44.entities.CampaignLead.filter({
+      call_log_id: callLogId
+    });
+
+    if (campaignLeadsCheck.length === 0) {
+      return Response.json({ success: true, skipped: 'not_campaign_call' });
+    }
+
+    const campaignLeadCheck = campaignLeadsCheck[0];
+
+    // If CampaignLead is already completed/failed, truly skip (idempotency)
+    if (campaignLeadCheck.status === 'completed' || campaignLeadCheck.status === 'failed') {
+      // Even though lead is done, check if we need to trigger next batch
+      const campaignId = campaignLeadCheck.campaign_id;
+      const campaign = await base44.entities.Campaign.get(campaignId);
+      if (campaign && campaign.status === 'running') {
+        const allLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId });
+        const pendingLeads = allLeads.filter(l => l.status === 'pending').length;
+        const callingLeads = allLeads.filter(l => l.status === 'calling').length;
+        const maxConcurrent = campaign.max_concurrent_calls || 5;
+
+        if (pendingLeads > 0 && callingLeads < maxConcurrent) {
+          console.log(`[campaignPostCall] Lead already processed but triggering next batch: ${pendingLeads} pending, ${callingLeads}/${maxConcurrent} calling`);
+          try {
+            await base44.functions.invoke('executeCampaign', {
+              campaign_id: campaignId, action: 'start', _internal: true
+            });
+          } catch (e) { console.error(`[campaignPostCall] Next batch trigger failed: ${e.message}`); }
+        }
+      }
+      return Response.json({ success: true, skipped: 'already_processed' });
+    }
+
+    // If this was a duplicate terminal update but CampaignLead is still "calling", process it
+    if (wasAlreadyTerminal) {
+      console.log(`[campaignPostCall] Duplicate terminal update but CampaignLead still ${campaignLeadCheck.status} — processing anyway`);
     }
 
     const callLog = data;
