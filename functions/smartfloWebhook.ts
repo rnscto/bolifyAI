@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    console.log('[smartfloWebhook] Received:', payload.status, 'Call:', payload.call_id, 'Direction:', payload.direction);
+    console.log('[smartfloWebhook] Received:', JSON.stringify(payload).substring(0, 500));
 
     const { call_id, status, duration, recording_url, direction, caller_number, called_number } = payload;
 
