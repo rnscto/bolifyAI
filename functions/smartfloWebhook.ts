@@ -294,10 +294,41 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
     }
 
     // Find call log by call_sid
-    const callLogs = await base44.entities.CallLog.filter({ call_sid: call_id });
+    let callLogs = await base44.entities.CallLog.filter({ call_sid: call_id });
+
+    // Fallback: if call_sid doesn't match (Smartflo often returns null call_id at originate time),
+    // search by callee_number + recent ringing/initiated status
+    if (callLogs.length === 0) {
+      const calledNum = called_number || payload.to || '';
+      const callerNum = caller_number || payload.from || '';
+      // Try finding by the number that was called (outbound) — look at recent ringing/initiated calls
+      const recentRinging = await base44.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 10);
+      const recentInitiated = await base44.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 10);
+      const allRecent = [...recentRinging, ...recentInitiated];
+      
+      // Match by callee_number (the number we called)
+      const cleanCalledNum = (calledNum || '').replace(/\D/g, '').slice(-10);
+      const cleanCallerNum = (callerNum || '').replace(/\D/g, '').slice(-10);
+      
+      for (const cl of allRecent) {
+        const clCallee = (cl.callee_number || '').replace(/\D/g, '').slice(-10);
+        const clCaller = (cl.caller_id || '').replace(/\D/g, '').slice(-10);
+        // Match: same callee number AND same caller DID AND call is < 10 min old
+        const callAge = Date.now() - new Date(cl.created_date).getTime();
+        if (callAge < 10 * 60 * 1000 && clCallee && 
+            (clCallee === cleanCalledNum || clCallee === cleanCallerNum) &&
+            cl.call_sid?.startsWith('camp_')) {
+          callLogs = [cl];
+          // Update the call_sid to Smartflo's call_id for future webhook matching
+          await base44.entities.CallLog.update(cl.id, { call_sid: call_id });
+          console.log(`[smartfloWebhook] Matched by callee_number fallback: ${cl.id}, callee=${clCallee}, updated call_sid to ${call_id}`);
+          break;
+        }
+      }
+    }
 
     if (callLogs.length === 0) {
-      console.log('[smartfloWebhook] Call log not found:', call_id);
+      console.log('[smartfloWebhook] Call log not found:', call_id, 'called_number:', called_number, 'caller_number:', caller_number);
       return Response.json({ success: true, message: 'Call log not found, but webhook received' });
     }
 
