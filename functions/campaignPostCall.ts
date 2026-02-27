@@ -454,16 +454,30 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
     const maxConcurrent = campaign.max_concurrent_calls || 5;
 
     if (pendingCount > 0 && callingCount < maxConcurrent && !updateData.status) {
-      // Add a small delay to ensure DB consistency before triggering next batch
-      await new Promise(r => setTimeout(r, 2000));
+      // Add a delay to ensure DB consistency before triggering next batch
+      await new Promise(r => setTimeout(r, 3000));
       console.log(`[campaignPostCall] 🚀 Auto-triggering next batch: ${pendingCount} pending, ${callingCount}/${maxConcurrent} calling`);
       try {
-        await base44.functions.invoke('executeCampaign', {
-          campaign_id: campaignId,
-          action: 'start',
-          _internal: true
+        // IMPORTANT: Use direct HTTP fetch to invoke executeCampaign instead of
+        // base44.functions.invoke, because this is a service-role context (entity automation)
+        // and functions.invoke requires a user session for auth forwarding.
+        const appId = Deno.env.get('BASE44_APP_ID');
+        const functionUrl = `https://app.base44.com/api/apps/${appId}/functions/executeCampaign`;
+        const invokeResp = await fetch(functionUrl, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Base44-App-Id': appId,
+            'Authorization': `ServiceRole`
+          },
+          body: JSON.stringify({
+            campaign_id: campaignId,
+            action: 'start',
+            _internal: true
+          })
         });
-        console.log(`[campaignPostCall] ✅ Next batch triggered successfully`);
+        const invokeData = await invokeResp.json();
+        console.log(`[campaignPostCall] ✅ Next batch result: ${JSON.stringify(invokeData)}`);
       } catch (batchErr) {
         console.error(`[campaignPostCall] Next batch trigger failed: ${batchErr.message}`);
       }
