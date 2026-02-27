@@ -177,6 +177,84 @@ Respond ONLY in valid JSON with this exact structure.`
       console.log(`[processTranscript] Lead ${callLog.lead_id} updated — Score: ${leadScore}, Tier: ${qualificationTier}`);
     }
 
+    // ===== CREATE AI-DRIVEN ACTIVITIES BASED ON TIER =====
+    if (callLog.lead_id && qualificationTier && leadStatus !== 'do_not_call') {
+      const actionsCreated = [];
+
+      if (qualificationTier === 'hot') {
+        const dueDate = new Date();
+        dueDate.setHours(dueDate.getHours() + 4);
+        await base44.entities.Activity.create({
+          client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
+          type: 'task',
+          title: `🔥 HOT LEAD: Call ${existingLead?.name || callLog.callee_number} immediately`,
+          description: `AI Score: ${leadScore}/100 | Tier: HOT | ${qualificationReason}\n\nSummary: ${summary}\nSignals: ${intentSignals.join(', ')}`,
+          scheduled_date: new Date().toISOString(), due_date: dueDate.toISOString(),
+          status: 'scheduled', priority: 'high', auto_created: true
+        });
+        actionsCreated.push('hot_task');
+
+        if (intentSignals.includes('demo_request')) {
+          const demoDate = new Date();
+          demoDate.setDate(demoDate.getDate() + 1);
+          if (demoDate.getDay() === 0) demoDate.setDate(demoDate.getDate() + 1);
+          if (demoDate.getDay() === 6) demoDate.setDate(demoDate.getDate() + 2);
+          demoDate.setHours(10, 0, 0, 0);
+          await base44.entities.Activity.create({
+            client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
+            type: 'demo',
+            title: `Schedule demo for ${existingLead?.name || callLog.callee_number}`,
+            description: `Lead requested a demo. Score: ${leadScore}/100.`,
+            scheduled_date: demoDate.toISOString(), due_date: demoDate.toISOString(),
+            status: 'scheduled', priority: 'high', auto_created: true
+          });
+          actionsCreated.push('demo_scheduled');
+        }
+      }
+
+      if (qualificationTier === 'warm') {
+        const followupDate = new Date();
+        followupDate.setDate(followupDate.getDate() + 1);
+        if (followupDate.getDay() === 0) followupDate.setDate(followupDate.getDate() + 1);
+        if (followupDate.getDay() === 6) followupDate.setDate(followupDate.getDate() + 2);
+        followupDate.setHours(11, 0, 0, 0);
+        await base44.entities.Activity.create({
+          client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
+          type: 'followup',
+          title: `Follow up with warm lead: ${existingLead?.name || callLog.callee_number}`,
+          description: `AI Score: ${leadScore}/100 | Tier: WARM | ${qualificationReason}\nSummary: ${summary}`,
+          scheduled_date: followupDate.toISOString(), due_date: followupDate.toISOString(),
+          status: 'scheduled', priority: 'medium', auto_created: true
+        });
+        actionsCreated.push('warm_followup');
+      }
+
+      if (qualificationTier === 'nurture') {
+        const reengageDate = new Date();
+        reengageDate.setDate(reengageDate.getDate() + 5);
+        await base44.entities.Activity.create({
+          client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
+          type: 'followup',
+          title: `Nurture lead: ${existingLead?.name || callLog.callee_number}`,
+          description: `AI Score: ${leadScore}/100 | Tier: NURTURE | ${qualificationReason}`,
+          scheduled_date: reengageDate.toISOString(),
+          status: 'scheduled', priority: 'low', auto_created: true
+        });
+        actionsCreated.push('nurture_followup');
+      }
+
+      // Update lead next_followup_date
+      if (actionsCreated.length > 0) {
+        const nextFollowup = qualificationTier === 'hot' ? new Date(Date.now() + 4 * 3600000) :
+          qualificationTier === 'warm' ? new Date(Date.now() + 24 * 3600000) :
+          new Date(Date.now() + 5 * 86400000);
+        await base44.entities.Lead.update(callLog.lead_id, {
+          next_followup_date: nextFollowup.toISOString()
+        });
+        console.log(`[processTranscript] AI activities created: ${actionsCreated.join(', ')}`);
+      }
+    }
+
     // Trigger post-call follow-up emails & RCS
     try {
       await base44.functions.invoke('postCallFollowup', {
