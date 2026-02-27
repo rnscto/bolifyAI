@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
       details: []
     };
 
-    for (const callLog of callLogsWithTranscripts) {
+    for (const callLog of uniqueCallLogs) {
       try {
         const transcript = callLog.transcript;
         const leadId = callLog.lead_id;
