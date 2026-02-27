@@ -32,7 +32,7 @@ Deno.serve(async (req) => {
 
         for (const cl of stuckLeads) {
           const leadAge = Date.now() - new Date(cl.updated_date || cl.created_date).getTime();
-          const STUCK_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+          const STUCK_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes (reduced from 5 to catch stuck leads faster)
 
           if (leadAge < STUCK_TIMEOUT_MS) continue; // Still fresh, skip
 
