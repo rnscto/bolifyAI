@@ -186,42 +186,94 @@ Generate the subject line and HTML body.`,
         results.errors.push({ lead_id: leadId, error: emailErr.message });
       }
 
-      // Also send RCS if lead has phone (via Smartflo SMS/RCS API)
+      // Also send RCS if lead has phone — auto-generate disposable template, save, fill & send
       if (lead.phone) {
         try {
-          const rcsContent = await base44.integrations.Core.InvokeLLM({
-            prompt: `Write a short follow-up RCS/SMS message (max 160 chars) for a lead after a call.
-Lead: ${lead.name || 'there'}
-Company: ${client.company_name}
-Call outcome: ${leadStatusAfterCall}
-Summary: ${summary.substring(0, 200)}
+          // Step 1: AI generates a template with variables from call context
+          const rcsTemplateData = await base44.integrations.Core.InvokeLLM({
+            prompt: `You are an RCS message template designer for "${client.company_name}" (${client.industry || 'general'} industry).
+Based on this call, create a reusable RCS message template with {{variable}} placeholders AND the filled values.
 
-Keep it personal, mention key point from the call, include CTA. No links.`,
+CALL CONTEXT:
+- Lead: ${lead.name || 'Unknown'} | Phone: ${lead.phone} | Company: ${lead.company || 'N/A'}
+- Agent Company: ${client.company_name}
+- Call Outcome: ${leadStatusAfterCall}
+- Summary: ${summary.substring(0, 500)}
+${transcript ? `- Key Transcript: ${transcript.substring(0, 500)}` : ''}
+
+RULES:
+- Template body must use {{variable_name}} placeholders (e.g. {{customer_name}}, {{topic}}, {{next_step}})
+- Max 300 chars for body
+- Be personal, reference specific call details
+- Include a clear CTA
+- Determine a fitting template name and category
+- Provide the filled_message with all variables replaced with actual values from this call
+- For each variable, specify: key, label, default_value, and source (one of: manual, lead_name, lead_phone, lead_email, lead_company, agent_name, client_company)
+
+Return the template definition AND the filled message.`,
             response_json_schema: {
               type: "object",
               properties: {
-                message: { type: "string" }
+                template_name: { type: "string" },
+                category: { type: "string", enum: ["followup", "reminder", "promotion", "notification", "welcome", "custom"] },
+                body: { type: "string", description: "Template body with {{variable}} placeholders" },
+                variables: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      key: { type: "string" },
+                      label: { type: "string" },
+                      default_value: { type: "string" },
+                      source: { type: "string" },
+                      filled_value: { type: "string" }
+                    }
+                  }
+                },
+                filled_message: { type: "string", description: "Final message with all variables replaced" }
               }
             }
           });
 
-          // Send RCS via centralized sendRCS function
+          console.log(`[postCallFollowup] AI generated RCS template: ${rcsTemplateData.template_name}`);
+
+          // Step 2: Save the disposable template to RCSTemplate entity
+          const savedTemplate = await base44.entities.RCSTemplate.create({
+            client_id: clientId,
+            name: rcsTemplateData.template_name || `Follow-up - ${lead.name || lead.phone} - ${new Date().toISOString().split('T')[0]}`,
+            category: rcsTemplateData.category || 'followup',
+            body: rcsTemplateData.body,
+            variables: (rcsTemplateData.variables || []).map(v => ({
+              key: v.key,
+              label: v.label,
+              default_value: v.default_value || '',
+              source: v.source || 'manual'
+            })),
+            status: 'active',
+            usage_count: 1
+          });
+
+          console.log(`[postCallFollowup] Saved RCS template ID: ${savedTemplate.id}`);
+
+          // Step 3: Send the filled message via sendRCS
+          const filledMessage = rcsTemplateData.filled_message || rcsTemplateData.body;
           const rcsResult = await base44.functions.invoke('sendRCS', {
             client_id: clientId,
             recipient: lead.phone,
-            message: rcsContent.message
+            message: filledMessage
           });
 
-          console.log(`[postCallFollowup] RCS sent to ${lead.phone}:`, JSON.stringify(rcsResult));
+          console.log(`[postCallFollowup] RCS sent to ${lead.phone} using template "${rcsTemplateData.template_name}":`, JSON.stringify(rcsResult));
 
+          // Step 4: Log the outreach
           await base44.entities.OutreachLog.create({
             client_id: clientId,
             lead_id: leadId,
             call_log_id: callLogId,
             channel: 'rcs',
             recipient_phone: lead.phone,
-            subject: 'Post-call follow-up',
-            body: rcsContent.message,
+            subject: `RCS Template: ${rcsTemplateData.template_name}`,
+            body: filledMessage,
             outreach_type: 'lead_followup',
             call_outcome: leadStatusAfterCall,
             status: rcsResult.success ? 'sent' : 'failed',
@@ -230,10 +282,10 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
           });
 
           if (rcsResult.success) {
-            results.rcs_sent.push({ lead_id: leadId, phone: lead.phone });
+            results.rcs_sent.push({ lead_id: leadId, phone: lead.phone, template_id: savedTemplate.id, template_name: rcsTemplateData.template_name });
           }
         } catch (rcsErr) {
-          console.error(`[postCallFollowup] RCS failed for ${lead.phone}:`, rcsErr.message);
+          console.error(`[postCallFollowup] RCS template generation/send failed for ${lead.phone}:`, rcsErr.message);
           results.errors.push({ lead_id: leadId, channel: 'rcs', error: rcsErr.message });
         }
       }
