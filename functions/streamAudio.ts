@@ -562,10 +562,10 @@ Deno.serve(async (req) => {
         body: JSON.stringify({
           messages: [
             ...session.chatHistory.slice(0, 1), // system prompt
-            { role: 'system', content: 'CRITICAL: You are speaking on a VOICE CALL. Your response will be read aloud by text-to-speech. NEVER use markdown formatting (**, *, #, ```, [], etc.), emojis, or special characters. Write in plain conversational text only. Keep responses short (2-3 sentences max). Speak naturally as a human would on a phone call.' },
+            { role: 'system', content: 'CRITICAL VOICE CALL RULES:\n1. You are on a LIVE PHONE CALL. Your text will be spoken by Hindi TTS.\n2. ALWAYS respond in Hindi script (देवनागरी). Example: "नमस्ते, मैं वाणी बोल रही हूँ" NOT "Namaste, main Vaani bol rahi hoon".\n3. NEVER use English words unless absolutely necessary (brand names OK).\n4. NEVER use markdown (**, *, #, ```, []), emojis, or special characters.\n5. Keep responses SHORT - maximum 2 sentences. Be conversational like a real phone call.\n6. Write plain text only. No bullet points, no lists, no formatting.' },
             ...session.chatHistory.slice(1) // rest of conversation
           ],
-          max_completion_tokens: 200,
+          max_completion_tokens: 150,
           stream: true
         })
       });
