@@ -412,32 +412,88 @@ INSTRUCTIONS:
         results.errors.push({ client_id: clientId, type: 'retention', error: retErr.message });
       }
 
-      // Send retention RCS to client phone
+      // Send retention RCS — auto-generate disposable template, save, fill & send
       if (client.phone) {
         try {
-          const retentionRCS = await base44.integrations.Core.InvokeLLM({
-            prompt: `Write a short retention RCS/SMS (max 160 chars) for ${client.company_name}. Account expired. ${retentionConfig.active_offer ? 'Offer: ' + retentionConfig.active_offer : ''} Mention VaaniAI. Include urgency.`,
+          const retRcsTemplate = await base44.integrations.Core.InvokeLLM({
+            prompt: `You are a retention RCS template designer for VaaniAI platform.
+Create a reusable RCS template with {{variable}} placeholders for a retention message to an expired client.
+
+CLIENT CONTEXT:
+- Company: ${client.company_name}
+- Industry: ${client.industry || 'General'}
+- Account Status: ${client.account_status}
+- Phone: ${client.phone}
+${retentionConfig.active_offer ? `- Active Offer: ${retentionConfig.active_offer}` : ''}
+${retentionConfig.offer_code ? `- Offer Code: ${retentionConfig.offer_code}` : ''}
+- Call Summary: ${summary.substring(0, 300)}
+
+RULES:
+- Template body max 300 chars with {{variable}} placeholders
+- Include urgency, mention VaaniAI
+- Highlight offer if available
+- Provide filled_message with all variables replaced
+- Variables should use source: manual, client_company, or lead_name as appropriate
+
+Return template definition and filled message.`,
             response_json_schema: {
               type: "object",
-              properties: { message: { type: "string" } }
+              properties: {
+                template_name: { type: "string" },
+                category: { type: "string", enum: ["followup", "reminder", "promotion", "notification", "welcome", "custom"] },
+                body: { type: "string" },
+                variables: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      key: { type: "string" },
+                      label: { type: "string" },
+                      default_value: { type: "string" },
+                      source: { type: "string" },
+                      filled_value: { type: "string" }
+                    }
+                  }
+                },
+                filled_message: { type: "string" }
+              }
             }
           });
 
+          // Save retention RCS template
+          const savedRetTemplate = await base44.entities.RCSTemplate.create({
+            client_id: clientId,
+            name: retRcsTemplate.template_name || `Retention - ${client.company_name} - ${new Date().toISOString().split('T')[0]}`,
+            category: retRcsTemplate.category || 'promotion',
+            body: retRcsTemplate.body,
+            variables: (retRcsTemplate.variables || []).map(v => ({
+              key: v.key,
+              label: v.label,
+              default_value: v.default_value || '',
+              source: v.source || 'manual'
+            })),
+            status: 'active',
+            usage_count: 1
+          });
+
+          console.log(`[postCallFollowup] Saved retention RCS template ID: ${savedRetTemplate.id}`);
+
+          const retFilledMsg = retRcsTemplate.filled_message || retRcsTemplate.body;
           const retRcsResult = await base44.functions.invoke('sendRCS', {
             client_id: clientId,
             recipient: client.phone,
-            message: retentionRCS.message
+            message: retFilledMsg
           });
 
-          console.log(`[postCallFollowup] Retention RCS to ${client.phone}:`, JSON.stringify(retRcsResult));
+          console.log(`[postCallFollowup] Retention RCS to ${client.phone} using template "${retRcsTemplate.template_name}":`, JSON.stringify(retRcsResult));
 
           await base44.entities.OutreachLog.create({
             client_id: clientId,
             call_log_id: callLogId,
             channel: 'rcs',
             recipient_phone: client.phone,
-            subject: 'Retention follow-up',
-            body: retentionRCS.message,
+            subject: `RCS Template: ${retRcsTemplate.template_name}`,
+            body: retFilledMsg,
             outreach_type: 'retention',
             call_outcome: callLog.status,
             status: retRcsResult.success ? 'sent' : 'failed',
@@ -446,10 +502,10 @@ INSTRUCTIONS:
           });
 
           if (retRcsResult.success) {
-            results.rcs_sent.push({ client_id: clientId, phone: client.phone, type: 'retention' });
+            results.rcs_sent.push({ client_id: clientId, phone: client.phone, type: 'retention', template_id: savedRetTemplate.id });
           }
         } catch (rcsErr) {
-          console.error(`[postCallFollowup] Retention RCS failed:`, rcsErr.message);
+          console.error(`[postCallFollowup] Retention RCS template failed:`, rcsErr.message);
           results.errors.push({ client_id: clientId, channel: 'retention_rcs', error: rcsErr.message });
         }
       }
