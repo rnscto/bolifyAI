@@ -211,6 +211,26 @@ async function saveCallRecord(session, reqId, duration) {
         }
         await serviceClient.entities.Campaign.update(cl.campaign_id, campaignUpdate);
         console.log(`[${reqId}] ✅ Campaign ${cl.campaign_id} updated: completed=${completedCount}, pending=${pendingCount}`);
+
+        // Auto-trigger next batch if slots are available
+        if (pendingCount > 0) {
+          const campaign = await serviceClient.entities.Campaign.get(cl.campaign_id);
+          if (campaign && campaign.status === 'running') {
+            const callingCount = allLeads.filter(l => l.status === 'calling').length;
+            const maxConcurrent = campaign.max_concurrent_calls || 5;
+            if (callingCount < maxConcurrent) {
+              console.log(`[${reqId}] 🚀 Auto-triggering next batch: ${pendingCount} pending, ${callingCount}/${maxConcurrent} calling`);
+              try {
+                await serviceClient.functions.invoke('executeCampaign', {
+                  campaign_id: cl.campaign_id,
+                  action: 'start'
+                });
+              } catch (batchErr) {
+                console.log(`[${reqId}] ⚠️ Next batch trigger failed: ${batchErr.message}`);
+              }
+            }
+          }
+        }
       }
     } catch (clErr) {
       console.error(`[${reqId}] ⚠️ CampaignLead update failed: ${clErr.message}`);
