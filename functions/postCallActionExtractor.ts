@@ -108,7 +108,7 @@ RULES:
               content: `Call transcript:\n\n${callLog.transcript}\n\n${callLog.conversation_summary ? `AI Summary: ${callLog.conversation_summary.substring(0, 500)}` : ''}`
             }
           ],
-          max_tokens: 1000,
+          max_completion_tokens: 1000,
           temperature: 0.2,
           response_format: { type: "json_object" }
         })
