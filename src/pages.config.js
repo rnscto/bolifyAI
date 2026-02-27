@@ -86,7 +86,6 @@ import PartnerSignup from './pages/PartnerSignup';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import RefundPolicy from './pages/RefundPolicy';
 import TermsOfService from './pages/TermsOfService';
-import ClientRCSTemplates from './pages/ClientRCSTemplates';
 import __Layout from './Layout.jsx';
 
 
@@ -130,7 +129,6 @@ export const PAGES = {
     "PrivacyPolicy": PrivacyPolicy,
     "RefundPolicy": RefundPolicy,
     "TermsOfService": TermsOfService,
-    "ClientRCSTemplates": ClientRCSTemplates,
 }
 
 export const pagesConfig = {
