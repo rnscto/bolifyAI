@@ -563,20 +563,10 @@ Deno.serve(async (req) => {
   // ─── Load agent config from CallLog cache ───
   async function loadAgentConfig() {
     try {
-      // Use base44 service role from the request-based client
-      // Also try a fresh standalone client as fallback
-      let svc;
-      try {
-        svc = base44.asServiceRole;
-        // Quick test to see if service role works
-        console.log(`[${reqId}] 🔑 Using request-based base44.asServiceRole`);
-      } catch (e) {
-        console.log(`[${reqId}] ⚠️ base44.asServiceRole failed: ${e.message}, creating standalone client`);
-        const { createClient } = await import('npm:@base44/sdk@0.8.18');
-        const appId = Deno.env.get('BASE44_APP_ID');
-        const standalone = createClient({ appId });
-        svc = standalone.asServiceRole;
-      }
+      // WebSocket requests don't carry auth tokens, so always use a standalone service-role client
+      const { createClient } = await import('npm:@base44/sdk@0.8.18');
+      const appId = Deno.env.get('BASE44_APP_ID');
+      const svc = createClient({ appId, asServiceRole: true });
 
       let callLog = null;
 
