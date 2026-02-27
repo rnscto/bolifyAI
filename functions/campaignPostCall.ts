@@ -129,16 +129,135 @@ Rules:
       call_duration: callLog.duration || 0
     });
 
-    // Update lead status (map outcome to valid Lead status enum)
+    // ============================================================
+    // AI-DRIVEN LEAD SCORING + QUALIFICATION TIER
+    // ============================================================
+    let aiScore = 0;
+    let aiSentiment = 'neutral';
+    let aiIntentSignals = [];
+    let aiScoreBreakdown = {};
+    let qualificationTier = 'cold';
+    let qualificationReason = '';
+
+    if (campaignLead.lead_id && (callLog.transcript || summary) && outcome !== 'no_answer') {
+      try {
+        const scoringResult = await base44.integrations.Core.InvokeLLM({
+          prompt: `You are an expert sales call analyst AI. Analyze this call transcript/summary and score the lead.
+
+TRANSCRIPT:
+${callLog.transcript || 'No transcript available'}
+
+SUMMARY:
+${summary}
+
+OUTCOME: ${outcome}
+
+SCORING CRITERIA (total 100):
+- Sentiment (0-25): very_negative=0, negative=5, neutral=12, positive=20, very_positive=25
+- Intent signals (0-30): pricing_inquiry=+10, demo_request=+15, competitor_mention=+5, budget_confirmed=+15, timeline_mentioned=+10, decision_maker=+10, referral=+8 (cap at 30)
+- Engagement (0-25): short_answers_only=5, asked_questions=15, extended_conversation=20, highly_engaged=25
+- Keywords (0-20): positive keywords like "interested","sign up","let's go","sounds good","when can we start"=+5 each (cap 20); negative keywords like "not interested","too expensive","no need","don't call"=-5 each (min 0)
+
+Also extract:
+- Specific objections raised (price, timing, need, competitor)
+- Conversion probability (0-100%)
+- Recommended next action
+- Key topics discussed for future follow-up`,
+          response_json_schema: {
+            type: "object",
+            properties: {
+              lead_score: { type: "number" },
+              sentiment: { type: "string" },
+              intent_signals: { type: "array", items: { type: "string" } },
+              score_breakdown: {
+                type: "object",
+                properties: {
+                  sentiment_score: { type: "number" },
+                  intent_score: { type: "number" },
+                  engagement_score: { type: "number" },
+                  keyword_score: { type: "number" },
+                  reasoning: { type: "string" }
+                }
+              },
+              conversion_probability: { type: "number" },
+              objections: { type: "array", items: { type: "string" } },
+              recommended_next_action: { type: "string" },
+              key_topics: { type: "array", items: { type: "string" } }
+            }
+          }
+        });
+
+        aiScore = Math.min(100, Math.max(0, scoringResult.lead_score || 0));
+        aiSentiment = scoringResult.sentiment || 'neutral';
+        aiIntentSignals = scoringResult.intent_signals || [];
+        aiScoreBreakdown = {
+          ...(scoringResult.score_breakdown || {}),
+          conversion_probability: scoringResult.conversion_probability || 0,
+          objections: scoringResult.objections || [],
+          recommended_next_action: scoringResult.recommended_next_action || '',
+          key_topics: scoringResult.key_topics || []
+        };
+
+        // Determine qualification tier from AI score
+        const highIntents = ['demo_request', 'budget_confirmed', 'timeline_mentioned', 'decision_maker']
+          .filter(s => aiIntentSignals.includes(s));
+
+        if (aiScore >= 75 && ['very_positive', 'positive'].includes(aiSentiment)) {
+          qualificationTier = 'hot';
+          qualificationReason = `Score ${aiScore}/100, ${aiSentiment} sentiment, strong signals: ${highIntents.join(', ') || 'high engagement'}`;
+        } else if (aiScore >= 75 && aiSentiment === 'neutral') {
+          qualificationTier = 'warm';
+          qualificationReason = `High score ${aiScore}/100 but neutral sentiment — needs personal touch`;
+        } else if (aiScore >= 50) {
+          qualificationTier = 'warm';
+          qualificationReason = `Moderate score ${aiScore}/100, ${aiSentiment} sentiment`;
+        } else if (aiScore >= 25) {
+          qualificationTier = 'nurture';
+          qualificationReason = `Low-moderate score ${aiScore}/100 — needs nurturing via email sequences`;
+        } else if (['negative', 'very_negative'].includes(aiSentiment)) {
+          qualificationTier = 'disqualified';
+          qualificationReason = `Very low score ${aiScore}/100 with ${aiSentiment} sentiment`;
+        } else {
+          qualificationTier = 'cold';
+          qualificationReason = `Low score ${aiScore}/100 — minimal engagement`;
+        }
+
+        // Override for converted
+        if (outcome === 'converted') { qualificationTier = 'hot'; qualificationReason = 'Lead converted'; }
+        if (outcome === 'not_interested') { qualificationTier = aiScore < 25 ? 'disqualified' : 'cold'; }
+
+        console.log(`[campaignPostCall] AI Score: ${aiScore}, Sentiment: ${aiSentiment}, Tier: ${qualificationTier}, Signals: ${aiIntentSignals.join(',')}`);
+      } catch (scoreErr) {
+        console.error(`[campaignPostCall] AI scoring failed: ${scoreErr.message}`);
+      }
+    }
+
+    // Update lead with status, AI score, sentiment, qualification tier
     if (campaignLead.lead_id) {
       const leadStatusMap = {
         interested: 'interested', not_interested: 'not_interested', callback: 'callback',
         no_answer: 'callback', converted: 'converted', contacted: 'contacted', do_not_call: 'do_not_call'
       };
-      await base44.entities.Lead.update(campaignLead.lead_id, {
+
+      const leadUpdate = {
         status: leadStatusMap[outcome] || 'contacted',
-        last_call_date: new Date().toISOString()
-      });
+        last_call_date: new Date().toISOString(),
+        last_engagement_date: new Date().toISOString()
+      };
+
+      // Only set AI fields if scoring was successful
+      if (aiScore > 0 || aiSentiment !== 'neutral') {
+        leadUpdate.score = aiScore;
+        leadUpdate.sentiment = aiSentiment;
+        leadUpdate.intent_signals = aiIntentSignals;
+        leadUpdate.score_breakdown = aiScoreBreakdown;
+        leadUpdate.qualification_tier = qualificationTier;
+        leadUpdate.qualification_reason = qualificationReason;
+        leadUpdate.notes = `[Score: ${aiScore}/100 | ${aiSentiment} | ${qualificationTier}] ${summary.substring(0, 300)}`;
+      }
+
+      await base44.entities.Lead.update(campaignLead.lead_id, leadUpdate);
+      console.log(`[campaignPostCall] Lead updated: score=${aiScore}, tier=${qualificationTier}`);
     }
 
     // Fetch campaign for follow-up rules
