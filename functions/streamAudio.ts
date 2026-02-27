@@ -266,6 +266,45 @@ Deno.serve(async (req) => {
     session.realtimeWs = ws;
   }
 
+  // ─── Reconfigure Realtime session after agent config loads ───
+  function reconfigureRealtimeSession() {
+    if (!session.realtimeReady) {
+      // Realtime not connected yet - will be configured when session.created fires
+      session._pendingReconfigure = true;
+      return;
+    }
+    applySessionConfig();
+  }
+
+  function applySessionConfig() {
+    const isHybrid = session.voiceEngine === 'azure_speech';
+    const sessionConfig = {
+      input_audio_format: 'pcm16',
+      input_audio_transcription: { model: 'whisper-1' },
+      turn_detection: {
+        type: 'server_vad',
+        threshold: 0.5,
+        prefix_padding_ms: 300,
+        silence_duration_ms: 400
+      }
+    };
+
+    if (isHybrid) {
+      sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
+      sessionConfig.modalities = ['text'];
+      sessionConfig.voice = 'alloy';
+      session.chatHistory = [{ role: 'system', content: session.systemPrompt }];
+      console.log(`[${reqId}] 🔀 Hybrid mode: Realtime STT → LLM → Azure Speech TTS (${session.voiceType})`);
+    } else {
+      sessionConfig.instructions = session.systemPrompt;
+      sessionConfig.voice = session.voiceType;
+      sessionConfig.output_audio_format = 'pcm16';
+    }
+
+    sendToRealtime({ type: 'session.update', session: sessionConfig });
+    console.log(`[${reqId}] 📤 Session configured: engine=${session.voiceEngine}, voice=${session.voiceType}`);
+  }
+
   // ─── Handle messages FROM Azure Realtime API ───
   function handleRealtimeMessage(msg) {
     const type = msg.type;
@@ -274,38 +313,21 @@ Deno.serve(async (req) => {
       console.log(`[${reqId}] ✅ Realtime session created`);
       session.realtimeReady = true;
 
-      // Configure session based on voice engine
-      const isHybrid = session.voiceEngine === 'azure_speech';
-      const sessionConfig = {
-        input_audio_format: 'pcm16',
-        input_audio_transcription: {
-          model: 'whisper-1'
-        },
-        turn_detection: {
-          type: 'server_vad',
-          threshold: 0.5,
-          prefix_padding_ms: 300,
-          silence_duration_ms: 500
-        }
-      };
-
-      if (isHybrid) {
-        // Hybrid mode: Realtime API for STT/VAD only → GPT-5-nano for LLM → Azure Speech TTS
-        sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
-        sessionConfig.modalities = ['text'];
-        sessionConfig.voice = 'alloy';
-        // Initialize chat history with system prompt
-        session.chatHistory = [{ role: 'system', content: session.systemPrompt }];
-        console.log(`[${reqId}] 🔀 Hybrid mode: Realtime STT → GPT-5-nano → Azure Speech TTS (${session.voiceType})`);
+      // If agent config already loaded, configure immediately
+      if (session._pendingReconfigure || session.callLogId) {
+        applySessionConfig();
       } else {
-        // Standard Realtime API with built-in voice
-        sessionConfig.instructions = session.systemPrompt;
-        sessionConfig.voice = session.voiceType;
-        sessionConfig.output_audio_format = 'pcm16';
+        // Send minimal config to start accepting audio while we wait for agent config
+        sendToRealtime({ type: 'session.update', session: {
+          input_audio_format: 'pcm16',
+          input_audio_transcription: { model: 'whisper-1' },
+          modalities: ['text'],
+          voice: 'alloy',
+          instructions: 'You are a transcription-only assistant. Do not respond.',
+          turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 400 }
+        }});
+        console.log(`[${reqId}] 📤 Minimal session config sent (waiting for agent config)`);
       }
-
-      sendToRealtime({ type: 'session.update', session: sessionConfig });
-      console.log(`[${reqId}] 📤 Session configured: engine=${session.voiceEngine}, voice=${session.voiceType}`);
       return;
     }
 
