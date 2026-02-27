@@ -175,18 +175,50 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Build retention-specific system prompt that includes agent intro + script
+      // Build personalized context from client's leads (find lead by phone)
+      let leadContext = '';
+      try {
+        const ctxRes = await base44.asServiceRole.functions.invoke('buildLeadContext', {
+          client_id: client.id, phone_number: client.phone
+        });
+        if (ctxRes?.context_text) leadContext = ctxRes.context_text;
+      } catch (e) {
+        console.log(`Retention lead context failed for ${client.company_name}: ${e.message}`);
+      }
+
+      // Client-specific context for retention
+      const clientContext = [
+        `\nCLIENT CONTEXT:`,
+        `- Company: ${client.company_name}`,
+        `- Industry: ${client.industry || 'General'}`,
+        `- Account Status: ${client.account_status}`,
+        `- Trial Expired: ${daysSinceExpiry} days ago`,
+        `- Has CRM: ${client.has_custom_crm ? 'Yes' : 'No'}`,
+        `- Channels: ${client.total_channels || 1}`,
+        client.email ? `- Email: ${client.email}` : '',
+      ].filter(Boolean).join('\n');
+
+      // Build retention-specific system prompt that includes agent intro + script + personalization
       const retentionSystemPrompt = [
         retentionAgent.system_prompt || '',
         `\nYou are ${retentionAgent.name}, an AI voice agent from VaaniAI.`,
         `IMPORTANT: Always start the call by greeting the customer warmly and introducing yourself by name and that you are calling from VaaniAI.`,
         `\nRetention call script to follow:\n${scriptResponse?.script || 'Standard retention script'}`,
         scriptResponse?.key_objection_handlers ? `\nKey objection handlers:\n${scriptResponse.key_objection_handlers.join('\n')}` : '',
+        clientContext,
+        leadContext ? `\n--- LEAD CONTEXT (use this to personalize the conversation) ---\n${leadContext}` : '',
+        `\nPERSONALIZATION: Address the customer as "${client.company_name}". Reference their trial experience and any previous interactions.`,
       ].filter(Boolean).join('\n');
 
       // Create call log with agent_config_cache (so WebSocket voice agent knows the greeting/persona/voice_engine)
       const callSid = `ret_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const agentPersona = retentionAgent.persona || {};
+      const fullContextForLog = [
+        `Retention call - Day ${daysSinceExpiry}. ${config.active_offer ? 'Offer: ' + config.active_offer + '. ' : ''}`,
+        clientContext,
+        leadContext ? `\n${leadContext}` : ''
+      ].filter(Boolean).join('\n');
+
       const callLog = await base44.asServiceRole.entities.CallLog.create({
         client_id: client.id,
         agent_id: retentionAgent.id,
@@ -196,12 +228,13 @@ Deno.serve(async (req) => {
         direction: 'outbound',
         status: 'initiated',
         call_start_time: new Date().toISOString(),
-        conversation_summary: `Retention call - Day ${daysSinceExpiry}. ${config.active_offer ? 'Offer: ' + config.active_offer + '. ' : ''}Script: ${scriptResponse?.script?.substring(0, 200) || 'Standard retention'}`,
+        conversation_summary: fullContextForLog,
         agent_config_cache: {
           agent_name: retentionAgent.name,
           system_prompt: retentionSystemPrompt,
           persona: agentPersona,
-          knowledge_base_content: kbContent
+          knowledge_base_content: kbContent,
+          lead_context: leadContext
         }
       });
 
