@@ -68,7 +68,7 @@ Respond ONLY in valid JSON.`
                   content: `Analyze this sales call transcript:\n\n${transcript}\n\nReturn JSON with: lead_status (one of: interested, not_interested, callback, converted, contacted), sentiment (one of: very_positive, positive, neutral, negative, very_negative), intent_signals (array of strings), lead_score (number 0-100), score_breakdown (object with: sentiment_score, intent_score, engagement_score, keyword_score, reasoning), key_keywords (array of strings), qualification_tier (one of: hot, warm, nurture, cold, disqualified), qualification_reason (string)`
                 }
               ],
-              max_tokens: 700,
+              max_completion_tokens: 700,
               temperature: 0.2,
               response_format: { type: "json_object" }
             })
