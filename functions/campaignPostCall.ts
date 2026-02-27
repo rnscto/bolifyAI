@@ -1,10 +1,10 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.18';
 
 Deno.serve(async (req) => {
   try {
-    // Entity automation — use createClientFromRequest to get proper auth context
-    const base44 = createClientFromRequest(req);
-    const svc = base44.asServiceRole;
+    // Entity automation — no user session, use service role directly
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const base44 = createClient({ appId, asServiceRole: true });
     const payload = await req.json();
 
     const { event, data, old_data } = payload;
@@ -26,24 +26,9 @@ Deno.serve(async (req) => {
     const callLogId = event.entity_id;
 
     // Check if this call belongs to a campaign
-    let campaignLeads = await svc.entities.CampaignLead.filter({
+    const campaignLeads = await base44.entities.CampaignLead.filter({
       call_log_id: callLogId
     });
-
-    // Also try matching by lead_id + campaign status if call_log_id doesn't match
-    // (handles race conditions where call_log_id wasn't set yet)
-    if (campaignLeads.length === 0 && callLog.lead_id && callLog.lead_id !== 'unknown') {
-      const leadMatches = await svc.entities.CampaignLead.filter({
-        lead_id: callLog.lead_id,
-        status: 'calling'
-      });
-      if (leadMatches.length > 0) {
-        console.log(`[campaignPostCall] Found CampaignLead via lead_id fallback: ${leadMatches[0].id}`);
-        // Update the call_log_id to link them
-        await svc.entities.CampaignLead.update(leadMatches[0].id, { call_log_id: callLogId });
-        campaignLeads = leadMatches;
-      }
-    }
 
     if (campaignLeads.length === 0) {
       return Response.json({ success: true, skipped: 'not_campaign_call' });
@@ -55,38 +40,14 @@ Deno.serve(async (req) => {
     // Idempotency guard: skip if CampaignLead is already completed/failed
     if (campaignLead.status === 'completed' || campaignLead.status === 'failed') {
       console.log(`[campaignPostCall] Skipping — CampaignLead ${campaignLead.id} already ${campaignLead.status}`);
-      
-      // Even though this lead is already processed, check if there are stuck leads
-      // and trigger next batch if needed (belt-and-suspenders approach)
-      try {
-        const campaign = await svc.entities.Campaign.get(campaignId);
-        if (campaign && campaign.status === 'running') {
-          const allLeads = await svc.entities.CampaignLead.filter({ campaign_id: campaignId });
-          const pendingCount = allLeads.filter(l => l.status === 'pending').length;
-          const callingCount = allLeads.filter(l => l.status === 'calling').length;
-          const maxConcurrent = campaign.max_concurrent_calls || 5;
-          
-          if (pendingCount > 0 && callingCount < maxConcurrent) {
-            console.log(`[campaignPostCall] Already processed but triggering next batch: ${pendingCount} pending, ${callingCount} calling`);
-            await svc.functions.invoke('executeCampaign', { campaign_id: campaignId, action: 'start', _internal: true });
-          }
-        }
-      } catch (e) {
-        console.error(`[campaignPostCall] Belt-and-suspenders trigger failed: ${e.message}`);
-      }
-      
       return Response.json({ success: true, skipped: 'already_processed' });
     }
 
-    console.log(`[campaignPostCall] Processing call ${callLogId} for campaign ${campaignId}, callLog.status=${data.status}, old_status=${old_data?.status}`);
+    console.log(`[campaignPostCall] Processing call ${callLogId} for campaign ${campaignId}`);
 
     // Determine outcome based on call status and transcript
     let outcome = 'contacted';
     let summary = callLog.conversation_summary || '';
-    // Clean up internal metadata from conversation_summary
-    if (summary.startsWith('[ref_id:') || summary.startsWith('[LEAD CONTEXT]') || summary.startsWith('[internal_id:')) {
-      summary = '';
-    }
 
     // For calls that never connected (no_answer, failed), set outcome directly
     if (callLog.status === 'no_answer') {
@@ -98,7 +59,7 @@ Deno.serve(async (req) => {
     } else if (callLog.transcript || callLog.conversation_summary) {
       // For calls with conversation data, analyze with LLM
       try {
-        const analysis = await svc.integrations.Core.InvokeLLM({
+        const analysis = await base44.integrations.Core.InvokeLLM({
           prompt: `Analyze this sales call and determine the outcome.
 
 TRANSCRIPT:
@@ -133,15 +94,14 @@ Rules:
       }
     }
 
-    // Update campaign lead to completed FIRST (this frees up the slot for next batch)
-    await svc.entities.CampaignLead.update(campaignLead.id, {
+    // Update campaign lead
+    await base44.entities.CampaignLead.update(campaignLead.id, {
       status: 'completed',
       outcome: outcome,
       conversation_summary: summary,
       transcript: callLog.transcript || '',
       call_duration: callLog.duration || 0
     });
-    console.log(`[campaignPostCall] CampaignLead ${campaignLead.id} (${campaignLead.lead_name}) → completed, outcome=${outcome}`);
 
     // Update lead status (map outcome to valid Lead status enum)
     if (campaignLead.lead_id) {
@@ -149,23 +109,19 @@ Rules:
         interested: 'interested', not_interested: 'not_interested', callback: 'callback',
         no_answer: 'callback', converted: 'converted', contacted: 'contacted', do_not_call: 'do_not_call'
       };
-      try {
-        await svc.entities.Lead.update(campaignLead.lead_id, {
-          status: leadStatusMap[outcome] || 'contacted',
-          last_call_date: new Date().toISOString()
-        });
-      } catch (leadErr) {
-        console.error(`[campaignPostCall] Lead update failed: ${leadErr.message}`);
-      }
+      await base44.entities.Lead.update(campaignLead.lead_id, {
+        status: leadStatusMap[outcome] || 'contacted',
+        last_call_date: new Date().toISOString()
+      });
     }
 
     // Fetch campaign for follow-up rules
-    const campaign = await svc.entities.Campaign.get(campaignId);
+    const campaign = await base44.entities.Campaign.get(campaignId);
     const rules = campaign?.followup_rules || {};
 
     // Pre-fetch lead and client for follow-ups (shared across actions)
-    const lead = campaignLead.lead_id ? await svc.entities.Lead.get(campaignLead.lead_id) : null;
-    const client = await svc.entities.Client.get(campaign.client_id);
+    const lead = campaignLead.lead_id ? await base44.entities.Lead.get(campaignLead.lead_id) : null;
+    const client = await base44.entities.Client.get(campaign.client_id);
 
     let emailSent = false;
     let callbackScheduled = false;
@@ -209,7 +165,7 @@ Company: ${client?.company_name}
 Summary: ${summary}
 Under 150 words. HTML format.`;
 
-          const emailContent = await svc.integrations.Core.InvokeLLM({
+          const emailContent = await base44.integrations.Core.InvokeLLM({
             prompt: emailPrompt,
             response_json_schema: {
               type: "object",
@@ -220,7 +176,7 @@ Under 150 words. HTML format.`;
             }
           });
 
-          await svc.integrations.Core.SendEmail({
+          await base44.integrations.Core.SendEmail({
             to: lead.email,
             from_name: client?.company_name || 'VaaniAI',
             subject: emailContent.subject,
@@ -234,7 +190,7 @@ Under 150 words. HTML format.`;
             </div>`
           });
 
-          await svc.entities.OutreachLog.create({
+          await base44.entities.OutreachLog.create({
             client_id: campaign.client_id,
             lead_id: campaignLead.lead_id,
             call_log_id: callLogId,
@@ -262,7 +218,7 @@ Under 150 words. HTML format.`;
       callbackDate.setDate(callbackDate.getDate() + callbackDays);
       callbackDate.setHours(10, 0, 0, 0);
 
-      await svc.entities.Activity.create({
+      await base44.entities.Activity.create({
         client_id: campaign.client_id,
         lead_id: campaignLead.lead_id,
         type: 'followup',
@@ -288,7 +244,7 @@ Under 150 words. HTML format.`;
 
         if (rules.callback_ai_talking_points !== false && (callLog.transcript || summary)) {
           try {
-            const tpResult = await svc.integrations.Core.InvokeLLM({
+            const tpResult = await base44.integrations.Core.InvokeLLM({
               prompt: `You are a sales coach. Based on this call transcript and summary, generate concise talking points for the agent's next callback with this lead.
 
 LEAD: ${lead?.name || 'Unknown'} (${lead?.company || 'N/A'})
@@ -340,7 +296,7 @@ Generate:
         if (callbackDate.getDay() === 6) callbackDate.setDate(callbackDate.getDate() + 2);
         callbackDate.setHours(10, 0, 0, 0);
 
-        await svc.entities.Activity.create({
+        await base44.entities.Activity.create({
           client_id: campaign.client_id,
           lead_id: campaignLead.lead_id,
           type: 'call',
@@ -359,7 +315,7 @@ Generate:
       // 2b. Send callback confirmation email
       if (rules.callback_email !== false && lead?.email) {
         try {
-          const emailContent = await svc.integrations.Core.InvokeLLM({
+          const emailContent = await base44.integrations.Core.InvokeLLM({
             prompt: `Write a brief, warm callback confirmation email.
 Lead: ${lead.name || 'there'}
 Company: ${client?.company_name}
@@ -374,7 +330,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
             }
           });
 
-          await svc.integrations.Core.SendEmail({
+          await base44.integrations.Core.SendEmail({
             to: lead.email,
             from_name: client?.company_name || 'VaaniAI',
             subject: emailContent.subject,
@@ -401,7 +357,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
         const retryDate = new Date(Date.now() + retryHours * 3600000);
 
         // Re-add lead to campaign queue as pending for retry
-        await svc.entities.CampaignLead.update(campaignLead.id, {
+        await base44.entities.CampaignLead.update(campaignLead.id, {
           status: 'pending',
           outcome: 'no_answer',
           attempt_count: currentAttempts,
@@ -413,7 +369,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
 
         // Don't count this as completed in campaign stats yet
         // Update campaign to reflect the retry
-        const allLeads = await svc.entities.CampaignLead.filter({ campaign_id: campaignId });
+        const allLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId });
         const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
         const completedCount = allLeads.filter(l => l.status === 'completed').length;
         const failedCount = allLeads.filter(l => l.status === 'failed').length;
@@ -421,7 +377,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
           if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++;
         });
 
-        await svc.entities.Campaign.update(campaignId, {
+        await base44.entities.Campaign.update(campaignId, {
           outcomes_summary: outcomes,
           calls_completed: completedCount,
           calls_failed: failedCount
@@ -438,7 +394,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
       } else {
         // Max retries exhausted - mark as final no_answer
         console.log(`[campaignPostCall] No-answer max retries (${maxRetries}) exhausted for lead ${campaignLead.lead_id}`);
-        await svc.entities.CampaignLead.update(campaignLead.id, {
+        await base44.entities.CampaignLead.update(campaignLead.id, {
           attempt_count: currentAttempts
         });
       }
@@ -453,24 +409,17 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
       const cbDays = outcome === 'interested' ? (rules.interested_callback_days || 2) : 1;
       updatePayload.followup_call_date = new Date(Date.now() + cbDays * 86400000).toISOString();
     }
-    await svc.entities.CampaignLead.update(campaignLead.id, updatePayload);
+    await base44.entities.CampaignLead.update(campaignLead.id, updatePayload);
 
-    // Small delay to ensure our CampaignLead.update is fully propagated
-    await new Promise(r => setTimeout(r, 1500));
-
-    // Update campaign outcomes summary — re-fetch FRESH data
-    const allLeads = await svc.entities.CampaignLead.filter({ campaign_id: campaignId });
+    // Update campaign outcomes summary
+    const allLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId });
     const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
     const completedCount = allLeads.filter(l => l.status === 'completed').length;
     const failedCount = allLeads.filter(l => l.status === 'failed').length;
-    const pendingCount = allLeads.filter(l => l.status === 'pending').length;
-    const callingCount = allLeads.filter(l => l.status === 'calling').length;
 
     allLeads.forEach(l => {
       if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++;
     });
-
-    console.log(`[campaignPostCall] 📊 Fresh counts: ${pendingCount} pending, ${callingCount} calling, ${completedCount} completed, ${failedCount} failed`);
 
     const updateData = {
       outcomes_summary: outcomes,
@@ -479,58 +428,34 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
     };
 
     // Check if campaign is done (no pending or calling leads)
-    if (pendingCount === 0 && callingCount === 0) {
+    const pending = allLeads.filter(l => ['pending', 'calling'].includes(l.status)).length;
+    if (pending === 0) {
       updateData.status = 'completed';
       updateData.completed_at = new Date().toISOString();
-      console.log(`[campaignPostCall] 🏁 Campaign completed!`);
     }
 
-    await svc.entities.Campaign.update(campaignId, updateData);
+    await base44.entities.Campaign.update(campaignId, updateData);
 
     // === AUTO-TRIGGER NEXT BATCH ===
     // If campaign is still running and there are pending leads with available slots,
     // immediately trigger the next batch instead of waiting for the 5-min poller.
-    const maxConcurrent = campaign.max_concurrent_calls || 5;
+    if (!updateData.status || updateData.status === 'running') {
+      const pendingLeads = allLeads.filter(l => l.status === 'pending').length;
+      const callingLeads = allLeads.filter(l => l.status === 'calling').length;
+      const maxConcurrent = campaign.max_concurrent_calls || 5;
 
-    // Re-fetch calling count FRESH after all our updates are done
-    // The counts above may include the lead we just completed
-    await new Promise(r => setTimeout(r, 2000));
-    const freshCallingLeads = await svc.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'calling' });
-    const freshCallingCount = freshCallingLeads.length;
-    const freshPendingLeads = await svc.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'pending' });
-    const freshPendingCount = freshPendingLeads.length;
-    
-    console.log(`[campaignPostCall] 🔄 Fresh re-check: ${freshPendingCount} pending, ${freshCallingCount} calling, max=${maxConcurrent}`);
-
-    if (freshPendingCount > 0 && freshCallingCount < maxConcurrent && !updateData.status) {
-      console.log(`[campaignPostCall] 🚀 Auto-triggering next batch: ${freshPendingCount} pending, ${freshCallingCount}/${maxConcurrent} calling`);
-      try {
-        const invokeData = await svc.functions.invoke('executeCampaign', {
-          campaign_id: campaignId,
-          action: 'start',
-          _internal: true
-        });
-        console.log(`[campaignPostCall] ✅ Next batch result: ${JSON.stringify(invokeData)}`);
-      } catch (batchErr) {
-        console.error(`[campaignPostCall] ❌ Next batch trigger failed: ${batchErr.message}`);
-        // Fallback: try direct HTTP call
+      if (pendingLeads > 0 && callingLeads < maxConcurrent) {
+        console.log(`[campaignPostCall] 🚀 Auto-triggering next batch: ${pendingLeads} pending, ${callingLeads}/${maxConcurrent} calling`);
         try {
-          console.log(`[campaignPostCall] 🔁 Retrying via direct fetch...`);
-          await new Promise(r => setTimeout(r, 2000));
-          const retryResult = await svc.functions.invoke('executeCampaign', {
+          await base44.functions.invoke('executeCampaign', {
             campaign_id: campaignId,
             action: 'start',
             _internal: true
           });
-          console.log(`[campaignPostCall] ✅ Retry result: ${JSON.stringify(retryResult)}`);
-        } catch (retryErr) {
-          console.error(`[campaignPostCall] ❌ Retry also failed: ${retryErr.message}`);
+        } catch (batchErr) {
+          console.error(`[campaignPostCall] Next batch trigger failed: ${batchErr.message}`);
         }
       }
-    } else if (freshPendingCount > 0) {
-      console.log(`[campaignPostCall] ⏸️ Not triggering yet: pending=${freshPendingCount}, calling=${freshCallingCount}, max=${maxConcurrent}`);
-    } else {
-      console.log(`[campaignPostCall] ✅ No more pending leads to trigger`);
     }
 
     return Response.json({

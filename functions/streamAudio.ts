@@ -140,26 +140,25 @@ async function saveCallRecord(session, reqId, duration) {
     const appId = Deno.env.get('BASE44_APP_ID');
     const serviceClient = createClient({ appId, asServiceRole: true });
 
+    await serviceClient.entities.CallLog.update(session.callLogId, {
+      status: 'completed',
+      transcript: transcript || '',
+      duration: duration,
+      call_end_time: new Date().toISOString(),
+      ...(summary ? { conversation_summary: summary } : {})
+    });
+
+    console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}, duration=${duration}s`);
+
     // ─── Post-call pipeline: Lead scoring, sentiment, follow-ups, activities ───
-    // IMPORTANT: We do ALL AI analysis FIRST, then make a SINGLE CallLog update
-    // that sets status='completed' + all enriched data at once. This ensures the
-    // campaignPostCall entity automation fires only ONCE with complete data.
-
-    // Clean up any internal metadata from conversation_summary (set during call initiation)
-    let enrichedSummary = summary;
-    if (enrichedSummary && (enrichedSummary.startsWith('[ref_id:') || enrichedSummary.startsWith('[LEAD CONTEXT]'))) {
-      enrichedSummary = '';
-    }
-    let leadStatusUpdated = null;
-    let leadId = null;
-    let clientId = null;
-
+    // streamAudio captures transcripts in real-time (no recording_url), so processTranscript
+    // is not triggered by smartfloWebhook. We must run the AI analysis and follow-ups here.
     if (transcript && transcript.trim().length > 20) {
       try {
         // Get the call log to find lead_id
         const savedCallLog = await serviceClient.entities.CallLog.get(session.callLogId);
-        leadId = savedCallLog?.lead_id;
-        clientId = savedCallLog?.client_id;
+        const leadId = savedCallLog?.lead_id;
+        const clientId = savedCallLog?.client_id;
 
         // ── AI Analysis: Lead scoring, sentiment, intent signals ──
         const analysisResponse = await fetch(
@@ -216,10 +215,13 @@ Respond ONLY in valid JSON.`
 
         console.log(`[${reqId}] 📊 AI Analysis: Score=${leadScore}, Sentiment=${sentiment}, Status=${leadStatus}, Intents=${intentSignals.join(', ')}`);
 
-        enrichedSummary = `${summary}\n\n---\nScore: ${leadScore}/100 | Sentiment: ${sentiment} | Signals: ${intentSignals.join(', ')}`;
-        leadStatusUpdated = leadStatus;
+        // Update CallLog with enriched summary and lead status
+        await serviceClient.entities.CallLog.update(session.callLogId, {
+          conversation_summary: `${summary}\n\n---\nScore: ${leadScore}/100 | Sentiment: ${sentiment} | Signals: ${intentSignals.join(', ')}`,
+          lead_status_updated: leadStatus
+        });
 
-        // Update Lead with score, sentiment, intent signals (before CallLog update)
+        // Update Lead with score, sentiment, intent signals
         if (leadId && leadId !== 'unknown') {
           let existingLead = {};
           try { existingLead = await serviceClient.entities.Lead.get(leadId); } catch (_) {}
@@ -242,38 +244,25 @@ Respond ONLY in valid JSON.`
           });
           console.log(`[${reqId}] ✅ Lead ${leadId} updated — Score: ${leadScore}, Sentiment: ${sentiment}, Status: ${leadStatus}`);
         }
+
+        // ── Trigger post-call follow-up (emails + RCS) ──
+        try {
+          await serviceClient.functions.invoke('postCallFollowup', { call_log_id: session.callLogId });
+          console.log(`[${reqId}] ✅ postCallFollowup triggered`);
+        } catch (fErr) {
+          console.error(`[${reqId}] ⚠️ postCallFollowup error: ${fErr.message}`);
+        }
+
+        // ── Trigger post-call action extraction (activities, tasks) ──
+        try {
+          await serviceClient.functions.invoke('postCallActionExtractor', { call_log_id: session.callLogId });
+          console.log(`[${reqId}] ✅ postCallActionExtractor triggered`);
+        } catch (aErr) {
+          console.error(`[${reqId}] ⚠️ postCallActionExtractor error: ${aErr.message}`);
+        }
+
       } catch (pipelineErr) {
         console.error(`[${reqId}] ❌ Post-call pipeline error: ${pipelineErr.message}`);
-      }
-    }
-
-    // ─── SINGLE CallLog update: set status=completed with ALL enriched data ───
-    // This triggers campaignPostCall entity automation exactly ONCE with complete data
-    await serviceClient.entities.CallLog.update(session.callLogId, {
-      status: 'completed',
-      transcript: transcript || '',
-      duration: duration,
-      call_end_time: new Date().toISOString(),
-      conversation_summary: enrichedSummary || '',
-      ...(leadStatusUpdated ? { lead_status_updated: leadStatusUpdated } : {})
-    });
-
-    console.log(`[${reqId}] 💾 Call saved: ${session.callLogId}, duration=${duration}s (single update — triggers campaignPostCall)`);
-
-    // ── Trigger post-call follow-up (emails + RCS) — AFTER the single update ──
-    if (transcript && transcript.trim().length > 20) {
-      try {
-        await serviceClient.functions.invoke('postCallFollowup', { call_log_id: session.callLogId });
-        console.log(`[${reqId}] ✅ postCallFollowup triggered`);
-      } catch (fErr) {
-        console.error(`[${reqId}] ⚠️ postCallFollowup error: ${fErr.message}`);
-      }
-
-      try {
-        await serviceClient.functions.invoke('postCallActionExtractor', { call_log_id: session.callLogId });
-        console.log(`[${reqId}] ✅ postCallActionExtractor triggered`);
-      } catch (aErr) {
-        console.error(`[${reqId}] ⚠️ postCallActionExtractor error: ${aErr.message}`);
       }
     }
 

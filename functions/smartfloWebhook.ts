@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    console.log('[smartfloWebhook] Received:', JSON.stringify(payload).substring(0, 500));
+    console.log('[smartfloWebhook] Received:', payload.status, 'Call:', payload.call_id, 'Direction:', payload.direction);
 
     const { call_id, status, duration, recording_url, direction, caller_number, called_number } = payload;
 
@@ -294,41 +294,10 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
     }
 
     // Find call log by call_sid
-    let callLogs = await base44.entities.CallLog.filter({ call_sid: call_id });
-
-    // Fallback: if call_sid doesn't match (Smartflo often returns null call_id at originate time),
-    // search by callee_number + recent ringing/initiated status
-    if (callLogs.length === 0) {
-      const calledNum = called_number || payload.to || '';
-      const callerNum = caller_number || payload.from || '';
-      // Try finding by the number that was called (outbound) — look at recent ringing/initiated calls
-      const recentRinging = await base44.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 10);
-      const recentInitiated = await base44.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 10);
-      const allRecent = [...recentRinging, ...recentInitiated];
-      
-      // Match by callee_number (the number we called)
-      const cleanCalledNum = (calledNum || '').replace(/\D/g, '').slice(-10);
-      const cleanCallerNum = (callerNum || '').replace(/\D/g, '').slice(-10);
-      
-      for (const cl of allRecent) {
-        const clCallee = (cl.callee_number || '').replace(/\D/g, '').slice(-10);
-        const clCaller = (cl.caller_id || '').replace(/\D/g, '').slice(-10);
-        // Match: same callee number AND same caller DID AND call is < 10 min old
-        const callAge = Date.now() - new Date(cl.created_date).getTime();
-        if (callAge < 10 * 60 * 1000 && clCallee && 
-            (clCallee === cleanCalledNum || clCallee === cleanCallerNum) &&
-            cl.call_sid?.startsWith('camp_')) {
-          callLogs = [cl];
-          // Update the call_sid to Smartflo's call_id for future webhook matching
-          await base44.entities.CallLog.update(cl.id, { call_sid: call_id });
-          console.log(`[smartfloWebhook] Matched by callee_number fallback: ${cl.id}, callee=${clCallee}, updated call_sid to ${call_id}`);
-          break;
-        }
-      }
-    }
+    const callLogs = await base44.entities.CallLog.filter({ call_sid: call_id });
 
     if (callLogs.length === 0) {
-      console.log('[smartfloWebhook] Call log not found:', call_id, 'called_number:', called_number, 'caller_number:', caller_number);
+      console.log('[smartfloWebhook] Call log not found:', call_id);
       return Response.json({ success: true, message: 'Call log not found, but webhook received' });
     }
 
@@ -342,62 +311,67 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
       return Response.json({ success: true, message: 'Ignoring — call already terminal' });
     }
 
-    // For non-terminal statuses (ringing, answered), do a simple update
-    if (!['completed', 'no_answer', 'failed', 'busy', 'cancelled'].includes(status)) {
-      const updateData = { status: mappedStatus };
-      if (duration) updateData.duration = parseInt(duration);
-      await base44.entities.CallLog.update(callLog.id, updateData);
+    const updateData = { status: mappedStatus };
+    if (duration) updateData.duration = parseInt(duration);
+    if (recording_url) updateData.recording_url = recording_url;
+    if (status === 'completed') updateData.call_end_time = new Date().toISOString();
 
-      // Mark lead as contacted when answered
-      if (callLog.lead_id && callLog.lead_id !== 'unknown' && status === 'answered') {
+    await base44.entities.CallLog.update(callLog.id, updateData);
+
+    // Update lead status based on call outcome (only for outbound client calls with valid lead_id)
+    // Note: For 'answered' we just mark 'contacted' — the real outcome is set later 
+    // by processTranscript → campaignPostCall after AI analyzes the conversation
+    if (callLog.lead_id && callLog.lead_id !== 'unknown') {
+      if (status === 'answered') {
         await base44.entities.Lead.update(callLog.lead_id, { 
           status: 'contacted',
           last_call_date: new Date().toISOString()
         });
-      }
-
-      return Response.json({ success: true, message: 'Status updated' });
-    }
-
-    // ─── TERMINAL STATUSES: Do a SINGLE update with all data to trigger campaignPostCall once ───
-    const terminalUpdate = {
-      status: mappedStatus,
-      call_end_time: new Date().toISOString()
-    };
-    if (duration) terminalUpdate.duration = parseInt(duration);
-    if (recording_url) terminalUpdate.recording_url = recording_url;
-
-    // For calls WITHOUT recording (no_answer, failed, busy, cancelled), add context immediately
-    if (!recording_url) {
-      const statusLabel = status === 'no_answer' ? 'No Answer' : status === 'busy' ? 'Busy' : status === 'cancelled' ? 'Cancelled' : 'Failed';
-      terminalUpdate.conversation_summary = `Call ended: ${statusLabel}. No recording available.`;
-      terminalUpdate.lead_status_updated = status === 'no_answer' ? 'no_answer' : 'callback';
-    }
-
-    // Make ONE update — this triggers campaignPostCall entity automation
-    await base44.entities.CallLog.update(callLog.id, terminalUpdate);
-    console.log(`[smartfloWebhook] Terminal update: ${status}, recording=${!!recording_url}`);
-
-    // Update lead for no_answer
-    if (callLog.lead_id && callLog.lead_id !== 'unknown' && (status === 'no_answer' || status === 'failed')) {
-      await base44.entities.Lead.update(callLog.lead_id, { 
-        status: 'callback',
-        last_call_date: new Date().toISOString()
-      });
-    }
-
-    // If recording available, process transcript (this makes its own CallLog update which
-    // triggers campaignPostCall again — but the idempotency guard prevents double-processing)
-    if (recording_url) {
-      try {
-        await base44.functions.invoke('processTranscript', {
-          call_log_id: callLog.id,
-          recording_url: recording_url
+      } else if (status === 'no_answer') {
+        await base44.entities.Lead.update(callLog.lead_id, { 
+          status: 'callback',
+          last_call_date: new Date().toISOString()
         });
-        console.log('[smartfloWebhook] Transcript processing triggered');
-      } catch (error) {
-        console.error('[smartfloWebhook] Error triggering transcript:', error);
       }
+      // Don't update for 'completed' here — let processTranscript/campaignPostCall handle final status
+    }
+
+    // Handle terminal call statuses
+    if (status === 'completed' || status === 'no_answer' || status === 'failed' || status === 'busy' || status === 'cancelled') {
+      // Set end time
+      if (!updateData.call_end_time) {
+        updateData.call_end_time = new Date().toISOString();
+        await base44.entities.CallLog.update(callLog.id, { call_end_time: new Date().toISOString() });
+      }
+
+      // If recording available, process transcript (this will update CallLog which triggers campaignPostCall)
+      if (recording_url) {
+        try {
+          await base44.functions.invoke('processTranscript', {
+            call_log_id: callLog.id,
+            recording_url: recording_url
+          });
+          console.log('[smartfloWebhook] Transcript processing triggered');
+        } catch (error) {
+          console.error('[smartfloWebhook] Error triggering transcript:', error);
+        }
+      }
+
+      // For calls WITHOUT recording (no_answer, failed, busy, cancelled),
+      // the CallLog update above already sets the terminal status, which triggers
+      // the campaignPostCall entity automation. Add a summary for context.
+      if (!recording_url && (status === 'no_answer' || status === 'failed' || status === 'busy' || status === 'cancelled')) {
+        const statusLabel = status === 'no_answer' ? 'No Answer' : status === 'busy' ? 'Busy' : status === 'cancelled' ? 'Cancelled' : 'Failed';
+        await base44.entities.CallLog.update(callLog.id, {
+          conversation_summary: `Call ended: ${statusLabel}. No recording available.`,
+          lead_status_updated: status === 'no_answer' ? 'no_answer' : 'callback'
+        });
+        console.log(`[smartfloWebhook] Terminal status ${status} without recording — updated CallLog for campaign processing`);
+      }
+
+      // NOTE: Campaign lead updates and next-batch triggers are handled by
+      // the campaignPostCall entity automation (triggered by CallLog status changes).
+      // No duplicate campaign logic here to avoid race conditions.
     }
 
     return Response.json({ success: true, message: 'Webhook processed' });

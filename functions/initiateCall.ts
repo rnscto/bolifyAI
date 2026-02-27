@@ -109,12 +109,9 @@ Deno.serve(async (req) => {
       }
     });
 
-    // Clean phone number — strip non-digits and country code for Smartflo
-    const cleanCallerID = callerDID.replace(/[^0-9]/g, ''); // Smartflo expects format: 91XXXXXXXXXX
+    // Clean phone number — strip "+" prefix but keep digits (Smartflo rejects "+" in caller_id)
+    const cleanCallerID = callerDID.replace(/^\+/, '');
     const cleanPhoneNumber = phone_number.replace(/[^0-9]/g, '');
-    const smartfloCustomerNumber = cleanPhoneNumber.startsWith('91') ? cleanPhoneNumber : `91${cleanPhoneNumber}`;
-
-    console.log(`Smartflo request: caller_id=${cleanCallerID}, customer_number=${smartfloCustomerNumber}, original_did=${callerDID}`);
 
     // Initiate call via Smartflo Click-to-Call Support API
     const smartfloResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
@@ -124,7 +121,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         api_key: Deno.env.get('SMARTFLO_API_KEY'),
-        customer_number: smartfloCustomerNumber,
+        customer_number: cleanPhoneNumber,
         caller_id: cleanCallerID,
         async: 1
       })
@@ -133,14 +130,8 @@ Deno.serve(async (req) => {
     const smartfloData = await smartfloResponse.json();
     console.log('Smartflo response:', JSON.stringify(smartfloData));
 
-    // Detect Smartflo errors - they sometimes return field-level errors like {"caller_id": "Provide a vaild caller_id."}
-    const isSmartfloError = !smartfloResponse.ok || 
-      smartfloData.success === false ||
-      (typeof smartfloData.caller_id === 'string' && smartfloData.caller_id.toLowerCase().includes('provide')) ||
-      (!smartfloData.ref_id && !smartfloData.call_id && !smartfloData.call_sid);
-
-    if (isSmartfloError) {
-      const errorMsg = smartfloData.message || smartfloData.caller_id || JSON.stringify(smartfloData);
+    if (!smartfloResponse.ok || smartfloData.success === false) {
+      const errorMsg = smartfloData.message || 'Unknown error';
       console.error('Smartflo API error:', errorMsg);
       
       await base44.asServiceRole.entities.CallLog.update(callLog.id, {

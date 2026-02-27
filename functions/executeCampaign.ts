@@ -100,46 +100,41 @@ Deno.serve(async (req) => {
               transcript: callLog.transcript || '',
               call_duration: callLog.duration || 0
             });
-            console.log(`[campaign] Fixed stuck lead ${stuckLead.lead_name}: CallLog already ${callLog.status} → ${outcome}`);
+            console.log(`[campaign] Fixed stuck lead ${stuckLead.lead_name}: ${outcome}`);
           } else {
-            // Call is still ringing/initiated — check age. If > 3 min, mark as no_answer.
+            // Call is still ringing or stuck — check age. If > 5 min, mark failed.
             const callAge = Date.now() - new Date(stuckLead.updated_date || stuckLead.created_date).getTime();
-            if (callAge > 3 * 60 * 1000) {
-              // Directly mark CampaignLead as completed (don't rely on automation)
+            if (callAge > 5 * 60 * 1000) {
               await svc.entities.CampaignLead.update(stuckLead.id, {
                 status: 'completed', outcome: 'no_answer',
-                conversation_summary: 'Call timed out — no response within 3 minutes.'
+                conversation_summary: 'Call timed out — no response from Smartflo within 5 minutes.'
               });
               if (stuckLead.call_log_id) {
                 await svc.entities.CallLog.update(stuckLead.call_log_id, {
                   status: 'no_answer', call_end_time: new Date().toISOString(),
-                  conversation_summary: 'Call timed out — no Smartflo webhook callback received.'
+                  conversation_summary: 'Call timed out — no Smartflo webhook callback received within 5 minutes.'
                 });
               }
-              console.log(`[campaign] Timed out stuck lead ${stuckLead.lead_name} (age=${Math.round(callAge/1000)}s)`);
+              console.log(`[campaign] Timed out stuck lead ${stuckLead.lead_name}`);
+            } else {
+              // Still fresh — reset to pending for retry
+              await svc.entities.CampaignLead.update(stuckLead.id, { status: 'pending', call_log_id: null });
+              console.log(`[campaign] Reset stuck lead ${stuckLead.lead_name} to pending`);
             }
-            // If < 3 min, leave it as calling — it may still be active
           }
         } else {
-          // No call_log_id — just reset to pending
           await svc.entities.CampaignLead.update(stuckLead.id, { status: 'pending', call_log_id: null });
-          console.log(`[campaign] Reset orphan stuck lead ${stuckLead.lead_name} to pending`);
         }
       } catch (e) {
         console.error(`[campaign] Error fixing stuck lead:`, e.message);
       }
     }
 
-    // Count currently in-flight calls (exclude any that have been calling for > 5 min — they're stuck)
+    // Count currently in-flight calls
     const currentlyCalling = await svc.entities.CampaignLead.filter(
       { campaign_id, status: 'calling' }, 'created_date', 100
     );
-    const activeCalling = currentlyCalling.filter(cl => {
-      const age = Date.now() - new Date(cl.updated_date || cl.created_date).getTime();
-      return age < 5 * 60 * 1000; // Only count calls under 5 min old
-    });
-    const slotsAvailable = Math.max(0, maxConcurrent - activeCalling.length);
-    console.log(`[campaign] Slot check: ${currentlyCalling.length} total calling, ${activeCalling.length} active (< 5min), ${slotsAvailable} slots available, max=${maxConcurrent}`);
+    const slotsAvailable = Math.max(0, maxConcurrent - currentlyCalling.length);
 
     if (slotsAvailable === 0) {
       console.log(`[campaign] All ${maxConcurrent} slots occupied, waiting for calls to complete.`);
@@ -218,51 +213,25 @@ Deno.serve(async (req) => {
 
         await svc.entities.CampaignLead.update(cl.id, { call_log_id: callLog.id });
 
-        // Clean the phone number for Smartflo (must be digits only, no spaces)
-        const smartfloPhone = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
-        const smartfloCallerId = selectedDID.replace(/[^0-9]/g, ''); // Smartflo expects format: 91XXXXXXXXXX
-        console.log(`[campaign] Calling ${cl.lead_name}: original=${cl.lead_phone}, clean=${cleanPhone}, smartflo=${smartfloPhone}, DID=${selectedDID}, caller_id=${smartfloCallerId}`);
-
         const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             api_key: Deno.env.get('SMARTFLO_API_KEY'),
-            customer_number: smartfloPhone,
-            caller_id: smartfloCallerId,
+            customer_number: cleanPhone,
+            caller_id: selectedDID.replace(/^\+/, ''),
             async: 1
           })
         });
 
         const smartfloData = await smartfloResp.json();
-        console.log(`[campaign] Smartflo response for ${cl.lead_name}: ${JSON.stringify(smartfloData)}`);
+        console.log(`[campaign] Call to ${cl.lead_phone} (${cl.lead_name}): ${JSON.stringify(smartfloData)}`);
 
-        // Smartflo sometimes returns errors as {"caller_id": "Provide a vaild caller_id."} 
-        // without a proper error structure. Detect this pattern.
-        const isSmartfloError = !smartfloResp.ok || 
-          smartfloData.success === false || 
-          (typeof smartfloData.caller_id === 'string' && smartfloData.caller_id.toLowerCase().includes('provide')) ||
-          (!smartfloData.ref_id && !smartfloData.call_id && !smartfloData.call_sid);
-        
-        if (!isSmartfloError) {
-          // Smartflo returns call_id (sometimes null), ref_id, and sometimes call_sid
-          // We store our internal callSid as the identifier since Smartflo call_id is often null
-          // and the WebSocket start event will provide the real Smartflo call_sid
-          const smartfloCallId = smartfloData.call_id || smartfloData.call_sid;
-          const refId = smartfloData.ref_id;
-          console.log(`[campaign] Smartflo IDs for ${cl.lead_name}: call_id=${smartfloCallId}, ref_id=${refId}, our_id=${callSid}`);
-          
-          // Keep our internal callSid as primary identifier — streamAudio will match by 
-          // recent initiated/ringing CallLog if Smartflo doesn't provide a matching call_sid
-          const updateFields = {
-            status: 'ringing',
-            conversation_summary: `[ref_id: ${refId || 'none'}] [internal_id: ${callSid}]`
-          };
-          // Only replace call_sid if Smartflo actually returned one
-          if (smartfloCallId) {
-            updateFields.call_sid = smartfloCallId;
-          }
-          await svc.entities.CallLog.update(callLog.id, updateFields);
+        if (smartfloResp.ok && smartfloData.success !== false) {
+          const newCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
+          await svc.entities.CallLog.update(callLog.id, {
+            call_sid: newCallSid, status: 'ringing'
+          });
           results.initiated++;
         } else {
           await svc.entities.CallLog.update(callLog.id, { status: 'failed' });
@@ -274,8 +243,8 @@ Deno.serve(async (req) => {
           results.errors.push({ lead: cl.lead_phone, error: smartfloData.message || 'API error' });
         }
 
-        // Small delay between calls to avoid race conditions with Smartflo
-        if (i < pendingLeads.length - 1) await new Promise(r => setTimeout(r, 2000));
+        // Small delay between calls
+        if (i < pendingLeads.length - 1) await new Promise(r => setTimeout(r, 500));
       } catch (err) {
         console.error(`[campaign] Error calling ${cl.lead_phone}:`, err.message);
         await svc.entities.CampaignLead.update(cl.id, {
