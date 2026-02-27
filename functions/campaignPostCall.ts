@@ -424,11 +424,33 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
 
     await base44.asServiceRole.entities.Campaign.update(campaignId, updateData);
 
+    // === AUTO-TRIGGER NEXT BATCH ===
+    // If campaign is still running and there are pending leads with available slots,
+    // immediately trigger the next batch instead of waiting for the 5-min poller.
+    if (!updateData.status || updateData.status === 'running') {
+      const pendingLeads = allLeads.filter(l => l.status === 'pending').length;
+      const callingLeads = allLeads.filter(l => l.status === 'calling').length;
+      const maxConcurrent = campaign.max_concurrent_calls || 5;
+
+      if (pendingLeads > 0 && callingLeads < maxConcurrent) {
+        console.log(`[campaignPostCall] 🚀 Auto-triggering next batch: ${pendingLeads} pending, ${callingLeads}/${maxConcurrent} calling`);
+        try {
+          await base44.asServiceRole.functions.invoke('executeCampaign', {
+            campaign_id: campaignId,
+            action: 'start'
+          });
+        } catch (batchErr) {
+          console.error(`[campaignPostCall] Next batch trigger failed: ${batchErr.message}`);
+        }
+      }
+    }
+
     return Response.json({
       success: true,
       outcome,
       email_sent: emailSent,
-      callback_scheduled: callbackScheduled
+      callback_scheduled: callbackScheduled,
+      next_batch_triggered: !updateData.status || updateData.status === 'running'
     });
 
   } catch (error) {
