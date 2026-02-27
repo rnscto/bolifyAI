@@ -64,25 +64,10 @@ Deno.serve(async (req) => {
     }
 
     const callLog = data;
-    const callLogId = event.entity_id;
 
-    // Check if this call belongs to a campaign
-    const campaignLeads = await base44.entities.CampaignLead.filter({
-      call_log_id: callLogId
-    });
-
-    if (campaignLeads.length === 0) {
-      return Response.json({ success: true, skipped: 'not_campaign_call' });
-    }
-
-    const campaignLead = campaignLeads[0];
+    // Use the campaign lead we already found above
+    const campaignLead = campaignLeadCheck;
     const campaignId = campaignLead.campaign_id;
-
-    // Idempotency guard: skip if CampaignLead is already completed/failed
-    if (campaignLead.status === 'completed' || campaignLead.status === 'failed') {
-      console.log(`[campaignPostCall] Skipping — CampaignLead ${campaignLead.id} already ${campaignLead.status}`);
-      return Response.json({ success: true, skipped: 'already_processed' });
-    }
 
     console.log(`[campaignPostCall] Processing call ${callLogId} for campaign ${campaignId}`);
 
