@@ -26,9 +26,24 @@ Deno.serve(async (req) => {
     const callLogId = event.entity_id;
 
     // Check if this call belongs to a campaign
-    const campaignLeads = await svc.entities.CampaignLead.filter({
+    let campaignLeads = await svc.entities.CampaignLead.filter({
       call_log_id: callLogId
     });
+
+    // Also try matching by lead_id + campaign status if call_log_id doesn't match
+    // (handles race conditions where call_log_id wasn't set yet)
+    if (campaignLeads.length === 0 && callLog.lead_id && callLog.lead_id !== 'unknown') {
+      const leadMatches = await svc.entities.CampaignLead.filter({
+        lead_id: callLog.lead_id,
+        status: 'calling'
+      });
+      if (leadMatches.length > 0) {
+        console.log(`[campaignPostCall] Found CampaignLead via lead_id fallback: ${leadMatches[0].id}`);
+        // Update the call_log_id to link them
+        await svc.entities.CampaignLead.update(leadMatches[0].id, { call_log_id: callLogId });
+        campaignLeads = leadMatches;
+      }
+    }
 
     if (campaignLeads.length === 0) {
       return Response.json({ success: true, skipped: 'not_campaign_call' });
