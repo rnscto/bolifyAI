@@ -130,11 +130,16 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Count currently in-flight calls
+    // Count currently in-flight calls (exclude any that have been calling for > 5 min — they're stuck)
     const currentlyCalling = await svc.entities.CampaignLead.filter(
       { campaign_id, status: 'calling' }, 'created_date', 100
     );
-    const slotsAvailable = Math.max(0, maxConcurrent - currentlyCalling.length);
+    const activeCalling = currentlyCalling.filter(cl => {
+      const age = Date.now() - new Date(cl.updated_date || cl.created_date).getTime();
+      return age < 5 * 60 * 1000; // Only count calls under 5 min old
+    });
+    const slotsAvailable = Math.max(0, maxConcurrent - activeCalling.length);
+    console.log(`[campaign] Slot check: ${currentlyCalling.length} total calling, ${activeCalling.length} active (< 5min), ${slotsAvailable} slots available, max=${maxConcurrent}`);
 
     if (slotsAvailable === 0) {
       console.log(`[campaign] All ${maxConcurrent} slots occupied, waiting for calls to complete.`);
