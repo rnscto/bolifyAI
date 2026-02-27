@@ -46,9 +46,10 @@ Deno.serve(async (req) => {
       const workspaceId = (provider === 'zixflow' && msgConfig?.rcs_api_endpoint)
         ? msgConfig.rcs_api_endpoint  // We store workspace_id in api_endpoint field for zixflow
         : Deno.env.get('ZIXFLOW_WORKSPACE_ID');
+      // Bot ID is optional — only use if client configured one
       const botId = (provider === 'zixflow' && msgConfig?.rcs_sender_id)
-        ? msgConfig.rcs_sender_id  // We store bot_id in sender_id field for zixflow
-        : (Deno.env.get('ZIXFLOW_BOT_ID') || '');
+        ? msgConfig.rcs_sender_id
+        : null;
 
       if (!apiKey || !workspaceId) {
         console.log('[sendRCS] No Zixflow credentials configured, skipping');
