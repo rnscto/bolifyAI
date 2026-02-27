@@ -445,11 +445,17 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
     // If campaign is still running and there are pending leads with available slots,
     // immediately trigger the next batch instead of waiting for the 5-min poller.
     if (!updateData.status || updateData.status === 'running') {
-      const pendingLeads = allLeads.filter(l => l.status === 'pending').length;
-      const callingLeads = allLeads.filter(l => l.status === 'calling').length;
+      // Re-fetch fresh counts since our updates above changed the data
+      const freshLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId });
+      const pendingLeads = freshLeads.filter(l => l.status === 'pending').length;
+      const callingLeads = freshLeads.filter(l => l.status === 'calling').length;
       const maxConcurrent = campaign.max_concurrent_calls || 5;
 
+      console.log(`[campaignPostCall] 📊 Campaign state: ${pendingLeads} pending, ${callingLeads} calling, max=${maxConcurrent}`);
+
       if (pendingLeads > 0 && callingLeads < maxConcurrent) {
+        // Add a small delay to ensure DB consistency before triggering next batch
+        await new Promise(r => setTimeout(r, 2000));
         console.log(`[campaignPostCall] 🚀 Auto-triggering next batch: ${pendingLeads} pending, ${callingLeads}/${maxConcurrent} calling`);
         try {
           await base44.functions.invoke('executeCampaign', {
@@ -457,9 +463,12 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
             action: 'start',
             _internal: true
           });
+          console.log(`[campaignPostCall] ✅ Next batch triggered successfully`);
         } catch (batchErr) {
           console.error(`[campaignPostCall] Next batch trigger failed: ${batchErr.message}`);
         }
+      } else {
+        console.log(`[campaignPostCall] ⏸️ Not triggering: pending=${pendingLeads}, calling=${callingLeads}, max=${maxConcurrent}`);
       }
     }
 
