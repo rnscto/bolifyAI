@@ -111,7 +111,7 @@ Rules:
         no_answer: 'callback', converted: 'converted', contacted: 'contacted', do_not_call: 'do_not_call'
       };
       try {
-        await base44.entities.Lead.update(campaignLead.lead_id, {
+        await svc.entities.Lead.update(campaignLead.lead_id, {
           status: leadStatusMap[outcome] || 'contacted',
           last_call_date: new Date().toISOString()
         });
@@ -121,12 +121,12 @@ Rules:
     }
 
     // Fetch campaign for follow-up rules
-    const campaign = await base44.entities.Campaign.get(campaignId);
+    const campaign = await svc.entities.Campaign.get(campaignId);
     const rules = campaign?.followup_rules || {};
 
     // Pre-fetch lead and client for follow-ups (shared across actions)
-    const lead = campaignLead.lead_id ? await base44.entities.Lead.get(campaignLead.lead_id) : null;
-    const client = await base44.entities.Client.get(campaign.client_id);
+    const lead = campaignLead.lead_id ? await svc.entities.Lead.get(campaignLead.lead_id) : null;
+    const client = await svc.entities.Client.get(campaign.client_id);
 
     let emailSent = false;
     let callbackScheduled = false;
@@ -195,7 +195,7 @@ Under 150 words. HTML format.`;
             </div>`
           });
 
-          await base44.entities.OutreachLog.create({
+          await svc.entities.OutreachLog.create({
             client_id: campaign.client_id,
             lead_id: campaignLead.lead_id,
             call_log_id: callLogId,
@@ -223,7 +223,7 @@ Under 150 words. HTML format.`;
       callbackDate.setDate(callbackDate.getDate() + callbackDays);
       callbackDate.setHours(10, 0, 0, 0);
 
-      await base44.entities.Activity.create({
+      await svc.entities.Activity.create({
         client_id: campaign.client_id,
         lead_id: campaignLead.lead_id,
         type: 'followup',
@@ -301,7 +301,7 @@ Generate:
         if (callbackDate.getDay() === 6) callbackDate.setDate(callbackDate.getDate() + 2);
         callbackDate.setHours(10, 0, 0, 0);
 
-        await base44.entities.Activity.create({
+        await svc.entities.Activity.create({
           client_id: campaign.client_id,
           lead_id: campaignLead.lead_id,
           type: 'call',
@@ -362,7 +362,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
         const retryDate = new Date(Date.now() + retryHours * 3600000);
 
         // Re-add lead to campaign queue as pending for retry
-        await base44.entities.CampaignLead.update(campaignLead.id, {
+        await svc.entities.CampaignLead.update(campaignLead.id, {
           status: 'pending',
           outcome: 'no_answer',
           attempt_count: currentAttempts,
@@ -374,7 +374,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
 
         // Don't count this as completed in campaign stats yet
         // Update campaign to reflect the retry
-        const allLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId });
+        const allLeads = await svc.entities.CampaignLead.filter({ campaign_id: campaignId });
         const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
         const completedCount = allLeads.filter(l => l.status === 'completed').length;
         const failedCount = allLeads.filter(l => l.status === 'failed').length;
@@ -382,7 +382,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
           if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++;
         });
 
-        await base44.entities.Campaign.update(campaignId, {
+        await svc.entities.Campaign.update(campaignId, {
           outcomes_summary: outcomes,
           calls_completed: completedCount,
           calls_failed: failedCount
@@ -399,7 +399,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
       } else {
         // Max retries exhausted - mark as final no_answer
         console.log(`[campaignPostCall] No-answer max retries (${maxRetries}) exhausted for lead ${campaignLead.lead_id}`);
-        await base44.entities.CampaignLead.update(campaignLead.id, {
+        await svc.entities.CampaignLead.update(campaignLead.id, {
           attempt_count: currentAttempts
         });
       }
@@ -414,13 +414,13 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
       const cbDays = outcome === 'interested' ? (rules.interested_callback_days || 2) : 1;
       updatePayload.followup_call_date = new Date(Date.now() + cbDays * 86400000).toISOString();
     }
-    await base44.entities.CampaignLead.update(campaignLead.id, updatePayload);
+    await svc.entities.CampaignLead.update(campaignLead.id, updatePayload);
 
     // Small delay to ensure our CampaignLead.update is fully propagated
     await new Promise(r => setTimeout(r, 1500));
 
     // Update campaign outcomes summary — re-fetch FRESH data
-    const allLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId });
+    const allLeads = await svc.entities.CampaignLead.filter({ campaign_id: campaignId });
     const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
     const completedCount = allLeads.filter(l => l.status === 'completed').length;
     const failedCount = allLeads.filter(l => l.status === 'failed').length;
@@ -446,7 +446,7 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
       console.log(`[campaignPostCall] 🏁 Campaign completed!`);
     }
 
-    await base44.entities.Campaign.update(campaignId, updateData);
+    await svc.entities.Campaign.update(campaignId, updateData);
 
     // === AUTO-TRIGGER NEXT BATCH ===
     // If campaign is still running and there are pending leads with available slots,
