@@ -3,20 +3,31 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
-
-    const { campaign_id, action } = await req.json();
+    
+    const { campaign_id, action, _internal } = await req.json();
     if (!campaign_id) return Response.json({ error: 'campaign_id required' }, { status: 400 });
+
+    // Auth check: internal calls from other functions skip ownership check
+    let user = null;
+    try {
+      user = await base44.auth.me();
+    } catch (e) {
+      // Service-role calls may not have a user context
+    }
+    if (!user && !_internal) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const campaign = await base44.asServiceRole.entities.Campaign.get(campaign_id);
     if (!campaign) return Response.json({ error: 'Campaign not found' }, { status: 404 });
 
-    // Ownership check
-    const clients = await base44.entities.Client.filter({ user_id: user.id });
-    const clientIds = clients.map(c => c.id);
-    if (!clientIds.includes(campaign.client_id)) {
-      return Response.json({ error: 'Forbidden' }, { status: 403 });
+    // Ownership check only for direct user calls (not internal triggers)
+    if (user && !_internal) {
+      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      const clientIds = clients.map(c => c.id);
+      if (user.role !== 'admin' && !clientIds.includes(campaign.client_id)) {
+        return Response.json({ error: 'Forbidden' }, { status: 403 });
+      }
     }
 
     // Handle pause/resume/cancel
