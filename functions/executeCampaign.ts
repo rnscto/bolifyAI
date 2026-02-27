@@ -102,9 +102,9 @@ Deno.serve(async (req) => {
             });
             console.log(`[campaign] Fixed stuck lead ${stuckLead.lead_name}: ${outcome}`);
           } else {
-            // Call is still ringing or stuck — check age. If > 5 min, mark failed.
+            // Call is still ringing or stuck — check age. If > 3 min, mark failed.
             const callAge = Date.now() - new Date(stuckLead.updated_date || stuckLead.created_date).getTime();
-            if (callAge > 5 * 60 * 1000) {
+            if (callAge > 3 * 60 * 1000) {
               await svc.entities.CampaignLead.update(stuckLead.id, {
                 status: 'completed', outcome: 'no_answer',
                 conversation_summary: 'Call timed out — no response from Smartflo within 5 minutes.'
