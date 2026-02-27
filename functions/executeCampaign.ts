@@ -256,8 +256,8 @@ Deno.serve(async (req) => {
           results.errors.push({ lead: cl.lead_phone, error: smartfloData.message || 'API error' });
         }
 
-        // Small delay between calls
-        if (i < pendingLeads.length - 1) await new Promise(r => setTimeout(r, 500));
+        // Small delay between calls to avoid race conditions with Smartflo
+        if (i < pendingLeads.length - 1) await new Promise(r => setTimeout(r, 2000));
       } catch (err) {
         console.error(`[campaign] Error calling ${cl.lead_phone}:`, err.message);
         await svc.entities.CampaignLead.update(cl.id, {
