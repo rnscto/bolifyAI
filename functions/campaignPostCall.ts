@@ -95,7 +95,7 @@ Rules:
     }
 
     // Update campaign lead to completed FIRST (this frees up the slot for next batch)
-    await base44.entities.CampaignLead.update(campaignLead.id, {
+    await svc.entities.CampaignLead.update(campaignLead.id, {
       status: 'completed',
       outcome: outcome,
       conversation_summary: summary,
