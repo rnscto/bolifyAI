@@ -462,16 +462,15 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
 
     await base44.entities.Campaign.update(campaignId, updateData);
 
-    // === AUTO-TRIGGER NEXT BATCH (inline to avoid 403 on function invoke) ===
+    // === AUTO-TRIGGER NEXT BATCH (inline — no cross-function invoke to avoid 403) ===
     if (!updateData.status || updateData.status === 'running') {
-      const pendingLeads = allLeads.filter(l => l.status === 'pending').length;
-      const callingLeads = allLeads.filter(l => l.status === 'calling').length;
+      const pendingLeadsList = allLeads.filter(l => l.status === 'pending');
+      const callingLeadsCount = allLeads.filter(l => l.status === 'calling').length;
       const maxConcurrent = campaign.max_concurrent_calls || 5;
 
-      if (pendingLeads > 0 && callingLeads < maxConcurrent) {
-        const slotsAvailable = Math.min(maxConcurrent - callingLeads, pendingLeads);
-        console.log(`[campaignPostCall] 🚀 Auto-triggering next ${slotsAvailable} calls: ${pendingLeads} pending, ${callingLeads}/${maxConcurrent} calling`);
-
+      if (pendingLeadsList.length > 0 && callingLeadsCount < maxConcurrent) {
+        const slotsAvailable = Math.min(maxConcurrent - callingLeadsCount, pendingLeadsList.length);
+        console.log(`[campaignPostCall] 🚀 Auto-triggering next batch: ${pendingLeadsList.length} pending, ${callingLeadsCount}/${maxConcurrent} calling, slots=${slotsAvailable}`);
         try {
           const agent = await base44.entities.Agent.get(campaign.agent_id);
           const agentDIDs = (agent?.assigned_dids?.length > 0)
@@ -489,9 +488,9 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
               }
             }
 
-            const pendingBatch = allLeads.filter(l => l.status === 'pending').slice(0, slotsAvailable);
-            for (let i = 0; i < pendingBatch.length; i++) {
-              const cl = pendingBatch[i];
+            const batch = pendingLeadsList.slice(0, slotsAvailable);
+            for (let i = 0; i < batch.length; i++) {
+              const cl = batch[i];
               try {
                 const selectedDID = agentDIDs[i % agentDIDs.length];
                 await base44.entities.CampaignLead.update(cl.id, {
@@ -544,8 +543,8 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
 
                 const smartfloData = await smartfloResp.json();
                 if (smartfloResp.ok && smartfloData.success !== false) {
-                  const newSid = smartfloData.call_id || smartfloData.call_sid || callSid;
-                  await base44.entities.CallLog.update(newCallLog.id, { call_sid: newSid, status: 'ringing' });
+                  const newCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
+                  await base44.entities.CallLog.update(newCallLog.id, { call_sid: newCallSid, status: 'ringing' });
                   console.log(`[campaignPostCall] Call initiated: ${cl.lead_name} → ${cleanPhone}`);
                 } else {
                   await base44.entities.CallLog.update(newCallLog.id, { status: 'failed' });
@@ -555,15 +554,16 @@ Let them know we'll call back soon. Keep under 80 words. HTML format (body conte
                   });
                 }
 
-                if (i < pendingBatch.length - 1) await new Promise(r => setTimeout(r, 500));
+                if (i < batch.length - 1) await new Promise(r => setTimeout(r, 500));
               } catch (callErr) {
-                console.error(`[campaignPostCall] Call error for ${cl.lead_name}: ${callErr.message}`);
+                console.error(`[campaignPostCall] Batch call error for ${cl.lead_name}: ${callErr.message}`);
                 await base44.entities.CampaignLead.update(cl.id, {
                   status: 'completed', outcome: 'no_answer',
                   conversation_summary: `Error: ${callErr.message}`
                 });
               }
             }
+            console.log(`[campaignPostCall] 🚀 Triggered ${batch.length} calls inline`);
           }
         } catch (batchErr) {
           console.error(`[campaignPostCall] Next batch trigger failed: ${batchErr.message}`);
