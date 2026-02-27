@@ -11,11 +11,11 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Eye, Mail, Phone, Clock } from 'lucide-react';
+import { Eye, Mail, Phone, Clock, PhoneCall } from 'lucide-react';
 
 const statusColors = {
   pending: 'bg-gray-100 text-gray-700',
-  calling: 'bg-blue-100 text-blue-700',
+  calling: 'bg-blue-100 text-blue-700 animate-pulse',
   completed: 'bg-green-100 text-green-700',
   failed: 'bg-red-100 text-red-700',
   skipped: 'bg-yellow-100 text-yellow-700',
@@ -87,7 +87,12 @@ export default function CampaignLeadsTable({ campaignLeads }) {
                   <TableRow key={cl.id}>
                     <TableCell className="font-medium">{cl.lead_name || '-'}</TableCell>
                     <TableCell>{cl.lead_phone}</TableCell>
-                    <TableCell><Badge className={statusColors[cl.status]}>{cl.status}</Badge></TableCell>
+                    <TableCell>
+                      <Badge className={statusColors[cl.status]}>
+                        {cl.status === 'calling' && <PhoneCall className="w-3 h-3 mr-1 inline" />}
+                        {cl.status}
+                      </Badge>
+                    </TableCell>
                     <TableCell>
                       {cl.outcome ? (
                         <Badge className={outcomeColors[cl.outcome]}>{cl.outcome.replace('_', ' ')}</Badge>
