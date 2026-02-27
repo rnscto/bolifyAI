@@ -1,35 +1,13 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.18';
 
 Deno.serve(async (req) => {
   try {
-    // Inject Base44-App-Id if missing (called from other functions/automations)
-    let base44Req = req;
-    if (!req.headers.get('Base44-App-Id')) {
-      const appId = Deno.env.get('BASE44_APP_ID');
-      if (appId) {
-        const newHeaders = new Headers(req.headers);
-        newHeaders.set('Base44-App-Id', appId);
-        base44Req = new Request(req.url, {
-          method: req.method,
-          headers: newHeaders,
-          body: req.body,
-          duplex: 'half'
-        });
-      }
-    }
-    const base44 = createClientFromRequest(base44Req);
+    // Entity automation — no user session, use service role directly
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const base44 = createClient({ appId, asServiceRole: true });
 
-    // Authenticate: allow entity automation triggers (which have event) or authenticated users
     const payload = await req.json();
     const { event, data, old_data } = payload;
-
-    if (!event) {
-      // Direct invocation — require authentication
-      const user = await base44.auth.me();
-      if (!user) {
-        return Response.json({ error: 'Unauthorized' }, { status: 401 });
-      }
-    }
 
     // Can be triggered via entity automation or direct invocation
     let callLog = data;

@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.18';
 
 // Post-Call AI Action Extractor
 // Analyzes call transcripts to extract specific action items:
@@ -11,18 +11,10 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
 
 Deno.serve(async (req) => {
   try {
-    // Inject Base44-App-Id if missing
-    let base44Req = req;
-    if (!req.headers.get('Base44-App-Id')) {
-      const appId = Deno.env.get('BASE44_APP_ID');
-      if (appId) {
-        const newHeaders = new Headers(req.headers);
-        newHeaders.set('Base44-App-Id', appId);
-        base44Req = new Request(req.url, { method: req.method, headers: newHeaders, body: req.body, duplex: 'half' });
-      }
-    }
-    const base44 = createClientFromRequest(base44Req);
-    const svc = base44.asServiceRole;
+    // Entity automation — no user session, use service role directly
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const base44 = createClient({ appId, asServiceRole: true });
+    const svc = base44;
 
     // Accept either direct invocation or entity automation payload
     const body = await req.json();

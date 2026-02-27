@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.6';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -12,20 +12,24 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // No auth required — this is for the public landing page voice agent
-    const endpoint = Deno.env.get('AZURE_REALTIME_ENDPOINT');
-    const apiKey = Deno.env.get('AZURE_REALTIME_KEY');
+    // Require authentication — never expose Azure keys publicly
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+    if (!user) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
-    if (!endpoint || !apiKey) {
+    const endpoint = Deno.env.get('AZURE_REALTIME_ENDPOINT');
+    if (!endpoint) {
       return Response.json({ error: 'Azure Realtime not configured' }, { status: 500 });
     }
 
-    // Convert HTTP endpoint to WSS
-    let wsUrl = endpoint.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
+    // Only return the WSS URL — never expose the API key to clients
+    const wsUrl = endpoint.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
 
     return Response.json({
       url: wsUrl,
-      key: apiKey
+      configured: true
     });
   } catch (err) {
     return Response.json({ error: err.message }, { status: 500 });
