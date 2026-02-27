@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, skipped: 'already_processed' });
     }
 
-    console.log(`[campaignPostCall] Processing call ${callLogId} for campaign ${campaignId}`);
+    console.log(`[campaignPostCall] Processing call ${callLogId} for campaign ${campaignId}, callLog.status=${data.status}, old_status=${old_data?.status}`);
 
     // Determine outcome based on call status and transcript
     let outcome = 'contacted';
