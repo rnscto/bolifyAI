@@ -344,34 +344,28 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
         await base44.entities.CallLog.update(callLog.id, { call_end_time: new Date().toISOString() });
       }
 
-      // If recording available, process transcript (this will update CallLog which triggers campaignPostCall)
-      if (recording_url) {
-        try {
-          await base44.functions.invoke('processTranscript', {
-            call_log_id: callLog.id,
-            recording_url: recording_url
+      // WebSocket-only approach: transcripts are captured by streamAudio in real-time.
+      // No recording_url processing needed. For calls that ended without WebSocket
+      // (no_answer, failed, busy, cancelled), add a status summary so campaignPostCall
+      // entity automation can process them.
+      if (status === 'no_answer' || status === 'failed' || status === 'busy' || status === 'cancelled') {
+        const statusLabel = status === 'no_answer' ? 'No Answer' : status === 'busy' ? 'Busy' : status === 'cancelled' ? 'Cancelled' : 'Failed';
+        // Only update summary if streamAudio hasn't already saved one
+        const freshLog = await base44.entities.CallLog.get(callLog.id);
+        if (!freshLog.transcript) {
+          await base44.entities.CallLog.update(callLog.id, {
+            conversation_summary: `Call ended: ${statusLabel}. No conversation captured.`,
+            lead_status_updated: status === 'no_answer' ? 'no_answer' : 'callback'
           });
-          console.log('[smartfloWebhook] Transcript processing triggered');
-        } catch (error) {
-          console.error('[smartfloWebhook] Error triggering transcript:', error);
+          console.log(`[smartfloWebhook] Terminal ${status} — no WebSocket transcript, updated for campaign processing`);
+        } else {
+          console.log(`[smartfloWebhook] Terminal ${status} — WebSocket transcript already present, skipping summary override`);
         }
       }
 
-      // For calls WITHOUT recording (no_answer, failed, busy, cancelled),
-      // the CallLog update above already sets the terminal status, which triggers
-      // the campaignPostCall entity automation. Add a summary for context.
-      if (!recording_url && (status === 'no_answer' || status === 'failed' || status === 'busy' || status === 'cancelled')) {
-        const statusLabel = status === 'no_answer' ? 'No Answer' : status === 'busy' ? 'Busy' : status === 'cancelled' ? 'Cancelled' : 'Failed';
-        await base44.entities.CallLog.update(callLog.id, {
-          conversation_summary: `Call ended: ${statusLabel}. No recording available.`,
-          lead_status_updated: status === 'no_answer' ? 'no_answer' : 'callback'
-        });
-        console.log(`[smartfloWebhook] Terminal status ${status} without recording — updated CallLog for campaign processing`);
-      }
-
-      // NOTE: Campaign lead updates and next-batch triggers are handled by
-      // the campaignPostCall entity automation (triggered by CallLog status changes).
-      // No duplicate campaign logic here to avoid race conditions.
+      // NOTE: For answered+completed calls, streamAudio's saveCallRecord handles
+      // transcript, summary, AI scoring, activities, and sequence enrollment.
+      // campaignPostCall entity automation triggers on CallLog update for campaign calls.
     }
 
     return Response.json({ success: true, message: 'Webhook processed' });
