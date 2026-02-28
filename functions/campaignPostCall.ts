@@ -95,13 +95,24 @@ Deno.serve(async (req) => {
 
     // =====================================================
     // STEP 5: SLOW — AI analysis, scoring, emails, activities
-    // This runs AFTER next batch is already triggered
+    // This runs AFTER next batch is already triggered.
+    // NOTE: streamAudio.saveCallRecord now does AI analysis + lead scoring.
+    // If transcript & lead_status_updated already present, skip duplicate LLM calls.
     // =====================================================
     let aiResult = {};
-    if (outcome !== 'no_answer' && (callLog.transcript || callLog.conversation_summary)) {
+    const alreadyAnalyzed = callLog.lead_status_updated && callLog.transcript;
+    
+    if (alreadyAnalyzed) {
+      // streamAudio already did AI analysis — use its results for follow-up actions only
+      outcome = callLog.lead_status_updated || outcome;
+      summary = callLog.conversation_summary || summary;
+      await base44.entities.CampaignLead.update(campaignLead.id, { outcome, conversation_summary: summary });
+      
+      // Still run follow-up emails/activities based on outcome
+      aiResult = await doFollowUpActions(base44, callLog, campaignLead, campaignId, outcome, summary);
+    } else if (outcome !== 'no_answer' && (callLog.transcript || callLog.conversation_summary)) {
       aiResult = await doAIAnalysis(base44, callLog, campaignLead, campaignId, outcome, summary);
     } else if (campaignLead.lead_id) {
-      // At minimum update lead status for non-AI calls
       const leadStatusMap = {
         interested: 'interested', not_interested: 'not_interested', callback: 'callback',
         no_answer: 'callback', converted: 'converted', contacted: 'contacted'
