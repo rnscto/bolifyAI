@@ -463,12 +463,13 @@ Deno.serve(async (req) => {
       console.log(`[${reqId}] ✅ Realtime session created`);
       session.realtimeReady = true;
 
-      // If agent config already loaded, configure immediately
-      if (session._pendingReconfigure || session.callLogId) {
+      // If agent config already loaded (race won by DB), apply full config immediately
+      if (session._agentConfigReady) {
+        console.log(`[${reqId}] ⚡ Agent config was ready before Realtime — applying immediately`);
         applySessionConfig();
       } else {
-        // Send minimal config — use text+audio so it can respond immediately if someone speaks
-        // This will be reconfigured with proper agent prompt once loadAgentConfig completes
+        // Realtime connected first — send minimal config so audio flows immediately
+        // Will be reconfigured with proper agent prompt once loadAgentConfig completes
         sendToRealtime({ type: 'session.update', session: {
           input_audio_format: 'pcm16',
           output_audio_format: 'pcm16',
@@ -478,7 +479,7 @@ Deno.serve(async (req) => {
           instructions: 'You are a friendly AI voice assistant. Greet the caller warmly. Be professional and concise.',
           turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 400 }
         }});
-        console.log(`[${reqId}] 📤 Minimal session config sent with audio output (waiting for agent config)`);
+        console.log(`[${reqId}] 📤 Minimal config sent (agent config still loading)`);
       }
       return;
     }
