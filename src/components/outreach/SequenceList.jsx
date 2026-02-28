@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Play, Pause, Pencil, Trash2, Users, Mail, CheckCircle2 } from 'lucide-react';
+import { Plus, Play, Pause, Pencil, Trash2, Users, Mail, CheckCircle2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 const STATUS_COLORS = {
@@ -58,6 +58,7 @@ export default function SequenceList({ sequences, onEdit, onRefresh, onViewEnrol
             <TableRow>
               <TableHead>Name</TableHead>
               <TableHead>Type</TableHead>
+              <TableHead>Tier</TableHead>
               <TableHead>Steps</TableHead>
               <TableHead>Enrolled</TableHead>
               <TableHead>Completed</TableHead>
@@ -69,17 +70,31 @@ export default function SequenceList({ sequences, onEdit, onRefresh, onViewEnrol
           <TableBody>
             {sequences.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-12 text-gray-400">
+                <TableCell colSpan={9} className="text-center py-12 text-gray-400">
                   No sequences created yet. Click "New Sequence" to get started.
                 </TableCell>
               </TableRow>
             ) : sequences.map(seq => (
               <TableRow key={seq.id}>
-                <TableCell className="font-medium">{seq.name}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium">{seq.name}</span>
+                    {seq.auto_generated && (
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" title="AI Generated" />
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>
                   <Badge className={TYPE_COLORS[seq.outreach_type] || 'bg-gray-100 text-gray-700'}>
                     {(seq.outreach_type || '').replace(/_/g, ' ')}
                   </Badge>
+                </TableCell>
+                <TableCell>
+                  {seq.tier_target ? (
+                    <Badge variant="outline" className="text-xs">
+                      {seq.tier_target === 'hot' ? '🔥' : seq.tier_target === 'warm' ? '🟡' : seq.tier_target === 'nurture' ? '🟢' : seq.tier_target === 'cold' ? '❄️' : '🌐'} {seq.tier_target}
+                    </Badge>
+                  ) : <span className="text-xs text-gray-400">—</span>}
                 </TableCell>
                 <TableCell>
                   <span className="flex items-center gap-1 text-sm text-gray-600">

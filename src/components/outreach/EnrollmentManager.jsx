@@ -148,17 +148,18 @@ export default function EnrollmentManager({ sequence, onBack }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Contact</TableHead>
-                  <TableHead>Progress</TableHead>
-                  <TableHead>Next Send</TableHead>
-                  <TableHead>Last Sent</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                    <TableHead>Tier</TableHead>
+                    <TableHead>Progress</TableHead>
+                    <TableHead>Next Send</TableHead>
+                    <TableHead>Last Sent</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {enrollments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-12 text-gray-400">
+                    <TableCell colSpan={7} className="text-center py-12 text-gray-400">
                       No contacts enrolled yet
                     </TableCell>
                   </TableRow>
@@ -169,6 +170,13 @@ export default function EnrollmentManager({ sequence, onBack }) {
                         <p className="font-medium text-sm">{e.recipient_name || e.recipient_email}</p>
                         {e.recipient_name && <p className="text-xs text-gray-400">{e.recipient_email}</p>}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      {e.qualification_tier ? (
+                        <Badge variant="outline" className="text-xs">
+                          {e.qualification_tier === 'hot' ? '🔥' : e.qualification_tier === 'warm' ? '🟡' : e.qualification_tier === 'nurture' ? '🟢' : '❄️'} {e.qualification_tier}
+                        </Badge>
+                      ) : <span className="text-xs text-gray-400">—</span>}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
