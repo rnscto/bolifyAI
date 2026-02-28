@@ -811,133 +811,94 @@ Deno.serve(async (req) => {
   }
 
   // ─── Load agent config from CallLog cache ───
+  // PHASE 1: Fast — find CallLog, extract agent persona & prompt, apply to Realtime session
+  // PHASE 2: Background — claim CallLog with stream_sid (non-blocking)
   async function loadAgentConfig() {
     try {
-      // WebSocket requests don't carry auth tokens, so always use a standalone service-role client
       const { createClient } = await import('npm:@base44/sdk@0.8.18');
       const appId = Deno.env.get('BASE44_APP_ID');
       const svc = createClient({ appId, asServiceRole: true });
 
       let callLog = null;
-
-      // FAST PATH: Try unclaimed ringing/initiated call FIRST (most reliable with sequential calling)
-      // Since campaigns now call sequentially, there's usually exactly 1 unclaimed ringing call
       const cutoff = new Date(Date.now() - 60000).toISOString();
+
+      // ── SINGLE fast query: get recent unclaimed ringing/initiated calls ──
       try {
-        const ringingLogs = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 10);
-        const unclaimed = ringingLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
+        const recentLogs = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 5);
+        const unclaimed = recentLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
         if (unclaimed.length === 1) {
           callLog = unclaimed[0];
-          console.log(`[${reqId}] ⚡ Fast match: single unclaimed ringing call: ${callLog.id}`);
-        } else if (unclaimed.length > 1) {
-          console.log(`[${reqId}] ⚠️ ${unclaimed.length} unclaimed ringing calls — trying call_sid match`);
+          console.log(`[${reqId}] ⚡ Fast match: ringing call ${callLog.id}`);
+        } else if (unclaimed.length === 0) {
+          // Try initiated
+          const initLogs = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 5);
+          const unclaimedInit = initLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
+          if (unclaimedInit.length === 1) {
+            callLog = unclaimedInit[0];
+            console.log(`[${reqId}] ⚡ Fast match: initiated call ${callLog.id}`);
+          }
         }
       } catch (e) {
-        console.log(`[${reqId}] ⚠️ Fast ringing lookup failed: ${e.message}`);
+        console.log(`[${reqId}] ⚠️ Fast lookup failed: ${e.message}`);
       }
 
-      // If no single ringing match, try 'initiated' status
-      if (!callLog) {
-        try {
-          const initLogs = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 10);
-          const unclaimed = initLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
-          if (unclaimed.length === 1) {
-            callLog = unclaimed[0];
-            console.log(`[${reqId}] ⚡ Fast match: single unclaimed initiated call: ${callLog.id}`);
-          }
-        } catch (e) {}
-      }
-
-      // FALLBACK: call_sid search (only if fast path didn't match)
+      // Fallback: call_sid (single attempt, no retries — speed over perfection)
       if (!callLog && session.callSid) {
         const numericCore = session.callSid.replace(/^[^-]*-/, '').replace(/\.[^.]*$/, '');
-        const searchVariants = [session.callSid];
-        if (numericCore && numericCore !== session.callSid) {
-          searchVariants.push(numericCore);
-        }
-
-        for (let attempt = 0; attempt < 2 && !callLog; attempt++) {
-          if (attempt > 0) await new Promise(r => setTimeout(r, 500));
-          for (const sid of searchVariants) {
-            if (callLog) break;
-            try {
-              console.log(`[${reqId}] 🔍 Searching by call_sid: ${sid} (attempt ${attempt + 1})`);
-              const logs = await svc.entities.CallLog.filter({ call_sid: sid });
-              if (logs.length > 0) {
-                callLog = logs[0];
-                console.log(`[${reqId}] 🔍 call_sid match: id=${callLog.id}, matched_sid=${sid}`);
-              }
-            } catch (e) {}
-          }
-        }
-      }
-
-      // LAST RESORT: stream_sid lookup
-      if (!callLog && session.streamSid) {
-        try {
-          const logs = await svc.entities.CallLog.filter({ stream_sid: session.streamSid });
-          if (logs.length > 0) callLog = logs[0];
-          console.log(`[${reqId}] 🔍 stream_sid lookup: found=${!!callLog}`);
-        } catch (e) {}
-      }
-
-      if (callLog) {
-        session.callLogId = callLog.id;
-        const cache = callLog.agent_config_cache;
-        console.log(`[${reqId}] 📍 Found call log: ${callLog.id}`);
-        console.log(`[${reqId}] 📍 Cache present: ${!!cache}, cache keys: ${cache ? Object.keys(cache).join(',') : 'N/A'}`);
-
-        // CRITICAL: Stamp stream_sid immediately to "claim" this CallLog
-        // This prevents other concurrent WS sessions from also matching it via Strategy 3
-        const updateFields = {};
-        if (session.streamSid) updateFields.stream_sid = session.streamSid;
-        if (session.callSid && callLog.call_sid !== session.callSid) updateFields.call_sid = session.callSid;
-        if (Object.keys(updateFields).length > 0) {
+        for (const sid of [session.callSid, numericCore]) {
+          if (callLog || !sid) continue;
           try {
-            await svc.entities.CallLog.update(callLog.id, updateFields);
-            console.log(`[${reqId}] 📍 Claimed CallLog with stream_sid=${session.streamSid}`);
-          } catch (e) { /* ignore */ }
-        }
-
-        if (cache && cache.system_prompt) {
-          session.systemPrompt = cache.system_prompt;
-          if (cache.knowledge_base_content) {
-            session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
-          }
-          if (cache.lead_context) {
-            console.log(`[${reqId}] 👤 Lead context loaded (${cache.lead_context.length} chars)`);
-          }
-          console.log(`[${reqId}] ✅ Agent config loaded (${session.systemPrompt.length} chars)`);
-        }
-        // Load voice engine and voice type from agent persona
-        if (cache && cache.persona) {
-          if (cache.persona.voice_engine) {
-            session.voiceEngine = cache.persona.voice_engine;
-            console.log(`[${reqId}] 🔧 Set voiceEngine = ${session.voiceEngine}`);
-          }
-          if (cache.persona.voice_type) {
-            if (session.voiceEngine === 'realtime') {
-              const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
-              const voice = cache.persona.voice_type.toLowerCase();
-              if (validVoices.includes(voice)) {
-                session.voiceType = voice;
-              } else {
-                console.log(`[${reqId}] ⚠️ Voice '${cache.persona.voice_type}' not valid for realtime, keeping default`);
-              }
-            } else {
-              session.voiceType = cache.persona.voice_type;
+            const logs = await svc.entities.CallLog.filter({ call_sid: sid });
+            if (logs.length > 0) {
+              callLog = logs[0];
+              console.log(`[${reqId}] 🔍 call_sid match: ${callLog.id}`);
             }
-          }
-          console.log(`[${reqId}] 🎙️ FINAL: engine=${session.voiceEngine}, voice=${session.voiceType}`);
-        } else {
-          console.log(`[${reqId}] ⚠️ No persona in cache, defaults: engine=${session.voiceEngine}, voice=${session.voiceType}`);
+          } catch (e) {}
         }
-      } else {
-        console.log(`[${reqId}] ⚠️ No call log found at all. callSid=${session.callSid}, streamSid=${session.streamSid}`);
+      }
+
+      if (!callLog) {
+        console.log(`[${reqId}] ⚠️ No call log found. callSid=${session.callSid}`);
+        return;
+      }
+
+      // ── IMMEDIATELY extract config and apply to session (before any DB writes) ──
+      session.callLogId = callLog.id;
+      const cache = callLog.agent_config_cache;
+
+      if (cache && cache.system_prompt) {
+        session.systemPrompt = cache.system_prompt;
+        if (cache.knowledge_base_content) {
+          session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
+        }
+        console.log(`[${reqId}] ✅ Agent config loaded (${session.systemPrompt.length} chars)`);
+      }
+
+      if (cache && cache.persona) {
+        if (cache.persona.voice_engine) session.voiceEngine = cache.persona.voice_engine;
+        if (cache.persona.voice_type) {
+          if (session.voiceEngine === 'realtime') {
+            const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
+            const voice = cache.persona.voice_type.toLowerCase();
+            if (validVoices.includes(voice)) session.voiceType = voice;
+          } else {
+            session.voiceType = cache.persona.voice_type;
+          }
+        }
+      }
+      console.log(`[${reqId}] 🎙️ engine=${session.voiceEngine}, voice=${session.voiceType}`);
+
+      // ── BACKGROUND: Claim CallLog with stream_sid (fire-and-forget, don't block) ──
+      const updateFields = {};
+      if (session.streamSid) updateFields.stream_sid = session.streamSid;
+      if (session.callSid && callLog.call_sid !== session.callSid) updateFields.call_sid = session.callSid;
+      if (Object.keys(updateFields).length > 0) {
+        svc.entities.CallLog.update(callLog.id, updateFields)
+          .then(() => console.log(`[${reqId}] 📍 Claimed CallLog ${callLog.id}`))
+          .catch(() => {});
       }
     } catch (e) {
       console.error(`[${reqId}] ❌ Agent config load failed: ${e.message}`);
-      console.error(`[${reqId}] ❌ Stack: ${e.stack}`);
     }
   }
 
