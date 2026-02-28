@@ -106,68 +106,202 @@ async function saveCallRecord(session, reqId, duration) {
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    let summary = '';
-    if (transcript && transcript.trim().length > 20) {
-      try {
-        const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
-        const summaryRes = await fetch(
-          `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`,
-          {
-            method: 'POST',
-            headers: {
-              'api-key': Deno.env.get('AZURE_OPENAI_KEY'),
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              messages: [
-                { role: 'system', content: 'Summarize this call transcript in 2-3 sentences. Mention the outcome and key points discussed.' },
-                { role: 'user', content: transcript }
-              ],
-              max_completion_tokens: 200
-            })
-          }
-        );
-        if (summaryRes.ok) {
-          const summaryData = await summaryRes.json();
-          summary = summaryData.choices?.[0]?.message?.content || '';
-        }
-      } catch (sumErr) {
-        console.error(`[${reqId}] ⚠️ Summary generation failed: ${sumErr.message}`);
-      }
-    }
-
     const { createClient } = await import('npm:@base44/sdk@0.8.18');
     const appId = Deno.env.get('BASE44_APP_ID');
     const serviceClient = createClient({ appId, asServiceRole: true });
 
-    // First update with transcript/summary but keep current status to avoid premature terminal
-    // Then set status to completed as a separate update to ensure entity automation fires correctly
+    const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+    const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
+    const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+
+    // ===== STEP 1: AI Analysis — summary + scoring + intent (single LLM call) =====
+    let summary = '';
+    let leadStatus = 'contacted';
+    let sentiment = 'neutral';
+    let leadScore = 0;
+    let intentSignals = [];
+    let scoreBreakdown = {};
+    let keyTopics = [];
+    let objections = [];
+
+    if (transcript && transcript.trim().length > 30) {
+      try {
+        const analysisRes = await fetch(
+          `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`,
+          {
+            method: 'POST',
+            headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messages: [
+                {
+                  role: 'system',
+                  content: `You are an expert sales call analyst. Analyze the transcript and provide a comprehensive analysis.
+
+SCORING (total 100):
+- Sentiment (0-25): very_negative=0, negative=5, neutral=12, positive=20, very_positive=25
+- Intent signals (0-30): pricing_inquiry=+10, demo_request=+15, budget_confirmed=+15, timeline_mentioned=+10, decision_maker=+10
+- Engagement (0-25): short_answers=5, asked_questions=15, highly_engaged=25
+- Keywords (0-20): positive="interested","sign up","sounds good"=+5 each; negative="not interested","too expensive"=-5 each
+
+Respond ONLY in valid JSON.`
+                },
+                {
+                  role: 'user',
+                  content: `Analyze this call transcript:\n\n${transcript}\n\nReturn JSON:
+{
+  "summary": "2-3 sentence summary of the call",
+  "lead_status": "interested|not_interested|callback|no_answer|converted|contacted|do_not_call",
+  "sentiment": "very_positive|positive|neutral|negative|very_negative",
+  "lead_score": 0-100,
+  "intent_signals": ["pricing_inquiry","demo_request","budget_confirmed","timeline_mentioned","decision_maker","referral","objection_price","objection_timing","follow_up_requested"],
+  "score_breakdown": {"sentiment_score":0,"intent_score":0,"engagement_score":0,"keyword_score":0,"reasoning":"..."},
+  "key_topics": ["topic1","topic2"],
+  "objections": ["objection1"],
+  "recommended_next_action": "..."
+}`
+                }
+              ],
+              max_completion_tokens: 800,
+              response_format: { type: "json_object" }
+            })
+          }
+        );
+
+        if (analysisRes.ok) {
+          const analysisData = await analysisRes.json();
+          const analysis = JSON.parse(analysisData.choices?.[0]?.message?.content || '{}');
+          summary = analysis.summary || '';
+          leadStatus = analysis.lead_status || 'contacted';
+          sentiment = analysis.sentiment || 'neutral';
+          leadScore = Math.min(100, Math.max(0, analysis.lead_score || 0));
+          intentSignals = analysis.intent_signals || [];
+          scoreBreakdown = {
+            ...(analysis.score_breakdown || {}),
+            objections: analysis.objections || [],
+            recommended_next_action: analysis.recommended_next_action || '',
+            key_topics: analysis.key_topics || []
+          };
+          keyTopics = analysis.key_topics || [];
+          objections = analysis.objections || [];
+          console.log(`[${reqId}] 🧠 AI Analysis: score=${leadScore}, status=${leadStatus}, sentiment=${sentiment}`);
+        } else {
+          console.error(`[${reqId}] ⚠️ AI analysis failed: ${analysisRes.status}`);
+        }
+      } catch (analysisErr) {
+        console.error(`[${reqId}] ⚠️ AI analysis error: ${analysisErr.message}`);
+      }
+    } else if (!transcript || transcript.trim().length <= 30) {
+      summary = 'Call ended with minimal or no conversation captured via WebSocket.';
+    }
+
+    // ===== STEP 2: Determine qualification tier =====
+    let qualificationTier = 'cold';
+    let qualificationReason = '';
+
+    const highIntents = ['demo_request', 'budget_confirmed', 'timeline_mentioned', 'decision_maker']
+      .filter(s => intentSignals.includes(s));
+
+    if (leadScore >= 75 && ['very_positive', 'positive'].includes(sentiment)) {
+      qualificationTier = 'hot';
+      qualificationReason = `Score ${leadScore}/100, ${sentiment}, signals: ${highIntents.join(', ') || 'high engagement'}`;
+    } else if (leadScore >= 50) {
+      qualificationTier = 'warm';
+      qualificationReason = `Score ${leadScore}/100, ${sentiment} sentiment`;
+    } else if (leadScore >= 25) {
+      qualificationTier = 'nurture';
+      qualificationReason = `Score ${leadScore}/100 — needs nurturing`;
+    } else if (['negative', 'very_negative'].includes(sentiment)) {
+      qualificationTier = 'disqualified';
+      qualificationReason = `Low score ${leadScore}/100, ${sentiment}`;
+    } else {
+      qualificationTier = 'cold';
+      qualificationReason = `Low score ${leadScore}/100 — minimal engagement`;
+    }
+    if (leadStatus === 'converted') { qualificationTier = 'hot'; qualificationReason = 'Converted'; }
+    if (leadStatus === 'do_not_call') { qualificationTier = 'disqualified'; qualificationReason = 'Do not call'; }
+
+    // ===== STEP 3: Save CallLog with full analysis =====
     const currentLog = await serviceClient.entities.CallLog.get(session.callLogId);
     const wasAlreadyCompleted = currentLog && ['completed', 'failed', 'no_answer'].includes(currentLog.status);
 
+    const enrichedSummary = summary
+      ? `${summary}\n\n---\nScore: ${leadScore}/100 | Sentiment: ${sentiment} | Tier: ${qualificationTier} | Signals: ${intentSignals.join(', ')}`
+      : '';
+
     if (wasAlreadyCompleted) {
-      // CallLog already terminal (smartfloWebhook beat us) — just add transcript/summary
       await serviceClient.entities.CallLog.update(session.callLogId, {
         transcript: transcript || '',
         duration: duration,
-        ...(summary ? { conversation_summary: summary } : {})
+        lead_status_updated: leadStatus,
+        ...(enrichedSummary ? { conversation_summary: enrichedSummary } : {})
       });
-      console.log(`[${reqId}] 💾 Call already ${currentLog.status}, added transcript: ${session.callLogId}`);
+      console.log(`[${reqId}] 💾 Call already ${currentLog.status}, added transcript+analysis: ${session.callLogId}`);
     } else {
-      // Set to completed — this triggers campaignPostCall entity automation
       await serviceClient.entities.CallLog.update(session.callLogId, {
         status: 'completed',
         transcript: transcript || '',
         duration: duration,
         call_end_time: new Date().toISOString(),
-        ...(summary ? { conversation_summary: summary } : {})
+        lead_status_updated: leadStatus,
+        ...(enrichedSummary ? { conversation_summary: enrichedSummary } : {})
       });
-      console.log(`[${reqId}] 💾 Call saved as completed: ${session.callLogId}, duration=${duration}s`);
+      console.log(`[${reqId}] 💾 Call saved as completed with analysis: ${session.callLogId}, score=${leadScore}`);
+    }
+
+    // ===== STEP 4: Update Lead with AI scoring (if lead exists) =====
+    if (currentLog.lead_id) {
+      try {
+        const existingLead = await serviceClient.entities.Lead.get(currentLog.lead_id);
+        const existingTags = existingLead.tags || [];
+        const mergedTags = [...new Set([...existingTags, ...keyTopics.slice(0, 10)])];
+
+        await serviceClient.entities.Lead.update(currentLog.lead_id, {
+          status: leadStatus,
+          score: leadScore,
+          sentiment: sentiment,
+          intent_signals: intentSignals,
+          score_breakdown: scoreBreakdown,
+          qualification_tier: qualificationTier,
+          qualification_reason: qualificationReason,
+          tags: mergedTags,
+          last_call_date: new Date().toISOString(),
+          last_engagement_date: new Date().toISOString(),
+          engagement_count: (existingLead.engagement_count || 0) + 1,
+          notes: `[Score: ${leadScore}/100 | ${sentiment} | ${qualificationTier}] ${summary.substring(0, 300)}`
+        });
+        console.log(`[${reqId}] 📊 Lead ${currentLog.lead_id} updated: score=${leadScore}, tier=${qualificationTier}`);
+      } catch (leadErr) {
+        console.error(`[${reqId}] ⚠️ Lead update failed: ${leadErr.message}`);
+      }
+    }
+
+    // ===== STEP 5: Auto-enroll in email sequence (fire-and-forget) =====
+    if (currentLog.lead_id && qualificationTier && !['disqualified'].includes(qualificationTier) && transcript.length > 30) {
+      serviceClient.functions.invoke('autoEnrollSequence', {
+        lead_id: currentLog.lead_id,
+        client_id: currentLog.client_id,
+        qualification_tier: qualificationTier,
+        call_outcome: leadStatus,
+        call_summary: summary.substring(0, 500),
+        call_topics: keyTopics.slice(0, 10),
+        objections: objections,
+        intent_signals: intentSignals,
+        ai_score: leadScore
+      }).then(r => {
+        if (r?.enrolled) console.log(`[${reqId}] ✉️ Auto-enrolled in sequence: ${r.sequence_name}`);
+      }).catch(e => console.error(`[${reqId}] ⚠️ Auto-enroll failed: ${e.message}`));
+    }
+
+    // ===== STEP 6: Trigger post-call action extraction (fire-and-forget) =====
+    if (transcript.length > 50) {
+      serviceClient.functions.invoke('postCallActionExtractor', {
+        call_log_id: session.callLogId
+      }).then(() => console.log(`[${reqId}] 📋 Action extraction triggered`))
+        .catch(e => console.error(`[${reqId}] ⚠️ Action extraction failed: ${e.message}`));
     }
 
     // NOTE: Campaign lead updates and next-batch triggers are handled by
     // campaignPostCall (entity automation on CallLog update).
-    // streamAudio only saves the CallLog — no campaign logic here to avoid race conditions.
 
     try { serviceClient.cleanup(); } catch (_) { /* ignore */ }
   } catch (err) {
