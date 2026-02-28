@@ -19,6 +19,14 @@ const OUTREACH_TYPES = [
   { value: 'callback_reminder', label: 'Callback Reminder' }
 ];
 
+const TIER_TARGETS = [
+  { value: 'all', label: 'All Tiers' },
+  { value: 'hot', label: '🔥 Hot Leads' },
+  { value: 'warm', label: '🟡 Warm Leads' },
+  { value: 'nurture', label: '🟢 Nurture Leads' },
+  { value: 'cold', label: '❄️ Cold Leads' }
+];
+
 const DEFAULT_STEP = { step_number: 1, delay_days: 1, subject: '', body_html: '', use_ai_personalization: false };
 
 export default function SequenceEditor({ sequence, onSave, onCancel }) {
@@ -28,6 +36,7 @@ export default function SequenceEditor({ sequence, onSave, onCancel }) {
     outreach_type: sequence?.outreach_type || 'lead_followup',
     description: sequence?.description || '',
     status: sequence?.status || 'draft',
+    tier_target: sequence?.tier_target || 'all',
     steps: sequence?.steps?.length > 0 ? sequence.steps : [{ ...DEFAULT_STEP }]
   });
   const [saving, setSaving] = useState(false);
@@ -129,7 +138,7 @@ Return subject and body_html.`,
       <Card>
         <CardHeader><CardTitle className="text-base">Sequence Details</CardTitle></CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <Label>Name</Label>
               <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="e.g. Lead Nurture - 5 Day" />
@@ -140,6 +149,15 @@ Return subject and body_html.`,
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {OUTREACH_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Target Tier (Auto-enrollment)</Label>
+              <Select value={form.tier_target || 'all'} onValueChange={v => setForm({ ...form, tier_target: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {TIER_TARGETS.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>

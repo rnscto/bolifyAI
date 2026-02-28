@@ -261,6 +261,28 @@ Respond ONLY in valid JSON with this exact structure.`
       }
     }
 
+    // Auto-enroll into AI email sequence based on tier
+    if (callLog.lead_id && qualificationTier && !['disqualified'].includes(qualificationTier)) {
+      try {
+        const enrollResult = await base44.functions.invoke('autoEnrollSequence', {
+          lead_id: callLog.lead_id,
+          client_id: callLog.client_id,
+          qualification_tier: qualificationTier,
+          call_outcome: leadStatus,
+          call_summary: summary.substring(0, 500),
+          call_topics: keyKeywords.slice(0, 10),
+          objections: [],
+          intent_signals: intentSignals,
+          ai_score: leadScore
+        });
+        if (enrollResult?.enrolled) {
+          console.log(`[processTranscript] ✉️ Auto-enrolled in sequence: ${enrollResult.sequence_name}`);
+        }
+      } catch (seqErr) {
+        console.error(`[processTranscript] Auto-enroll failed: ${seqErr.message}`);
+      }
+    }
+
     // Trigger post-call follow-up emails & RCS
     try {
       await base44.functions.invoke('postCallFollowup', {
