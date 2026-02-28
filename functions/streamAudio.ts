@@ -1,4 +1,3 @@
-
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
 
 // ─── Audio Conversion Helpers ───
@@ -923,13 +922,16 @@ Deno.serve(async (req) => {
         session.callSid = startData.callSid;
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}, call=${session.callSid}`);
 
-        // Start Realtime connection immediately (don't wait for agent config)
-        // This saves ~1-2s since WebSocket handshake happens in parallel with DB lookups
+        // Connect Realtime + load agent config IN PARALLEL for minimum latency
+        // Both run concurrently — whichever finishes second triggers applySessionConfig
         connectRealtime();
-        // Load agent config in parallel - will reconfigure session once loaded
         loadAgentConfig().then(() => {
-          console.log(`[${reqId}] 🚀 Agent config loaded, reconfiguring session: engine=${session.voiceEngine}, voice=${session.voiceType}`);
-          reconfigureRealtimeSession();
+          session._agentConfigReady = true;
+          console.log(`[${reqId}] 🚀 Agent config ready: engine=${session.voiceEngine}, voice=${session.voiceType}`);
+          // If Realtime is already connected, apply config now
+          if (session.realtimeReady) {
+            applySessionConfig();
+          }
         });
         return;
       }
