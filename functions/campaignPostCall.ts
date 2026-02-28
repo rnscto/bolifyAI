@@ -194,9 +194,14 @@ async function triggerNextBatch(base44, campaignId) {
       }
     }
 
+    const CONNECT_TIMEOUT_MS = 50000; // 50 seconds
+    const POLL_INTERVAL_MS = 3000;
     const batch = pendingLeads.slice(0, slotsAvailable);
     let initiated = 0;
+    let connected = 0;
+    let timedOut = 0;
 
+    // Sequential: initiate one call, wait for streamAudio to connect, then next
     for (let i = 0; i < batch.length; i++) {
       const cl = batch[i];
       try {
@@ -250,21 +255,58 @@ async function triggerNextBatch(base44, campaignId) {
         });
 
         const smartfloData = await smartfloResp.json();
-        if (smartfloResp.ok && smartfloData.success !== false) {
-          const newCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
-          console.log(`[campaignPostCall] Smartflo returned call_id=${smartfloData.call_id}, call_sid=${smartfloData.call_sid}, using=${newCallSid}, original=${callSid}`);
-          await base44.entities.CallLog.update(newCallLog.id, { call_sid: newCallSid, status: 'ringing' });
-          initiated++;
-          console.log(`[campaignPostCall] ✅ Call initiated: ${cl.lead_name} → ${cleanPhone}`);
-        } else {
+        if (!(smartfloResp.ok && smartfloData.success !== false)) {
           await base44.entities.CallLog.update(newCallLog.id, { status: 'failed' });
           await base44.entities.CampaignLead.update(cl.id, {
             status: 'completed', outcome: 'no_answer',
             conversation_summary: `Smartflo error: ${smartfloData.message || 'Unknown'}`
           });
+          continue; // Next lead immediately
         }
 
-        if (i < batch.length - 1) await new Promise(r => setTimeout(r, 500));
+        const newCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
+        console.log(`[campaignPostCall] Smartflo returned call_id=${smartfloData.call_id}, call_sid=${smartfloData.call_sid}, using=${newCallSid}`);
+        await base44.entities.CallLog.update(newCallLog.id, { call_sid: newCallSid, status: 'ringing' });
+        initiated++;
+        console.log(`[campaignPostCall] ✅ Call initiated: ${cl.lead_name} → ${cleanPhone}, waiting for streamAudio...`);
+
+        // ─── WAIT for streamAudio to connect (poll for stream_sid or terminal status) ───
+        const waitStart = Date.now();
+        let callConnected = false;
+        let callTerminal = false;
+
+        while (Date.now() - waitStart < CONNECT_TIMEOUT_MS) {
+          await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+          try {
+            const updatedLog = await base44.entities.CallLog.get(newCallLog.id);
+            if (updatedLog.stream_sid) {
+              console.log(`[campaignPostCall] ✅ Call ${newCallLog.id} connected to streamAudio after ${Math.round((Date.now() - waitStart)/1000)}s`);
+              callConnected = true;
+              connected++;
+              break;
+            }
+            if (['completed', 'failed', 'no_answer'].includes(updatedLog.status)) {
+              console.log(`[campaignPostCall] 📴 Call ${newCallLog.id} terminal: ${updatedLog.status}`);
+              callTerminal = true;
+              break;
+            }
+          } catch (_) {}
+        }
+
+        if (!callConnected && !callTerminal) {
+          console.log(`[campaignPostCall] ⏰ TIMEOUT: ${cl.lead_name} not connected in ${CONNECT_TIMEOUT_MS/1000}s — marking no_answer`);
+          await base44.entities.CallLog.update(newCallLog.id, {
+            status: 'no_answer', call_end_time: new Date().toISOString(),
+            conversation_summary: `Call not answered — no streamAudio connection within ${CONNECT_TIMEOUT_MS/1000}s.`
+          });
+          await base44.entities.CampaignLead.update(cl.id, {
+            status: 'completed', outcome: 'no_answer',
+            conversation_summary: `Call not answered within ${CONNECT_TIMEOUT_MS/1000}s.`
+          });
+          timedOut++;
+        }
+
+        if (i < batch.length - 1) await new Promise(r => setTimeout(r, 1000));
       } catch (callErr) {
         console.error(`[campaignPostCall] Call error for ${cl.lead_name}: ${callErr.message}`);
         await base44.entities.CampaignLead.update(cl.id, {
@@ -274,7 +316,7 @@ async function triggerNextBatch(base44, campaignId) {
       }
     }
 
-    return { initiated, batch_size: batch.length, pending_remaining: pendingLeads.length - batch.length };
+    return { initiated, connected, timed_out: timedOut, batch_size: batch.length, pending_remaining: pendingLeads.length - batch.length };
   } catch (err) {
     console.error(`[campaignPostCall] triggerNextBatch error: ${err.message}`);
     return { error: err.message };
