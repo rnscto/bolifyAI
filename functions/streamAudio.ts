@@ -1,3 +1,4 @@
+
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
 
 // ─── Audio Conversion Helpers ───
@@ -413,16 +414,6 @@ Deno.serve(async (req) => {
     };
 
     session.realtimeWs = ws;
-  }
-
-  // ─── Reconfigure Realtime session after agent config loads ───
-  function reconfigureRealtimeSession() {
-    if (!session.realtimeReady) {
-      // Realtime not connected yet - will be configured when session.created fires
-      session._pendingReconfigure = true;
-      return;
-    }
-    applySessionConfig();
   }
 
   function applySessionConfig() {
