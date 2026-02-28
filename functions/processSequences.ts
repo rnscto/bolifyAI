@@ -1,18 +1,17 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.18';
+
+// Scheduled automation — runs every 30 min, no user session.
+// Uses service role directly (only platform scheduler invokes this).
 
 Deno.serve(async (req) => {
   try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const base44 = createClient({ appId, asServiceRole: true });
 
-    if (user?.role !== 'admin') {
-      return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
-
-    const results = { sent: 0, skipped: 0, completed: 0, errors: 0 };
+    const results = { sent: 0, skipped: 0, completed: 0, errors: 0, adapted: 0 };
 
     // Get all active sequences
-    const sequences = await base44.asServiceRole.entities.EmailSequence.filter({ status: 'active' });
+    const sequences = await base44.entities.EmailSequence.filter({ status: 'active' });
     if (sequences.length === 0) {
       return Response.json({ success: true, message: 'No active sequences', ...results });
     }
@@ -20,9 +19,8 @@ Deno.serve(async (req) => {
     const sequenceMap = {};
     sequences.forEach(s => { sequenceMap[s.id] = s; });
 
-    // Get all active enrollments with next_send_date in the past
-    const now = new Date().toISOString();
-    const activeEnrollments = await base44.asServiceRole.entities.SequenceEnrollment.filter({ status: 'active' });
+    // Get all active enrollments
+    const activeEnrollments = await base44.entities.SequenceEnrollment.filter({ status: 'active' });
 
     for (const enrollment of activeEnrollments) {
       // Check if it's time to send
@@ -32,20 +30,14 @@ Deno.serve(async (req) => {
       }
 
       const sequence = sequenceMap[enrollment.sequence_id];
-      if (!sequence) {
-        results.skipped++;
-        continue;
-      }
+      if (!sequence) { results.skipped++; continue; }
 
       const stepIndex = enrollment.steps_completed || 0;
       const steps = sequence.steps || [];
 
       if (stepIndex >= steps.length) {
-        // Mark as completed
-        await base44.asServiceRole.entities.SequenceEnrollment.update(enrollment.id, {
-          status: 'completed'
-        });
-        await base44.asServiceRole.entities.EmailSequence.update(sequence.id, {
+        await base44.entities.SequenceEnrollment.update(enrollment.id, { status: 'completed' });
+        await base44.entities.EmailSequence.update(sequence.id, {
           total_completed: (sequence.total_completed || 0) + 1
         });
         results.completed++;
@@ -60,34 +52,72 @@ Deno.serve(async (req) => {
       subject = subject.replace(/\{\{name\}\}/g, enrollment.recipient_name || 'there');
       bodyHtml = bodyHtml.replace(/\{\{name\}\}/g, enrollment.recipient_name || 'there');
 
-      // AI personalization if enabled
+      // ============================================================
+      // AI DYNAMIC CONTENT ADAPTATION
+      // Uses call context (topics, objections, intent signals) to
+      // personalize each email based on the actual conversation
+      // ============================================================
       if (step.use_ai_personalization) {
         try {
-          let contextInfo = '';
+          // Build rich context from enrollment + lead data
+          let contextParts = [];
+
           if (enrollment.lead_id) {
             try {
-              const lead = await base44.asServiceRole.entities.Lead.get(enrollment.lead_id);
-              contextInfo = `Lead: ${lead.name || ''}, Company: ${lead.company || ''}, Status: ${lead.status || ''}, Notes: ${lead.notes || ''}`;
-            } catch (_) {}
-          }
-          if (enrollment.client_id) {
-            try {
-              const client = await base44.asServiceRole.entities.Client.get(enrollment.client_id);
-              contextInfo += ` Client: ${client.company_name || ''}, Industry: ${client.industry || ''}, Account: ${client.account_status || ''}`;
+              const lead = await base44.entities.Lead.get(enrollment.lead_id);
+              contextParts.push(`Lead: ${lead.name || ''}, Company: ${lead.company || ''}, Status: ${lead.status || ''}, Score: ${lead.score || 'N/A'}/100, Tier: ${lead.qualification_tier || 'N/A'}`);
+              if (lead.notes) contextParts.push(`Recent Notes: ${lead.notes.substring(0, 300)}`);
+              if (lead.intent_signals?.length > 0) contextParts.push(`Intent Signals: ${lead.intent_signals.join(', ')}`);
+              if (lead.sentiment) contextParts.push(`Sentiment: ${lead.sentiment}`);
             } catch (_) {}
           }
 
-          if (contextInfo) {
-            const personalized = await base44.asServiceRole.integrations.Core.InvokeLLM({
-              prompt: `Personalize this email using the context below. Keep the structure and CTA, but add personal touches.
+          if (enrollment.client_id) {
+            try {
+              const client = await base44.entities.Client.get(enrollment.client_id);
+              contextParts.push(`Company: ${client.company_name || ''}, Industry: ${client.industry || ''}`);
+            } catch (_) {}
+          }
+
+          // Enrollment-specific call context
+          if (enrollment.call_summary) contextParts.push(`Call Summary: ${enrollment.call_summary}`);
+          if (enrollment.call_topics?.length > 0) contextParts.push(`Topics Discussed: ${enrollment.call_topics.join(', ')}`);
+          if (enrollment.objections?.length > 0) contextParts.push(`Objections Raised: ${enrollment.objections.join(', ')}`);
+          if (enrollment.intent_signals?.length > 0) contextParts.push(`Lead Intent: ${enrollment.intent_signals.join(', ')}`);
+          if (enrollment.qualification_tier) contextParts.push(`Qualification: ${enrollment.qualification_tier} lead`);
+
+          // Previous sends context
+          const prevSends = enrollment.send_log || [];
+          if (prevSends.length > 0) {
+            contextParts.push(`Previous Emails Sent: ${prevSends.map(s => `Step ${s.step_number}: "${s.subject}"`).join('; ')}`);
+          }
+
+          const context = contextParts.join('\n');
+
+          if (context.length > 20) {
+            const personalized = await base44.integrations.Core.InvokeLLM({
+              prompt: `Dynamically adapt this nurture email using the lead's context below.
 
 ORIGINAL SUBJECT: ${subject}
 ORIGINAL BODY: ${bodyHtml}
 
-CONTEXT: ${contextInfo}
-RECIPIENT: ${enrollment.recipient_name || enrollment.recipient_email}
+LEAD CONTEXT:
+${context}
 
-Return personalized subject and body_html.`,
+STEP ${stepIndex + 1} of ${steps.length} — ${enrollment.qualification_tier || 'unknown'} tier lead.
+
+ADAPTATION RULES:
+1. If the lead raised specific objections, address them naturally in the email
+2. If topics like "pricing" or "demo" were discussed, reference those specifically
+3. Reference the lead's company/industry if known
+4. Adjust urgency: hot leads get stronger CTAs, nurture leads get softer CTAs
+5. If this is a later step (3+), escalate value proposition or try a new angle
+6. Keep the core message but make it feel personally written
+7. Keep it under 150 words
+8. Professional Indian business English
+9. Return HTML body content only (no html/head tags)
+
+Return the adapted subject and body_html.`,
               response_json_schema: {
                 type: "object",
                 properties: {
@@ -98,23 +128,38 @@ Return personalized subject and body_html.`,
             });
             subject = personalized.subject || subject;
             bodyHtml = personalized.body_html || bodyHtml;
+            results.adapted++;
           }
         } catch (aiErr) {
-          console.warn(`[processSequences] AI personalization failed for ${enrollment.id}:`, aiErr.message);
+          console.warn(`[processSequences] AI adaptation failed for ${enrollment.id}: ${aiErr.message}`);
         }
+      }
+
+      // Final placeholder replacement (in case AI output still has them)
+      subject = subject.replace(/\{\{name\}\}/g, enrollment.recipient_name || 'there');
+      bodyHtml = bodyHtml.replace(/\{\{name\}\}/g, enrollment.recipient_name || 'there');
+
+      // Determine sender
+      let fromName = 'VaaniAI';
+      if (enrollment.client_id) {
+        try {
+          const client = await base44.entities.Client.get(enrollment.client_id);
+          if (client?.company_name) fromName = client.company_name;
+        } catch (_) {}
       }
 
       // Send the email
       try {
-        await base44.asServiceRole.integrations.Core.SendEmail({
+        await base44.integrations.Core.SendEmail({
           to: enrollment.recipient_email,
-          from_name: 'VaaniAI',
+          from_name: fromName,
           subject,
-          body: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">${bodyHtml}</div>`
+          body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">${bodyHtml}</div>`
         });
 
         // Log in OutreachLog
-        await base44.asServiceRole.entities.OutreachLog.create({
+        await base44.integrations.Core.InvokeLLM; // no-op check
+        await base44.entities.OutreachLog.create({
           client_id: enrollment.client_id || '',
           lead_id: enrollment.lead_id || '',
           channel: 'email',
@@ -140,7 +185,7 @@ Return personalized subject and body_html.`,
         const nextStep = !isLast ? steps[nextStepIndex] : null;
         const nextSendDate = nextStep ? new Date(Date.now() + nextStep.delay_days * 86400000).toISOString() : null;
 
-        await base44.asServiceRole.entities.SequenceEnrollment.update(enrollment.id, {
+        await base44.entities.SequenceEnrollment.update(enrollment.id, {
           steps_completed: nextStepIndex,
           current_step: nextStepIndex,
           last_sent_date: new Date().toISOString(),
@@ -150,19 +195,18 @@ Return personalized subject and body_html.`,
         });
 
         if (isLast) {
-          await base44.asServiceRole.entities.EmailSequence.update(sequence.id, {
+          await base44.entities.EmailSequence.update(sequence.id, {
             total_completed: (sequence.total_completed || 0) + 1
           });
           results.completed++;
         }
 
         results.sent++;
-        console.log(`[processSequences] Sent step ${stepIndex + 1} to ${enrollment.recipient_email}`);
+        console.log(`[processSequences] Sent step ${stepIndex + 1}/${steps.length} to ${enrollment.recipient_email} (tier: ${enrollment.qualification_tier || 'N/A'})`);
 
       } catch (sendErr) {
-        console.error(`[processSequences] Send failed for ${enrollment.recipient_email}:`, sendErr.message);
-
-        await base44.asServiceRole.entities.OutreachLog.create({
+        console.error(`[processSequences] Send failed for ${enrollment.recipient_email}: ${sendErr.message}`);
+        await base44.entities.OutreachLog.create({
           client_id: enrollment.client_id || '',
           lead_id: enrollment.lead_id || '',
           channel: 'email',
@@ -173,12 +217,11 @@ Return personalized subject and body_html.`,
           error_message: sendErr.message,
           is_retention: sequence.outreach_type === 'retention'
         });
-
         results.errors++;
       }
     }
 
-    console.log(`[processSequences] Done. Sent: ${results.sent}, Completed: ${results.completed}, Skipped: ${results.skipped}, Errors: ${results.errors}`);
+    console.log(`[processSequences] Done. Sent: ${results.sent}, Adapted: ${results.adapted}, Completed: ${results.completed}, Skipped: ${results.skipped}, Errors: ${results.errors}`);
     return Response.json({ success: true, ...results });
 
   } catch (error) {

@@ -510,6 +510,30 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
     ...(callbackScheduled ? { followup_call_date: new Date(Date.now() + 2 * 86400000).toISOString() } : {})
   });
 
+  // ============================================================
+  // AUTO-ENROLL INTO AI EMAIL SEQUENCE based on tier
+  // ============================================================
+  if (campaignLead.lead_id && qualificationTier && !['disqualified'].includes(qualificationTier) && outcome !== 'no_answer') {
+    try {
+      const enrollResult = await base44.functions.invoke('autoEnrollSequence', {
+        lead_id: campaignLead.lead_id,
+        client_id: campaign.client_id,
+        qualification_tier: qualificationTier,
+        call_outcome: outcome,
+        call_summary: summary.substring(0, 500),
+        call_topics: aiScoreBreakdown.key_topics || [],
+        objections: aiScoreBreakdown.objections || [],
+        intent_signals: aiIntentSignals,
+        ai_score: aiScore
+      });
+      if (enrollResult?.enrolled) {
+        console.log(`[campaignPostCall] ✉️ Auto-enrolled in sequence: ${enrollResult.sequence_name}`);
+      }
+    } catch (seqErr) {
+      console.error(`[campaignPostCall] Auto-enroll failed: ${seqErr.message}`);
+    }
+  }
+
   return { outcome, emailSent, callbackScheduled, aiScore, qualificationTier };
 }
 
