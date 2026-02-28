@@ -1,4 +1,3 @@
-
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
 
 // ─── Audio Conversion Helpers ───
@@ -301,8 +300,28 @@ Respond ONLY in valid JSON.`
         .catch(e => console.error(`[${reqId}] ⚠️ Action extraction failed: ${e.message}`));
     }
 
-    // NOTE: Campaign lead updates and next-batch triggers are handled by
-    // campaignPostCall (entity automation on CallLog update).
+    // ===== STEP 7: Directly update CampaignLead if this is a campaign call =====
+    // The entity automation (campaignPostCall) should also handle this, but as a
+    // reliability measure we update the CampaignLead directly here to prevent
+    // "stuck calling" issues when the automation doesn't fire or races.
+    try {
+      const campaignLeads = await serviceClient.entities.CampaignLead.filter({ call_log_id: session.callLogId });
+      if (campaignLeads.length > 0) {
+        const cl = campaignLeads[0];
+        if (cl.status === 'calling') {
+          await serviceClient.entities.CampaignLead.update(cl.id, {
+            status: 'completed',
+            outcome: leadStatus || 'contacted',
+            conversation_summary: enrichedSummary || summary || 'Call completed.',
+            transcript: transcript || '',
+            call_duration: duration || 0
+          });
+          console.log(`[${reqId}] 📋 CampaignLead ${cl.id} (${cl.lead_name}) updated to completed directly`);
+        }
+      }
+    } catch (clErr) {
+      console.error(`[${reqId}] ⚠️ CampaignLead direct update failed: ${clErr.message}`);
+    }
 
     try { serviceClient.cleanup(); } catch (_) { /* ignore */ }
   } catch (err) {
