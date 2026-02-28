@@ -816,22 +816,27 @@ Deno.serve(async (req) => {
 
       let callLog = null;
 
-      // Strategy 1: Look up by call_sid from Smartflo
+      // Strategy 1: Look up by call_sid from Smartflo (with retry for timing gap)
+      // When Smartflo initiates a call, it returns a call_id that we store on CallLog.
+      // But Smartflo sends the WebSocket 'start' event almost immediately — sometimes
+      // BEFORE our code finishes updating CallLog.call_sid. A retry handles this gap.
       if (session.callSid) {
-        try {
-          console.log(`[${reqId}] 🔍 Searching by call_sid: ${session.callSid}`);
-          const logs = await svc.entities.CallLog.filter({ call_sid: session.callSid });
-          console.log(`[${reqId}] 🔍 call_sid results: ${logs.length} records`);
-          if (logs.length > 0) {
-            callLog = logs[0];
-            console.log(`[${reqId}] 🔍 call_sid match: id=${callLog.id}, has_cache=${!!callLog.agent_config_cache}`);
+        for (let attempt = 0; attempt < 3 && !callLog; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 800)); // wait 800ms between retries
+          try {
+            console.log(`[${reqId}] 🔍 Searching by call_sid: ${session.callSid} (attempt ${attempt + 1})`);
+            const logs = await svc.entities.CallLog.filter({ call_sid: session.callSid });
+            if (logs.length > 0) {
+              callLog = logs[0];
+              console.log(`[${reqId}] 🔍 call_sid match: id=${callLog.id}, has_cache=${!!callLog.agent_config_cache}`);
+            }
+          } catch (e) {
+            console.log(`[${reqId}] ⚠️ call_sid filter failed: ${e.message}`);
           }
-        } catch (e) {
-          console.log(`[${reqId}] ⚠️ call_sid filter failed: ${e.message}`);
         }
       }
 
-      // Strategy 2: Look up by stream_sid
+      // Strategy 2: Look up by stream_sid (set if another WS connection linked it first)
       if (!callLog && session.streamSid) {
         try {
           const logs = await svc.entities.CallLog.filter({ stream_sid: session.streamSid });
@@ -842,22 +847,45 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Strategy 3: Look for most recent ringing/initiated call (fallback)
+      // Strategy 3: SAFE fallback — look for ringing/initiated calls WITHOUT stream_sid yet.
+      // To avoid cross-matching during concurrency, only pick calls that are:
+      //   a) Still ringing/initiated (not yet picked up by another WS)
+      //   b) Don't already have a stream_sid (meaning no WS session has claimed them)
+      //   c) Created recently (within last 60 seconds)
       if (!callLog) {
         try {
-          const logs = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 1);
-          if (logs.length > 0) callLog = logs[0];
-          console.log(`[${reqId}] 🔍 ringing lookup: found=${!!callLog}${callLog ? ', id=' + callLog.id : ''}`);
+          const cutoff = new Date(Date.now() - 60000).toISOString(); // 60s ago
+          // Get recent ringing calls, then find one without stream_sid
+          const ringingLogs = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 10);
+          const unclaimed = ringingLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
+          if (unclaimed.length === 1) {
+            // Only auto-match if there's exactly ONE unclaimed ringing call (no ambiguity)
+            callLog = unclaimed[0];
+            console.log(`[${reqId}] 🔍 Safe fallback: single unclaimed ringing call: ${callLog.id}`);
+          } else if (unclaimed.length > 1) {
+            // Multiple unclaimed — DON'T guess, log warning and skip
+            console.log(`[${reqId}] ⚠️ ${unclaimed.length} unclaimed ringing calls — skipping fallback to avoid mismatch`);
+          } else {
+            console.log(`[${reqId}] 🔍 No unclaimed ringing calls found`);
+          }
         } catch (e) {
-          console.log(`[${reqId}] ⚠️ ringing filter failed: ${e.message}`);
+          console.log(`[${reqId}] ⚠️ Safe fallback failed: ${e.message}`);
         }
+
+        // Last resort: same logic for 'initiated' status
         if (!callLog) {
           try {
-            const logs = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 1);
-            if (logs.length > 0) callLog = logs[0];
-            console.log(`[${reqId}] 🔍 initiated lookup: found=${!!callLog}${callLog ? ', id=' + callLog.id : ''}`);
+            const cutoff = new Date(Date.now() - 60000).toISOString();
+            const initLogs = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 10);
+            const unclaimed = initLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
+            if (unclaimed.length === 1) {
+              callLog = unclaimed[0];
+              console.log(`[${reqId}] 🔍 Safe fallback: single unclaimed initiated call: ${callLog.id}`);
+            } else if (unclaimed.length > 1) {
+              console.log(`[${reqId}] ⚠️ ${unclaimed.length} unclaimed initiated calls — skipping`);
+            }
           } catch (e) {
-            console.log(`[${reqId}] ⚠️ initiated filter failed: ${e.message}`);
+            console.log(`[${reqId}] ⚠️ Initiated fallback failed: ${e.message}`);
           }
         }
       }
@@ -867,17 +895,16 @@ Deno.serve(async (req) => {
         const cache = callLog.agent_config_cache;
         console.log(`[${reqId}] 📍 Found call log: ${callLog.id}`);
         console.log(`[${reqId}] 📍 Cache present: ${!!cache}, cache keys: ${cache ? Object.keys(cache).join(',') : 'N/A'}`);
-        if (cache?.persona) {
-          console.log(`[${reqId}] 📍 Persona: ${JSON.stringify(cache.persona)}`);
-        }
 
-        // Update call log with stream/call sid
+        // CRITICAL: Stamp stream_sid immediately to "claim" this CallLog
+        // This prevents other concurrent WS sessions from also matching it via Strategy 3
         const updateFields = {};
-        if (session.streamSid && !callLog.stream_sid) updateFields.stream_sid = session.streamSid;
+        if (session.streamSid) updateFields.stream_sid = session.streamSid;
         if (session.callSid && callLog.call_sid !== session.callSid) updateFields.call_sid = session.callSid;
         if (Object.keys(updateFields).length > 0) {
           try {
             await svc.entities.CallLog.update(callLog.id, updateFields);
+            console.log(`[${reqId}] 📍 Claimed CallLog with stream_sid=${session.streamSid}`);
           } catch (e) { /* ignore */ }
         }
 
