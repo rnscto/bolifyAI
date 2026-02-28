@@ -1,3 +1,4 @@
+
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
 
 // ─── Audio Conversion Helpers ───
@@ -819,21 +820,44 @@ Deno.serve(async (req) => {
 
       let callLog = null;
 
-      // Strategy 1: Look up by call_sid from Smartflo (with retry for timing gap)
-      // IMPORTANT: Smartflo WebSocket sends call_sid in format like "h6.02-1772258809.340250"
-      // but the Smartflo API returns just the numeric part like "1772258809" which we store.
-      // So we need to try: exact match, then extract the numeric core and match that too.
-      if (session.callSid) {
-        // Extract numeric core from Smartflo WS call_sid (e.g. "h6.02-1772258809.340250" → "1772258809")
+      // FAST PATH: Try unclaimed ringing/initiated call FIRST (most reliable with sequential calling)
+      // Since campaigns now call sequentially, there's usually exactly 1 unclaimed ringing call
+      const cutoff = new Date(Date.now() - 60000).toISOString();
+      try {
+        const ringingLogs = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 10);
+        const unclaimed = ringingLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
+        if (unclaimed.length === 1) {
+          callLog = unclaimed[0];
+          console.log(`[${reqId}] ⚡ Fast match: single unclaimed ringing call: ${callLog.id}`);
+        } else if (unclaimed.length > 1) {
+          console.log(`[${reqId}] ⚠️ ${unclaimed.length} unclaimed ringing calls — trying call_sid match`);
+        }
+      } catch (e) {
+        console.log(`[${reqId}] ⚠️ Fast ringing lookup failed: ${e.message}`);
+      }
+
+      // If no single ringing match, try 'initiated' status
+      if (!callLog) {
+        try {
+          const initLogs = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 10);
+          const unclaimed = initLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
+          if (unclaimed.length === 1) {
+            callLog = unclaimed[0];
+            console.log(`[${reqId}] ⚡ Fast match: single unclaimed initiated call: ${callLog.id}`);
+          }
+        } catch (e) {}
+      }
+
+      // FALLBACK: call_sid search (only if fast path didn't match)
+      if (!callLog && session.callSid) {
         const numericCore = session.callSid.replace(/^[^-]*-/, '').replace(/\.[^.]*$/, '');
         const searchVariants = [session.callSid];
         if (numericCore && numericCore !== session.callSid) {
           searchVariants.push(numericCore);
         }
-        console.log(`[${reqId}] 🔍 call_sid variants to search: ${searchVariants.join(', ')}`);
 
-        for (let attempt = 0; attempt < 3 && !callLog; attempt++) {
-          if (attempt > 0) await new Promise(r => setTimeout(r, 800));
+        for (let attempt = 0; attempt < 2 && !callLog; attempt++) {
+          if (attempt > 0) await new Promise(r => setTimeout(r, 500));
           for (const sid of searchVariants) {
             if (callLog) break;
             try {
@@ -841,67 +865,20 @@ Deno.serve(async (req) => {
               const logs = await svc.entities.CallLog.filter({ call_sid: sid });
               if (logs.length > 0) {
                 callLog = logs[0];
-                console.log(`[${reqId}] 🔍 call_sid match: id=${callLog.id}, matched_sid=${sid}, has_cache=${!!callLog.agent_config_cache}`);
+                console.log(`[${reqId}] 🔍 call_sid match: id=${callLog.id}, matched_sid=${sid}`);
               }
-            } catch (e) {
-              console.log(`[${reqId}] ⚠️ call_sid filter failed for ${sid}: ${e.message}`);
-            }
+            } catch (e) {}
           }
         }
       }
 
-      // Strategy 2: Look up by stream_sid (set if another WS connection linked it first)
+      // LAST RESORT: stream_sid lookup
       if (!callLog && session.streamSid) {
         try {
           const logs = await svc.entities.CallLog.filter({ stream_sid: session.streamSid });
           if (logs.length > 0) callLog = logs[0];
           console.log(`[${reqId}] 🔍 stream_sid lookup: found=${!!callLog}`);
-        } catch (e) {
-          console.log(`[${reqId}] ⚠️ stream_sid filter failed: ${e.message}`);
-        }
-      }
-
-      // Strategy 3: SAFE fallback — look for ringing/initiated calls WITHOUT stream_sid yet.
-      // To avoid cross-matching during concurrency, only pick calls that are:
-      //   a) Still ringing/initiated (not yet picked up by another WS)
-      //   b) Don't already have a stream_sid (meaning no WS session has claimed them)
-      //   c) Created recently (within last 60 seconds)
-      if (!callLog) {
-        try {
-          const cutoff = new Date(Date.now() - 60000).toISOString(); // 60s ago
-          // Get recent ringing calls, then find one without stream_sid
-          const ringingLogs = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 10);
-          const unclaimed = ringingLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
-          if (unclaimed.length === 1) {
-            // Only auto-match if there's exactly ONE unclaimed ringing call (no ambiguity)
-            callLog = unclaimed[0];
-            console.log(`[${reqId}] 🔍 Safe fallback: single unclaimed ringing call: ${callLog.id}`);
-          } else if (unclaimed.length > 1) {
-            // Multiple unclaimed — DON'T guess, log warning and skip
-            console.log(`[${reqId}] ⚠️ ${unclaimed.length} unclaimed ringing calls — skipping fallback to avoid mismatch`);
-          } else {
-            console.log(`[${reqId}] 🔍 No unclaimed ringing calls found`);
-          }
-        } catch (e) {
-          console.log(`[${reqId}] ⚠️ Safe fallback failed: ${e.message}`);
-        }
-
-        // Last resort: same logic for 'initiated' status
-        if (!callLog) {
-          try {
-            const cutoff = new Date(Date.now() - 60000).toISOString();
-            const initLogs = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 10);
-            const unclaimed = initLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
-            if (unclaimed.length === 1) {
-              callLog = unclaimed[0];
-              console.log(`[${reqId}] 🔍 Safe fallback: single unclaimed initiated call: ${callLog.id}`);
-            } else if (unclaimed.length > 1) {
-              console.log(`[${reqId}] ⚠️ ${unclaimed.length} unclaimed initiated calls — skipping`);
-            }
-          } catch (e) {
-            console.log(`[${reqId}] ⚠️ Initiated fallback failed: ${e.message}`);
-          }
-        }
+        } catch (e) {}
       }
 
       if (callLog) {
