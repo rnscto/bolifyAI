@@ -817,21 +817,32 @@ Deno.serve(async (req) => {
       let callLog = null;
 
       // Strategy 1: Look up by call_sid from Smartflo (with retry for timing gap)
-      // When Smartflo initiates a call, it returns a call_id that we store on CallLog.
-      // But Smartflo sends the WebSocket 'start' event almost immediately — sometimes
-      // BEFORE our code finishes updating CallLog.call_sid. A retry handles this gap.
+      // IMPORTANT: Smartflo WebSocket sends call_sid in format like "h6.02-1772258809.340250"
+      // but the Smartflo API returns just the numeric part like "1772258809" which we store.
+      // So we need to try: exact match, then extract the numeric core and match that too.
       if (session.callSid) {
+        // Extract numeric core from Smartflo WS call_sid (e.g. "h6.02-1772258809.340250" → "1772258809")
+        const numericCore = session.callSid.replace(/^[^-]*-/, '').replace(/\.[^.]*$/, '');
+        const searchVariants = [session.callSid];
+        if (numericCore && numericCore !== session.callSid) {
+          searchVariants.push(numericCore);
+        }
+        console.log(`[${reqId}] 🔍 call_sid variants to search: ${searchVariants.join(', ')}`);
+
         for (let attempt = 0; attempt < 3 && !callLog; attempt++) {
-          if (attempt > 0) await new Promise(r => setTimeout(r, 800)); // wait 800ms between retries
-          try {
-            console.log(`[${reqId}] 🔍 Searching by call_sid: ${session.callSid} (attempt ${attempt + 1})`);
-            const logs = await svc.entities.CallLog.filter({ call_sid: session.callSid });
-            if (logs.length > 0) {
-              callLog = logs[0];
-              console.log(`[${reqId}] 🔍 call_sid match: id=${callLog.id}, has_cache=${!!callLog.agent_config_cache}`);
+          if (attempt > 0) await new Promise(r => setTimeout(r, 800));
+          for (const sid of searchVariants) {
+            if (callLog) break;
+            try {
+              console.log(`[${reqId}] 🔍 Searching by call_sid: ${sid} (attempt ${attempt + 1})`);
+              const logs = await svc.entities.CallLog.filter({ call_sid: sid });
+              if (logs.length > 0) {
+                callLog = logs[0];
+                console.log(`[${reqId}] 🔍 call_sid match: id=${callLog.id}, matched_sid=${sid}, has_cache=${!!callLog.agent_config_cache}`);
+              }
+            } catch (e) {
+              console.log(`[${reqId}] ⚠️ call_sid filter failed for ${sid}: ${e.message}`);
             }
-          } catch (e) {
-            console.log(`[${reqId}] ⚠️ call_sid filter failed: ${e.message}`);
           }
         }
       }
