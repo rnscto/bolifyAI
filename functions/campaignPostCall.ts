@@ -252,6 +252,7 @@ async function triggerNextBatch(base44, campaignId) {
         const smartfloData = await smartfloResp.json();
         if (smartfloResp.ok && smartfloData.success !== false) {
           const newCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
+          console.log(`[campaignPostCall] Smartflo returned call_id=${smartfloData.call_id}, call_sid=${smartfloData.call_sid}, using=${newCallSid}, original=${callSid}`);
           await base44.entities.CallLog.update(newCallLog.id, { call_sid: newCallSid, status: 'ringing' });
           initiated++;
           console.log(`[campaignPostCall] ✅ Call initiated: ${cl.lead_name} → ${cleanPhone}`);
