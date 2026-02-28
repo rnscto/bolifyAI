@@ -467,16 +467,18 @@ Deno.serve(async (req) => {
       if (session._pendingReconfigure || session.callLogId) {
         applySessionConfig();
       } else {
-        // Send minimal config to start accepting audio while we wait for agent config
+        // Send minimal config — use text+audio so it can respond immediately if someone speaks
+        // This will be reconfigured with proper agent prompt once loadAgentConfig completes
         sendToRealtime({ type: 'session.update', session: {
           input_audio_format: 'pcm16',
+          output_audio_format: 'pcm16',
           input_audio_transcription: { model: 'whisper-1' },
-          modalities: ['text'],
+          modalities: ['text', 'audio'],
           voice: 'alloy',
-          instructions: 'You are a transcription-only assistant. Do not respond.',
+          instructions: 'You are a friendly AI voice assistant. Greet the caller warmly. Be professional and concise.',
           turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 400 }
         }});
-        console.log(`[${reqId}] 📤 Minimal session config sent (waiting for agent config)`);
+        console.log(`[${reqId}] 📤 Minimal session config sent with audio output (waiting for agent config)`);
       }
       return;
     }
