@@ -445,6 +445,7 @@ Deno.serve(async (req) => {
       session.chatHistory = [{ role: 'system', content: session.systemPrompt }];
       console.log(`[${reqId}] 🔀 Hybrid mode: Realtime STT → LLM → Azure Speech TTS (${session.voiceType})`);
     } else {
+      sessionConfig.modalities = ['text', 'audio'];
       sessionConfig.instructions = session.systemPrompt;
       sessionConfig.voice = session.voiceType;
       sessionConfig.output_audio_format = 'pcm16';
