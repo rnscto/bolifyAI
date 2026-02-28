@@ -317,6 +317,13 @@ Respond ONLY in valid JSON.`
             call_duration: duration || 0
           });
           console.log(`[${reqId}] 📋 CampaignLead ${cl.id} (${cl.lead_name}) updated to completed directly`);
+
+          // Trigger next campaign call via executeCampaign (fire-and-forget)
+          serviceClient.functions.invoke('executeCampaign', {
+            campaign_id: cl.campaign_id,
+            _internal: true
+          }).then(r => console.log(`[${reqId}] 🚀 Next campaign batch triggered: ${JSON.stringify(r).substring(0, 200)}`))
+            .catch(e => console.error(`[${reqId}] ⚠️ Next batch trigger failed: ${e.message}`));
         }
       }
     } catch (clErr) {
