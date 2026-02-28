@@ -229,6 +229,7 @@ Deno.serve(async (req) => {
 
         if (smartfloResp.ok && smartfloData.success !== false) {
           const newCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
+          console.log(`[campaign] Smartflo returned call_id=${smartfloData.call_id}, call_sid=${smartfloData.call_sid}, using=${newCallSid}, original=${callSid}`);
           await svc.entities.CallLog.update(callLog.id, {
             call_sid: newCallSid, status: 'ringing'
           });
