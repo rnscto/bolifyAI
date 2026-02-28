@@ -1,16 +1,15 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.18';
+
+// Scheduled automation — runs daily at 11 AM IST.
+// No user session available. Uses service role directly.
 
 Deno.serve(async (req) => {
   try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-
-    if (user?.role !== 'admin') {
-      return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const base44 = createClient({ appId, asServiceRole: true });
 
     // Load retention config
-    const configs = await base44.asServiceRole.entities.RetentionConfig.list('-created_date', 1);
+    const configs = await base44.entities.RetentionConfig.list('-created_date', 1);
     const config = configs[0] || {};
 
     if (config.is_active === false) {
@@ -21,9 +20,7 @@ Deno.serve(async (req) => {
     let requestBody = {};
     try {
       requestBody = await req.json();
-    } catch (e) {
-      // No body or invalid JSON - that's fine
-    }
+    } catch (_) {}
     const forceRun = requestBody.force === true;
 
     const callDays = config.call_days_after_expiry || [2, 5];
@@ -31,10 +28,10 @@ Deno.serve(async (req) => {
     const results = { calls_initiated: [], emails_sent: [], errors: [], skipped: [], force_mode: forceRun };
 
     // Get all expired clients
-    const expiredClients = await base44.asServiceRole.entities.Client.filter({ account_status: 'expired' });
+    const expiredClients = await base44.entities.Client.filter({ account_status: 'expired' });
 
     // Load all retention call logs to check call counts
-    const allCallLogs = await base44.asServiceRole.entities.CallLog.list('-created_date', 500);
+    const allCallLogs = await base44.entities.CallLog.list('-created_date', 500);
 
     for (const client of expiredClients) {
       if (!client.trial_end_date || !client.phone) continue;
@@ -53,7 +50,7 @@ Deno.serve(async (req) => {
       if (!forceRun && !callDays.includes(daysSinceExpiry)) continue;
 
       // Check max calls per client (skip check in force mode)
-      const clientRetentionCalls = allCallLogs.filter(l => 
+      const clientRetentionCalls = allCallLogs.filter(l =>
         l.client_id === client.id && (l.call_sid?.startsWith('ret_') || l.conversation_summary?.includes('Retention'))
       );
       if (!forceRun && clientRetentionCalls.length >= maxCallsPerClient) {
@@ -64,14 +61,18 @@ Deno.serve(async (req) => {
       // Determine which agent/DID to use
       let retentionAgent = null;
       if (config.retention_agent_id) {
-        const agents = await base44.asServiceRole.entities.Agent.filter({ status: 'active' });
+        const agents = await base44.entities.Agent.filter({ status: 'active' });
         retentionAgent = agents.find(a => a.id === config.retention_agent_id);
       }
 
       // Fallback: find any active agent with a DID
       if (!retentionAgent) {
-        const allAgents = await base44.asServiceRole.entities.Agent.filter({ status: 'active' });
-        retentionAgent = allAgents.find(a => a.assigned_did && a.assigned_did.trim() !== '');
+        const allAgents = await base44.entities.Agent.filter({ status: 'active' });
+        retentionAgent = allAgents.find(a => {
+          if (a.assigned_dids?.length > 0) return true;
+          if (a.assigned_did && a.assigned_did.trim() !== '') return true;
+          return false;
+        });
       }
 
       if (!retentionAgent) {
@@ -80,16 +81,21 @@ Deno.serve(async (req) => {
       }
 
       // Use configured retention DID or the agent's DID
-      const callerDID = config.retention_did || retentionAgent.assigned_did;
+      const agentDIDs = (retentionAgent.assigned_dids?.length > 0)
+        ? retentionAgent.assigned_dids
+        : (retentionAgent.assigned_did ? [retentionAgent.assigned_did] : []);
+      const callerDID = config.retention_did || agentDIDs[0];
 
-      // Build personalized prompt with config-driven instructions
+      if (!callerDID) {
+        results.errors.push({ client_id: client.id, error: 'No DID available for retention calls' });
+        continue;
+      }
+
+      // Build personalized prompt
       let promptParts = [];
-      
       promptParts.push(`Generate a short, warm, professional retention phone call script for a VaaniAI sales agent calling a customer whose free trial has expired.`);
-      
       promptParts.push(`\nCustomer details:\n- Company: ${client.company_name}\n- Industry: ${client.industry || 'General'}\n- Trial expired: ${daysSinceExpiry} days ago\n- Has CRM: ${client.has_custom_crm ? 'Yes' : 'No'}`);
 
-      // Add greeting template if configured
       if (config.greeting_template) {
         const greeting = config.greeting_template
           .replace('{company_name}', client.company_name)
@@ -99,45 +105,39 @@ Deno.serve(async (req) => {
         promptParts.push(`\nUse this greeting: "${greeting}"`);
       }
 
-      // Add active offer
       if (config.active_offer) {
         promptParts.push(`\nIMPORTANT: Mention this special offer: "${config.active_offer}"${config.offer_code ? ` (code: ${config.offer_code})` : ''}${config.offer_expiry ? ` (expires: ${config.offer_expiry})` : ''}`);
       }
 
-      // Add custom instructions
       if (config.custom_instructions) {
         promptParts.push(`\nAdditional instructions: ${config.custom_instructions}`);
       }
 
-      // Add objection handlers
       if (config.objection_handlers && config.objection_handlers.length > 0) {
-        const handlers = config.objection_handlers
-          .map(h => `- If they say "${h.objection}": ${h.response}`)
-          .join('\n');
+        const handlers = config.objection_handlers.map(h => `- If they say "${h.objection}": ${h.response}`).join('\n');
         promptParts.push(`\nObjection handling:\n${handlers}`);
       }
 
       promptParts.push(`\nDefault points to cover:\n1. Greet warmly\n2. Ask about their trial experience\n3. Highlight that their setup is preserved\n4. Mention pricing: ₹6,500/month per channel (quarterly billing)\n5. Be respectful if not interested\n\nKeep it conversational and under 200 words. Indian business context.`);
 
-      // Use Azure OpenAI directly (no Base44 credits)
-      // Build URI: use AZURE_GPT52_TARGET_URI if it contains /deployments/, otherwise construct from parts
-      let azureUri = Deno.env.get('AZURE_GPT52_TARGET_URI') || '';
-      const azureApiKey = Deno.env.get('AZURE_GPT52_API_KEY') || Deno.env.get('AZURE_OPENAI_KEY');
-      
-      // If the URI doesn't contain /deployments/, construct it properly
-      if (!azureUri.includes('/deployments/')) {
-        const endpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT') || azureUri.replace(/\/+$/, '');
-        const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT') || 'gpt-4o';
-        azureUri = `${endpoint}/openai/deployments/${deployment}/chat/completions?api-version=2024-12-01-preview`;
+      // Use Azure OpenAI with the standard secrets
+      const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+      const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
+      const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+
+      if (!baseUrl || !deployment || !apiKey) {
+        results.errors.push({ client_id: client.id, error: 'Missing Azure OpenAI secrets' });
+        continue;
       }
-      
-      console.log('Azure URI:', azureUri);
-      
+
+      const azureUri = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+      console.log(`[retentionCall] Azure URI: ${azureUri.substring(0, 80)}...`);
+
       const azureResponse = await fetch(azureUri, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'api-key': azureApiKey,
+          'api-key': apiKey,
         },
         body: JSON.stringify({
           messages: [
@@ -150,43 +150,35 @@ Deno.serve(async (req) => {
 
       if (!azureResponse.ok) {
         const errText = await azureResponse.text();
-        console.error('Azure GPT-5.2 error:', azureResponse.status, errText);
-        console.error('Azure URI used:', Deno.env.get('AZURE_GPT52_TARGET_URI'));
-        throw new Error('Azure OpenAI call failed: ' + azureResponse.status + ' - ' + errText);
+        console.error('[retentionCall] Azure error:', azureResponse.status, errText);
+        results.errors.push({ client_id: client.id, error: `Azure OpenAI: ${azureResponse.status}` });
+        continue;
       }
 
       const azureData = await azureResponse.json();
       const scriptResponse = JSON.parse(azureData.choices[0].message.content);
 
-      // Pre-fetch knowledge base content for agent config cache
+      // Pre-fetch knowledge base content
       let kbContent = '';
-      if (retentionAgent.knowledge_base_ids && retentionAgent.knowledge_base_ids.length > 0) {
-        const kbDocs = [];
+      if (retentionAgent.knowledge_base_ids?.length > 0) {
         for (const kbId of retentionAgent.knowledge_base_ids) {
           try {
-            const doc = await base44.asServiceRole.entities.KnowledgeBase.get(kbId);
-            if (doc && doc.content) kbDocs.push({ title: doc.title, content: doc.content });
-          } catch (e) {
-            console.log(`KB doc ${kbId} fetch failed: ${e.message}`);
-          }
-        }
-        if (kbDocs.length > 0) {
-          kbContent = kbDocs.map(doc => `[${doc.title}]\n${doc.content}`).join('\n\n---\n\n');
+            const doc = await base44.entities.KnowledgeBase.get(kbId);
+            if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
+          } catch (_) {}
         }
       }
 
-      // Build personalized context from client's leads (find lead by phone)
+      // Build lead context
       let leadContext = '';
       try {
-        const ctxRes = await base44.asServiceRole.functions.invoke('buildLeadContext', {
+        const ctxRes = await base44.functions.invoke('buildLeadContext', {
           client_id: client.id, phone_number: client.phone
         });
         if (ctxRes?.context_text) leadContext = ctxRes.context_text;
-      } catch (e) {
-        console.log(`Retention lead context failed for ${client.company_name}: ${e.message}`);
-      }
+      } catch (_) {}
 
-      // Client-specific context for retention
+      // Client-specific context
       const clientContext = [
         `\nCLIENT CONTEXT:`,
         `- Company: ${client.company_name}`,
@@ -198,28 +190,23 @@ Deno.serve(async (req) => {
         client.email ? `- Email: ${client.email}` : '',
       ].filter(Boolean).join('\n');
 
-      // Build retention-specific system prompt that includes agent intro + script + personalization
+      // Build retention system prompt
       const retentionSystemPrompt = [
         retentionAgent.system_prompt || '',
         `\nYou are ${retentionAgent.name}, an AI voice agent from VaaniAI.`,
-        `IMPORTANT: Always start the call by greeting the customer warmly and introducing yourself by name and that you are calling from VaaniAI.`,
-        `\nRetention call script to follow:\n${scriptResponse?.script || 'Standard retention script'}`,
+        `IMPORTANT: Always start the call by greeting the customer warmly and introducing yourself.`,
+        `\nRetention call script:\n${scriptResponse?.script || 'Standard retention script'}`,
         scriptResponse?.key_objection_handlers ? `\nKey objection handlers:\n${scriptResponse.key_objection_handlers.join('\n')}` : '',
         clientContext,
-        leadContext ? `\n--- LEAD CONTEXT (use this to personalize the conversation) ---\n${leadContext}` : '',
-        `\nPERSONALIZATION: Address the customer as "${client.company_name}". Reference their trial experience and any previous interactions.`,
+        leadContext ? `\n--- LEAD CONTEXT ---\n${leadContext}` : '',
+        `\nPERSONALIZATION: Address the customer as "${client.company_name}".`,
       ].filter(Boolean).join('\n');
 
-      // Create call log with agent_config_cache (so WebSocket voice agent knows the greeting/persona/voice_engine)
+      // Create call log
       const callSid = `ret_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
       const agentPersona = retentionAgent.persona || {};
-      const fullContextForLog = [
-        `Retention call - Day ${daysSinceExpiry}. ${config.active_offer ? 'Offer: ' + config.active_offer + '. ' : ''}`,
-        clientContext,
-        leadContext ? `\n${leadContext}` : ''
-      ].filter(Boolean).join('\n');
 
-      const callLog = await base44.asServiceRole.entities.CallLog.create({
+      const callLog = await base44.entities.CallLog.create({
         client_id: client.id,
         agent_id: retentionAgent.id,
         call_sid: callSid,
@@ -228,7 +215,7 @@ Deno.serve(async (req) => {
         direction: 'outbound',
         status: 'initiated',
         call_start_time: new Date().toISOString(),
-        conversation_summary: fullContextForLog,
+        conversation_summary: `Retention call - Day ${daysSinceExpiry}. ${config.active_offer ? 'Offer: ' + config.active_offer : ''}`,
         agent_config_cache: {
           agent_name: retentionAgent.name,
           system_prompt: retentionSystemPrompt,
@@ -256,24 +243,26 @@ Deno.serve(async (req) => {
       const smartfloData = await smartfloResponse.json();
 
       if (!smartfloResponse.ok || smartfloData.success === false) {
-        await base44.asServiceRole.entities.CallLog.update(callLog.id, { status: 'failed' });
+        await base44.entities.CallLog.update(callLog.id, { status: 'failed' });
         results.errors.push({ client_id: client.id, company: client.company_name, error: smartfloData.message || 'Smartflo call failed' });
         continue;
       }
 
-      await base44.asServiceRole.entities.CallLog.update(callLog.id, {
-        call_sid: smartfloData.call_id || smartfloData.call_sid || callSid,
+      // Update call_sid with Smartflo's actual ID
+      const actualCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
+      await base44.entities.CallLog.update(callLog.id, {
+        call_sid: actualCallSid,
         status: 'ringing',
       });
 
-      // Create activity record
-      await base44.asServiceRole.entities.Activity.create({
+      // Create activity
+      await base44.entities.Activity.create({
         client_id: client.id,
         type: 'call',
         title: `Retention call - Day ${daysSinceExpiry}${config.active_offer ? ' (with offer)' : ''}`,
         description: `Automated retention call to ${client.company_name} (${client.phone}). ${config.active_offer || ''}`,
         scheduled_date: new Date().toISOString(),
-        status: 'completed',
+        status: 'scheduled',
         priority: 'high',
         auto_created: true,
       });
@@ -284,52 +273,48 @@ Deno.serve(async (req) => {
         phone: client.phone,
         days_since_expiry: daysSinceExpiry,
         call_id: callLog.id,
+        call_sid: actualCallSid,
         offer: config.active_offer || null,
       });
 
       // Send follow-up email
-      const offerHtml = config.active_offer ? `
-        <div style="background: #fff8e1; border: 2px dashed #f59e0b; border-radius: 8px; padding: 16px; margin: 16px 0; text-align: center;">
-          <p style="margin: 0 0 4px; color: #92400e; font-weight: bold;">🎁 Special Offer: ${config.active_offer}</p>
-          ${config.offer_code ? `<p style="margin: 0; color: #b45309; font-size: 14px;">Use code: <strong>${config.offer_code}</strong></p>` : ''}
-          ${config.offer_expiry ? `<p style="margin: 4px 0 0; color: #d97706; font-size: 12px;">Expires: ${new Date(config.offer_expiry).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>` : ''}
-        </div>
-      ` : '';
-
-      // Send email via Resend directly (no Base44 credits)
-      const emailBody = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
-              <h1 style="color: white; margin: 0;">VaaniAI</h1>
+      if (client.email) {
+        try {
+          const offerHtml = config.active_offer ? `
+            <div style="background:#fff8e1;border:2px dashed #f59e0b;border-radius:8px;padding:16px;margin:16px 0;text-align:center;">
+              <p style="margin:0 0 4px;color:#92400e;font-weight:bold;">🎁 Special Offer: ${config.active_offer}</p>
+              ${config.offer_code ? `<p style="margin:0;color:#b45309;font-size:14px;">Use code: <strong>${config.offer_code}</strong></p>` : ''}
+              ${config.offer_expiry ? `<p style="margin:4px 0 0;color:#d97706;font-size:12px;">Expires: ${new Date(config.offer_expiry).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}</p>` : ''}
             </div>
-            <div style="padding: 30px; background: white; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
-              <h2 style="color: #1a365d;">Hi ${client.company_name},</h2>
-              <p style="color: #4a5568; line-height: 1.6;">Thanks for taking our call! Your VaaniAI setup is still intact and ready to go.</p>
-              ${offerHtml}
-              <div style="background: #f7fafc; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center;">
-                <p style="margin: 0 0 8px; color: #2d3748; font-weight: bold;">Starting at just ₹6,500/month</p>
-                <p style="margin: 0; color: #718096; font-size: 13px;">Quarterly billing • Cancel anytime</p>
-              </div>
-              <div style="text-align: center; margin: 30px 0;">
-                <a href="https://vaaniai.in" style="background: linear-gradient(135deg, #e67e22, #f39c12); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Subscribe Now</a>
-              </div>
-            </div>
-          </div>`;
+          ` : '';
 
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`,
-        },
-        body: JSON.stringify({
-          from: 'VaaniAI <noreply@vaaniai.in>',
-          to: client.email,
-          subject: 'Following up on our call — VaaniAI',
-          html: emailBody,
-        })
-      });
-      results.emails_sent.push({ client_id: client.id, email: client.email });
+          await base44.integrations.Core.SendEmail({
+            to: client.email,
+            from_name: 'VaaniAI',
+            subject: 'Following up on our call — VaaniAI',
+            body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+              <div style="background:linear-gradient(135deg,#1a365d,#2d3748);padding:30px;text-align:center;border-radius:12px 12px 0 0;">
+                <h1 style="color:white;margin:0;">VaaniAI</h1>
+              </div>
+              <div style="padding:30px;background:white;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;">
+                <h2 style="color:#1a365d;">Hi ${client.company_name},</h2>
+                <p style="color:#4a5568;line-height:1.6;">Thanks for taking our call! Your VaaniAI setup is still intact and ready to go.</p>
+                ${offerHtml}
+                <div style="background:#f7fafc;border-radius:8px;padding:20px;margin:20px 0;text-align:center;">
+                  <p style="margin:0 0 8px;color:#2d3748;font-weight:bold;">Starting at just ₹6,500/month</p>
+                  <p style="margin:0;color:#718096;font-size:13px;">Quarterly billing • Cancel anytime</p>
+                </div>
+                <div style="text-align:center;margin:30px 0;">
+                  <a href="https://vaaniai.in" style="background:linear-gradient(135deg,#e67e22,#f39c12);color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px;">Subscribe Now</a>
+                </div>
+              </div>
+            </div>`
+          });
+          results.emails_sent.push({ client_id: client.id, email: client.email });
+        } catch (emailErr) {
+          console.error(`[retentionCall] Email failed for ${client.company_name}: ${emailErr.message}`);
+        }
+      }
     }
 
     return Response.json({
@@ -344,7 +329,7 @@ Deno.serve(async (req) => {
       ...results,
     });
   } catch (error) {
-    console.error('Retention call error:', error);
+    console.error('[retentionCall] Error:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
