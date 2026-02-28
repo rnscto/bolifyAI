@@ -576,3 +576,105 @@ function countOutcomes(allLeads) {
   allLeads.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
   return outcomes;
 }
+
+
+// =====================================================
+// FOLLOW-UP ACTIONS ONLY — When AI scoring was already done by streamAudio
+// Handles emails, callbacks, activities, and sequence enrollment
+// =====================================================
+async function doFollowUpActions(base44, callLog, campaignLead, campaignId, outcome, summary) {
+  let emailSent = false;
+  let callbackScheduled = false;
+
+  const campaign = await base44.entities.Campaign.get(campaignId);
+  const rules = campaign?.followup_rules || {};
+  const lead = campaignLead.lead_id ? await base44.entities.Lead.get(campaignLead.lead_id) : null;
+  const client = await base44.entities.Client.get(campaign.client_id);
+
+  // Read lead's current scoring from what streamAudio already set
+  const aiScore = lead?.score || 0;
+  const qualificationTier = lead?.qualification_tier || 'cold';
+  const aiIntentSignals = lead?.intent_signals || [];
+  const qualificationReason = lead?.qualification_reason || '';
+
+  // INTERESTED → email + callback
+  if (outcome === 'interested') {
+    if (rules.interested_email !== false && lead?.email) {
+      try {
+        const emailContent = await base44.integrations.Core.InvokeLLM({
+          prompt: `Write a personalized follow-up email for ${client?.company_name || 'our company'}.
+Lead: ${lead.name || 'Valued Customer'}, Company: ${lead.company || 'N/A'}
+Call Summary: ${summary}
+Reference specific topics discussed. Include a CTA. Under 200 words. HTML format.`,
+          response_json_schema: {
+            type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } }
+          }
+        });
+        await base44.integrations.Core.SendEmail({
+          to: lead.email, from_name: client?.company_name || 'VaaniAI',
+          subject: emailContent.subject,
+          body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${emailContent.body_html}</div>`
+        });
+        emailSent = true;
+        await base44.entities.OutreachLog.create({
+          client_id: campaign.client_id, lead_id: campaignLead.lead_id, call_log_id: callLog.id || '',
+          channel: 'email', recipient_email: lead.email, subject: emailContent.subject,
+          body: emailContent.body_html, outreach_type: 'lead_followup', call_outcome: outcome,
+          ai_summary: summary.substring(0, 500), status: 'sent'
+        });
+      } catch (e) { console.error(`[campaignPostCall] Email failed: ${e.message}`); }
+    }
+
+    const cbDays = rules.interested_callback_days || 2;
+    const cbDate = new Date(); cbDate.setDate(cbDate.getDate() + cbDays); cbDate.setHours(10, 0, 0, 0);
+    await base44.entities.Activity.create({
+      client_id: campaign.client_id, lead_id: campaignLead.lead_id, type: 'followup',
+      title: `Follow-up: ${lead?.name || campaignLead.lead_phone} (Interested)`,
+      description: `Campaign "${campaign.name}"\nSummary: ${summary}`,
+      scheduled_date: cbDate.toISOString(), status: 'scheduled', priority: 'high', auto_created: true
+    });
+    callbackScheduled = true;
+  }
+
+  // CALLBACK → task
+  if (outcome === 'callback') {
+    const cbDate = new Date(); cbDate.setDate(cbDate.getDate() + 1);
+    if (cbDate.getDay() === 0) cbDate.setDate(cbDate.getDate() + 1);
+    if (cbDate.getDay() === 6) cbDate.setDate(cbDate.getDate() + 2);
+    cbDate.setHours(10, 0, 0, 0);
+    await base44.entities.Activity.create({
+      client_id: campaign.client_id, lead_id: campaignLead.lead_id, type: 'call',
+      title: `Callback: ${lead?.name || campaignLead.lead_phone}`,
+      description: `Lead requested callback.\nSummary: ${summary}`,
+      scheduled_date: cbDate.toISOString(), status: 'scheduled', priority: 'high', auto_created: true
+    });
+    callbackScheduled = true;
+  }
+
+  // Update campaign lead follow-up flags
+  await base44.entities.CampaignLead.update(campaignLead.id, {
+    followup_email_sent: emailSent, followup_scheduled: callbackScheduled,
+    ...(callbackScheduled ? { followup_call_date: new Date(Date.now() + 2 * 86400000).toISOString() } : {})
+  });
+
+  // Auto-enroll into email sequence if not already done by streamAudio
+  if (campaignLead.lead_id && qualificationTier && !['disqualified'].includes(qualificationTier) && outcome !== 'no_answer') {
+    try {
+      const enrollResult = await base44.functions.invoke('autoEnrollSequence', {
+        lead_id: campaignLead.lead_id, client_id: campaign.client_id,
+        qualification_tier: qualificationTier, call_outcome: outcome,
+        call_summary: summary.substring(0, 500),
+        call_topics: lead?.score_breakdown?.key_topics || [],
+        objections: lead?.score_breakdown?.objections || [],
+        intent_signals: aiIntentSignals, ai_score: aiScore
+      });
+      if (enrollResult?.enrolled) {
+        console.log(`[campaignPostCall] ✉️ Auto-enrolled in sequence: ${enrollResult.sequence_name}`);
+      }
+    } catch (seqErr) {
+      console.error(`[campaignPostCall] Auto-enroll failed: ${seqErr.message}`);
+    }
+  }
+
+  return { outcome, emailSent, callbackScheduled, aiScore, qualificationTier };
+}
