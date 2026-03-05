@@ -71,21 +71,67 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Build personalized lead context (name, history, score, sentiment, notes)
+    // Build lead context DIRECTLY (inline, no cross-function call to avoid auth issues)
     let leadContext = '';
     try {
-      const ctxRes = await base44.asServiceRole.functions.invoke('buildLeadContext', {
-        lead_id, client_id: agent.client_id, phone_number
-      });
-      if (ctxRes?.context_text) leadContext = ctxRes.context_text;
+      // Fetch last 3 call logs for this lead
+      const callLogs = await base44.asServiceRole.entities.CallLog.filter(
+        { lead_id: lead.id }, '-created_date', 3
+      );
+
+      const sections = [];
+      sections.push(`CUSTOMER PROFILE:`);
+      sections.push(`- Name: ${lead.name || 'Unknown'}`);
+      if (lead.phone) sections.push(`- Phone: ${lead.phone}`);
+      if (lead.email) sections.push(`- Email: ${lead.email}`);
+      if (lead.company) sections.push(`- Company: ${lead.company}`);
+      if (lead.source) sections.push(`- Lead Source: ${lead.source}`);
+      if (lead.status) sections.push(`- Current Status: ${lead.status}`);
+
+      if (lead.score || lead.sentiment || lead.qualification_tier) {
+        sections.push(`\nLEAD INTELLIGENCE:`);
+        if (lead.score) sections.push(`- Lead Score: ${lead.score}/100`);
+        if (lead.sentiment) sections.push(`- Sentiment: ${lead.sentiment.replace(/_/g, ' ')}`);
+        if (lead.qualification_tier) sections.push(`- Qualification: ${lead.qualification_tier.toUpperCase()}`);
+        if (lead.intent_signals?.length > 0) sections.push(`- Intent Signals: ${lead.intent_signals.join(', ')}`);
+      }
+
+      if (lead.tags?.length > 0) sections.push(`- Tags: ${lead.tags.join(', ')}`);
+      if (lead.notes) sections.push(`\nAGENT NOTES:\n${lead.notes}`);
+
+      if (callLogs.length > 0) {
+        sections.push(`\nPREVIOUS CALL HISTORY (last ${callLogs.length}):`);
+        callLogs.forEach((cl, i) => {
+          const date = cl.call_start_time ? new Date(cl.call_start_time).toLocaleDateString('en-IN') : 'Unknown';
+          sections.push(`Call ${i + 1} — ${date} (${cl.duration ? Math.round(cl.duration) + 's' : 'N/A'}, ${cl.status}):`);
+          if (cl.conversation_summary) sections.push(`  Summary: ${cl.conversation_summary.substring(0, 300)}`);
+          if (cl.lead_status_updated) sections.push(`  Outcome: ${cl.lead_status_updated}`);
+        });
+      } else {
+        sections.push(`\nPREVIOUS CALLS: None — this is the first interaction.`);
+      }
+
+      sections.push(`\nCRITICAL PERSONALIZATION RULES:`);
+      sections.push(`- You MUST address the customer by their name "${lead.name || ''}" in the conversation.`);
+      sections.push(`- Example: "Kya main ${lead.name || 'Sir/Madam'} se baat kar rahi hu?"`);
+      if (lead.email) sections.push(`- If confirming email, use: "${lead.email}"`);
+      if (lead.company) sections.push(`- Reference their company "${lead.company}" naturally.`);
+      if (callLogs.length > 0) {
+        sections.push(`- Reference your previous conversation (e.g., "Jaise humne pichli baar baat ki thi...")`);
+      }
+
+      leadContext = sections.join('\n');
+      console.log(`Lead context built: ${leadContext.length} chars for lead ${lead.name}`);
     } catch (e) {
       console.log('Lead context build failed:', e.message);
+      // Minimal fallback context with just the lead name
+      leadContext = `CUSTOMER PROFILE:\n- Name: ${lead.name || 'Unknown'}\n- Phone: ${lead.phone || phone_number}\n${lead.email ? '- Email: ' + lead.email + '\n' : ''}\nCRITICAL: Address the customer by name "${lead.name || 'Sir/Madam'}" during the call.`;
     }
 
     // Combine agent system prompt with lead personalization
     const personalizedPrompt = [
       agent.system_prompt || '',
-      leadContext ? `\n\n--- LEAD CONTEXT (use this to personalize the conversation) ---\n${leadContext}` : ''
+      `\n\n--- LEAD CONTEXT (YOU MUST USE THIS DATA IN THE CONVERSATION) ---\n${leadContext}`
     ].filter(Boolean).join('\n');
 
     // Create call log with cached agent config (so streamAudio WebSocket can read it without cross-function calls)
