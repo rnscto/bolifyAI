@@ -87,10 +87,48 @@ export default function AdminDIDs() {
 
   const handleAssign = async (didId, clientId) => {
     try {
+      const did = dids.find(d => d.id === didId);
+      const oldClientId = did?.client_id;
+
+      // Update DID entity
       await base44.entities.DID.update(didId, {
-        client_id: clientId,
+        client_id: clientId || null,
+        agent_id: clientId ? did?.agent_id : null,
         status: clientId ? 'assigned' : 'available'
       });
+
+      // If unassigning from old client, remove DID from that client's agents
+      if (oldClientId && oldClientId !== clientId && did?.number) {
+        const oldAgents = await base44.entities.Agent.filter({ client_id: oldClientId });
+        for (const agent of oldAgents) {
+          const agentDIDs = agent.assigned_dids || (agent.assigned_did ? [agent.assigned_did] : []);
+          if (agentDIDs.includes(did.number)) {
+            const newDIDs = agentDIDs.filter(d => d !== did.number);
+            await base44.entities.Agent.update(agent.id, {
+              assigned_dids: newDIDs,
+              assigned_did: newDIDs[0] || ''
+            });
+          }
+        }
+      }
+
+      // If assigning to a new client, auto-assign to their first agent if they have one
+      if (clientId && did?.number) {
+        const newAgents = await base44.entities.Agent.filter({ client_id: clientId });
+        if (newAgents.length > 0) {
+          const agent = newAgents[0];
+          const agentDIDs = agent.assigned_dids || (agent.assigned_did ? [agent.assigned_did] : []);
+          if (!agentDIDs.includes(did.number)) {
+            const updatedDIDs = [...agentDIDs, did.number];
+            await base44.entities.Agent.update(agent.id, {
+              assigned_dids: updatedDIDs,
+              assigned_did: updatedDIDs[0]
+            });
+          }
+          await base44.entities.DID.update(didId, { agent_id: agent.id });
+        }
+      }
+
       toast.success('DID assignment updated');
       loadData();
     } catch (error) {
