@@ -27,7 +27,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Phone, RefreshCw } from 'lucide-react';
+import { Plus, Phone, RefreshCw, Lock, Unlock } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminDIDs() {
@@ -155,9 +155,52 @@ export default function AdminDIDs() {
     }
   };
 
+  const handleReserve = async (didId) => {
+    const did = dids.find(d => d.id === didId);
+    if (!did) return;
+    const isReserved = did.status === 'reserved';
+    try {
+      if (isReserved) {
+        // Unreserve → make available
+        await base44.entities.DID.update(didId, {
+          status: 'available',
+          reserved_note: ''
+        });
+        toast.success('DID unreserved');
+      } else {
+        const note = prompt('Reserve note (optional):') || '';
+        await base44.entities.DID.update(didId, {
+          status: 'reserved',
+          client_id: null,
+          agent_id: null,
+          reserved_note: note
+        });
+        // Remove from any agent
+        if (did.client_id && did.number) {
+          const agents = await base44.entities.Agent.filter({ client_id: did.client_id });
+          for (const agent of agents) {
+            const agentDIDs = agent.assigned_dids || (agent.assigned_did ? [agent.assigned_did] : []);
+            if (agentDIDs.includes(did.number)) {
+              const newDIDs = agentDIDs.filter(d => d !== did.number);
+              await base44.entities.Agent.update(agent.id, {
+                assigned_dids: newDIDs,
+                assigned_did: newDIDs[0] || ''
+              });
+            }
+          }
+        }
+        toast.success('DID reserved');
+      }
+      loadData();
+    } catch (error) {
+      toast.error('Failed to update DID');
+    }
+  };
+
   const statusColors = {
     available: 'bg-green-100 text-green-800',
     assigned: 'bg-blue-100 text-blue-800',
+    reserved: 'bg-amber-100 text-amber-800',
     inactive: 'bg-gray-100 text-gray-800'
   };
 
@@ -347,22 +390,34 @@ export default function AdminDIDs() {
                     <TableCell>{getClientName(did.client_id)}</TableCell>
                     <TableCell>₹{did.monthly_cost?.toLocaleString()}</TableCell>
                     <TableCell>
-                      <Select
-                        value={did.client_id || ''}
-                        onValueChange={(value) => handleAssign(did.id, value)}
-                      >
-                        <SelectTrigger className="w-40">
-                          <SelectValue placeholder="Assign" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value={null}>Unassigned</SelectItem>
-                          {clients.map((client) => (
-                            <SelectItem key={client.id} value={client.id}>
-                              {client.company_name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={did.client_id || ''}
+                          onValueChange={(value) => handleAssign(did.id, value)}
+                          disabled={did.status === 'reserved'}
+                        >
+                          <SelectTrigger className="w-40">
+                            <SelectValue placeholder="Assign" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={null}>Unassigned</SelectItem>
+                            {clients.map((client) => (
+                              <SelectItem key={client.id} value={client.id}>
+                                {client.company_name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button
+                          size="sm"
+                          variant={did.status === 'reserved' ? 'default' : 'outline'}
+                          className={did.status === 'reserved' ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}
+                          onClick={() => handleReserve(did.id)}
+                          title={did.status === 'reserved' ? `Reserved: ${did.reserved_note || 'No note'}. Click to unreserve.` : 'Reserve this DID'}
+                        >
+                          {did.status === 'reserved' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
