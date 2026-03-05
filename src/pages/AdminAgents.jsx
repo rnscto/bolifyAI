@@ -28,7 +28,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Bot } from 'lucide-react';
+import { Plus, Edit, Trash2, Bot, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import { REALTIME_VOICES, AZURE_SPEECH_VOICES } from '../components/agents/VoiceData';
 
@@ -48,6 +48,7 @@ export default function AdminAgents() {
     language: 'en-US',
     system_prompt: '',
     assigned_did: '',
+    assigned_dids: [],
     status: 'inactive',
     industry: ''
   });
@@ -88,7 +89,8 @@ export default function AdminAgents() {
           language: formData.language
         },
         system_prompt: formData.system_prompt,
-        assigned_did: formData.assigned_did,
+        assigned_did: (formData.assigned_dids || [])[0] || '',
+        assigned_dids: formData.assigned_dids || [],
         status: formData.status,
         industry: formData.industry,
         knowledge_base_ids: []
@@ -122,6 +124,7 @@ export default function AdminAgents() {
       language: 'en-US',
       system_prompt: '',
       assigned_did: '',
+      assigned_dids: [],
       status: 'inactive',
       industry: ''
     });
@@ -129,6 +132,9 @@ export default function AdminAgents() {
 
   const handleEdit = (agent) => {
     setEditingAgent(agent);
+    const didsArray = agent.assigned_dids?.length > 0
+      ? agent.assigned_dids
+      : (agent.assigned_did ? [agent.assigned_did] : []);
     setFormData({
       name: agent.name,
       client_id: agent.client_id,
@@ -137,7 +143,8 @@ export default function AdminAgents() {
       tone: agent.persona?.tone || 'professional',
       language: agent.persona?.language || 'en-US',
       system_prompt: agent.system_prompt || '',
-      assigned_did: agent.assigned_did || '',
+      assigned_did: didsArray[0] || '',
+      assigned_dids: didsArray,
       status: agent.status || 'inactive',
       industry: agent.industry || ''
     });
@@ -339,22 +346,43 @@ export default function AdminAgents() {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="assigned_did">Assigned DID</Label>
-                  <Select 
-                    value={formData.assigned_did}
-                    onValueChange={(value) => setFormData({ ...formData, assigned_did: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select DID (optional)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {dids.filter(d => d.status === 'available' || d.number === formData.assigned_did).map((did) => (
-                        <SelectItem key={did.id} value={did.number}>
-                          {did.number}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  <Label>Assigned DIDs</Label>
+                  <div className="space-y-2 mt-1">
+                    {(formData.assigned_dids || []).map((did, i) => (
+                      <div key={did} className="flex items-center gap-2 p-2 bg-gray-50 rounded border text-sm font-mono">
+                        <Phone className="w-3 h-3 text-blue-600" />
+                        {did}
+                        {i === 0 && <Badge className="text-[10px] bg-blue-100 text-blue-700 py-0">Primary</Badge>}
+                        <Button type="button" variant="ghost" size="sm" className="ml-auto h-6 w-6 p-0 text-red-500"
+                          onClick={() => {
+                            const newDids = formData.assigned_dids.filter(d => d !== did);
+                            setFormData({ ...formData, assigned_dids: newDids, assigned_did: newDids[0] || '' });
+                          }}>
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    ))}
+                    <Select
+                      value=""
+                      onValueChange={(value) => {
+                        if (value && !(formData.assigned_dids || []).includes(value)) {
+                          const newDids = [...(formData.assigned_dids || []), value];
+                          setFormData({ ...formData, assigned_dids: newDids, assigned_did: newDids[0] });
+                        }
+                      }}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="+ Add DID" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {dids
+                          .filter(d => (d.status === 'available' || (d.client_id === formData.client_id && d.status === 'assigned')) && !(formData.assigned_dids || []).includes(d.number))
+                          .map((did) => (
+                            <SelectItem key={did.id} value={did.number}>{did.number}</SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <div>
@@ -427,7 +455,15 @@ export default function AdminAgents() {
                     <TableCell className="text-sm">
                       {agent.persona?.tone || 'professional'} / {agent.persona?.language || 'en-IN'}
                     </TableCell>
-                    <TableCell>{agent.assigned_did || '-'}</TableCell>
+                    <TableCell>
+                      {(agent.assigned_dids?.length > 0)
+                        ? agent.assigned_dids.map((d, i) => (
+                            <span key={d} className="block font-mono text-xs">
+                              {d}{i === 0 && <Badge className="ml-1 bg-blue-100 text-blue-700 text-[10px] py-0">Primary</Badge>}
+                            </span>
+                          ))
+                        : (agent.assigned_did || '-')}
+                    </TableCell>
                     <TableCell>
                       <Badge className={agent.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
                         {agent.status}
