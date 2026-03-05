@@ -34,6 +34,7 @@ export default function Onboarding() {
   });
   const [selectedDID, setSelectedDID] = useState(null);
   const [referralCode, setReferralCode] = useState('');
+  const [existingClient, setExistingClient] = useState(null);
 
   useEffect(() => {
     // Capture referral code from URL
@@ -51,11 +52,21 @@ export default function Onboarding() {
       email: currentUser.email,
     }));
 
-    // Check if already onboarded
+    // Check if already has a client account
     const clients = await base44.entities.Client.filter({ user_id: currentUser.id });
-    if (clients.length > 0 && clients[0].onboarding_completed) {
-      navigate(createPageUrl('ClientDashboard'));
-      return;
+    if (clients.length > 0) {
+      if (clients[0].onboarding_completed) {
+        navigate(createPageUrl('ClientDashboard'));
+        return;
+      }
+      // Has incomplete client record — resume onboarding with existing data
+      setExistingClient(clients[0]);
+      setProfileData({
+        company_name: clients[0].company_name || '',
+        email: clients[0].email || currentUser.email,
+        phone: clients[0].phone || '',
+      });
+      if (clients[0].industry) setIndustry(clients[0].industry);
     }
     setLoading(false);
   };
@@ -67,20 +78,36 @@ export default function Onboarding() {
     const trialEnd = new Date(now);
     trialEnd.setDate(trialEnd.getDate() + 7);
 
-    // 1. Create Client record
-    const client = await base44.entities.Client.create({
-      company_name: profileData.company_name,
-      email: profileData.email,
-      phone: profileData.phone,
-      user_id: user.id,
-      industry: industry,
-      status: 'active',
-      account_status: 'trial',
-      trial_start_date: now.toISOString(),
-      trial_end_date: trialEnd.toISOString(),
-      onboarding_completed: true,
-      total_channels: 1,
-    });
+    // 1. Create or update Client record
+    let client;
+    if (existingClient) {
+      await base44.entities.Client.update(existingClient.id, {
+        company_name: profileData.company_name,
+        email: profileData.email,
+        phone: profileData.phone,
+        industry: industry,
+        status: 'active',
+        account_status: existingClient.account_status || 'trial',
+        trial_start_date: existingClient.trial_start_date || now.toISOString(),
+        trial_end_date: existingClient.trial_end_date || trialEnd.toISOString(),
+        onboarding_completed: true,
+      });
+      client = { ...existingClient, id: existingClient.id };
+    } else {
+      client = await base44.entities.Client.create({
+        company_name: profileData.company_name,
+        email: profileData.email,
+        phone: profileData.phone,
+        user_id: user.id,
+        industry: industry,
+        status: 'active',
+        account_status: 'trial',
+        trial_start_date: now.toISOString(),
+        trial_end_date: trialEnd.toISOString(),
+        onboarding_completed: true,
+        total_channels: 1,
+      });
+    }
 
     // 2. Create Agent
     const agentPayload = {
