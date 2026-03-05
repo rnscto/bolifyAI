@@ -207,14 +207,33 @@ async function triggerNextBatch(base44, campaignId) {
       const cleanPhone = (cl.lead_phone || '').replace(/[^0-9]/g, '');
       const callSid = `camp_${campaignId.slice(-8)}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
-      // Build lead context (fast, non-critical)
+      // Build lead context INLINE (avoid cross-function auth issues)
       let leadContext = '';
       try {
-        const ctxRes = await base44.functions.invoke('buildLeadContext', {
-          lead_id: cl.lead_id, client_id: campaign.client_id, phone_number: cl.lead_phone
-        });
-        if (ctxRes?.context_text) leadContext = ctxRes.context_text;
-      } catch (_) {}
+        let lead = null;
+        if (cl.lead_id) {
+          try { lead = await base44.entities.Lead.get(cl.lead_id); } catch (_) {}
+        }
+        if (lead) {
+          const ctxParts = [];
+          ctxParts.push(`CUSTOMER PROFILE:`);
+          ctxParts.push(`- Name: ${lead.name || cl.lead_name || 'Unknown'}`);
+          if (lead.phone) ctxParts.push(`- Phone: ${lead.phone}`);
+          if (lead.email) ctxParts.push(`- Email: ${lead.email}`);
+          if (lead.company) ctxParts.push(`- Company: ${lead.company}`);
+          if (lead.status) ctxParts.push(`- Status: ${lead.status}`);
+          ctxParts.push(`\nCRITICAL PERSONALIZATION RULES:`);
+          ctxParts.push(`- You MUST address the customer by name "${lead.name || cl.lead_name || 'Sir/Madam'}".`);
+          ctxParts.push(`- Example: "Kya main ${lead.name || cl.lead_name || 'Sir/Madam'} se baat kar rahi hu?"`);
+          if (lead.email) ctxParts.push(`- If confirming email, use: "${lead.email}"`);
+          if (lead.company) ctxParts.push(`- Reference their company "${lead.company}" naturally.`);
+          leadContext = ctxParts.join('\n');
+        } else {
+          leadContext = `CUSTOMER: ${cl.lead_name || 'Unknown'}\nCRITICAL: Address the customer by name "${cl.lead_name || 'Sir/Madam'}".`;
+        }
+      } catch (_) {
+        leadContext = `CUSTOMER: ${cl.lead_name || 'Unknown'}\nCRITICAL: Address the customer by name "${cl.lead_name || 'Sir/Madam'}".`;
+      }
 
       const personalizedPrompt = [
         agent.system_prompt || '',
@@ -222,7 +241,7 @@ async function triggerNextBatch(base44, campaignId) {
         campaign.call_script?.pitch ? `\nCALL SCRIPT - Pitch: ${campaign.call_script.pitch}` : '',
         campaign.call_script?.objection_handling ? `\nCALL SCRIPT - Objections: ${campaign.call_script.objection_handling}` : '',
         campaign.call_script?.closing ? `\nCALL SCRIPT - Closing: ${campaign.call_script.closing}` : '',
-        leadContext ? `\n\n--- LEAD CONTEXT ---\n${leadContext}` : ''
+        `\n\n--- LEAD CONTEXT (YOU MUST USE THIS DATA IN THE CONVERSATION) ---\n${leadContext}`
       ].filter(Boolean).join('\n');
 
       const newCallLog = await base44.entities.CallLog.create({
