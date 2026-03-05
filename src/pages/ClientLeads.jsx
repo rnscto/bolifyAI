@@ -28,7 +28,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter } from 'lucide-react';
+import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter, Loader2, PhoneCall } from 'lucide-react';
 import { toast } from 'sonner';
 import CSVImportDialog from '../components/leads/CSVImportDialog';
 import LeadScoreBadge from '../components/leads/LeadScoreBadge';
@@ -43,6 +43,7 @@ export default function ClientLeads() {
   const [csvDialogOpen, setCsvDialogOpen] = useState(false);
   const [tierFilter, setTierFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [callingLeadId, setCallingLeadId] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -150,6 +151,7 @@ export default function ClientLeads() {
       return;
     }
 
+    setCallingLeadId(lead.id);
     try {
       const response = await base44.functions.invoke('initiateCall', {
         lead_id: lead.id,
@@ -158,12 +160,18 @@ export default function ClientLeads() {
       });
 
       if (response.data.success) {
-        toast.success('Call initiated');
-        loadData();
+        toast.success('Call initiated! AI agent is connecting...');
+        // Keep the calling state for a few seconds to show progress
+        setTimeout(() => {
+          setCallingLeadId(null);
+          loadData();
+        }, 5000);
       } else {
+        setCallingLeadId(null);
         toast.error(response.data.error || 'Failed to initiate call');
       }
     } catch (error) {
+      setCallingLeadId(null);
       console.error('Error initiating call:', error);
       toast.error('Failed to initiate call');
     }
@@ -375,11 +383,17 @@ export default function ClientLeads() {
                       <div className="flex gap-2">
                         <Button
                           size="sm"
-                          variant="outline"
+                          variant={callingLeadId === lead.id ? "default" : "outline"}
                           onClick={() => initiateCall(lead)}
-                          title="Call Now"
+                          disabled={callingLeadId !== null}
+                          title={callingLeadId === lead.id ? "Calling..." : "Call Now"}
+                          className={callingLeadId === lead.id ? "bg-green-600 hover:bg-green-700 text-white animate-pulse" : ""}
                         >
-                          <PhoneIcon className="w-4 h-4" />
+                          {callingLeadId === lead.id ? (
+                            <><Loader2 className="w-4 h-4 animate-spin mr-1" /> Calling</>
+                          ) : (
+                            <PhoneIcon className="w-4 h-4" />
+                          )}
                         </Button>
                         <Button
                           size="sm"
