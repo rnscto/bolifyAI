@@ -277,9 +277,13 @@ async function triggerNextBatch(base44, campaignId) {
         return { initiated: 0, error: 'smartflo_failed', pending_remaining: pendingLeads.length - 1 };
       }
 
-      const newCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
-      console.log(`[campaignPostCall] Smartflo call_id=${smartfloData.call_id}, using=${newCallSid}`);
-      await base44.entities.CallLog.update(newCallLog.id, { call_sid: newCallSid, status: 'ringing' });
+      const smartfloCallId = smartfloData.call_id || null;
+      const smartfloRefId = smartfloData.ref_id || null;
+      const newCallSid = smartfloCallId || smartfloData.call_sid || smartfloRefId || callSid;
+      console.log(`[campaignPostCall] Smartflo call_id=${smartfloCallId}, ref_id=${smartfloRefId}, using=${newCallSid}`);
+      const sidUpdate = { status: 'ringing' };
+      sidUpdate.call_sid = smartfloRefId && !smartfloCallId ? smartfloRefId : newCallSid;
+      await base44.entities.CallLog.update(newCallLog.id, sidUpdate);
       console.log(`[campaignPostCall] ✅ Call initiated: ${cl.lead_name} → ${cleanPhone}`);
 
       return { initiated: 1, call_log_id: newCallLog.id, pending_remaining: pendingLeads.length - 1 };
