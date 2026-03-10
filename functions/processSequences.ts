@@ -118,8 +118,8 @@ Deno.serve(async (req) => {
           const context = contextParts.join('\n');
 
           if (context.length > 20) {
-            const personalized = await base44.integrations.Core.InvokeLLM({
-              prompt: `Dynamically adapt this nurture email using the lead's context below.
+            const personalized = await azureLLM(
+              `Dynamically adapt this nurture email using the lead's context below.
 
 ORIGINAL SUBJECT: ${subject}
 ORIGINAL BODY: ${bodyHtml}
@@ -141,14 +141,9 @@ ADAPTATION RULES:
 9. Return HTML body content only (no html/head tags)
 
 Return the adapted subject and body_html.`,
-              response_json_schema: {
-                type: "object",
-                properties: {
-                  subject: { type: "string" },
-                  body_html: { type: "string" }
-                }
-              }
-            });
+              'You are an email personalization expert. Always respond in valid JSON.',
+              { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } } }
+            );
             subject = personalized.subject || subject;
             bodyHtml = personalized.body_html || bodyHtml;
             results.adapted++;
