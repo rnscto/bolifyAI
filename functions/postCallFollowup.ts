@@ -1,4 +1,19 @@
 import { createClient } from 'npm:@base44/sdk@0.8.18';
+import { Resend } from 'npm:resend@4.0.0';
+
+const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
+
+// ─── Send lead email via Resend (zero Base44 credits) ───
+async function sendLeadEmail({ to, fromName, subject, html }) {
+  const { data, error } = await resend.emails.send({
+    from: `${fromName} <onboarding@resend.dev>`,
+    to,
+    subject,
+    html
+  });
+  if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
+  return data;
+}
 
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
 async function azureLLM(prompt, systemPrompt, jsonSchema) {
@@ -131,13 +146,9 @@ Generate the subject line and HTML body.`,
         { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" }, tone: { type: "string" }, cta_text: { type: "string" }, follow_up_recommended_days: { type: "number" } } }
       );
 
-      // Send the email
+      // Send the email via Resend
       try {
-        await base44.integrations.Core.SendEmail({
-          to: lead.email,
-          from_name: client.company_name,
-          subject: aiContent.subject,
-          body: `
+        const emailHtml = `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
   <div style="background: linear-gradient(135deg, #2563eb, #1e40af); padding: 24px 30px; border-radius: 12px 12px 0 0;">
     <h2 style="color: white; margin: 0; font-size: 20px;">${client.company_name}</h2>
@@ -149,8 +160,8 @@ Generate the subject line and HTML body.`,
       Sent by ${client.company_name} powered by VaaniAI
     </p>
   </div>
-</div>`
-        });
+</div>`;
+        await sendLeadEmail({ to: lead.email, fromName: client.company_name, subject: aiContent.subject, html: emailHtml });
 
         // Log the outreach
         await base44.entities.OutreachLog.create({
