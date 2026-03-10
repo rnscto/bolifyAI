@@ -105,8 +105,8 @@ Deno.serve(async (req) => {
     // PART 1: CLIENT LEAD FOLLOW-UP EMAILS (for all client leads)
     // ===================================================================
     if (lead && lead.email) {
-      const aiContent = await base44.integrations.Core.InvokeLLM({
-        prompt: `You are an AI email copywriter for "${client.company_name}", a business in the ${client.industry || 'general'} industry.
+      const aiContent = await azureLLM(
+        `You are an AI email copywriter for "${client.company_name}", a business in the ${client.industry || 'general'} industry.
 A call just ended with a lead. Based on the call transcript/summary, write a personalized follow-up email.
 
 CALL DETAILS:
@@ -119,12 +119,7 @@ CALL DETAILS:
 ${transcript ? `- Transcript excerpt: ${transcript.substring(0, 1000)}` : ''}
 
 INSTRUCTIONS:
-- Match the tone to the call outcome:
-  * "interested" → enthusiastic, provide next steps, share relevant info
-  * "callback" → confirm callback time, offer flexibility
-  * "not_interested" → gracious, leave door open, no hard sell
-  * "contacted" → thank them, summarize discussion, suggest next step
-  * "converted" → congratulate, welcome aboard, onboarding details
+- Match the tone to the call outcome
 - Keep it concise (under 200 words)
 - Use the company's name naturally
 - Include a clear call-to-action
@@ -132,17 +127,9 @@ INSTRUCTIONS:
 - Format as HTML email body (no full html/head tags, just the content div)
 
 Generate the subject line and HTML body.`,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            subject: { type: "string" },
-            body_html: { type: "string" },
-            tone: { type: "string" },
-            cta_text: { type: "string" },
-            follow_up_recommended_days: { type: "number" }
-          }
-        }
-      });
+        'You are an email copywriter. Always respond in valid JSON.',
+        { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" }, tone: { type: "string" }, cta_text: { type: "string" }, follow_up_recommended_days: { type: "number" } } }
+      );
 
       // Send the email
       try {
@@ -212,21 +199,17 @@ Generate the subject line and HTML body.`,
       // Also send RCS if lead has phone (via Smartflo SMS/RCS API)
       if (lead.phone) {
         try {
-          const rcsContent = await base44.integrations.Core.InvokeLLM({
-            prompt: `Write a short follow-up RCS/SMS message (max 160 chars) for a lead after a call.
+          const rcsContent = await azureLLM(
+            `Write a short follow-up RCS/SMS message (max 160 chars) for a lead after a call.
 Lead: ${lead.name || 'there'}
 Company: ${client.company_name}
 Call outcome: ${leadStatusAfterCall}
 Summary: ${summary.substring(0, 200)}
 
 Keep it personal, mention key point from the call, include CTA. No links.`,
-            response_json_schema: {
-              type: "object",
-              properties: {
-                message: { type: "string" }
-              }
-            }
-          });
+            'You are an SMS copywriter. Always respond in valid JSON.',
+            { type: "object", properties: { message: { type: "string" } } }
+          );
 
           // Send RCS/SMS via Smartflo API
           const smartfloApiKey = Deno.env.get('SMARTFLO_API_KEY');
@@ -290,8 +273,8 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
     if (isExpiredClient || isRetentionCall) {
       console.log(`[postCallFollowup] Retention outreach for expired client: ${client.company_name}`);
 
-      const retentionEmail = await base44.integrations.Core.InvokeLLM({
-        prompt: `You are VaaniAI's retention email specialist. Write a personalized retention email for a platform client who hasn't subscribed.
+      const retentionEmail = await azureLLM(
+        `You are VaaniAI's retention email specialist. Write a personalized retention email for a platform client who hasn't subscribed.
 
 CLIENT CONTEXT:
 - Company: ${client.company_name}
@@ -323,17 +306,9 @@ INSTRUCTIONS:
 - Professional Indian business tone
 - Under 250 words
 - Format as HTML email body`,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            subject: { type: "string" },
-            body_html: { type: "string" },
-            urgency_level: { type: "string", enum: ["low", "medium", "high"] },
-            key_objection_addressed: { type: "string" },
-            offer_highlighted: { type: "boolean" }
-          }
-        }
-      });
+        'You are a retention email specialist. Always respond in valid JSON.',
+        { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" }, urgency_level: { type: "string" }, key_objection_addressed: { type: "string" }, offer_highlighted: { type: "boolean" } } }
+      );
 
       // Send retention email
       try {
@@ -401,13 +376,11 @@ INSTRUCTIONS:
       // Send retention RCS to client phone
       if (client.phone) {
         try {
-          const retentionRCS = await base44.integrations.Core.InvokeLLM({
-            prompt: `Write a short retention RCS/SMS (max 160 chars) for ${client.company_name}. Account expired. ${retentionConfig.active_offer ? 'Offer: ' + retentionConfig.active_offer : ''} Mention VaaniAI. Include urgency.`,
-            response_json_schema: {
-              type: "object",
-              properties: { message: { type: "string" } }
-            }
-          });
+          const retentionRCS = await azureLLM(
+            `Write a short retention RCS/SMS (max 160 chars) for ${client.company_name}. Account expired. ${retentionConfig.active_offer ? 'Offer: ' + retentionConfig.active_offer : ''} Mention VaaniAI. Include urgency.`,
+            'You are an SMS copywriter. Always respond in valid JSON.',
+            { type: "object", properties: { message: { type: "string" } } }
+          );
 
           const smartfloApiKey = Deno.env.get('SMARTFLO_API_KEY');
           if (smartfloApiKey) {
