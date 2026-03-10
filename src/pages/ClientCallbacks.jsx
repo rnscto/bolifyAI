@@ -7,6 +7,7 @@ import {
   Phone, RefreshCw, Calendar as CalendarIcon, List, Filter,
   AlertTriangle, Clock, CheckCircle2
 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CallbackStats from '../components/callbacks/CallbackStats';
 import CallbackList from '../components/callbacks/CallbackList';
 import CallbackCalendar from '../components/callbacks/CallbackCalendar';
@@ -102,7 +103,19 @@ export default function ClientCallbacks() {
             AI-parsed follow-up schedule from call conversations
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {isAdmin && allClients.length > 0 && (
+            <Select value={clientId || ''} onValueChange={handleClientChange}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Select client" />
+              </SelectTrigger>
+              <SelectContent>
+                {allClients.map(c => (
+                  <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
           <div className="flex border rounded-lg overflow-hidden">
             <button
               onClick={() => setView('list')}
