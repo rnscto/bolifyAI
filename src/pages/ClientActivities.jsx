@@ -10,7 +10,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, CheckCircle2, XCircle } from 'lucide-react';
+import { Calendar, CheckCircle2, XCircle, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '../utils';
 import FeatureGate from '../components/FeatureGate';
 
 export default function ClientActivities() {
@@ -159,7 +161,13 @@ export default function ClientActivities() {
                       </Badge>
                     </TableCell>
                     <TableCell className="font-medium">{activity.title}</TableCell>
-                    <TableCell>{getLeadName(activity.lead_id)}</TableCell>
+                    <TableCell>
+                      {activity.lead_id ? (
+                        <Link to={createPageUrl('LeadDetail') + `?id=${activity.lead_id}`} className="text-blue-600 hover:underline">
+                          {getLeadName(activity.lead_id)}
+                        </Link>
+                      ) : '-'}
+                    </TableCell>
                     <TableCell>
                       {new Date(activity.scheduled_date).toLocaleString()}
                     </TableCell>
