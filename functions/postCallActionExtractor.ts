@@ -190,6 +190,7 @@ RULES:
             status: 'scheduled',
             priority: action.priority || 'medium',
             auto_created: true,
+            assigned_to: callLog.agent_id || '',
             notes: `[Auto-extracted from call ${callLogId}]`
           });
 
