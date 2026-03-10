@@ -1,4 +1,19 @@
 import { createClient } from 'npm:@base44/sdk@0.8.18';
+import { Resend } from 'npm:resend@4.0.0';
+
+const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
+
+// ─── Send lead email via Resend (zero Base44 credits) ───
+async function sendLeadEmail({ to, fromName, subject, html }) {
+  const { data, error } = await resend.emails.send({
+    from: `${fromName} <onboarding@resend.dev>`,
+    to,
+    subject,
+    html
+  });
+  if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
+  return data;
+}
 
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
 async function azureLLM(prompt, systemPrompt, jsonSchema) {
@@ -166,13 +181,13 @@ Return the adapted subject and body_html.`,
         } catch (_) {}
       }
 
-      // Send the email
+      // Send the email via Resend
       try {
-        await base44.integrations.Core.SendEmail({
+        await sendLeadEmail({
           to: enrollment.recipient_email,
-          from_name: fromName,
+          fromName,
           subject,
-          body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">${bodyHtml}</div>`
+          html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">${bodyHtml}</div>`
         });
 
         // Log in OutreachLog
