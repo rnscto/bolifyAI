@@ -176,7 +176,6 @@ Return the adapted subject and body_html.`,
         });
 
         // Log in OutreachLog
-        await base44.integrations.Core.InvokeLLM; // no-op check
         await base44.entities.OutreachLog.create({
           client_id: enrollment.client_id || '',
           lead_id: enrollment.lead_id || '',
