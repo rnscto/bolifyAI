@@ -18,7 +18,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing, Play } from 'lucide-react';
+import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing, Play, ExternalLink } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '../utils';
 import AudioPlayer from '../components/calls/AudioPlayer';
 
 export default function ClientCallLogs() {
@@ -149,6 +151,7 @@ export default function ClientCallLogs() {
               <TableRow>
                 <TableHead>Direction</TableHead>
                 <TableHead>Number</TableHead>
+                <TableHead>Lead</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Date</TableHead>
@@ -158,7 +161,7 @@ export default function ClientCallLogs() {
             <TableBody>
               {calls.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center text-gray-500">
+                  <TableCell colSpan={7} className="text-center text-gray-500">
                     No call history yet
                   </TableCell>
                 </TableRow>
@@ -176,6 +179,13 @@ export default function ClientCallLogs() {
                       </div>
                     </TableCell>
                     <TableCell className="font-medium">{call.callee_number}</TableCell>
+                    <TableCell>
+                      {call.lead_id ? (
+                        <Link to={createPageUrl('LeadDetail') + `?id=${call.lead_id}`} className="text-blue-600 hover:underline text-sm flex items-center gap-1">
+                          <ExternalLink className="w-3 h-3" /> View
+                        </Link>
+                      ) : '-'}
+                    </TableCell>
                     <TableCell>{formatDuration(call.duration)}</TableCell>
                     <TableCell>
                       <Badge className={statusColors[call.status]}>

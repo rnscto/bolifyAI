@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '../../utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Phone, Clock, User, Building2, AlertTriangle, ChevronDown, ChevronUp,
-  Calendar as CalendarIcon, Star, MessageSquare, ArrowRight
+  Calendar as CalendarIcon, Star, MessageSquare, ArrowRight, ExternalLink
 } from 'lucide-react';
 import moment from 'moment';
 
@@ -43,7 +45,9 @@ function CallbackCard({ item, onCall }) {
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <h3 className="font-semibold text-sm truncate">{item.lead_name}</h3>
+              <Link to={createPageUrl('LeadDetail') + `?id=${item.lead_id}`} className="font-semibold text-sm truncate text-blue-700 hover:underline">
+                {item.lead_name}
+              </Link>
               <div className={`w-2 h-2 rounded-full ${tierColors[item.qualification_tier] || 'bg-gray-300'}`} title={item.qualification_tier} />
               {item.lead_score > 0 && (
                 <span className="text-xs text-gray-500 flex items-center gap-0.5">
