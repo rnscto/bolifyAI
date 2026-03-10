@@ -23,7 +23,8 @@ import {
   BarChart3,
   Globe,
   Handshake,
-  Zap
+  Zap,
+  PhoneForwarded
 } from 'lucide-react';
 
 export default function Layout({ children, currentPageName }) {
@@ -109,6 +110,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Leads', path: 'ClientLeads', icon: Users },
     { name: 'Campaigns', path: 'ClientCampaigns', icon: Megaphone },
     { name: 'Call Logs', path: 'ClientCallLogs', icon: PhoneCall },
+    { name: 'Callbacks', path: 'ClientCallbacks', icon: PhoneForwarded },
     { name: 'Analytics', path: 'ClientAnalytics', icon: BarChart3 },
     { name: 'Knowledge Base', path: 'ClientKnowledgeBase', icon: BookOpen },
     { name: 'Activities', path: 'ClientActivities', icon: Activity },
