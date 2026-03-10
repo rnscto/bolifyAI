@@ -217,9 +217,13 @@ Deno.serve(async (req) => {
         client.email ? `- Email: ${client.email}` : '',
       ].filter(Boolean).join('\n');
 
+      // Inject current IST date/time
+      const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+
       // Build retention system prompt
       const retentionSystemPrompt = [
         retentionAgent.system_prompt || '',
+        `\n--- CURRENT DATE & TIME (IST) ---\nRight now it is: ${nowIST} (Indian Standard Time). Use this for any relative time calculations. Always confirm callback times in IST.`,
         `\nYou are ${retentionAgent.name}, an AI voice agent from VaaniAI.`,
         `IMPORTANT: Always start the call by greeting the customer warmly and introducing yourself.`,
         `\nRetention call script:\n${scriptResponse?.script || 'Standard retention script'}`,
