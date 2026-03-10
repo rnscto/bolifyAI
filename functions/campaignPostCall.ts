@@ -1,4 +1,19 @@
 import { createClient } from 'npm:@base44/sdk@0.8.18';
+import { Resend } from 'npm:resend@4.0.0';
+
+const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
+
+// ─── Send lead email via Resend (zero Base44 credits) ───
+async function sendLeadEmail({ to, fromName, subject, html }) {
+  const { data, error } = await resend.emails.send({
+    from: `${fromName} <onboarding@resend.dev>`,
+    to,
+    subject,
+    html
+  });
+  if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
+  return data;
+}
 
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
 async function azureLLM(prompt, systemPrompt, jsonSchema) {
@@ -469,10 +484,10 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
           'You are an email copywriter. Always respond in valid JSON.',
           { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } } }
         );
-        await base44.integrations.Core.SendEmail({
-          to: lead.email, from_name: client?.company_name || 'VaaniAI',
+        await sendLeadEmail({
+          to: lead.email, fromName: client?.company_name || 'VaaniAI',
           subject: emailContent.subject,
-          body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${emailContent.body_html}</div>`
+          html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${emailContent.body_html}</div>`
         });
         emailSent = true;
         await base44.entities.OutreachLog.create({
