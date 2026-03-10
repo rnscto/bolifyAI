@@ -336,8 +336,8 @@ async function doAIAnalysis(base44, callLog, campaignLead, campaignId, initialOu
 
   // 1. LLM Outcome Analysis
   try {
-    const analysis = await base44.integrations.Core.InvokeLLM({
-      prompt: `Analyze this sales call and determine the outcome.
+    const analysis = await azureLLM(
+      `Analyze this sales call and determine the outcome.
 
 TRANSCRIPT:
 ${callLog.transcript || 'No transcript available'}
@@ -356,11 +356,9 @@ Rules:
 - "no_answer" = no real conversation happened
 - "converted" = agreed to sign up/purchase
 - "contacted" = conversation but no clear outcome`,
-      response_json_schema: {
-        type: "object",
-        properties: { outcome: { type: "string" }, summary: { type: "string" } }
-      }
-    });
+      'You are a sales call analyst. Always respond in valid JSON.',
+      { type: "object", properties: { outcome: { type: "string" }, summary: { type: "string" } } }
+    );
     outcome = analysis.outcome || outcome;
     summary = analysis.summary || summary;
   } catch (e) {
@@ -376,8 +374,8 @@ Rules:
 
   if (campaignLead.lead_id) {
     try {
-      const scoringResult = await base44.integrations.Core.InvokeLLM({
-        prompt: `Analyze this sales call and score the lead (0-100).
+      const scoringResult = await azureLLM(
+        `Analyze this sales call and score the lead (0-100).
 
 TRANSCRIPT: ${callLog.transcript || 'N/A'}
 SUMMARY: ${summary}
@@ -388,22 +386,17 @@ SCORING (total 100):
 - Intent signals (0-30): pricing_inquiry=+10, demo_request=+15, budget_confirmed=+15, timeline_mentioned=+10, decision_maker=+10
 - Engagement (0-25): short_answers=5, asked_questions=15, highly_engaged=25
 - Keywords (0-20): positive="interested","sign up","sounds good"=+5 each; negative="not interested","too expensive"=-5 each`,
-        response_json_schema: {
-          type: "object",
-          properties: {
-            lead_score: { type: "number" }, sentiment: { type: "string" },
-            intent_signals: { type: "array", items: { type: "string" } },
-            score_breakdown: { type: "object", properties: {
-              sentiment_score: { type: "number" }, intent_score: { type: "number" },
-              engagement_score: { type: "number" }, keyword_score: { type: "number" }, reasoning: { type: "string" }
-            }},
-            conversion_probability: { type: "number" },
-            objections: { type: "array", items: { type: "string" } },
-            recommended_next_action: { type: "string" },
-            key_topics: { type: "array", items: { type: "string" } }
-          }
-        }
-      });
+        'You are a lead scoring analyst. Always respond in valid JSON.',
+        { type: "object", properties: {
+          lead_score: { type: "number" }, sentiment: { type: "string" },
+          intent_signals: { type: "array", items: { type: "string" } },
+          score_breakdown: { type: "object" },
+          conversion_probability: { type: "number" },
+          objections: { type: "array", items: { type: "string" } },
+          recommended_next_action: { type: "string" },
+          key_topics: { type: "array", items: { type: "string" } }
+        }}
+      );
 
       aiScore = Math.min(100, Math.max(0, scoringResult.lead_score || 0));
       aiSentiment = scoringResult.sentiment || 'neutral';
