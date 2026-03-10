@@ -461,15 +461,14 @@ SCORING (total 100):
   if (outcome === 'interested') {
     if (rules.interested_email !== false && lead?.email) {
       try {
-        const emailContent = await base44.integrations.Core.InvokeLLM({
-          prompt: `Write a personalized follow-up email for ${client?.company_name || 'our company'}.
+        const emailContent = await azureLLM(
+          `Write a personalized follow-up email for ${client?.company_name || 'our company'}.
 Lead: ${lead.name || 'Valued Customer'}, Company: ${lead.company || 'N/A'}
 Call Summary: ${summary}
 Reference specific topics discussed. Include a CTA. Under 200 words. HTML format.`,
-          response_json_schema: {
-            type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } }
-          }
-        });
+          'You are an email copywriter. Always respond in valid JSON.',
+          { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } } }
+        );
         await base44.integrations.Core.SendEmail({
           to: lead.email, from_name: client?.company_name || 'VaaniAI',
           subject: emailContent.subject,
@@ -638,15 +637,14 @@ async function doFollowUpActions(base44, callLog, campaignLead, campaignId, outc
   if (outcome === 'interested') {
     if (rules.interested_email !== false && lead?.email) {
       try {
-        const emailContent = await base44.integrations.Core.InvokeLLM({
-          prompt: `Write a personalized follow-up email for ${client?.company_name || 'our company'}.
+        const emailContent = await azureLLM(
+          `Write a personalized follow-up email for ${client?.company_name || 'our company'}.
 Lead: ${lead.name || 'Valued Customer'}, Company: ${lead.company || 'N/A'}
 Call Summary: ${summary}
 Reference specific topics discussed. Include a CTA. Under 200 words. HTML format.`,
-          response_json_schema: {
-            type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } }
-          }
-        });
+          'You are an email copywriter. Always respond in valid JSON.',
+          { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } } }
+        );
         await base44.integrations.Core.SendEmail({
           to: lead.email, from_name: client?.company_name || 'VaaniAI',
           subject: emailContent.subject,
