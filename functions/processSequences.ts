@@ -1,5 +1,28 @@
 import { createClient } from 'npm:@base44/sdk@0.8.18';
 
+// ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
+async function azureLLM(prompt, systemPrompt, jsonSchema) {
+  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
+  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: [
+        { role: 'system', content: systemPrompt || 'You are a helpful assistant. Always respond in valid JSON.' },
+        { role: 'user', content: prompt + (jsonSchema ? '\n\nRespond in JSON matching this schema: ' + JSON.stringify(jsonSchema) : '') }
+      ],
+      max_completion_tokens: 800,
+      response_format: { type: "json_object" }
+    })
+  });
+  if (!res.ok) throw new Error(`Azure OpenAI error: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return JSON.parse(data.choices[0].message.content);
+}
+
 // Scheduled automation — runs every 30 min, no user session.
 // Uses service role directly (only platform scheduler invokes this).
 
