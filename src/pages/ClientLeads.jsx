@@ -28,8 +28,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter, Loader2, PhoneCall } from 'lucide-react';
+import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter, Loader2, PhoneCall, Eye } from 'lucide-react';
 import { toast } from 'sonner';
+import { Link } from 'react-router-dom';
+import { createPageUrl } from '../utils';
 import CSVImportDialog from '../components/leads/CSVImportDialog';
 import LeadScoreBadge from '../components/leads/LeadScoreBadge';
 
@@ -360,10 +362,10 @@ export default function ClientLeads() {
                 filtered.map((lead) => (
                   <TableRow key={lead.id} className={lead.qualification_tier === 'disqualified' ? 'opacity-50' : ''}>
                     <TableCell>
-                      <div>
-                        <span className="font-medium">{lead.name}</span>
+                      <Link to={createPageUrl('LeadDetail') + `?id=${lead.id}`} className="hover:underline">
+                        <span className="font-medium text-blue-700">{lead.name}</span>
                         {lead.email && <p className="text-xs text-gray-400">{lead.email}</p>}
-                      </div>
+                      </Link>
                     </TableCell>
                     <TableCell>{lead.phone}</TableCell>
                     <TableCell>{lead.company || '-'}</TableCell>
@@ -381,6 +383,11 @@ export default function ClientLeads() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-2">
+                        <Link to={createPageUrl('LeadDetail') + `?id=${lead.id}`}>
+                          <Button size="sm" variant="ghost" title="View Details">
+                            <Eye className="w-4 h-4" />
+                          </Button>
+                        </Link>
                         <Button
                           size="sm"
                           variant={callingLeadId === lead.id ? "default" : "outline"}
