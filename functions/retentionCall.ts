@@ -27,9 +27,26 @@ Deno.serve(async (req) => {
     const maxCallsPerClient = config.max_calls_per_client || 5;
     const results = { calls_initiated: [], emails_sent: [], errors: [], skipped: [], force_mode: forceRun };
 
-    // Get all expired clients
-    const expiredClients = await base44.entities.Client.filter({ account_status: 'expired' });
-    console.log(`[retentionCall] Found ${expiredClients.length} expired clients, callDays=${callDays.join(',')}, force=${forceRun}`);
+    // Get all expired clients + trial clients whose trial has actually ended
+    const [explicitlyExpired, trialClients] = await Promise.all([
+      base44.entities.Client.filter({ account_status: 'expired' }),
+      base44.entities.Client.filter({ account_status: 'trial' }),
+    ]);
+
+    const now = new Date();
+    const staleTrials = [];
+    for (const tc of trialClients) {
+      if (tc.trial_end_date && new Date(tc.trial_end_date) < now) {
+        // Auto-fix: mark as expired in DB
+        await base44.entities.Client.update(tc.id, { account_status: 'expired' });
+        tc.account_status = 'expired';
+        staleTrials.push(tc);
+        console.log(`[retentionCall] Auto-expired stale trial: ${tc.company_name} (trial ended ${tc.trial_end_date})`);
+      }
+    }
+
+    const expiredClients = [...explicitlyExpired, ...staleTrials];
+    console.log(`[retentionCall] Found ${expiredClients.length} expired clients (${explicitlyExpired.length} already expired + ${staleTrials.length} stale trials auto-expired), callDays=${callDays.join(',')}, force=${forceRun}`);
 
     // Load all retention call logs to check call counts
     const allCallLogs = await base44.entities.CallLog.list('-created_date', 500);
