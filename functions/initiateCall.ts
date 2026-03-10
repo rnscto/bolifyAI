@@ -128,9 +128,14 @@ Deno.serve(async (req) => {
       leadContext = `CUSTOMER PROFILE:\n- Name: ${lead.name || 'Unknown'}\n- Phone: ${lead.phone || phone_number}\n${lead.email ? '- Email: ' + lead.email + '\n' : ''}\nCRITICAL: Address the customer by name "${lead.name || 'Sir/Madam'}" during the call.`;
     }
 
+    // Inject current IST date/time so the agent is time-aware
+    const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+    const timeContext = `\n\n--- CURRENT DATE & TIME (IST) ---\nRight now it is: ${nowIST} (Indian Standard Time).\nUse this to calculate relative times when the customer says things like "call me after 30 minutes" or "call me tomorrow morning". Always confirm callback times in IST.`;
+
     // Combine agent system prompt with lead personalization
     const personalizedPrompt = [
       agent.system_prompt || '',
+      timeContext,
       `\n\n--- LEAD CONTEXT (YOU MUST USE THIS DATA IN THE CONVERSATION) ---\n${leadContext}`
     ].filter(Boolean).join('\n');
 

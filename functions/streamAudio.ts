@@ -455,15 +455,19 @@ Deno.serve(async (req) => {
       }
     };
 
+    // Inject live IST timestamp so the agent knows the current time
+    const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+    const timeInjection = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}. Use this to compute relative times (e.g. "30 minutes later", "tomorrow 10 AM"). Always state callback times in IST.\n`;
+
     if (isHybrid) {
       sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
       sessionConfig.modalities = ['text'];
       sessionConfig.voice = 'alloy';
-      session.chatHistory = [{ role: 'system', content: session.systemPrompt }];
+      session.chatHistory = [{ role: 'system', content: timeInjection + session.systemPrompt }];
       console.log(`[${reqId}] 🔀 Hybrid mode: Realtime STT → LLM → Azure Speech TTS (${session.voiceType})`);
     } else {
       sessionConfig.modalities = ['text', 'audio'];
-      sessionConfig.instructions = session.systemPrompt;
+      sessionConfig.instructions = timeInjection + session.systemPrompt;
       sessionConfig.voice = session.voiceType;
       sessionConfig.output_audio_format = 'pcm16';
     }
