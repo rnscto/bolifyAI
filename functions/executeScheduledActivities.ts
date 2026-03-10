@@ -1,27 +1,23 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.18';
 
-// Activity Execution Engine
-// Runs every 15 min. Picks up scheduled activities that are due and executes them:
-//  - call/followup → auto-initiates call via Smartflo
-//  - email → sends AI-personalized email
-//  - appointment/demo/visit/meeting → sends reminder via email + RCS
-//  - task → marks overdue if past due
-// Also marks overdue activities that are >24h past scheduled_date
+// Follow-up Automation Engine — runs every 15 min via scheduled automation.
+// No user session — uses service role directly.
+// Picks up scheduled activities due NOW, executes them:
+//  - call/followup → auto-initiates call via same agent from original call
+//  - email → sends AI-personalized email to lead
+//  - appointment/demo/visit/meeting → sends reminder + notifies client admin
+//  - task → notifies client admin for human action required
 
 Deno.serve(async (req) => {
   try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const svc = createClient({ appId, asServiceRole: true });
 
-    if (user?.role !== 'admin') {
-      return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
-
-    const svc = base44.asServiceRole;
     const now = new Date();
     const results = {
       calls_initiated: 0,
       emails_sent: 0,
+      admin_alerts_sent: 0,
       reminders_sent: 0,
       marked_overdue: 0,
       skipped: 0,
@@ -30,6 +26,7 @@ Deno.serve(async (req) => {
 
     // Fetch all scheduled activities
     const activities = await svc.entities.Activity.filter({ status: 'scheduled' }, 'scheduled_date', 100);
+    console.log(`[FollowupEngine] Processing ${activities.length} scheduled activities`);
 
     for (const activity of activities) {
       const scheduledDate = new Date(activity.scheduled_date);
@@ -42,27 +39,24 @@ Deno.serve(async (req) => {
 
       const hoursPast = (now - scheduledDate) / (1000 * 60 * 60);
 
-      // Mark as overdue if >24h past and not yet executed
+      // Mark as overdue if >24h past
       if (hoursPast > 24) {
         await svc.entities.Activity.update(activity.id, { status: 'overdue' });
         results.marked_overdue++;
         continue;
       }
 
-      // Skip if reminder already sent (avoid duplicate execution)
+      // Skip if already processed
       if (activity.reminder_sent) {
         results.skipped++;
         continue;
       }
 
-      // Load lead data if available
-      let lead = null;
+      // Load lead + client
+      let lead = null, client = null;
       if (activity.lead_id) {
         try { lead = await svc.entities.Lead.get(activity.lead_id); } catch (_) {}
       }
-
-      // Load client data
-      let client = null;
       if (activity.client_id) {
         try { client = await svc.entities.Client.get(activity.client_id); } catch (_) {}
       }
@@ -70,65 +64,96 @@ Deno.serve(async (req) => {
       const activityType = activity.type;
 
       // ============================================================
-      // 1. CALL / FOLLOWUP → Auto-initiate call
+      // 1. CALL / FOLLOWUP → Auto-initiate call with SAME agent
       // ============================================================
       if (activityType === 'call' || activityType === 'followup') {
-        if (!lead || !lead.phone) {
+        if (!lead?.phone) {
           await svc.entities.Activity.update(activity.id, {
             reminder_sent: true,
-            notes: (activity.notes || '') + '\n[Auto-Engine] Skipped: no lead phone number'
+            notes: (activity.notes || '') + '\n[Engine] Skipped: no lead phone'
           });
           results.skipped++;
           continue;
         }
 
-        // Check if lead is do_not_call
         if (lead.status === 'do_not_call') {
           await svc.entities.Activity.update(activity.id, {
             status: 'cancelled',
-            notes: (activity.notes || '') + '\n[Auto-Engine] Cancelled: lead is do_not_call'
+            notes: (activity.notes || '') + '\n[Engine] Cancelled: do_not_call'
           });
           results.skipped++;
           continue;
         }
 
-        // Find an active agent for this client
-        const agents = await svc.entities.Agent.filter({ client_id: activity.client_id, status: 'active' });
-        const agent = agents.find(a => (a.assigned_dids?.length > 0) || a.assigned_did);
+        // Find the SAME agent from the original call (via call_log_id on activity)
+        let agent = null;
+        if (activity.call_log_id) {
+          try {
+            const origCall = await svc.entities.CallLog.get(activity.call_log_id);
+            if (origCall?.agent_id) {
+              agent = await svc.entities.Agent.get(origCall.agent_id);
+              if (agent?.status !== 'active') agent = null;
+            }
+          } catch (_) {}
+        }
+
+        // Fallback: any active agent for this client
+        if (!agent) {
+          const agents = await svc.entities.Agent.filter({ client_id: activity.client_id, status: 'active' });
+          agent = agents.find(a => (a.assigned_dids?.length > 0) || a.assigned_did);
+        }
 
         if (!agent) {
           await svc.entities.Activity.update(activity.id, {
             reminder_sent: true,
-            notes: (activity.notes || '') + '\n[Auto-Engine] Skipped: no active agent with DID'
+            notes: (activity.notes || '') + '\n[Engine] Skipped: no active agent'
           });
+          // Send admin email about failed auto-call
+          await sendAdminAlert(svc, client, activity, lead, 'auto_call_failed', 'No active agent with DID available for follow-up call.');
           results.skipped++;
           continue;
         }
 
-        // Select DID
         const callerDID = (agent.assigned_dids?.length > 0) ? agent.assigned_dids[0] : agent.assigned_did;
+        if (!callerDID) {
+          results.skipped++;
+          continue;
+        }
 
-        // Build lead context
+        // Build lead context INLINE
         let leadContext = '';
+        const ctxParts = [`CUSTOMER PROFILE:`, `- Name: ${lead.name || 'Unknown'}`];
+        if (lead.phone) ctxParts.push(`- Phone: ${lead.phone}`);
+        if (lead.email) ctxParts.push(`- Email: ${lead.email}`);
+        if (lead.company) ctxParts.push(`- Company: ${lead.company}`);
+        if (lead.status) ctxParts.push(`- Status: ${lead.status}`);
+        if (lead.score) ctxParts.push(`- Score: ${lead.score}/100`);
+        if (lead.qualification_tier) ctxParts.push(`- Tier: ${lead.qualification_tier.toUpperCase()}`);
+        if (lead.notes) ctxParts.push(`\nLEAD NOTES:\n${lead.notes.substring(0, 500)}`);
+
+        // Get recent call history
         try {
-          const ctxRes = await svc.functions.invoke('buildLeadContext', {
-            lead_id: lead.id, client_id: activity.client_id, phone_number: lead.phone
-          });
-          if (ctxRes?.context_text) leadContext = ctxRes.context_text;
+          const recentCalls = await svc.entities.CallLog.filter({ lead_id: lead.id }, '-created_date', 3);
+          if (recentCalls.length > 0) {
+            ctxParts.push(`\nPREVIOUS CALLS (${recentCalls.length}):`);
+            recentCalls.forEach((c, i) => {
+              const dt = c.call_start_time ? new Date(c.call_start_time).toLocaleDateString('en-IN') : '?';
+              ctxParts.push(`  ${i+1}. ${dt} (${c.status}) — ${(c.conversation_summary || '').substring(0, 200)}`);
+            });
+          }
         } catch (_) {}
 
-        // Build prompt with activity context
-        const personalizedPrompt = [
-          agent.system_prompt || '',
-          `\nSCHEDULED ACTIVITY CONTEXT:`,
-          `- Type: ${activityType}`,
-          `- Title: ${activity.title || 'Follow-up call'}`,
-          `- Description: ${activity.description || 'N/A'}`,
-          activity.notes ? `- Agent Notes: ${activity.notes}` : '',
-          leadContext ? `\n--- LEAD CONTEXT ---\n${leadContext}` : ''
-        ].filter(Boolean).join('\n');
+        ctxParts.push(`\nFOLLOW-UP CONTEXT:`);
+        ctxParts.push(`- Reason: ${activity.title || 'Scheduled follow-up'}`);
+        ctxParts.push(`- Details: ${activity.description || 'N/A'}`);
+        if (activity.notes) ctxParts.push(`- Notes: ${activity.notes}`);
+        ctxParts.push(`\nCRITICAL RULES:`);
+        ctxParts.push(`- Address customer by name "${lead.name || 'Sir/Madam'}".`);
+        ctxParts.push(`- Reference your previous conversation naturally.`);
+        ctxParts.push(`- This is a SCHEDULED follow-up — the customer expects this call.`);
+        leadContext = ctxParts.join('\n');
 
-        // Pre-fetch knowledge base
+        // Knowledge base
         let kbContent = '';
         if (agent.knowledge_base_ids?.length > 0) {
           for (const kbId of agent.knowledge_base_ids) {
@@ -139,8 +164,12 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Create call log
-        const callSid = `auto_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+        const personalizedPrompt = [
+          agent.system_prompt || '',
+          `\n\n--- FOLLOW-UP CALL CONTEXT (YOU MUST USE THIS DATA) ---\n${leadContext}`
+        ].filter(Boolean).join('\n');
+
+        const callSid = `followup_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
         const callLog = await svc.entities.CallLog.create({
           client_id: activity.client_id,
           agent_id: agent.id,
@@ -151,7 +180,7 @@ Deno.serve(async (req) => {
           direction: 'outbound',
           status: 'initiated',
           call_start_time: now.toISOString(),
-          conversation_summary: `[AUTO-FOLLOWUP] ${activity.title}\n${leadContext}`,
+          conversation_summary: `[AUTO-FOLLOWUP] ${activity.title}\n${leadContext.substring(0, 500)}`,
           agent_config_cache: {
             agent_name: agent.name,
             system_prompt: personalizedPrompt,
@@ -161,53 +190,44 @@ Deno.serve(async (req) => {
           }
         });
 
-        // Initiate via Smartflo
-        const cleanCallerID = callerDID.replace(/\D/g, '');
+        // Smartflo call
         const cleanPhone = lead.phone.replace(/\D/g, '');
-
         const smartfloRes = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             api_key: Deno.env.get('SMARTFLO_API_KEY'),
             customer_number: cleanPhone,
-            caller_id: cleanCallerID,
+            caller_id: callerDID.replace(/^\+/, ''),
             async: 1
           })
         });
 
         const smartfloData = await smartfloRes.json();
-
         if (!smartfloRes.ok || smartfloData.success === false) {
           await svc.entities.CallLog.update(callLog.id, { status: 'failed' });
           await svc.entities.Activity.update(activity.id, {
             reminder_sent: true,
-            notes: (activity.notes || '') + `\n[Auto-Engine] Call failed: ${smartfloData.message || 'Unknown error'}`
+            notes: (activity.notes || '') + `\n[Engine] Call failed: ${smartfloData.message || 'Unknown'}`
           });
           results.errors.push({ activity_id: activity.id, error: smartfloData.message });
           continue;
         }
 
-        await svc.entities.CallLog.update(callLog.id, {
-          call_sid: smartfloData.call_id || smartfloData.call_sid || callSid,
-          status: 'ringing'
-        });
+        const actualSid = smartfloData.call_id || smartfloData.call_sid || smartfloData.ref_id || callSid;
+        await svc.entities.CallLog.update(callLog.id, { call_sid: actualSid, status: 'ringing' });
 
         await svc.entities.Activity.update(activity.id, {
           status: 'completed',
           completed_date: now.toISOString(),
           reminder_sent: true,
-          outcome: 'Auto-call initiated',
-          notes: (activity.notes || '') + `\n[Auto-Engine] Call initiated: ${callLog.id}`
+          outcome: `Auto-call initiated (${callLog.id})`,
+          notes: (activity.notes || '') + `\n[Engine] Call initiated: ${callLog.id}`
         });
 
-        await svc.entities.Lead.update(lead.id, {
-          status: 'contacted',
-          last_call_date: now.toISOString()
-        });
-
+        await svc.entities.Lead.update(lead.id, { status: 'contacted', last_call_date: now.toISOString() });
         results.calls_initiated++;
-        console.log(`[ActivityEngine] Call initiated for activity ${activity.id} → lead ${lead.name || lead.phone}`);
+        console.log(`[FollowupEngine] Call initiated: ${lead.name} → ${lead.phone} (activity ${activity.id})`);
       }
 
       // ============================================================
@@ -215,10 +235,7 @@ Deno.serve(async (req) => {
       // ============================================================
       else if (activityType === 'email') {
         if (!lead?.email) {
-          await svc.entities.Activity.update(activity.id, {
-            reminder_sent: true,
-            notes: (activity.notes || '') + '\n[Auto-Engine] Skipped: no lead email'
-          });
+          await svc.entities.Activity.update(activity.id, { reminder_sent: true });
           results.skipped++;
           continue;
         }
@@ -226,21 +243,16 @@ Deno.serve(async (req) => {
         const emailContent = await svc.integrations.Core.InvokeLLM({
           prompt: `Write a personalized follow-up email.
 Company: ${client?.company_name || 'Our Team'}
-Industry: ${client?.industry || 'General'}
-Lead: ${lead.name || 'Valued Customer'}
-Lead Company: ${lead.company || 'N/A'}
-Lead Status: ${lead.status || 'N/A'}
+Lead: ${lead.name || 'Valued Customer'}, Company: ${lead.company || 'N/A'}
 Activity: ${activity.title || 'Follow-up'}
 Context: ${activity.description || 'General follow-up'}
 ${activity.notes ? 'Notes: ' + activity.notes : ''}
+${lead.notes ? 'Lead history: ' + lead.notes.substring(0, 300) : ''}
 
 Professional, concise (<150 words), HTML body only. Indian business context.`,
           response_json_schema: {
             type: "object",
-            properties: {
-              subject: { type: "string" },
-              body_html: { type: "string" }
-            }
+            properties: { subject: { type: "string" }, body_html: { type: "string" } }
           }
         });
 
@@ -248,146 +260,75 @@ Professional, concise (<150 words), HTML body only. Indian business context.`,
           to: lead.email,
           from_name: client?.company_name || 'VaaniAI',
           subject: emailContent.subject,
-          body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-            <div style="background:linear-gradient(135deg,#2563eb,#1e40af);padding:24px 30px;border-radius:12px 12px 0 0;">
-              <h2 style="color:white;margin:0;">${client?.company_name || 'VaaniAI'}</h2>
-            </div>
-            <div style="padding:30px;background:white;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;">
-              ${emailContent.body_html}
-            </div>
-          </div>`
+          body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${emailContent.body_html}</div>`
         });
 
         await svc.entities.OutreachLog.create({
-          client_id: activity.client_id,
-          lead_id: lead.id,
-          channel: 'email',
-          recipient_email: lead.email,
-          subject: emailContent.subject,
-          body: emailContent.body_html,
-          outreach_type: 'lead_followup',
-          status: 'sent',
-          is_retention: false
+          client_id: activity.client_id, lead_id: lead.id,
+          channel: 'email', recipient_email: lead.email,
+          subject: emailContent.subject, body: emailContent.body_html,
+          outreach_type: 'lead_followup', status: 'sent'
         });
 
         await svc.entities.Activity.update(activity.id, {
-          status: 'completed',
-          completed_date: now.toISOString(),
-          reminder_sent: true,
-          outcome: `Email sent: ${emailContent.subject}`
+          status: 'completed', completed_date: now.toISOString(),
+          reminder_sent: true, outcome: `Email sent: ${emailContent.subject}`
         });
 
         results.emails_sent++;
-        console.log(`[ActivityEngine] Email sent for activity ${activity.id} → ${lead.email}`);
+        console.log(`[FollowupEngine] Email sent: ${lead.email} (activity ${activity.id})`);
       }
 
       // ============================================================
-      // 3. APPOINTMENT / DEMO / VISIT / MEETING → Send reminder
+      // 3. APPOINTMENT / DEMO / VISIT / MEETING → Human action needed
+      //    Send reminder to lead + alert to client admin
       // ============================================================
       else if (['appointment', 'demo', 'visit', 'meeting', 'booking'].includes(activityType)) {
-        // Send reminder email if lead has email
+        // Send reminder to lead
         if (lead?.email) {
-          const reminderContent = await svc.integrations.Core.InvokeLLM({
-            prompt: `Write a brief, friendly reminder email for an upcoming ${activityType}.
-Company: ${client?.company_name || 'Our Team'}
-Lead: ${lead.name || 'Valued Customer'}
-Activity: ${activity.title || activityType}
-Scheduled: ${scheduledDate.toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
-${activity.description ? 'Details: ' + activity.description : ''}
-
-Keep under 80 words. HTML body only. Professional and warm.`,
-            response_json_schema: {
-              type: "object",
-              properties: {
-                subject: { type: "string" },
-                body_html: { type: "string" }
-              }
-            }
-          });
-
-          await svc.integrations.Core.SendEmail({
-            to: lead.email,
-            from_name: client?.company_name || 'VaaniAI',
-            subject: reminderContent.subject,
-            body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${reminderContent.body_html}</div>`
-          });
-
-          await svc.entities.OutreachLog.create({
-            client_id: activity.client_id,
-            lead_id: lead.id,
-            channel: 'email',
-            recipient_email: lead.email,
-            subject: reminderContent.subject,
-            body: reminderContent.body_html,
-            outreach_type: 'callback_reminder',
-            status: 'sent',
-            is_retention: false
-          });
-
-          results.reminders_sent++;
-          console.log(`[ActivityEngine] Reminder email for ${activityType} → ${lead.email}`);
-        }
-
-        // Send RCS/SMS reminder if lead has phone
-        if (lead?.phone) {
-          const smartfloApiKey = Deno.env.get('SMARTFLO_API_KEY');
-          if (smartfloApiKey) {
-            const smsContent = await svc.integrations.Core.InvokeLLM({
-              prompt: `Write a short reminder SMS (max 160 chars) for ${lead.name || 'customer'} about their ${activityType}: "${activity.title || activityType}" scheduled at ${scheduledDate.toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}. From ${client?.company_name || 'VaaniAI'}. Friendly and brief.`,
+          try {
+            const reminderContent = await svc.integrations.Core.InvokeLLM({
+              prompt: `Write a brief reminder email for ${lead.name || 'customer'} about their ${activityType}: "${activity.title}". Scheduled: ${scheduledDate.toLocaleString('en-IN')}. From ${client?.company_name || 'VaaniAI'}. Under 80 words, HTML body only.`,
               response_json_schema: {
                 type: "object",
-                properties: { message: { type: "string" } }
+                properties: { subject: { type: "string" }, body_html: { type: "string" } }
               }
             });
-
-            await fetch('https://api.smartflo.in/v1/messages/send', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${smartfloApiKey}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                to: lead.phone,
-                message: smsContent.message,
-                type: 'rcs',
-                fallback: 'sms'
-              })
+            await svc.integrations.Core.SendEmail({
+              to: lead.email, from_name: client?.company_name || 'VaaniAI',
+              subject: reminderContent.subject,
+              body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${reminderContent.body_html}</div>`
             });
-
-            await svc.entities.OutreachLog.create({
-              client_id: activity.client_id,
-              lead_id: lead.id,
-              channel: 'rcs',
-              recipient_phone: lead.phone,
-              subject: `${activityType} reminder`,
-              body: smsContent.message,
-              outreach_type: 'callback_reminder',
-              status: 'sent',
-              is_retention: false
-            });
-
             results.reminders_sent++;
-            console.log(`[ActivityEngine] RCS reminder for ${activityType} → ${lead.phone}`);
+          } catch (e) {
+            console.error(`[FollowupEngine] Lead reminder failed: ${e.message}`);
           }
         }
 
-        // Mark reminder sent (don't complete — human needs to conduct the meeting)
+        // ALERT CLIENT ADMIN — human action required
+        await sendAdminAlert(svc, client, activity, lead, 'human_action_required',
+          `${activityType.toUpperCase()} scheduled. Human agent action needed.`);
+        results.admin_alerts_sent++;
+
         await svc.entities.Activity.update(activity.id, {
           reminder_sent: true,
-          notes: (activity.notes || '') + `\n[Auto-Engine] Reminders sent at ${now.toISOString()}`
+          notes: (activity.notes || '') + `\n[Engine] Reminder + admin alert sent at ${now.toISOString()}`
         });
       }
 
       // ============================================================
-      // 4. TASK → Just mark overdue if past due
+      // 4. TASK → Alert admin, mark overdue
       // ============================================================
       else if (activityType === 'task') {
-        if (hoursPast > 0) {
-          await svc.entities.Activity.update(activity.id, { status: 'overdue' });
-          results.marked_overdue++;
-        } else {
-          results.skipped++;
-        }
+        await sendAdminAlert(svc, client, activity, lead, 'task_due',
+          `Task is due and requires attention.`);
+        results.admin_alerts_sent++;
+
+        await svc.entities.Activity.update(activity.id, {
+          reminder_sent: true, status: hoursPast > 4 ? 'overdue' : 'scheduled',
+          notes: (activity.notes || '') + `\n[Engine] Admin alerted at ${now.toISOString()}`
+        });
+        if (hoursPast > 4) results.marked_overdue++;
       }
 
       else {
@@ -395,12 +336,86 @@ Keep under 80 words. HTML body only. Professional and warm.`,
       }
     }
 
-    console.log(`[ActivityEngine] Done. Calls: ${results.calls_initiated}, Emails: ${results.emails_sent}, Reminders: ${results.reminders_sent}, Overdue: ${results.marked_overdue}, Skipped: ${results.skipped}, Errors: ${results.errors.length}`);
-
-    return Response.json({ success: true, ...results });
+    console.log(`[FollowupEngine] Done. Calls:${results.calls_initiated} Emails:${results.emails_sent} Alerts:${results.admin_alerts_sent} Overdue:${results.marked_overdue}`);
+    return Response.json({ success: true, processed: activities.length, ...results });
 
   } catch (error) {
-    console.error('[ActivityEngine] Fatal error:', error);
+    console.error('[FollowupEngine] Fatal error:', error);
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
+
+
+// ============================================================
+// ADMIN EMAIL ALERT — Notify client admin about actions needed
+// ============================================================
+async function sendAdminAlert(svc, client, activity, lead, alertType, reason) {
+  if (!client?.email) return;
+
+  const leadName = lead?.name || 'Unknown Lead';
+  const leadPhone = lead?.phone || 'N/A';
+  const leadEmail = lead?.email || 'N/A';
+  const companyName = client.company_name || 'Your Company';
+
+  const typeLabels = {
+    human_action_required: '🏃 Human Action Required',
+    task_due: '📋 Task Due',
+    auto_call_failed: '⚠️ Auto-Call Failed'
+  };
+  const label = typeLabels[alertType] || '🔔 Activity Alert';
+
+  const actionGuide = {
+    'visit': 'Send location details to the lead and confirm the visit timing.',
+    'demo': 'Prepare the demo environment and send meeting link/instructions.',
+    'appointment': 'Confirm the appointment and prepare relevant materials.',
+    'meeting': 'Send meeting details (agenda, link) to all participants.',
+    'booking': 'Confirm the booking and share details with the lead.',
+    'task': 'Complete the assigned task and update the lead status.'
+  };
+  const suggestedAction = actionGuide[activity.type] || 'Review and take appropriate action.';
+
+  const emailBody = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+      <div style="background:linear-gradient(135deg,#dc2626,#b91c1c);padding:20px 30px;border-radius:12px 12px 0 0;">
+        <h2 style="color:white;margin:0;">${label}</h2>
+        <p style="color:#fecaca;margin:4px 0 0;font-size:13px;">${companyName} — VaaniAI Automation Engine</p>
+      </div>
+      <div style="padding:24px 30px;background:white;border:1px solid #e2e8f0;border-top:none;">
+        <h3 style="color:#1e293b;margin:0 0 8px;">${activity.title || activity.type}</h3>
+        <p style="color:#64748b;margin:0 0 16px;font-size:14px;">${reason}</p>
+        
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+          <tr><td style="padding:8px 0;color:#64748b;width:120px;">Lead Name:</td><td style="padding:8px 0;color:#1e293b;font-weight:600;">${leadName}</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b;">Phone:</td><td style="padding:8px 0;color:#1e293b;">${leadPhone}</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b;">Email:</td><td style="padding:8px 0;color:#1e293b;">${leadEmail}</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b;">Type:</td><td style="padding:8px 0;color:#1e293b;">${activity.type?.toUpperCase()}</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b;">Priority:</td><td style="padding:8px 0;color:${activity.priority === 'high' ? '#dc2626' : '#1e293b'};font-weight:600;">${(activity.priority || 'medium').toUpperCase()}</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b;">Scheduled:</td><td style="padding:8px 0;color:#1e293b;">${new Date(activity.scheduled_date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td></tr>
+        </table>
+
+        ${activity.description ? `<div style="margin:16px 0;padding:12px;background:#f8fafc;border-radius:8px;border-left:3px solid #3b82f6;"><p style="margin:0;color:#334155;font-size:13px;">${activity.description}</p></div>` : ''}
+        ${activity.notes ? `<div style="margin:8px 0;padding:12px;background:#fffbeb;border-radius:8px;border-left:3px solid #f59e0b;"><p style="margin:0;color:#92400e;font-size:13px;"><strong>Notes:</strong> ${activity.notes.substring(0, 300)}</p></div>` : ''}
+
+        <div style="margin:20px 0;padding:16px;background:#f0fdf4;border-radius:8px;border:1px solid #bbf7d0;">
+          <p style="margin:0;color:#166534;font-size:14px;"><strong>✅ Suggested Action:</strong> ${suggestedAction}</p>
+        </div>
+
+        ${lead?.notes ? `<div style="margin:12px 0;padding:12px;background:#f1f5f9;border-radius:8px;"><p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;">LEAD HISTORY:</p><p style="margin:0;color:#334155;font-size:13px;">${lead.notes.substring(0, 400)}</p></div>` : ''}
+      </div>
+      <div style="padding:16px 30px;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;text-align:center;">
+        <p style="margin:0;color:#94a3b8;font-size:12px;">Sent by VaaniAI Follow-up Automation Engine</p>
+      </div>
+    </div>`;
+
+  try {
+    await svc.integrations.Core.SendEmail({
+      to: client.email,
+      from_name: 'VaaniAI Automation',
+      subject: `[${label}] ${activity.title || activity.type} — ${leadName}`,
+      body: emailBody
+    });
+    console.log(`[FollowupEngine] Admin alert sent to ${client.email}: ${alertType}`);
+  } catch (e) {
+    console.error(`[FollowupEngine] Admin alert failed: ${e.message}`);
+  }
+}
