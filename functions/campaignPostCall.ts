@@ -660,10 +660,10 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
           'You are an email copywriter. Always respond in valid JSON.',
           { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } } }
         );
-        await base44.integrations.Core.SendEmail({
-          to: lead.email, from_name: client?.company_name || 'VaaniAI',
+        await sendLeadEmail({
+          to: lead.email, fromName: client?.company_name || 'VaaniAI',
           subject: emailContent.subject,
-          body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${emailContent.body_html}</div>`
+          html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${emailContent.body_html}</div>`
         });
         emailSent = true;
         await base44.entities.OutreachLog.create({
