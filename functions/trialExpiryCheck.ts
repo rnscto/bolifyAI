@@ -1,19 +1,17 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.18';
+
+// Scheduled automation — runs daily. Uses service role directly (no user session).
 
 Deno.serve(async (req) => {
   try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-
-    if (user?.role !== 'admin') {
-      return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const base44 = createClient({ appId, asServiceRole: true });
 
     const now = new Date();
     const results = { emails_sent: [], agents_triggered: [], expired_updated: [] };
 
     // Get all trial clients
-    const trialClients = await base44.asServiceRole.entities.Client.filter({ account_status: 'trial' });
+    const trialClients = await base44.entities.Client.filter({ account_status: 'trial' });
 
     for (const client of trialClients) {
       if (!client.trial_end_date) continue;
