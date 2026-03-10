@@ -137,13 +137,20 @@ async function saveCallRecord(session, reqId, duration) {
                   role: 'system',
                   content: `You are an expert sales call analyst. Analyze the transcript and provide a comprehensive analysis.
 
-SCORING (total 100):
-- Sentiment (0-25): very_negative=0, negative=5, neutral=12, positive=20, very_positive=25
-- Intent signals (0-30): pricing_inquiry=+10, demo_request=+15, budget_confirmed=+15, timeline_mentioned=+10, decision_maker=+10
-- Engagement (0-25): short_answers=5, asked_questions=15, highly_engaged=25
-- Keywords (0-20): positive="interested","sign up","sounds good"=+5 each; negative="not interested","too expensive"=-5 each
+                  IMPORTANT TRANSCRIPTION NOTES:
+                  - Speech-to-text can MISINTERPRET short words. Common errors: "Hi" heard as "Bye-bye", "Haan" as "Nah", "Hello" as various words.
+                  - If the transcript is very short (1-2 lines) and the customer only said a single word like "Bye-bye", "Bye", or similar — consider that it might actually be a greeting ("Hi", "Hello") that was misheard by the speech recognition system.
+                  - Do NOT mark a lead as "do_not_call" or "very_negative" based on a single ambiguous short word. Use "contacted" or "no_answer" for such cases.
+                  - Only use "do_not_call" when the customer EXPLICITLY and CLEARLY says they don't want to be called (e.g., "Don't call me again", "Remove my number", "I'm not interested, stop calling").
+                  - For very short calls (under 30 seconds) with minimal customer speech, default to lead_status "contacted" and sentiment "neutral".
 
-Respond ONLY in valid JSON.`
+                  SCORING (total 100):
+                  - Sentiment (0-25): very_negative=0, negative=5, neutral=12, positive=20, very_positive=25
+                  - Intent signals (0-30): pricing_inquiry=+10, demo_request=+15, budget_confirmed=+15, timeline_mentioned=+10, decision_maker=+10
+                  - Engagement (0-25): short_answers=5, asked_questions=15, highly_engaged=25
+                  - Keywords (0-20): positive="interested","sign up","sounds good"=+5 each; negative="not interested","too expensive"=-5 each
+
+                  Respond ONLY in valid JSON.`
                 },
                 {
                   role: 'user',
@@ -449,9 +456,9 @@ Deno.serve(async (req) => {
       input_audio_transcription: { model: 'whisper-1' },
       turn_detection: {
         type: 'server_vad',
-        threshold: 0.6,
-        prefix_padding_ms: 500,
-        silence_duration_ms: 700
+        threshold: 0.5,
+        prefix_padding_ms: 600,
+        silence_duration_ms: 800
       }
     };
 
@@ -498,7 +505,7 @@ Deno.serve(async (req) => {
           modalities: ['text', 'audio'],
           voice: 'alloy',
           instructions: 'You are a friendly AI voice assistant. Greet the caller warmly. Be professional and concise.',
-          turn_detection: { type: 'server_vad', threshold: 0.6, prefix_padding_ms: 500, silence_duration_ms: 700 }
+          turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 600, silence_duration_ms: 800 }
         }});
         console.log(`[${reqId}] 📤 Minimal config sent (agent config still loading)`);
       }
