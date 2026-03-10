@@ -856,8 +856,7 @@ Deno.serve(async (req) => {
   }
 
   // ─── Load agent config from CallLog cache ───
-  // PHASE 1: Fast — find CallLog, extract agent persona & prompt, apply to Realtime session
-  // PHASE 2: Background — claim CallLog with stream_sid (non-blocking)
+  // Finds the matching CallLog for this WebSocket stream, extracts the cached agent config
   async function loadAgentConfig() {
     try {
       const { createClient } = await import('npm:@base44/sdk@0.8.18');
@@ -865,45 +864,83 @@ Deno.serve(async (req) => {
       const svc = createClient({ appId, asServiceRole: true });
 
       let callLog = null;
-      const cutoff = new Date(Date.now() - 60000).toISOString();
+      const cutoff = new Date(Date.now() - 120000).toISOString(); // 2 minute window
 
-      // ── SINGLE fast query: get recent unclaimed ringing/initiated calls ──
-      try {
-        const recentLogs = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 5);
-        const unclaimed = recentLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
-        if (unclaimed.length === 1) {
-          callLog = unclaimed[0];
-          console.log(`[${reqId}] ⚡ Fast match: ringing call ${callLog.id}`);
-        } else if (unclaimed.length === 0) {
-          // Try initiated
-          const initLogs = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 5);
-          const unclaimedInit = initLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
-          if (unclaimedInit.length === 1) {
-            callLog = unclaimedInit[0];
-            console.log(`[${reqId}] ⚡ Fast match: initiated call ${callLog.id}`);
-          }
-        }
-      } catch (e) {
-        console.log(`[${reqId}] ⚠️ Fast lookup failed: ${e.message}`);
-      }
-
-      // Fallback: call_sid (single attempt, no retries — speed over perfection)
+      // ── Strategy 1: call_sid match (most reliable when formats align) ──
       if (!callLog && session.callSid) {
+        const variants = [session.callSid];
+        // Smartflo WebSocket callSid may differ from API call_id — try numeric core
         const numericCore = session.callSid.replace(/^[^-]*-/, '').replace(/\.[^.]*$/, '');
-        for (const sid of [session.callSid, numericCore]) {
-          if (callLog || !sid) continue;
+        if (numericCore && numericCore !== session.callSid) variants.push(numericCore);
+        // Also try just digits
+        const digitsOnly = session.callSid.replace(/\D/g, '');
+        if (digitsOnly && digitsOnly.length > 5) variants.push(digitsOnly);
+
+        for (const sid of variants) {
+          if (callLog) break;
           try {
             const logs = await svc.entities.CallLog.filter({ call_sid: sid });
             if (logs.length > 0) {
               callLog = logs[0];
-              console.log(`[${reqId}] 🔍 call_sid match: ${callLog.id}`);
+              console.log(`[${reqId}] 🔍 call_sid match (${sid}): ${callLog.id}`);
             }
           } catch (e) {}
         }
       }
 
+      // ── Strategy 2: Recent unclaimed ringing/initiated calls (pick newest) ──
       if (!callLog) {
-        console.log(`[${reqId}] ⚠️ No call log found. callSid=${session.callSid}`);
+        try {
+          const recentLogs = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 10);
+          const unclaimed = recentLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
+          console.log(`[${reqId}] 🔍 Ringing unclaimed: ${unclaimed.length} (total ringing: ${recentLogs.length})`);
+
+          if (unclaimed.length >= 1) {
+            // Pick the most recent unclaimed one
+            callLog = unclaimed[0];
+            console.log(`[${reqId}] ⚡ Fast match: ringing call ${callLog.id} (${callLog.callee_number})`);
+          }
+        } catch (e) {
+          console.log(`[${reqId}] ⚠️ Ringing lookup failed: ${e.message}`);
+        }
+      }
+
+      if (!callLog) {
+        try {
+          const initLogs = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 10);
+          const unclaimed = initLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
+          console.log(`[${reqId}] 🔍 Initiated unclaimed: ${unclaimed.length}`);
+
+          if (unclaimed.length >= 1) {
+            callLog = unclaimed[0];
+            console.log(`[${reqId}] ⚡ Fast match: initiated call ${callLog.id} (${callLog.callee_number})`);
+          }
+        } catch (e) {
+          console.log(`[${reqId}] ⚠️ Initiated lookup failed: ${e.message}`);
+        }
+      }
+
+      // ── Strategy 3: Broadest fallback — any recent call with agent_config_cache that has no stream_sid ──
+      if (!callLog) {
+        try {
+          const allRecent = await svc.entities.CallLog.list('-created_date', 10);
+          const candidates = allRecent.filter(l =>
+            !l.stream_sid &&
+            l.created_date >= cutoff &&
+            l.agent_config_cache?.system_prompt &&
+            ['initiated', 'ringing', 'answered'].includes(l.status)
+          );
+          if (candidates.length > 0) {
+            callLog = candidates[0];
+            console.log(`[${reqId}] 🔍 Broad fallback match: ${callLog.id} (status=${callLog.status})`);
+          }
+        } catch (e) {
+          console.log(`[${reqId}] ⚠️ Broad fallback failed: ${e.message}`);
+        }
+      }
+
+      if (!callLog) {
+        console.log(`[${reqId}] ⚠️ No call log found after all strategies. callSid=${session.callSid}`);
         return;
       }
 
