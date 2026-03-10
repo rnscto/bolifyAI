@@ -225,6 +225,23 @@ async function saveCallRecord(session, reqId, duration) {
       qualificationReason = `Low score ${leadScore}/100 — minimal engagement`;
     }
     if (leadStatus === 'converted') { qualificationTier = 'hot'; qualificationReason = 'Converted'; }
+
+    // ── Safeguard: prevent misclassification from very short/ambiguous calls ──
+    // If transcript has fewer than 3 customer lines and call was under 30s,
+    // override aggressive statuses that are likely STT misinterpretation
+    const customerLines = session.transcript.filter(t => t.speaker === 'Customer');
+    const totalCustomerWords = customerLines.reduce((acc, t) => acc + t.text.split(/\s+/).length, 0);
+    if (totalCustomerWords <= 5 && duration < 30) {
+      if (leadStatus === 'do_not_call' || leadStatus === 'not_interested') {
+        console.log(`[${reqId}] ⚠️ Short call safeguard: overriding ${leadStatus}→contacted (only ${totalCustomerWords} customer words in ${duration}s)`);
+        leadStatus = 'contacted';
+        sentiment = 'neutral';
+        leadScore = Math.max(leadScore, 10);
+        qualificationTier = 'cold';
+        qualificationReason = `Short call (${duration}s) with minimal response — needs follow-up`;
+      }
+    }
+
     if (leadStatus === 'do_not_call') { qualificationTier = 'disqualified'; qualificationReason = 'Do not call'; }
 
     // ===== STEP 3: Save CallLog with full analysis =====
