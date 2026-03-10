@@ -21,13 +21,13 @@ Deno.serve(async (req) => {
 
       // EXPIRED: Update status
       if (daysLeft <= 0) {
-        await base44.asServiceRole.entities.Client.update(client.id, {
+        await base44.entities.Client.update(client.id, {
           account_status: 'expired',
         });
         results.expired_updated.push({ client_id: client.id, company: client.company_name });
 
         // Send expiry email
-        await base44.asServiceRole.integrations.Core.SendEmail({
+        await base44.integrations.Core.SendEmail({
           to: client.email,
           subject: 'Your VaaniAI trial has expired — special offer inside!',
           body: `
@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
 
       // 3 DAYS LEFT: Send warning email
       if (daysLeft === 3) {
-        await base44.asServiceRole.integrations.Core.SendEmail({
+        await base44.integrations.Core.SendEmail({
           to: client.email,
           subject: `Only 3 days left on your VaaniAI trial!`,
           body: `
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
 
       // 1 DAY LEFT: Send urgent email + trigger retention agent call
       if (daysLeft === 1) {
-        await base44.asServiceRole.integrations.Core.SendEmail({
+        await base44.integrations.Core.SendEmail({
           to: client.email,
           subject: `⚠️ Last day of your VaaniAI trial!`,
           body: `
@@ -111,7 +111,7 @@ Deno.serve(async (req) => {
         results.emails_sent.push({ client_id: client.id, type: '1_day_urgent', email: client.email });
 
         // Create a retention activity for follow-up
-        await base44.asServiceRole.entities.Activity.create({
+        await base44.entities.Activity.create({
           client_id: client.id,
           type: 'call',
           title: `Retention call - Trial expiring for ${client.company_name}`,
