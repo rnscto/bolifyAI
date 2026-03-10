@@ -23,12 +23,13 @@ Deno.serve(async (req) => {
     } catch (_) {}
     const forceRun = requestBody.force === true;
 
-    const callDays = config.call_days_after_expiry || [2, 5];
-    const maxCallsPerClient = config.max_calls_per_client || 3;
+    const callDays = config.call_days_after_expiry || [2, 5, 7, 10, 14, 21, 30];
+    const maxCallsPerClient = config.max_calls_per_client || 5;
     const results = { calls_initiated: [], emails_sent: [], errors: [], skipped: [], force_mode: forceRun };
 
     // Get all expired clients
     const expiredClients = await base44.entities.Client.filter({ account_status: 'expired' });
+    console.log(`[retentionCall] Found ${expiredClients.length} expired clients, callDays=${callDays.join(',')}, force=${forceRun}`);
 
     // Load all retention call logs to check call counts
     const allCallLogs = await base44.entities.CallLog.list('-created_date', 500);
@@ -169,13 +170,22 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Build lead context
+      // Build lead context INLINE (avoid cross-function auth issues)
       let leadContext = '';
       try {
-        const ctxRes = await base44.functions.invoke('buildLeadContext', {
-          client_id: client.id, phone_number: client.phone
-        });
-        if (ctxRes?.context_text) leadContext = ctxRes.context_text;
+        // Find leads matching this client's phone
+        const clientLeads = await base44.entities.Lead.filter({ client_id: client.id });
+        const recentCalls = await base44.entities.CallLog.filter({ client_id: client.id }, '-created_date', 3);
+        const ctxParts = [`CLIENT HISTORY:`];
+        if (recentCalls.length > 0) {
+          ctxParts.push(`Previous calls: ${recentCalls.length}`);
+          recentCalls.forEach((c, i) => {
+            const dt = c.call_start_time ? new Date(c.call_start_time).toLocaleDateString('en-IN') : 'Unknown';
+            ctxParts.push(`  Call ${i+1} (${dt}): ${c.status} — ${(c.conversation_summary || '').substring(0, 200)}`);
+          });
+        }
+        if (clientLeads.length > 0) ctxParts.push(`Total leads: ${clientLeads.length}`);
+        leadContext = ctxParts.join('\n');
       } catch (_) {}
 
       // Client-specific context
@@ -248,8 +258,8 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Update call_sid with Smartflo's actual ID
-      const actualCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
+      // Update call_sid with Smartflo's actual ID (use ref_id as fallback)
+      const actualCallSid = smartfloData.call_id || smartfloData.call_sid || smartfloData.ref_id || callSid;
       await base44.entities.CallLog.update(callLog.id, {
         call_sid: actualCallSid,
         status: 'ringing',
