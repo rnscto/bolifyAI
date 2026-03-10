@@ -5,7 +5,7 @@ const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
 
 async function sendLeadEmail({ to, fromName, subject, html }) {
   const { data, error } = await resend.emails.send({
-    from: `${fromName} <onboarding@resend.dev>`,
+    from: `${fromName} <noreply@vaaniai.io>`,
     to,
     subject,
     html
