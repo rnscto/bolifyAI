@@ -271,12 +271,19 @@ Deno.serve(async (req) => {
           continue; // Move to next lead immediately
         }
 
-        // Smartflo accepted the call
-        const newCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
-        console.log(`[campaign] Smartflo returned call_id=${smartfloData.call_id}, call_sid=${smartfloData.call_sid}, using=${newCallSid}, original=${callSid}`);
-        await svc.entities.CallLog.update(callLog.id, {
-          call_sid: newCallSid, status: 'ringing'
-        });
+        // Smartflo accepted the call — store ALL possible IDs for webhook matching
+        const smartfloCallId = smartfloData.call_id || null;
+        const smartfloRefId = smartfloData.ref_id || null;
+        const newCallSid = smartfloCallId || smartfloData.call_sid || callSid;
+        console.log(`[campaign] Smartflo returned call_id=${smartfloCallId}, ref_id=${smartfloRefId}, call_sid=${smartfloData.call_sid}, using=${newCallSid}, original=${callSid}`);
+        
+        // Store ref_id in conversation_summary temporarily so webhook can match it
+        const updateFields = { call_sid: newCallSid, status: 'ringing' };
+        if (smartfloRefId && !smartfloCallId) {
+          // Smartflo returned ref_id but no call_id — store ref_id as call_sid too for matching
+          updateFields.call_sid = smartfloRefId;
+        }
+        await svc.entities.CallLog.update(callLog.id, updateFields);
         results.initiated++;
 
         // ─── WAIT for streamAudio to connect (poll for stream_sid or terminal status) ───
@@ -313,18 +320,37 @@ Deno.serve(async (req) => {
           }
         }
 
-        // ─── TIMEOUT: Call not connected to streamAudio within 50s → mark no_answer ───
+        // ─── TIMEOUT: Call not connected to streamAudio within 50s ───
         if (!callConnected && !callTerminal) {
-          console.log(`[campaign] ⏰ TIMEOUT: Call ${callLog.id} for ${cl.lead_name} not connected to streamAudio within ${CONNECT_TIMEOUT_MS/1000}s — marking no_answer`);
+          console.log(`[campaign] ⏰ TIMEOUT: Call ${callLog.id} for ${cl.lead_name} not connected within ${CONNECT_TIMEOUT_MS/1000}s`);
           await svc.entities.CallLog.update(callLog.id, {
             status: 'no_answer',
             call_end_time: new Date().toISOString(),
             conversation_summary: `Call not answered — no streamAudio connection within ${CONNECT_TIMEOUT_MS/1000} seconds.`
           });
-          await svc.entities.CampaignLead.update(cl.id, {
-            status: 'completed', outcome: 'no_answer',
-            conversation_summary: `Call not answered within ${CONNECT_TIMEOUT_MS/1000} seconds.`
-          });
+
+          // Check if retry is applicable before marking completed
+          const currentAttempts = (cl.attempt_count || 0) + 1;
+          const freshCamp = await svc.entities.Campaign.get(campaign_id);
+          const retryRules = freshCamp?.followup_rules || {};
+          const maxRetries = retryRules.no_answer_max_retries || 3;
+          const shouldRetry = retryRules.no_answer_retry !== false && currentAttempts < maxRetries;
+
+          if (shouldRetry) {
+            const retryHours = retryRules.no_answer_retry_hours || 4;
+            await svc.entities.CampaignLead.update(cl.id, {
+              status: 'pending', outcome: 'no_answer',
+              attempt_count: currentAttempts, call_log_id: null,
+              followup_call_date: new Date(Date.now() + retryHours * 3600000).toISOString(),
+              conversation_summary: `No answer (attempt ${currentAttempts}/${maxRetries}). Retry in ${retryHours}h.`
+            });
+            console.log(`[campaign] ♻️ No-answer retry ${currentAttempts}/${maxRetries} queued for ${cl.lead_name}`);
+          } else {
+            await svc.entities.CampaignLead.update(cl.id, {
+              status: 'completed', outcome: 'no_answer',
+              conversation_summary: `Call not answered after ${currentAttempts} attempt(s).`
+            });
+          }
           results.no_answer_timeout++;
         }
 

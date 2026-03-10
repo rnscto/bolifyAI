@@ -449,9 +449,9 @@ Deno.serve(async (req) => {
       input_audio_transcription: { model: 'whisper-1' },
       turn_detection: {
         type: 'server_vad',
-        threshold: 0.5,
-        prefix_padding_ms: 300,
-        silence_duration_ms: 400
+        threshold: 0.6,
+        prefix_padding_ms: 500,
+        silence_duration_ms: 700
       }
     };
 
@@ -494,7 +494,7 @@ Deno.serve(async (req) => {
           modalities: ['text', 'audio'],
           voice: 'alloy',
           instructions: 'You are a friendly AI voice assistant. Greet the caller warmly. Be professional and concise.',
-          turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 300, silence_duration_ms: 400 }
+          turn_detection: { type: 'server_vad', threshold: 0.6, prefix_padding_ms: 500, silence_duration_ms: 700 }
         }});
         console.log(`[${reqId}] 📤 Minimal config sent (agent config still loading)`);
       }
