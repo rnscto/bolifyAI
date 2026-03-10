@@ -72,6 +72,7 @@ import ClientCRMDeals from './pages/ClientCRMDeals';
 import ClientCRMReports from './pages/ClientCRMReports';
 import ClientCRMSetup from './pages/ClientCRMSetup';
 import ClientCallLogs from './pages/ClientCallLogs';
+import ClientCallbacks from './pages/ClientCallbacks';
 import ClientCampaigns from './pages/ClientCampaigns';
 import ClientDashboard from './pages/ClientDashboard';
 import ClientIntegrations from './pages/ClientIntegrations';
@@ -87,7 +88,7 @@ import PartnerSignup from './pages/PartnerSignup';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import RefundPolicy from './pages/RefundPolicy';
 import TermsOfService from './pages/TermsOfService';
-import ClientCallbacks from './pages/ClientCallbacks';
+import LeadDetail from './pages/LeadDetail';
 import __Layout from './Layout.jsx';
 
 
@@ -117,6 +118,7 @@ export const PAGES = {
     "ClientCRMReports": ClientCRMReports,
     "ClientCRMSetup": ClientCRMSetup,
     "ClientCallLogs": ClientCallLogs,
+    "ClientCallbacks": ClientCallbacks,
     "ClientCampaigns": ClientCampaigns,
     "ClientDashboard": ClientDashboard,
     "ClientIntegrations": ClientIntegrations,
@@ -132,7 +134,7 @@ export const PAGES = {
     "PrivacyPolicy": PrivacyPolicy,
     "RefundPolicy": RefundPolicy,
     "TermsOfService": TermsOfService,
-    "ClientCallbacks": ClientCallbacks,
+    "LeadDetail": LeadDetail,
 }
 
 export const pagesConfig = {
