@@ -22,7 +22,8 @@ import {
   Megaphone,
   BarChart3,
   Globe,
-  Handshake
+  Handshake,
+  Zap
 } from 'lucide-react';
 
 export default function Layout({ children, currentPageName }) {
@@ -111,6 +112,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Analytics', path: 'ClientAnalytics', icon: BarChart3 },
     { name: 'Knowledge Base', path: 'ClientKnowledgeBase', icon: BookOpen },
     { name: 'Activities', path: 'ClientActivities', icon: Activity },
+    { name: 'Automation Engine', path: 'ClientAutomationEngine', icon: Zap },
     { name: 'CRM Integration', path: 'ClientCRM', icon: Database },
     { name: 'Integrations', path: 'ClientIntegrations', icon: Activity },
     { name: 'Subscription', path: 'ClientSubscription', icon: CreditCard },
