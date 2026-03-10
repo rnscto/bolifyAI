@@ -940,7 +940,8 @@ Deno.serve(async (req) => {
       }
 
       if (!callLog) {
-        console.log(`[${reqId}] ⚠️ No call log found after all strategies. callSid=${session.callSid}`);
+        console.log(`[${reqId}] ⚠️ No call log found after all strategies. callSid=${session.callSid}, streamSid=${session.streamSid}`);
+        console.log(`[${reqId}] ⚠️ Agent will use DEFAULT generic prompt — this call will NOT be personalized.`);
         return;
       }
 
@@ -953,7 +954,9 @@ Deno.serve(async (req) => {
         if (cache.knowledge_base_content) {
           session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
         }
-        console.log(`[${reqId}] ✅ Agent config loaded (${session.systemPrompt.length} chars)`);
+        console.log(`[${reqId}] ✅ Agent config loaded from CallLog ${callLog.id} (${session.systemPrompt.length} chars, agent=${cache.agent_name || 'unknown'})`);
+      } else {
+        console.log(`[${reqId}] ⚠️ CallLog ${callLog.id} found but has NO agent_config_cache — using default prompt`);
       }
 
       if (cache && cache.persona) {
