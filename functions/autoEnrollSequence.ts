@@ -206,8 +206,8 @@ async function generateTierSequence(base44, tier, outreachType, companyName, ind
   const config = tierConfig[tier] || tierConfig.nurture;
 
   try {
-    const result = await base44.integrations.Core.InvokeLLM({
-      prompt: `Generate a ${config.stepCount}-step email nurture sequence for ${companyName} (Industry: ${industry}).
+    const result = await azureLLM(
+      `Generate a ${config.stepCount}-step email nurture sequence for ${companyName} (Industry: ${industry}).
 
 TARGET: "${tier}" qualification tier leads
 TONE: ${config.tone}
@@ -227,23 +227,9 @@ IMPORTANT:
 - Professional Indian business English
 - Include clear CTA in each email
 - All emails should feel like they come from a real person, not automated`,
-      response_json_schema: {
-        type: "object",
-        properties: {
-          steps: {
-            type: "array",
-            items: {
-              type: "object",
-              properties: {
-                subject: { type: "string" },
-                body_html: { type: "string" },
-                delay_days: { type: "number" }
-              }
-            }
-          }
-        }
-      }
-    });
+      'You are an email sequence generator. Always respond in valid JSON.',
+      { type: "object", properties: { steps: { type: "array", items: { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" }, delay_days: { type: "number" } } } } } }
+    );
 
     const steps = (result.steps || []).map((s, i) => ({
       step_number: i + 1,
