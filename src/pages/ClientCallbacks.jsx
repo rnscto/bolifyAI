@@ -19,6 +19,9 @@ export default function ClientCallbacks() {
   const [filter, setFilter] = useState('all');
   const [clientId, setClientId] = useState(null);
 
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [allClients, setAllClients] = useState([]);
+
   useEffect(() => {
     loadClient();
   }, []);
@@ -26,9 +29,16 @@ export default function ClientCallbacks() {
   const loadClient = async () => {
     const user = await base44.auth.me();
     if (user.role === 'admin') {
-      // Admin can see all — use first client or all
-      setClientId('admin');
-      fetchCallbacks('admin');
+      setIsAdmin(true);
+      // Load all clients for admin selector
+      const clients = await base44.entities.Client.filter({ status: 'active' });
+      setAllClients(clients);
+      if (clients.length > 0) {
+        setClientId(clients[0].id);
+        fetchCallbacks(clients[0].id);
+      } else {
+        setLoading(false);
+      }
     } else {
       const clients = await base44.entities.Client.filter({ user_id: user.id });
       if (clients.length > 0) {
@@ -36,6 +46,11 @@ export default function ClientCallbacks() {
         fetchCallbacks(clients[0].id);
       }
     }
+  };
+
+  const handleClientChange = (cId) => {
+    setClientId(cId);
+    fetchCallbacks(cId);
   };
 
   const fetchCallbacks = async (cId) => {
