@@ -170,7 +170,8 @@ Deno.serve(async (req) => {
     lead = await base44.entities.Lead.get(leadId);
     client = await base44.entities.Client.get(clientId);
 
-    if (!lead?.email) {
+    const recipientEmail = payload.test_email || lead?.email;
+    if (!recipientEmail) {
       return Response.json({ success: false, skipped: 'no_email', lead_name: lead?.name });
     }
 
@@ -301,7 +302,7 @@ INSTRUCTIONS:
     });
 
     await sendLeadEmail({
-      to: lead.email,
+      to: recipientEmail,
       fromName: client.company_name || 'VaaniAI',
       subject: contentAnalysis.subject,
       html: emailHtml
@@ -313,7 +314,7 @@ INSTRUCTIONS:
       lead_id: leadId,
       call_log_id: callLog.id,
       channel: 'email',
-      recipient_email: lead.email,
+      recipient_email: recipientEmail,
       subject: contentAnalysis.subject,
       body: `Content blocks: ${(contentBlocks.blocks || []).map(b => b.type).join(', ')}`,
       outreach_type: 'proposal',
