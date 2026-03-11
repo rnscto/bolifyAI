@@ -1,5 +1,28 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
 
+// ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
+async function azureLLM(prompt, systemPrompt, jsonSchema) {
+  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
+  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: [
+        { role: 'system', content: systemPrompt || 'You are a helpful assistant. Always respond in valid JSON.' },
+        { role: 'user', content: prompt + (jsonSchema ? '\n\nRespond in JSON matching this schema: ' + JSON.stringify(jsonSchema) : '') }
+      ],
+      max_completion_tokens: 1200,
+      response_format: { type: "json_object" }
+    })
+  });
+  if (!res.ok) throw new Error(`Azure OpenAI error: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return JSON.parse(data.choices[0].message.content);
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -72,8 +95,8 @@ Deno.serve(async (req) => {
 
       const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
 
-      const aiResult = await svc.integrations.Core.InvokeLLM({
-        prompt: `You are a call analysis assistant. Current date/time (IST): ${nowIST}.
+      const aiResult = await azureLLM(
+        `You are a call analysis assistant. Current date/time (IST): ${nowIST}.
 
 For each lead below, extract the callback/follow-up details mentioned in the conversation. Look for:
 1. When to call back (specific date/time, relative time like "tomorrow 2 PM", "after 30 minutes", "next week", etc.)
@@ -83,7 +106,8 @@ For each lead below, extract the callback/follow-up details mentioned in the con
 If no specific callback time was mentioned, estimate based on context (e.g., "busy now" = try again in a few hours).
 
 ${batchPrompt}`,
-        response_json_schema: {
+        'You are a call analysis assistant. Always respond in valid JSON.',
+        {
           type: "object",
           properties: {
             leads: {
@@ -91,19 +115,19 @@ ${batchPrompt}`,
               items: {
                 type: "object",
                 properties: {
-                  lead_index: { type: "number", description: "1-based index matching the lead number" },
-                  callback_datetime_ist: { type: "string", description: "ISO datetime string in IST, or null if unclear" },
-                  callback_time_description: { type: "string", description: "Human-readable description like 'Tomorrow at 2 PM IST'" },
-                  reason: { type: "string", description: "Why they want a callback" },
-                  specific_requests: { type: "array", items: { type: "string" }, description: "Specific things requested" },
-                  confidence: { type: "string", description: "high, medium, or low" },
-                  urgency: { type: "string", description: "high, medium, or low" }
+                  lead_index: { type: "number" },
+                  callback_datetime_ist: { type: "string" },
+                  callback_time_description: { type: "string" },
+                  reason: { type: "string" },
+                  specific_requests: { type: "array", items: { type: "string" } },
+                  confidence: { type: "string" },
+                  urgency: { type: "string" }
                 }
               }
             }
           }
         }
-      });
+      );
 
       // Merge AI results back
       if (aiResult?.leads) {
