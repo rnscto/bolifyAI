@@ -124,7 +124,30 @@ RULES:
       return Response.json({ error: 'AI response parse error' }, { status: 500 });
     }
 
-    const results = { lead_notes_updated: false, activities_created: 0, details: [] };
+    const results = { lead_notes_updated: false, activities_created: 0, skipped_duplicates: 0, details: [] };
+
+    // ── DEDUP: Check if this lead is in an active campaign (pending/calling) ──
+    // If yes, skip creating call/followup activities to prevent duplicate calls
+    let leadInActiveCampaign = false;
+    if (callLog.lead_id) {
+      try {
+        const campaignLeads = await svc.entities.CampaignLead.filter({ lead_id: callLog.lead_id });
+        leadInActiveCampaign = campaignLeads.some(cl => ['pending', 'calling'].includes(cl.status));
+        if (leadInActiveCampaign) {
+          console.log(`[ActionExtractor] Lead ${callLog.lead_id} is in active campaign — will skip call/followup activities`);
+        }
+      } catch (_) {}
+    }
+
+    // ── DEDUP: Load existing pending activities for this lead to avoid duplicates ──
+    let existingActivities = [];
+    if (callLog.lead_id) {
+      try {
+        existingActivities = await svc.entities.Activity.filter({
+          lead_id: callLog.lead_id, status: 'scheduled'
+        });
+      } catch (_) {}
+    }
 
     // 1. Update lead notes with extracted information
     if (callLog.lead_id && extracted.lead_notes && extracted.lead_notes.trim().length > 10) {
@@ -149,10 +172,43 @@ RULES:
     // 2. Create Activity records for each extracted action
     if (extracted.actions && Array.isArray(extracted.actions)) {
       for (const action of extracted.actions) {
+        // Map action type to Activity type enum
+        const typeMap = {
+          'call': 'call', 'followup': 'followup', 'email': 'email',
+          'demo': 'demo', 'appointment': 'appointment', 'visit': 'visit',
+          'meeting': 'meeting', 'task': 'task', 'booking': 'booking'
+        };
+        const activityType = typeMap[action.type] || 'task';
+
+        // ── DEDUP CHECK 1: Skip call/followup if lead is in active campaign ──
+        if (leadInActiveCampaign && ['call', 'followup'].includes(activityType)) {
+          console.log(`[ActionExtractor] Skipped ${activityType} "${action.title}": lead in active campaign`);
+          results.skipped_duplicates++;
+          continue;
+        }
+
+        // ── DEDUP CHECK 2: Skip if similar activity already exists for this lead ──
+        const hasSimilar = existingActivities.some(ea =>
+          ea.type === activityType &&
+          ea.title?.toLowerCase().includes(action.title?.toLowerCase().substring(0, 20) || '') 
+        );
+        // Also check for same-type activity created from a recent call (within last 4 hours)
+        const hasRecentSameType = existingActivities.some(ea => {
+          if (ea.type !== activityType) return false;
+          const created = new Date(ea.created_date);
+          const hoursAgo = (now - created) / (1000 * 60 * 60);
+          return hoursAgo < 4;
+        });
+
+        if (hasSimilar || hasRecentSameType) {
+          console.log(`[ActionExtractor] Skipped duplicate ${activityType} "${action.title}": similar activity exists`);
+          results.skipped_duplicates++;
+          continue;
+        }
+
         // Determine scheduled date
         let scheduledDate = action.scheduled_date;
         if (!scheduledDate) {
-          // Default: 2 business days from now at 11:00 IST
           const defaultDate = new Date(istNow);
           let daysAdded = 0;
           while (daysAdded < 2) {
@@ -164,22 +220,8 @@ RULES:
           scheduledDate = defaultDate.toISOString();
         }
 
-        // Map action type to Activity type enum
-        const typeMap = {
-          'call': 'call',
-          'followup': 'followup',
-          'email': 'email',
-          'demo': 'demo',
-          'appointment': 'appointment',
-          'visit': 'visit',
-          'meeting': 'meeting',
-          'task': 'task',
-          'booking': 'booking'
-        };
-        const activityType = typeMap[action.type] || 'task';
-
         try {
-          await svc.entities.Activity.create({
+          const newActivity = await svc.entities.Activity.create({
             client_id: callLog.client_id,
             lead_id: callLog.lead_id || null,
             call_log_id: callLogId,
@@ -194,12 +236,13 @@ RULES:
             notes: `[Auto-extracted from call ${callLogId}]`
           });
 
+          // Add to existing list so next iteration can dedup against it
+          existingActivities.push({ ...newActivity, type: activityType, created_date: now.toISOString() });
+
           results.activities_created++;
           results.details.push({
-            type: activityType,
-            title: action.title,
-            scheduled: scheduledDate,
-            priority: action.priority
+            type: activityType, title: action.title,
+            scheduled: scheduledDate, priority: action.priority
           });
 
           console.log(`[ActionExtractor] Created ${activityType}: "${action.title}" scheduled ${scheduledDate}`);

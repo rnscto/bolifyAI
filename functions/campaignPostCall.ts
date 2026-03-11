@@ -510,22 +510,16 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
     callbackScheduled = true;
   }
 
-  // CALLBACK → task + email
+  // CALLBACK → NO Activity created here. The campaign's no_answer_retry mechanism
+  // OR the postCallActionExtractor will handle scheduling the callback.
+  // Creating an Activity here caused DUPLICATE calls (campaign retry + activity-based call).
   if (outcome === 'callback') {
-    const cbDate = new Date(); cbDate.setDate(cbDate.getDate() + 1);
-    if (cbDate.getDay() === 0) cbDate.setDate(cbDate.getDate() + 1);
-    if (cbDate.getDay() === 6) cbDate.setDate(cbDate.getDate() + 2);
-    cbDate.setHours(10, 0, 0, 0);
-    await base44.entities.Activity.create({
-      client_id: campaign.client_id, lead_id: campaignLead.lead_id, type: 'call',
-      title: `Callback: ${lead?.name || campaignLead.lead_phone}`,
-      description: `Lead requested callback.\nSummary: ${summary}`,
-      scheduled_date: cbDate.toISOString(), status: 'scheduled', priority: 'high', auto_created: true
-    });
-    callbackScheduled = true;
+    callbackScheduled = true; // Flag it but don't create a duplicate Activity
+    console.log(`[campaignPostCall] Callback outcome — skipping Activity creation (campaign retry handles this)`);
   }
 
-  // Tier-based activities
+  // Tier-based activities — only create TASK type (human notification), NOT call/followup
+  // because those would trigger executeScheduledActivities to make duplicate calls
   if (campaignLead.lead_id && qualificationTier && outcome !== 'no_answer') {
     if (qualificationTier === 'hot' && !callbackScheduled) {
       const due = new Date(); due.setHours(due.getHours() + 4);
@@ -537,26 +531,10 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
         status: 'scheduled', priority: 'high', auto_created: true
       });
     }
-    if (qualificationTier === 'warm' && !callbackScheduled) {
-      const fDate = new Date(); fDate.setDate(fDate.getDate() + 1); fDate.setHours(11, 0, 0, 0);
-      await base44.entities.Activity.create({
-        client_id: campaign.client_id, lead_id: campaignLead.lead_id, type: 'followup',
-        title: `Warm lead: ${lead?.name || campaignLead.lead_phone}`,
-        description: `Score: ${aiScore}/100 | ${qualificationReason}\nSummary: ${summary}`,
-        scheduled_date: fDate.toISOString(), status: 'scheduled', priority: 'medium', auto_created: true
-      });
-    }
-    if (qualificationTier === 'nurture') {
-      const rDate = new Date(); rDate.setDate(rDate.getDate() + 5);
-      await base44.entities.Activity.create({
-        client_id: campaign.client_id, lead_id: campaignLead.lead_id, type: 'followup',
-        title: `Nurture: ${lead?.name || campaignLead.lead_phone}`,
-        description: `Score: ${aiScore}/100 | ${qualificationReason}`,
-        scheduled_date: rDate.toISOString(), status: 'scheduled', priority: 'low', auto_created: true
-      });
-    }
+    // Warm/nurture: only update lead metadata, don't create followup Activities
+    // (these were creating call/followup activities that duplicated campaign calls)
 
-    // Update next followup
+    // Update next followup on lead record only
     const nextF = qualificationTier === 'hot' ? new Date(Date.now() + 4 * 3600000) :
       qualificationTier === 'warm' ? new Date(Date.now() + 24 * 3600000) :
       new Date(Date.now() + 5 * 86400000);
@@ -686,19 +664,10 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
     callbackScheduled = true;
   }
 
-  // CALLBACK → task
+  // CALLBACK → Don't create Activity here (campaign retry + postCallActionExtractor handle it)
   if (outcome === 'callback') {
-    const cbDate = new Date(); cbDate.setDate(cbDate.getDate() + 1);
-    if (cbDate.getDay() === 0) cbDate.setDate(cbDate.getDate() + 1);
-    if (cbDate.getDay() === 6) cbDate.setDate(cbDate.getDate() + 2);
-    cbDate.setHours(10, 0, 0, 0);
-    await base44.entities.Activity.create({
-      client_id: campaign.client_id, lead_id: campaignLead.lead_id, type: 'call',
-      title: `Callback: ${lead?.name || campaignLead.lead_phone}`,
-      description: `Lead requested callback.\nSummary: ${summary}`,
-      scheduled_date: cbDate.toISOString(), status: 'scheduled', priority: 'high', auto_created: true
-    });
     callbackScheduled = true;
+    console.log(`[campaignPostCall] doFollowUpActions: callback outcome — skipping Activity (no duplicate calls)`);
   }
 
   // Update campaign lead follow-up flags
