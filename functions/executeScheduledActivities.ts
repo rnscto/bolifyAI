@@ -1,4 +1,19 @@
 import { createClient } from 'npm:@base44/sdk@0.8.18';
+import { Resend } from 'npm:resend@4.0.0';
+
+const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
+
+// ─── Send email via Resend (works for ANY email address) ───
+async function sendEmailViaResend({ to, fromName, subject, html }) {
+  const { data, error } = await resend.emails.send({
+    from: `${fromName} <noreply@vaaniai.io>`,
+    to,
+    subject,
+    html
+  });
+  if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
+  return data;
+}
 
 // Follow-up Automation Engine — runs every 15 min via scheduled automation.
 // No user session — uses service role directly.
@@ -29,219 +44,262 @@ Deno.serve(async (req) => {
     console.log(`[FollowupEngine] Processing ${activities.length} scheduled activities`);
 
     for (const activity of activities) {
-      const scheduledDate = new Date(activity.scheduled_date);
+      // ── Per-activity try/catch so one failure doesn't kill the whole run ──
+      try {
+        const scheduledDate = new Date(activity.scheduled_date);
 
-      // Skip future activities (not yet due)
-      if (scheduledDate > now) {
-        results.skipped++;
-        continue;
-      }
+        // Skip future activities (not yet due)
+        if (scheduledDate > now) {
+          results.skipped++;
+          continue;
+        }
 
-      const hoursPast = (now - scheduledDate) / (1000 * 60 * 60);
+        const hoursPast = (now - scheduledDate) / (1000 * 60 * 60);
 
-      // Mark as overdue if >24h past
-      if (hoursPast > 24) {
-        await svc.entities.Activity.update(activity.id, { status: 'overdue' });
-        results.marked_overdue++;
-        continue;
-      }
+        // Mark as overdue if >24h past
+        if (hoursPast > 24) {
+          await svc.entities.Activity.update(activity.id, { status: 'overdue' });
+          results.marked_overdue++;
+          console.log(`[FollowupEngine] Marked overdue: ${activity.id} (${activity.title})`);
+          continue;
+        }
 
-      // Skip if already processed
-      if (activity.reminder_sent) {
-        results.skipped++;
-        continue;
-      }
+        // Skip if already processed
+        if (activity.reminder_sent) {
+          results.skipped++;
+          continue;
+        }
 
-      // Load lead + client
-      let lead = null, client = null;
-      if (activity.lead_id) {
-        try { lead = await svc.entities.Lead.get(activity.lead_id); } catch (_) {}
-      }
-      if (activity.client_id) {
-        try { client = await svc.entities.Client.get(activity.client_id); } catch (_) {}
-      }
+        // Load lead + client (with safe error handling)
+        let lead = null, client = null;
+        if (activity.lead_id) {
+          try { lead = await svc.entities.Lead.get(activity.lead_id); } catch (e) {
+            console.warn(`[FollowupEngine] Lead ${activity.lead_id} not found: ${e.message}`);
+          }
+        }
+        if (activity.client_id) {
+          try { client = await svc.entities.Client.get(activity.client_id); } catch (e) {
+            console.warn(`[FollowupEngine] Client ${activity.client_id} not found: ${e.message}`);
+          }
+        }
 
-      const activityType = activity.type;
-
-      // ============================================================
-      // 1. CALL / FOLLOWUP → Auto-initiate call with SAME agent
-      // ============================================================
-      if (activityType === 'call' || activityType === 'followup') {
-        if (!lead?.phone) {
+        // If client doesn't exist, skip but don't crash
+        if (!client) {
+          console.warn(`[FollowupEngine] Skipping activity ${activity.id}: client not found`);
           await svc.entities.Activity.update(activity.id, {
             reminder_sent: true,
-            notes: (activity.notes || '') + '\n[Engine] Skipped: no lead phone'
+            notes: (activity.notes || '') + '\n[Engine] Skipped: client not found'
           });
           results.skipped++;
           continue;
         }
 
-        if (lead.status === 'do_not_call') {
-          await svc.entities.Activity.update(activity.id, {
-            status: 'cancelled',
-            notes: (activity.notes || '') + '\n[Engine] Cancelled: do_not_call'
-          });
-          results.skipped++;
-          continue;
-        }
+        const activityType = activity.type;
+        console.log(`[FollowupEngine] Processing: ${activity.id} | type=${activityType} | title="${activity.title}" | lead=${lead?.name || 'N/A'}`);
 
-        // Find the SAME agent from the original call (via call_log_id on activity)
-        let agent = null;
-        if (activity.call_log_id) {
+        // ============================================================
+        // 1. CALL / FOLLOWUP → Auto-initiate call with SAME agent
+        // ============================================================
+        if (activityType === 'call' || activityType === 'followup') {
+          if (!lead?.phone) {
+            await svc.entities.Activity.update(activity.id, {
+              reminder_sent: true,
+              notes: (activity.notes || '') + '\n[Engine] Skipped: no lead phone'
+            });
+            results.skipped++;
+            console.log(`[FollowupEngine] Skipped ${activity.id}: no lead phone`);
+            continue;
+          }
+
+          if (lead.status === 'do_not_call') {
+            await svc.entities.Activity.update(activity.id, {
+              status: 'cancelled',
+              notes: (activity.notes || '') + '\n[Engine] Cancelled: do_not_call'
+            });
+            results.skipped++;
+            console.log(`[FollowupEngine] Cancelled ${activity.id}: do_not_call`);
+            continue;
+          }
+
+          // Find the SAME agent from the original call (via call_log_id on activity)
+          let agent = null;
+          if (activity.call_log_id) {
+            try {
+              const origCall = await svc.entities.CallLog.get(activity.call_log_id);
+              if (origCall?.agent_id) {
+                try {
+                  agent = await svc.entities.Agent.get(origCall.agent_id);
+                  if (agent?.status !== 'active') {
+                    console.log(`[FollowupEngine] Original agent ${origCall.agent_id} not active, looking for fallback`);
+                    agent = null;
+                  }
+                } catch (e) {
+                  console.warn(`[FollowupEngine] Agent ${origCall.agent_id} not found: ${e.message}`);
+                }
+              }
+            } catch (e) {
+              console.warn(`[FollowupEngine] CallLog ${activity.call_log_id} not found: ${e.message}`);
+            }
+          }
+
+          // Fallback: any active agent for this client
+          if (!agent) {
+            try {
+              const agents = await svc.entities.Agent.filter({ client_id: activity.client_id, status: 'active' });
+              agent = agents.find(a => (a.assigned_dids?.length > 0) || a.assigned_did);
+              if (agent) console.log(`[FollowupEngine] Using fallback agent: ${agent.name}`);
+            } catch (e) {
+              console.warn(`[FollowupEngine] Error finding fallback agents: ${e.message}`);
+            }
+          }
+
+          if (!agent) {
+            await svc.entities.Activity.update(activity.id, {
+              reminder_sent: true,
+              notes: (activity.notes || '') + '\n[Engine] Skipped: no active agent'
+            });
+            try {
+              await sendAdminAlert(svc, client, activity, lead, 'auto_call_failed', 'No active agent with DID available for follow-up call.');
+            } catch (alertErr) {
+              console.error(`[FollowupEngine] Admin alert failed: ${alertErr.message}`);
+            }
+            results.skipped++;
+            continue;
+          }
+
+          const callerDID = (agent.assigned_dids?.length > 0) ? agent.assigned_dids[0] : agent.assigned_did;
+          if (!callerDID) {
+            await svc.entities.Activity.update(activity.id, {
+              reminder_sent: true,
+              notes: (activity.notes || '') + '\n[Engine] Skipped: agent has no DID assigned'
+            });
+            console.warn(`[FollowupEngine] Agent ${agent.name} has no DID assigned`);
+            results.skipped++;
+            continue;
+          }
+
+          // Build lead context INLINE
+          const ctxParts = [`CUSTOMER PROFILE:`, `- Name: ${lead.name || 'Unknown'}`];
+          if (lead.phone) ctxParts.push(`- Phone: ${lead.phone}`);
+          if (lead.email) ctxParts.push(`- Email: ${lead.email}`);
+          if (lead.company) ctxParts.push(`- Company: ${lead.company}`);
+          if (lead.status) ctxParts.push(`- Status: ${lead.status}`);
+          if (lead.score) ctxParts.push(`- Score: ${lead.score}/100`);
+          if (lead.qualification_tier) ctxParts.push(`- Tier: ${lead.qualification_tier.toUpperCase()}`);
+          if (lead.notes) ctxParts.push(`\nLEAD NOTES:\n${lead.notes.substring(0, 500)}`);
+
+          // Get recent call history
           try {
-            const origCall = await svc.entities.CallLog.get(activity.call_log_id);
-            if (origCall?.agent_id) {
-              agent = await svc.entities.Agent.get(origCall.agent_id);
-              if (agent?.status !== 'active') agent = null;
+            const recentCalls = await svc.entities.CallLog.filter({ lead_id: lead.id }, '-created_date', 3);
+            if (recentCalls.length > 0) {
+              ctxParts.push(`\nPREVIOUS CALLS (${recentCalls.length}):`);
+              recentCalls.forEach((c, i) => {
+                const dt = c.call_start_time ? new Date(c.call_start_time).toLocaleDateString('en-IN') : '?';
+                ctxParts.push(`  ${i+1}. ${dt} (${c.status}) — ${(c.conversation_summary || '').substring(0, 200)}`);
+              });
             }
           } catch (_) {}
-        }
 
-        // Fallback: any active agent for this client
-        if (!agent) {
-          const agents = await svc.entities.Agent.filter({ client_id: activity.client_id, status: 'active' });
-          agent = agents.find(a => (a.assigned_dids?.length > 0) || a.assigned_did);
-        }
+          ctxParts.push(`\nFOLLOW-UP CONTEXT:`);
+          ctxParts.push(`- Reason: ${activity.title || 'Scheduled follow-up'}`);
+          ctxParts.push(`- Details: ${activity.description || 'N/A'}`);
+          if (activity.notes) ctxParts.push(`- Notes: ${activity.notes}`);
+          ctxParts.push(`\nCRITICAL RULES:`);
+          ctxParts.push(`- Address customer by name "${lead.name || 'Sir/Madam'}".`);
+          ctxParts.push(`- Reference your previous conversation naturally.`);
+          ctxParts.push(`- This is a SCHEDULED follow-up — the customer expects this call.`);
+          const leadContext = ctxParts.join('\n');
 
-        if (!agent) {
-          await svc.entities.Activity.update(activity.id, {
-            reminder_sent: true,
-            notes: (activity.notes || '') + '\n[Engine] Skipped: no active agent'
+          // Knowledge base
+          let kbContent = '';
+          if (agent.knowledge_base_ids?.length > 0) {
+            for (const kbId of agent.knowledge_base_ids) {
+              try {
+                const doc = await svc.entities.KnowledgeBase.get(kbId);
+                if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
+              } catch (_) {}
+            }
+          }
+
+          const personalizedPrompt = [
+            agent.system_prompt || '',
+            `\n\n--- FOLLOW-UP CALL CONTEXT (YOU MUST USE THIS DATA) ---\n${leadContext}`
+          ].filter(Boolean).join('\n');
+
+          const callSid = `followup_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+          const callLog = await svc.entities.CallLog.create({
+            client_id: activity.client_id,
+            agent_id: agent.id,
+            lead_id: lead.id,
+            call_sid: callSid,
+            caller_id: callerDID,
+            callee_number: lead.phone,
+            direction: 'outbound',
+            status: 'initiated',
+            call_start_time: now.toISOString(),
+            conversation_summary: `[AUTO-FOLLOWUP] ${activity.title}\n${leadContext.substring(0, 500)}`,
+            agent_config_cache: {
+              agent_name: agent.name,
+              system_prompt: personalizedPrompt,
+              persona: agent.persona || {},
+              knowledge_base_content: kbContent,
+              lead_context: leadContext
+            }
           });
-          // Send admin email about failed auto-call
-          await sendAdminAlert(svc, client, activity, lead, 'auto_call_failed', 'No active agent with DID available for follow-up call.');
-          results.skipped++;
-          continue;
-        }
 
-        const callerDID = (agent.assigned_dids?.length > 0) ? agent.assigned_dids[0] : agent.assigned_did;
-        if (!callerDID) {
-          results.skipped++;
-          continue;
-        }
+          // Smartflo call
+          const cleanPhone = lead.phone.replace(/\D/g, '');
+          const smartfloRes = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              api_key: Deno.env.get('SMARTFLO_API_KEY'),
+              customer_number: cleanPhone,
+              caller_id: callerDID.replace(/^\+/, ''),
+              async: 1
+            })
+          });
 
-        // Build lead context INLINE
-        let leadContext = '';
-        const ctxParts = [`CUSTOMER PROFILE:`, `- Name: ${lead.name || 'Unknown'}`];
-        if (lead.phone) ctxParts.push(`- Phone: ${lead.phone}`);
-        if (lead.email) ctxParts.push(`- Email: ${lead.email}`);
-        if (lead.company) ctxParts.push(`- Company: ${lead.company}`);
-        if (lead.status) ctxParts.push(`- Status: ${lead.status}`);
-        if (lead.score) ctxParts.push(`- Score: ${lead.score}/100`);
-        if (lead.qualification_tier) ctxParts.push(`- Tier: ${lead.qualification_tier.toUpperCase()}`);
-        if (lead.notes) ctxParts.push(`\nLEAD NOTES:\n${lead.notes.substring(0, 500)}`);
-
-        // Get recent call history
-        try {
-          const recentCalls = await svc.entities.CallLog.filter({ lead_id: lead.id }, '-created_date', 3);
-          if (recentCalls.length > 0) {
-            ctxParts.push(`\nPREVIOUS CALLS (${recentCalls.length}):`);
-            recentCalls.forEach((c, i) => {
-              const dt = c.call_start_time ? new Date(c.call_start_time).toLocaleDateString('en-IN') : '?';
-              ctxParts.push(`  ${i+1}. ${dt} (${c.status}) — ${(c.conversation_summary || '').substring(0, 200)}`);
+          const smartfloData = await smartfloRes.json();
+          if (!smartfloRes.ok || smartfloData.success === false) {
+            await svc.entities.CallLog.update(callLog.id, { status: 'failed' });
+            await svc.entities.Activity.update(activity.id, {
+              reminder_sent: true,
+              notes: (activity.notes || '') + `\n[Engine] Call failed: ${smartfloData.message || 'Unknown'}`
             });
+            results.errors.push({ activity_id: activity.id, error: smartfloData.message });
+            console.error(`[FollowupEngine] Smartflo call failed for ${lead.name}: ${smartfloData.message}`);
+            continue;
           }
-        } catch (_) {}
 
-        ctxParts.push(`\nFOLLOW-UP CONTEXT:`);
-        ctxParts.push(`- Reason: ${activity.title || 'Scheduled follow-up'}`);
-        ctxParts.push(`- Details: ${activity.description || 'N/A'}`);
-        if (activity.notes) ctxParts.push(`- Notes: ${activity.notes}`);
-        ctxParts.push(`\nCRITICAL RULES:`);
-        ctxParts.push(`- Address customer by name "${lead.name || 'Sir/Madam'}".`);
-        ctxParts.push(`- Reference your previous conversation naturally.`);
-        ctxParts.push(`- This is a SCHEDULED follow-up — the customer expects this call.`);
-        leadContext = ctxParts.join('\n');
+          const actualSid = smartfloData.call_id || smartfloData.call_sid || smartfloData.ref_id || callSid;
+          await svc.entities.CallLog.update(callLog.id, { call_sid: actualSid, status: 'ringing' });
 
-        // Knowledge base
-        let kbContent = '';
-        if (agent.knowledge_base_ids?.length > 0) {
-          for (const kbId of agent.knowledge_base_ids) {
-            try {
-              const doc = await svc.entities.KnowledgeBase.get(kbId);
-              if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
-            } catch (_) {}
-          }
-        }
-
-        const personalizedPrompt = [
-          agent.system_prompt || '',
-          `\n\n--- FOLLOW-UP CALL CONTEXT (YOU MUST USE THIS DATA) ---\n${leadContext}`
-        ].filter(Boolean).join('\n');
-
-        const callSid = `followup_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-        const callLog = await svc.entities.CallLog.create({
-          client_id: activity.client_id,
-          agent_id: agent.id,
-          lead_id: lead.id,
-          call_sid: callSid,
-          caller_id: callerDID,
-          callee_number: lead.phone,
-          direction: 'outbound',
-          status: 'initiated',
-          call_start_time: now.toISOString(),
-          conversation_summary: `[AUTO-FOLLOWUP] ${activity.title}\n${leadContext.substring(0, 500)}`,
-          agent_config_cache: {
-            agent_name: agent.name,
-            system_prompt: personalizedPrompt,
-            persona: agent.persona || {},
-            knowledge_base_content: kbContent,
-            lead_context: leadContext
-          }
-        });
-
-        // Smartflo call
-        const cleanPhone = lead.phone.replace(/\D/g, '');
-        const smartfloRes = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            api_key: Deno.env.get('SMARTFLO_API_KEY'),
-            customer_number: cleanPhone,
-            caller_id: callerDID.replace(/^\+/, ''),
-            async: 1
-          })
-        });
-
-        const smartfloData = await smartfloRes.json();
-        if (!smartfloRes.ok || smartfloData.success === false) {
-          await svc.entities.CallLog.update(callLog.id, { status: 'failed' });
           await svc.entities.Activity.update(activity.id, {
+            status: 'completed',
+            completed_date: now.toISOString(),
             reminder_sent: true,
-            notes: (activity.notes || '') + `\n[Engine] Call failed: ${smartfloData.message || 'Unknown'}`
+            outcome: `Auto-call initiated (${callLog.id})`,
+            notes: (activity.notes || '') + `\n[Engine] Call initiated: ${callLog.id}`
           });
-          results.errors.push({ activity_id: activity.id, error: smartfloData.message });
-          continue;
+
+          await svc.entities.Lead.update(lead.id, { status: 'contacted', last_call_date: now.toISOString() });
+          results.calls_initiated++;
+          console.log(`[FollowupEngine] ✅ Call initiated: ${lead.name} → ${lead.phone} (activity ${activity.id})`);
         }
 
-        const actualSid = smartfloData.call_id || smartfloData.call_sid || smartfloData.ref_id || callSid;
-        await svc.entities.CallLog.update(callLog.id, { call_sid: actualSid, status: 'ringing' });
+        // ============================================================
+        // 2. EMAIL → Send AI-personalized email
+        // ============================================================
+        else if (activityType === 'email') {
+          if (!lead?.email) {
+            await svc.entities.Activity.update(activity.id, { reminder_sent: true });
+            results.skipped++;
+            continue;
+          }
 
-        await svc.entities.Activity.update(activity.id, {
-          status: 'completed',
-          completed_date: now.toISOString(),
-          reminder_sent: true,
-          outcome: `Auto-call initiated (${callLog.id})`,
-          notes: (activity.notes || '') + `\n[Engine] Call initiated: ${callLog.id}`
-        });
-
-        await svc.entities.Lead.update(lead.id, { status: 'contacted', last_call_date: now.toISOString() });
-        results.calls_initiated++;
-        console.log(`[FollowupEngine] Call initiated: ${lead.name} → ${lead.phone} (activity ${activity.id})`);
-      }
-
-      // ============================================================
-      // 2. EMAIL → Send AI-personalized email
-      // ============================================================
-      else if (activityType === 'email') {
-        if (!lead?.email) {
-          await svc.entities.Activity.update(activity.id, { reminder_sent: true });
-          results.skipped++;
-          continue;
-        }
-
-        const emailContent = await svc.integrations.Core.InvokeLLM({
-          prompt: `Write a personalized follow-up email.
+          const emailContent = await svc.integrations.Core.InvokeLLM({
+            prompt: `Write a personalized follow-up email.
 Company: ${client?.company_name || 'Our Team'}
 Lead: ${lead.name || 'Valued Customer'}, Company: ${lead.company || 'N/A'}
 Activity: ${activity.title || 'Follow-up'}
@@ -250,93 +308,117 @@ ${activity.notes ? 'Notes: ' + activity.notes : ''}
 ${lead.notes ? 'Lead history: ' + lead.notes.substring(0, 300) : ''}
 
 Professional, concise (<150 words), HTML body only. Indian business context.`,
-          response_json_schema: {
-            type: "object",
-            properties: { subject: { type: "string" }, body_html: { type: "string" } }
-          }
-        });
+            response_json_schema: {
+              type: "object",
+              properties: { subject: { type: "string" }, body_html: { type: "string" } }
+            }
+          });
 
-        await svc.integrations.Core.SendEmail({
-          to: lead.email,
-          from_name: client?.company_name || 'VaaniAI',
-          subject: emailContent.subject,
-          body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${emailContent.body_html}</div>`
-        });
+          await sendEmailViaResend({
+            to: lead.email,
+            fromName: client?.company_name || 'VaaniAI',
+            subject: emailContent.subject,
+            html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${emailContent.body_html}</div>`
+          });
 
-        await svc.entities.OutreachLog.create({
-          client_id: activity.client_id, lead_id: lead.id,
-          channel: 'email', recipient_email: lead.email,
-          subject: emailContent.subject, body: emailContent.body_html,
-          outreach_type: 'lead_followup', status: 'sent'
-        });
+          await svc.entities.OutreachLog.create({
+            client_id: activity.client_id, lead_id: lead.id,
+            channel: 'email', recipient_email: lead.email,
+            subject: emailContent.subject, body: emailContent.body_html,
+            outreach_type: 'lead_followup', status: 'sent'
+          });
 
-        await svc.entities.Activity.update(activity.id, {
-          status: 'completed', completed_date: now.toISOString(),
-          reminder_sent: true, outcome: `Email sent: ${emailContent.subject}`
-        });
+          await svc.entities.Activity.update(activity.id, {
+            status: 'completed', completed_date: now.toISOString(),
+            reminder_sent: true, outcome: `Email sent: ${emailContent.subject}`
+          });
 
-        results.emails_sent++;
-        console.log(`[FollowupEngine] Email sent: ${lead.email} (activity ${activity.id})`);
-      }
-
-      // ============================================================
-      // 3. APPOINTMENT / DEMO / VISIT / MEETING → Human action needed
-      //    Send reminder to lead + alert to client admin
-      // ============================================================
-      else if (['appointment', 'demo', 'visit', 'meeting', 'booking'].includes(activityType)) {
-        // Send reminder to lead
-        if (lead?.email) {
-          try {
-            const reminderContent = await svc.integrations.Core.InvokeLLM({
-              prompt: `Write a brief reminder email for ${lead.name || 'customer'} about their ${activityType}: "${activity.title}". Scheduled: ${scheduledDate.toLocaleString('en-IN')}. From ${client?.company_name || 'VaaniAI'}. Under 80 words, HTML body only.`,
-              response_json_schema: {
-                type: "object",
-                properties: { subject: { type: "string" }, body_html: { type: "string" } }
-              }
-            });
-            await svc.integrations.Core.SendEmail({
-              to: lead.email, from_name: client?.company_name || 'VaaniAI',
-              subject: reminderContent.subject,
-              body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${reminderContent.body_html}</div>`
-            });
-            results.reminders_sent++;
-          } catch (e) {
-            console.error(`[FollowupEngine] Lead reminder failed: ${e.message}`);
-          }
+          results.emails_sent++;
+          console.log(`[FollowupEngine] ✅ Email sent: ${lead.email} (activity ${activity.id})`);
         }
 
-        // ALERT CLIENT ADMIN — human action required
-        await sendAdminAlert(svc, client, activity, lead, 'human_action_required',
-          `${activityType.toUpperCase()} scheduled. Human agent action needed.`);
-        results.admin_alerts_sent++;
+        // ============================================================
+        // 3. APPOINTMENT / DEMO / VISIT / MEETING → Human action needed
+        //    Send reminder to lead + alert to client admin
+        // ============================================================
+        else if (['appointment', 'demo', 'visit', 'meeting', 'booking'].includes(activityType)) {
+          // Send reminder to lead
+          if (lead?.email) {
+            try {
+              const reminderContent = await svc.integrations.Core.InvokeLLM({
+                prompt: `Write a brief reminder email for ${lead.name || 'customer'} about their ${activityType}: "${activity.title}". Scheduled: ${scheduledDate.toLocaleString('en-IN')}. From ${client?.company_name || 'VaaniAI'}. Under 80 words, HTML body only.`,
+                response_json_schema: {
+                  type: "object",
+                  properties: { subject: { type: "string" }, body_html: { type: "string" } }
+                }
+              });
+              await sendEmailViaResend({
+                to: lead.email,
+                fromName: client?.company_name || 'VaaniAI',
+                subject: reminderContent.subject,
+                html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${reminderContent.body_html}</div>`
+              });
+              results.reminders_sent++;
+              console.log(`[FollowupEngine] ✅ Reminder sent to ${lead.email}`);
+            } catch (e) {
+              console.error(`[FollowupEngine] Lead reminder failed: ${e.message}`);
+            }
+          }
 
-        await svc.entities.Activity.update(activity.id, {
-          reminder_sent: true,
-          notes: (activity.notes || '') + `\n[Engine] Reminder + admin alert sent at ${now.toISOString()}`
-        });
-      }
+          // ALERT CLIENT ADMIN — human action required
+          try {
+            await sendAdminAlert(svc, client, activity, lead, 'human_action_required',
+              `${activityType.toUpperCase()} scheduled. Human agent action needed.`);
+            results.admin_alerts_sent++;
+          } catch (alertErr) {
+            console.error(`[FollowupEngine] Admin alert failed: ${alertErr.message}`);
+          }
 
-      // ============================================================
-      // 4. TASK → Alert admin, mark overdue
-      // ============================================================
-      else if (activityType === 'task') {
-        await sendAdminAlert(svc, client, activity, lead, 'task_due',
-          `Task is due and requires attention.`);
-        results.admin_alerts_sent++;
+          await svc.entities.Activity.update(activity.id, {
+            reminder_sent: true,
+            notes: (activity.notes || '') + `\n[Engine] Reminder + admin alert sent at ${now.toISOString()}`
+          });
+        }
 
-        await svc.entities.Activity.update(activity.id, {
-          reminder_sent: true, status: hoursPast > 4 ? 'overdue' : 'scheduled',
-          notes: (activity.notes || '') + `\n[Engine] Admin alerted at ${now.toISOString()}`
-        });
-        if (hoursPast > 4) results.marked_overdue++;
-      }
+        // ============================================================
+        // 4. TASK → Alert admin, mark overdue
+        // ============================================================
+        else if (activityType === 'task') {
+          try {
+            await sendAdminAlert(svc, client, activity, lead, 'task_due',
+              `Task is due and requires attention.`);
+            results.admin_alerts_sent++;
+          } catch (alertErr) {
+            console.error(`[FollowupEngine] Admin alert failed: ${alertErr.message}`);
+          }
 
-      else {
-        results.skipped++;
+          await svc.entities.Activity.update(activity.id, {
+            reminder_sent: true, status: hoursPast > 4 ? 'overdue' : 'scheduled',
+            notes: (activity.notes || '') + `\n[Engine] Admin alerted at ${now.toISOString()}`
+          });
+          if (hoursPast > 4) results.marked_overdue++;
+        }
+
+        else {
+          console.log(`[FollowupEngine] Unknown type: ${activityType}, skipping`);
+          results.skipped++;
+        }
+
+      } catch (activityErr) {
+        // ── Per-activity error: log it and continue to next ──
+        console.error(`[FollowupEngine] Error processing activity ${activity.id} (${activity.title}): ${activityErr.message}`);
+        results.errors.push({ activity_id: activity.id, title: activity.title, error: activityErr.message });
+        // Mark as processed to avoid retrying the same broken activity forever
+        try {
+          await svc.entities.Activity.update(activity.id, {
+            reminder_sent: true,
+            notes: (activity.notes || '') + `\n[Engine] Error: ${activityErr.message}`
+          });
+        } catch (_) {}
       }
     }
 
-    console.log(`[FollowupEngine] Done. Calls:${results.calls_initiated} Emails:${results.emails_sent} Alerts:${results.admin_alerts_sent} Overdue:${results.marked_overdue}`);
+    console.log(`[FollowupEngine] Done. Calls:${results.calls_initiated} Emails:${results.emails_sent} Alerts:${results.admin_alerts_sent} Overdue:${results.marked_overdue} Errors:${results.errors.length}`);
     return Response.json({ success: true, processed: activities.length, ...results });
 
   } catch (error) {
@@ -347,10 +429,13 @@ Professional, concise (<150 words), HTML body only. Indian business context.`,
 
 
 // ============================================================
-// ADMIN EMAIL ALERT — Notify client admin about actions needed
+// ADMIN EMAIL ALERT — Uses Resend (works for ANY email)
 // ============================================================
 async function sendAdminAlert(svc, client, activity, lead, alertType, reason) {
-  if (!client?.email) return;
+  if (!client?.email) {
+    console.warn(`[FollowupEngine] Cannot send admin alert: no client email`);
+    return;
+  }
 
   const leadName = lead?.name || 'Unknown Lead';
   const leadPhone = lead?.phone || 'N/A';
@@ -407,15 +492,11 @@ async function sendAdminAlert(svc, client, activity, lead, alertType, reason) {
       </div>
     </div>`;
 
-  try {
-    await svc.integrations.Core.SendEmail({
-      to: client.email,
-      from_name: 'VaaniAI Automation',
-      subject: `[${label}] ${activity.title || activity.type} — ${leadName}`,
-      body: emailBody
-    });
-    console.log(`[FollowupEngine] Admin alert sent to ${client.email}: ${alertType}`);
-  } catch (e) {
-    console.error(`[FollowupEngine] Admin alert failed: ${e.message}`);
-  }
+  await sendEmailViaResend({
+    to: client.email,
+    fromName: 'VaaniAI Automation',
+    subject: `[${label}] ${activity.title || activity.type} — ${leadName}`,
+    html: emailBody
+  });
+  console.log(`[FollowupEngine] Admin alert sent to ${client.email}: ${alertType}`);
 }
