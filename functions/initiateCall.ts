@@ -156,7 +156,8 @@ Deno.serve(async (req) => {
         system_prompt: personalizedPrompt,
         persona: agent.persona || {},
         knowledge_base_content: kbContent,
-        lead_context: leadContext
+        lead_context: leadContext,
+        greeting_message: agent.greeting_message || ''
       }
     });
 
