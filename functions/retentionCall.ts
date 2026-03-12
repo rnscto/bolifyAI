@@ -266,7 +266,8 @@ Deno.serve(async (req) => {
           system_prompt: retentionSystemPrompt,
           persona: agentPersona,
           knowledge_base_content: kbContent,
-          lead_context: leadContext
+          lead_context: leadContext,
+          greeting_message: retentionAgent.greeting_message || ''
         }
       });
 
