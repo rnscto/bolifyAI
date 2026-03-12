@@ -273,6 +273,57 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
     }
 
     // ===================================================================
+    // PART 1.5: CREATE CALLBACK/FOLLOWUP ACTIVITY (for manual non-campaign calls)
+    // This ensures manual calls appear in Automation Engine & Callbacks page
+    // ===================================================================
+    if (lead && leadId && ['callback', 'interested'].includes(leadStatusAfterCall)) {
+      // Check if an activity already exists for this call to avoid duplicates
+      const existingActivities = await svc.entities.Activity.filter({ 
+        client_id: clientId, 
+        lead_id: leadId, 
+        call_log_id: callLogId 
+      });
+
+      if (existingActivities.length === 0) {
+        // Determine follow-up date: callback = 1 day, interested = 2 days
+        const followupDays = leadStatusAfterCall === 'callback' ? 1 : 2;
+        const followupDate = new Date();
+        followupDate.setDate(followupDate.getDate() + followupDays);
+        followupDate.setHours(10, 0, 0, 0); // Default to 10 AM IST
+
+        const activityType = leadStatusAfterCall === 'callback' ? 'followup' : 'call';
+        const activityTitle = leadStatusAfterCall === 'callback' 
+          ? `Callback: ${lead.name || lead.phone}` 
+          : `Follow-up call: ${lead.name || lead.phone}`;
+
+        await svc.entities.Activity.create({
+          client_id: clientId,
+          lead_id: leadId,
+          call_log_id: callLogId,
+          type: activityType,
+          title: activityTitle,
+          description: `Auto-created from manual call. Outcome: ${leadStatusAfterCall}. Summary: ${summary.substring(0, 300)}`,
+          scheduled_date: followupDate.toISOString(),
+          due_date: followupDate.toISOString(),
+          status: 'scheduled',
+          priority: leadStatusAfterCall === 'callback' ? 'high' : 'medium',
+          auto_created: true,
+          notes: `Call ID: ${callLogId}`
+        });
+
+        // Also update lead's next_followup_date
+        await svc.entities.Lead.update(leadId, { 
+          next_followup_date: followupDate.toISOString() 
+        });
+
+        console.log(`[postCallFollowup] Created ${activityType} activity for lead ${leadId}, scheduled ${followupDate.toISOString()}`);
+        results.activity_created = { lead_id: leadId, type: activityType, scheduled: followupDate.toISOString() };
+      } else {
+        console.log(`[postCallFollowup] Activity already exists for call ${callLogId}, skipping`);
+      }
+    }
+
+    // ===================================================================
     // PART 2: RETENTION — Platform clients who didn't subscribe
     // ===================================================================
     const isRetentionCall = callLog.agent_id === 'system_inbound' || 
