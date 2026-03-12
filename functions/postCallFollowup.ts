@@ -346,7 +346,7 @@ INSTRUCTIONS:
 </div>`
         });
 
-        await base44.entities.OutreachLog.create({
+        await svc.entities.OutreachLog.create({
           client_id: clientId,
           call_log_id: callLogId,
           channel: 'email',
@@ -370,7 +370,7 @@ INSTRUCTIONS:
 
       } catch (retErr) {
         console.error(`[postCallFollowup] Retention email failed:`, retErr.message);
-        await base44.entities.OutreachLog.create({
+        await svc.entities.OutreachLog.create({
           client_id: clientId,
           call_log_id: callLogId,
           channel: 'email',
@@ -411,7 +411,7 @@ INSTRUCTIONS:
             const rcsResult = await rcsResp.json();
             console.log(`[postCallFollowup] Retention RCS to ${client.phone}:`, rcsResult);
 
-            await base44.entities.OutreachLog.create({
+            await svc.entities.OutreachLog.create({
               client_id: clientId,
               call_log_id: callLogId,
               channel: 'rcs',
