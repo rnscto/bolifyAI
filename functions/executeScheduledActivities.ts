@@ -15,6 +15,29 @@ async function sendEmailViaResend({ to, fromName, subject, html }) {
   return data;
 }
 
+// ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
+async function azureLLM(prompt, systemPrompt, jsonSchema) {
+  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
+  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: [
+        { role: 'system', content: systemPrompt || 'You are a helpful assistant. Always respond in valid JSON.' },
+        { role: 'user', content: prompt + (jsonSchema ? '\n\nRespond in JSON matching this schema: ' + JSON.stringify(jsonSchema) : '') }
+      ],
+      max_completion_tokens: 800,
+      response_format: { type: "json_object" }
+    })
+  });
+  if (!res.ok) throw new Error(`Azure OpenAI error: ${res.status} ${await res.text()}`);
+  const data = await res.json();
+  return JSON.parse(data.choices[0].message.content);
+}
+
 // Follow-up Automation Engine — runs every 15 min via scheduled automation.
 // No user session — uses service role directly.
 // Picks up scheduled activities due NOW, executes them:
@@ -343,8 +366,8 @@ Deno.serve(async (req) => {
             continue;
           }
 
-          const emailContent = await svc.integrations.Core.InvokeLLM({
-            prompt: `Write a personalized follow-up email.
+          const emailContent = await azureLLM(
+            `Write a personalized follow-up email.
 Company: ${client?.company_name || 'Our Team'}
 Lead: ${lead.name || 'Valued Customer'}, Company: ${lead.company || 'N/A'}
 Activity: ${activity.title || 'Follow-up'}
@@ -353,11 +376,9 @@ ${activity.notes ? 'Notes: ' + activity.notes : ''}
 ${lead.notes ? 'Lead history: ' + lead.notes.substring(0, 300) : ''}
 
 Professional, concise (<150 words), HTML body only. Indian business context.`,
-            response_json_schema: {
-              type: "object",
-              properties: { subject: { type: "string" }, body_html: { type: "string" } }
-            }
-          });
+            'You are an email copywriter. Always respond in valid JSON.',
+            { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } } }
+          );
 
           await sendEmailViaResend({
             to: lead.email,
@@ -390,13 +411,11 @@ Professional, concise (<150 words), HTML body only. Indian business context.`,
           // Send reminder to lead
           if (lead?.email) {
             try {
-              const reminderContent = await svc.integrations.Core.InvokeLLM({
-                prompt: `Write a brief reminder email for ${lead.name || 'customer'} about their ${activityType}: "${activity.title}". Scheduled: ${scheduledDate.toLocaleString('en-IN')}. From ${client?.company_name || 'VaaniAI'}. Under 80 words, HTML body only.`,
-                response_json_schema: {
-                  type: "object",
-                  properties: { subject: { type: "string" }, body_html: { type: "string" } }
-                }
-              });
+              const reminderContent = await azureLLM(
+                `Write a brief reminder email for ${lead.name || 'customer'} about their ${activityType}: "${activity.title}". Scheduled: ${scheduledDate.toLocaleString('en-IN')}. From ${client?.company_name || 'VaaniAI'}. Under 80 words, HTML body only.`,
+                'You are an email copywriter. Always respond in valid JSON.',
+                { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } } }
+              );
               await sendEmailViaResend({
                 to: lead.email,
                 fromName: client?.company_name || 'VaaniAI',

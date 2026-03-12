@@ -319,11 +319,12 @@ Deno.serve(async (req) => {
             </div>
           ` : '';
 
-          await base44.integrations.Core.SendEmail({
+          const retResend = new (await import('npm:resend@4.0.0')).Resend(Deno.env.get('RESEND_API_KEY'));
+          await retResend.emails.send({
+            from: 'VaaniAI <noreply@vaaniai.io>',
             to: client.email,
-            from_name: 'VaaniAI',
             subject: 'Following up on our call — VaaniAI',
-            body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+            html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
               <div style="background:linear-gradient(135deg,#1a365d,#2d3748);padding:30px;text-align:center;border-radius:12px 12px 0 0;">
                 <h1 style="color:white;margin:0;">VaaniAI</h1>
               </div>

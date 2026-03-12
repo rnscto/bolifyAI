@@ -323,11 +323,11 @@ INSTRUCTIONS:
 
       // Send retention email
       try {
-        await base44.integrations.Core.SendEmail({
+        await sendLeadEmail({
           to: client.email,
-          from_name: 'VaaniAI',
+          fromName: 'VaaniAI',
           subject: retentionEmail.subject,
-          body: `
+          html: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
   <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 24px 30px; border-radius: 12px 12px 0 0; text-align: center;">
     <h2 style="color: white; margin: 0;">VaaniAI</h2>
