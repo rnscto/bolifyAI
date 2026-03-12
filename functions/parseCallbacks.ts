@@ -52,8 +52,8 @@ Deno.serve(async (req) => {
     const callActivities = await svc.entities.Activity.filter({ client_id, type: 'call', status: 'scheduled' });
     const activities = [...followupActivities, ...callActivities];
 
-    // Fetch call logs for callback leads to get transcripts/summaries
-    const leadIds = callbackLeads.map(l => l.id);
+    // Fetch call logs for all leads to get transcripts/summaries
+    const leadIds = allCallbackLeads.map(l => l.id);
     const callLogs = [];
     for (const leadId of leadIds) {
       const logs = await svc.entities.CallLog.filter({ lead_id: leadId, status: 'completed' }, '-created_date', 1);
@@ -63,7 +63,7 @@ Deno.serve(async (req) => {
     // Use LLM to extract callback details from transcripts
     const callbackItems = [];
 
-    for (const lead of callbackLeads) {
+    for (const lead of allCallbackLeads) {
       const matchingLog = callLogs.find(cl => cl.lead_id === lead.id);
       const matchingCL = campaignLeads.find(cl => cl.lead_id === lead.id);
       const matchingActivity = activities.find(a => a.lead_id === lead.id);
