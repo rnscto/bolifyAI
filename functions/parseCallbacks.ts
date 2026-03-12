@@ -20,7 +20,12 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
   });
   if (!res.ok) throw new Error(`Azure OpenAI error: ${res.status} ${await res.text()}`);
   const data = await res.json();
-  return JSON.parse(data.choices[0].message.content);
+  const content = data.choices?.[0]?.message?.content;
+  if (!content) {
+    console.warn('[parseCallbacks] Azure returned empty content, returning empty object');
+    return {};
+  }
+  return JSON.parse(content);
 }
 
 Deno.serve(async (req) => {
