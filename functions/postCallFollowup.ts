@@ -61,7 +61,7 @@ Deno.serve(async (req) => {
       }
     } else if (payload.call_log_id) {
       // Direct invocation
-      callLog = await base44.entities.CallLog.get(payload.call_log_id);
+      callLog = await svc.entities.CallLog.get(payload.call_log_id);
     } else {
       return Response.json({ error: 'Invalid payload' }, { status: 400 });
     }
@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
     // Skip campaign calls — campaignPostCall handles their follow-up emails to avoid duplicates
     const callLogId_check = callLog.id || event?.entity_id;
     if (callLogId_check) {
-      const campaignLeadCheck = await base44.entities.CampaignLead.filter({ call_log_id: callLogId_check });
+      const campaignLeadCheck = await svc.entities.CampaignLead.filter({ call_log_id: callLogId_check });
       if (campaignLeadCheck.length > 0) {
         console.log('[postCallFollowup] Skipping campaign call — handled by campaignPostCall');
         return Response.json({ success: true, skipped: 'campaign_call' });
@@ -101,18 +101,18 @@ Deno.serve(async (req) => {
     }
 
     // ===== LOAD CONTEXT =====
-    const client = await base44.entities.Client.get(clientId);
+    const client = await svc.entities.Client.get(clientId);
     if (!client) {
       return Response.json({ success: true, skipped: 'client_not_found' });
     }
 
     let lead = null;
     if (leadId && leadId !== 'unknown') {
-      try { lead = await base44.entities.Lead.get(leadId); } catch (_) {}
+      try { lead = await svc.entities.Lead.get(leadId); } catch (_) {}
     }
 
     // Load retention config
-    const configs = await base44.entities.RetentionConfig.list('-created_date', 1);
+    const configs = await svc.entities.RetentionConfig.list('-created_date', 1);
     const retentionConfig = configs[0] || {};
 
     // ===================================================================
@@ -163,7 +163,7 @@ Generate the subject line and HTML body.`,
         await sendLeadEmail({ to: lead.email, fromName: client.company_name, subject: aiContent.subject, html: emailHtml });
 
         // Log the outreach
-        await base44.entities.OutreachLog.create({
+        await svc.entities.OutreachLog.create({
           client_id: clientId,
           lead_id: leadId,
           call_log_id: callLogId,
@@ -191,7 +191,7 @@ Generate the subject line and HTML body.`,
 
       } catch (emailErr) {
         console.error(`[postCallFollowup] Email failed for lead ${leadId}:`, emailErr.message);
-        await base44.entities.OutreachLog.create({
+        await svc.entities.OutreachLog.create({
           client_id: clientId,
           lead_id: leadId,
           call_log_id: callLogId,
@@ -241,7 +241,7 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
             const smsResult = await smsResponse.json();
             console.log(`[postCallFollowup] RCS/SMS sent to ${lead.phone}:`, smsResult);
 
-            await base44.entities.OutreachLog.create({
+            await svc.entities.OutreachLog.create({
               client_id: clientId,
               lead_id: leadId,
               call_log_id: callLogId,
