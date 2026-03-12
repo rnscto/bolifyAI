@@ -104,7 +104,7 @@ export default function ClientAutomationEngine() {
                   {humanActions.length} action(s) require human attention
                 </h3>
                 <div className="mt-2 space-y-1">
-                  {humanActions.slice(0, 5).map(a => {
+                  {(showAllHuman ? humanActions : humanActions.slice(0, 5)).map(a => {
                     const lead = leads.find(l => l.id === a.lead_id);
                     return (
                       <div key={a.id} className="text-xs text-orange-800 flex items-center gap-2">
@@ -115,7 +115,12 @@ export default function ClientAutomationEngine() {
                     );
                   })}
                   {humanActions.length > 5 && (
-                    <p className="text-xs text-orange-600">...and {humanActions.length - 5} more</p>
+                    <button
+                      onClick={() => setShowAllHuman(!showAllHuman)}
+                      className="text-xs text-orange-700 font-medium hover:underline mt-1"
+                    >
+                      {showAllHuman ? 'Show less' : `View all ${humanActions.length} actions`}
+                    </button>
                   )}
                 </div>
               </div>
