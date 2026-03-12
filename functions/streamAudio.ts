@@ -412,6 +412,7 @@ Deno.serve(async (req) => {
     transcript: [],
     startTime: Date.now(),
     systemPrompt: 'You are a friendly AI voice assistant. Be professional and concise. Keep responses to 1-3 sentences.',
+    greetingMessage: '',      // Custom greeting spoken first when call connects
     voiceEngine: 'realtime',  // 'realtime' or 'azure_speech'
     voiceType: 'alloy',       // Default voice, overridden from agent config
     _saved: false,
@@ -498,6 +499,9 @@ Deno.serve(async (req) => {
 
     sendToRealtime({ type: 'session.update', session: sessionConfig });
     console.log(`[${reqId}] 📤 Session configured: engine=${session.voiceEngine}, voice=${session.voiceType}`);
+
+    // ─── TRIGGER INITIAL GREETING so the agent speaks first ───
+    triggerGreeting();
   }
 
   // ─── Handle messages FROM Azure Realtime API ───
