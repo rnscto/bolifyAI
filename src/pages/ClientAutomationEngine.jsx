@@ -58,6 +58,8 @@ export default function ClientAutomationEngine() {
     setRefreshing(false);
   };
 
+  const [showAllHuman, setShowAllHuman] = useState(false);
+
   const scheduled = activities.filter(a => a.status === 'scheduled');
   const humanActions = scheduled.filter(a =>
     ['appointment', 'demo', 'visit', 'meeting', 'booking'].includes(a.type)
