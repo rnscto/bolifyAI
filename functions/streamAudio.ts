@@ -1006,7 +1006,10 @@ Deno.serve(async (req) => {
         if (cache.knowledge_base_content) {
           session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
         }
-        console.log(`[${reqId}] ✅ Agent config loaded from CallLog ${callLog.id} (${session.systemPrompt.length} chars, agent=${cache.agent_name || 'unknown'})`);
+        if (cache.greeting_message) {
+          session.greetingMessage = cache.greeting_message;
+        }
+        console.log(`[${reqId}] ✅ Agent config loaded from CallLog ${callLog.id} (${session.systemPrompt.length} chars, agent=${cache.agent_name || 'unknown'}, greeting=${session.greetingMessage ? 'custom' : 'auto'})`);
       } else {
         console.log(`[${reqId}] ⚠️ CallLog ${callLog.id} found but has NO agent_config_cache — using default prompt`);
       }
