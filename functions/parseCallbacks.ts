@@ -37,14 +37,20 @@ Deno.serve(async (req) => {
     const { client_id } = await req.json();
     const svc = base44.asServiceRole;
 
-    // Fetch callback leads for this client
+    // Fetch callback AND interested leads for this client
     const callbackLeads = await svc.entities.Lead.filter({ client_id, status: 'callback' });
+    const interestedLeads = await svc.entities.Lead.filter({ client_id, status: 'interested' });
+    const allCallbackLeads = [...callbackLeads, ...interestedLeads];
     
-    // Fetch recent campaign leads with callback outcome
-    const campaignLeads = await svc.entities.CampaignLead.filter({ client_id, outcome: 'callback' });
+    // Fetch recent campaign leads with callback or interested outcome
+    const campaignCallbacks = await svc.entities.CampaignLead.filter({ client_id, outcome: 'callback' });
+    const campaignInterested = await svc.entities.CampaignLead.filter({ client_id, outcome: 'interested' });
+    const campaignLeads = [...campaignCallbacks, ...campaignInterested];
     
-    // Fetch scheduled followup activities
-    const activities = await svc.entities.Activity.filter({ client_id, type: 'followup', status: 'scheduled' });
+    // Fetch scheduled followup activities (all types that need action)
+    const followupActivities = await svc.entities.Activity.filter({ client_id, type: 'followup', status: 'scheduled' });
+    const callActivities = await svc.entities.Activity.filter({ client_id, type: 'call', status: 'scheduled' });
+    const activities = [...followupActivities, ...callActivities];
 
     // Fetch call logs for callback leads to get transcripts/summaries
     const leadIds = callbackLeads.map(l => l.id);
