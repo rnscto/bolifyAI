@@ -517,18 +517,18 @@ Deno.serve(async (req) => {
         console.log(`[${reqId}] ⚡ Agent config was ready before Realtime — applying immediately`);
         applySessionConfig();
       } else {
-        // Realtime connected first — send minimal config so audio flows immediately
-        // Will be reconfigured with proper agent prompt once loadAgentConfig completes
+        // Realtime connected first — send minimal config so audio can flow
+        // Do NOT trigger greeting yet — wait for full agent config to arrive
         sendToRealtime({ type: 'session.update', session: {
           input_audio_format: 'pcm16',
           output_audio_format: 'pcm16',
           input_audio_transcription: { model: 'whisper-1' },
           modalities: ['text', 'audio'],
           voice: 'alloy',
-          instructions: 'You are a friendly AI voice assistant. Greet the caller warmly. Be professional and concise.',
+          instructions: 'You are a friendly AI voice assistant. Be professional and concise. Wait for the system to provide further instructions before speaking.',
           turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 600, silence_duration_ms: 800 }
         }});
-        console.log(`[${reqId}] 📤 Minimal config sent (agent config still loading)`);
+        console.log(`[${reqId}] 📤 Minimal config sent (waiting for agent config before greeting)`);
       }
       return;
     }
