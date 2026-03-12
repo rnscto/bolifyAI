@@ -1,4 +1,18 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { Resend } from 'npm:resend@4.0.0';
+
+const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
+
+async function sendEmail({ to, subject, html }) {
+  const { data, error } = await resend.emails.send({
+    from: 'VaaniAI <noreply@vaaniai.io>',
+    to,
+    subject,
+    html
+  });
+  if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
+  return data;
+}
 
 Deno.serve(async (req) => {
   try {
@@ -23,10 +37,10 @@ Deno.serve(async (req) => {
 
       // Day 3 after expiry: Follow-up email
       if (daysSinceExpiry === 3) {
-        await base44.asServiceRole.integrations.Core.SendEmail({
+        await sendEmail({
           to: client.email,
           subject: `We miss you at VaaniAI — your agent is waiting`,
-          body: `
+          html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
                 <h1 style="color: white; margin: 0;">VaaniAI</h1>
@@ -41,17 +55,17 @@ Deno.serve(async (req) => {
                 <p style="color: #718096; font-size: 13px; text-align: center;">Need help? Just reply to this email.</p>
               </div>
             </div>
-          `,
+          `
         });
         results.followups_sent.push({ client_id: client.id, type: 'day_3_followup', email: client.email });
       }
 
       // Day 7 after expiry: Last chance email
       if (daysSinceExpiry === 7) {
-        await base44.asServiceRole.integrations.Core.SendEmail({
+        await sendEmail({
           to: client.email,
           subject: `Last chance: Your VaaniAI data will be archived soon`,
-          body: `
+          html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
                 <h1 style="color: white; margin: 0;">VaaniAI</h1>
@@ -68,7 +82,7 @@ Deno.serve(async (req) => {
                 </div>
               </div>
             </div>
-          `,
+          `
         });
         results.followups_sent.push({ client_id: client.id, type: 'day_7_last_chance', email: client.email });
       }

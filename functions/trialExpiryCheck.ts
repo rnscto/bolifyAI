@@ -1,4 +1,18 @@
 import { createClient } from 'npm:@base44/sdk@0.8.18';
+import { Resend } from 'npm:resend@4.0.0';
+
+const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
+
+async function sendEmail({ to, subject, html }) {
+  const { data, error } = await resend.emails.send({
+    from: 'VaaniAI <noreply@vaaniai.io>',
+    to,
+    subject,
+    html
+  });
+  if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
+  return data;
+}
 
 // Scheduled automation — runs daily. Uses service role directly (no user session).
 
@@ -27,10 +41,10 @@ Deno.serve(async (req) => {
         results.expired_updated.push({ client_id: client.id, company: client.company_name });
 
         // Send expiry email
-        await base44.integrations.Core.SendEmail({
+        await sendEmail({
           to: client.email,
           subject: 'Your VaaniAI trial has expired — special offer inside!',
-          body: `
+          html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
                 <h1 style="color: white; margin: 0;">VaaniAI</h1>
@@ -53,7 +67,7 @@ Deno.serve(async (req) => {
                 <p style="color: #718096; font-size: 13px; text-align: center;">Questions? Reply to this email or call us.</p>
               </div>
             </div>
-          `,
+          `
         });
         results.emails_sent.push({ client_id: client.id, type: 'expired', email: client.email });
         continue;
@@ -61,10 +75,10 @@ Deno.serve(async (req) => {
 
       // 3 DAYS LEFT: Send warning email
       if (daysLeft === 3) {
-        await base44.integrations.Core.SendEmail({
+        await sendEmail({
           to: client.email,
           subject: `Only 3 days left on your VaaniAI trial!`,
-          body: `
+          html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
                 <h1 style="color: white; margin: 0;">VaaniAI</h1>
@@ -81,17 +95,17 @@ Deno.serve(async (req) => {
                 </div>
               </div>
             </div>
-          `,
+          `
         });
         results.emails_sent.push({ client_id: client.id, type: '3_day_warning', email: client.email });
       }
 
       // 1 DAY LEFT: Send urgent email + trigger retention agent call
       if (daysLeft === 1) {
-        await base44.integrations.Core.SendEmail({
+        await sendEmail({
           to: client.email,
           subject: `⚠️ Last day of your VaaniAI trial!`,
-          body: `
+          html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: linear-gradient(135deg, #c53030, #e53e3e); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
                 <h1 style="color: white; margin: 0;">⚠️ Trial Ending Today</h1>
@@ -106,7 +120,7 @@ Deno.serve(async (req) => {
                 <p style="color: #718096; font-size: 13px; text-align: center;">Our team may also reach out to help you get started.</p>
               </div>
             </div>
-          `,
+          `
         });
         results.emails_sent.push({ client_id: client.id, type: '1_day_urgent', email: client.email });
 
