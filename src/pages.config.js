@@ -82,13 +82,13 @@ import ClientSettings from './pages/ClientSettings';
 import ClientSubscription from './pages/ClientSubscription';
 import ConceptNote from './pages/ConceptNote';
 import Home from './pages/Home';
+import LeadDetail from './pages/LeadDetail';
 import Onboarding from './pages/Onboarding';
 import PartnerDashboard from './pages/PartnerDashboard';
 import PartnerSignup from './pages/PartnerSignup';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import RefundPolicy from './pages/RefundPolicy';
 import TermsOfService from './pages/TermsOfService';
-import LeadDetail from './pages/LeadDetail';
 import __Layout from './Layout.jsx';
 
 
@@ -128,13 +128,13 @@ export const PAGES = {
     "ClientSubscription": ClientSubscription,
     "ConceptNote": ConceptNote,
     "Home": Home,
+    "LeadDetail": LeadDetail,
     "Onboarding": Onboarding,
     "PartnerDashboard": PartnerDashboard,
     "PartnerSignup": PartnerSignup,
     "PrivacyPolicy": PrivacyPolicy,
     "RefundPolicy": RefundPolicy,
     "TermsOfService": TermsOfService,
-    "LeadDetail": LeadDetail,
 }
 
 export const pagesConfig = {

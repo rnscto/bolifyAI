@@ -47,6 +47,7 @@ export default function AdminAgents() {
     tone: 'professional',
     language: 'en-US',
     system_prompt: '',
+    greeting_message: '',
     assigned_did: '',
     assigned_dids: [],
     status: 'inactive',
@@ -89,6 +90,7 @@ export default function AdminAgents() {
           language: formData.language
         },
         system_prompt: formData.system_prompt,
+        greeting_message: formData.greeting_message || '',
         assigned_did: (formData.assigned_dids || [])[0] || '',
         assigned_dids: formData.assigned_dids || [],
         status: formData.status,
@@ -123,6 +125,7 @@ export default function AdminAgents() {
       tone: 'professional',
       language: 'en-US',
       system_prompt: '',
+      greeting_message: '',
       assigned_did: '',
       assigned_dids: [],
       status: 'inactive',
@@ -143,6 +146,7 @@ export default function AdminAgents() {
       tone: agent.persona?.tone || 'professional',
       language: agent.persona?.language || 'en-US',
       system_prompt: agent.system_prompt || '',
+      greeting_message: agent.greeting_message || '',
       assigned_did: didsArray[0] || '',
       assigned_dids: didsArray,
       status: agent.status || 'inactive',
@@ -341,6 +345,18 @@ export default function AdminAgents() {
                   onChange={(e) => setFormData({ ...formData, system_prompt: e.target.value })}
                   className="w-full min-h-[100px] px-3 py-2 border rounded-md"
                   placeholder="Enter system instructions for the AI agent..."
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="greeting_message">Voice Greeting Message</Label>
+                <p className="text-xs text-gray-500 mb-1">The agent will speak this greeting immediately when the call connects (before the customer speaks). Leave empty for AI-generated greeting.</p>
+                <textarea
+                  id="greeting_message"
+                  value={formData.greeting_message}
+                  onChange={(e) => setFormData({ ...formData, greeting_message: e.target.value })}
+                  className="w-full min-h-[60px] px-3 py-2 border rounded-md"
+                  placeholder='e.g., "Hello! Thank you for calling. This is Vaani from ABC Company. How can I help you today?"'
                 />
               </div>
 
