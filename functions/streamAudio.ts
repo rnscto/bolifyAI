@@ -648,6 +648,54 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ─── Trigger initial greeting so the AI speaks first ───
+  function triggerGreeting() {
+    const isHybrid = session.voiceEngine === 'azure_speech';
+    const greeting = session.greetingMessage || '';
+
+    if (isHybrid) {
+      // In hybrid mode, directly synthesize the greeting via Azure Speech TTS
+      if (greeting) {
+        console.log(`[${reqId}] 🎙️ Sending custom greeting (hybrid): "${greeting.substring(0, 80)}"`);
+        session.transcript.push({ speaker: 'AI', text: greeting });
+        session.chatHistory.push({ role: 'assistant', content: greeting });
+        synthesizeWithAzureSpeech(greeting);
+      } else {
+        // No custom greeting — ask LLM to generate one
+        console.log(`[${reqId}] 🎙️ Generating AI greeting (hybrid)`);
+        generateGpt5NanoResponse('[SYSTEM: The call just connected. Greet the customer warmly as your opening line. Do not wait for them to speak first.]');
+      }
+    } else {
+      // In Realtime mode, inject a conversation item + trigger a response
+      if (greeting) {
+        // Custom greeting: inject it as a pre-written assistant message and speak it
+        console.log(`[${reqId}] 🎙️ Sending custom greeting (realtime): "${greeting.substring(0, 80)}"`);
+        session.transcript.push({ speaker: 'AI', text: greeting });
+        sendToRealtime({
+          type: 'conversation.item.create',
+          item: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: '[SYSTEM: The call just connected. Say this exact greeting to the customer: "' + greeting + '"]' }]
+          }
+        });
+        sendToRealtime({ type: 'response.create' });
+      } else {
+        // No custom greeting — ask the model to generate one from its instructions
+        console.log(`[${reqId}] 🎙️ Triggering AI greeting (realtime)`);
+        sendToRealtime({
+          type: 'conversation.item.create',
+          item: {
+            type: 'message',
+            role: 'user',
+            content: [{ type: 'input_text', text: '[SYSTEM: The call just connected. Greet the customer warmly as your opening line. Do not wait for them to speak first.]' }]
+          }
+        });
+        sendToRealtime({ type: 'response.create' });
+      }
+    }
+  }
+
   // ─── Send message to Azure Realtime API ───
   function sendToRealtime(msg) {
     if (session.realtimeWs && session.realtimeWs.readyState === WebSocket.OPEN) {
