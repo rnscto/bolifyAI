@@ -1,4 +1,18 @@
 import { createClient } from 'npm:@base44/sdk@0.8.18';
+import { Resend } from 'npm:resend@4.0.0';
+
+const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
+
+async function sendEmailViaResend({ to, fromName, subject, html }) {
+  const { data, error } = await resend.emails.send({
+    from: `${fromName} <noreply@vaaniai.io>`,
+    to,
+    subject,
+    html
+  });
+  if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
+  return data;
+}
 
 // Scheduled automation — runs daily at 11 AM IST.
 // No user session available. Uses service role directly.
@@ -319,10 +333,9 @@ Deno.serve(async (req) => {
             </div>
           ` : '';
 
-          const retResend = new (await import('npm:resend@4.0.0')).Resend(Deno.env.get('RESEND_API_KEY'));
-          await retResend.emails.send({
-            from: 'VaaniAI <noreply@vaaniai.io>',
+          await sendEmailViaResend({
             to: client.email,
+            fromName: 'VaaniAI',
             subject: 'Following up on our call — VaaniAI',
             html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
               <div style="background:linear-gradient(135deg,#1a365d,#2d3748);padding:30px;text-align:center;border-radius:12px 12px 0 0;">
