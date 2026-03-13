@@ -150,6 +150,9 @@ export default function DIDManager({ agent, client, onUpdate }) {
                   {idx === 0 && (
                     <Badge className="bg-blue-100 text-blue-800 text-xs">Primary</Badge>
                   )}
+                  {isDemo && (
+                    <Badge className="bg-amber-100 text-amber-700 text-xs">Shared</Badge>
+                  )}
                 </div>
                 <Button
                   variant="ghost"
