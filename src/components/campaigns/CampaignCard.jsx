@@ -69,6 +69,11 @@ export default function CampaignCard({ campaign, onStart, onPause }) {
               <CheckCircle2 className="w-3 h-3" /> {outcomes.interested} interested
             </span>
           )}
+          {outcomes.neutral > 0 && (
+            <span className="flex items-center gap-1 text-blue-600">
+              <Users className="w-3 h-3" /> {outcomes.neutral} neutral
+            </span>
+          )}
           {outcomes.callback > 0 && (
             <span className="flex items-center gap-1 text-yellow-700">
               <Phone className="w-3 h-3" /> {outcomes.callback} callback
@@ -79,9 +84,9 @@ export default function CampaignCard({ campaign, onStart, onPause }) {
               <XCircle className="w-3 h-3" /> {outcomes.not_interested} not interested
             </span>
           )}
-          {outcomes.no_answer > 0 && (
+          {outcomes.not_answered > 0 && (
             <span className="flex items-center gap-1 text-gray-500">
-              <Users className="w-3 h-3" /> {outcomes.no_answer} no answer
+              <Users className="w-3 h-3" /> {outcomes.not_answered} not answered
             </span>
           )}
         </div>

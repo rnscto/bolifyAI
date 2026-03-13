@@ -74,20 +74,24 @@ Deno.serve(async (req) => {
     // =====================================================
     // STEP 1: FAST — Determine basic outcome (no LLM)
     // =====================================================
-    let outcome = 'contacted';
+    let outcome = 'neutral';
+    let callStatus = 'answered';
     let summary = callLog.conversation_summary || '';
 
     if (callLog.status === 'no_answer') {
-      outcome = 'no_answer';
+      outcome = 'not_answered';
+      callStatus = 'not_answered';
       summary = summary || 'Call was not answered.';
     } else if (callLog.status === 'failed') {
-      outcome = 'no_answer';
+      outcome = 'not_answered';
+      callStatus = 'not_answered';
       summary = summary || 'Call failed to connect.';
     } else if (!callLog.transcript && !callLog.conversation_summary) {
-      outcome = 'contacted';
+      outcome = 'neutral';
+      callStatus = 'answered';
       summary = 'Call connected but no transcript captured.';
     }
-    // If there IS a transcript, we'll analyze with LLM later but use 'contacted' for now
+    // If there IS a transcript, we'll analyze with LLM later but use 'neutral' for now
 
     // =====================================================
     // STEP 2: FAST — Mark campaign lead as completed immediately
@@ -95,17 +99,18 @@ Deno.serve(async (req) => {
     await base44.entities.CampaignLead.update(campaignLead.id, {
       status: 'completed',
       outcome: outcome,
+      call_status: callStatus,
       conversation_summary: summary,
       transcript: callLog.transcript || '',
       call_duration: callLog.duration || 0
     });
-    console.log(`[campaignPostCall] Lead ${campaignLead.lead_name} marked completed: ${outcome}`);
+    console.log(`[campaignPostCall] Lead ${campaignLead.lead_name} marked completed: outcome=${outcome}, call_status=${callStatus}`);
 
     // =====================================================
     // STEP 3: FAST — Handle no-answer retry (before next batch)
     // =====================================================
     let retryScheduled = false;
-    if (outcome === 'no_answer') {
+    if (outcome === 'not_answered') {
       const campaign = await base44.entities.Campaign.get(campaignId);
       const rules = campaign?.followup_rules || {};
       if (rules.no_answer_retry !== false) {
@@ -114,11 +119,11 @@ Deno.serve(async (req) => {
         if (currentAttempts < maxRetries) {
           const retryHours = rules.no_answer_retry_hours || 4;
           await base44.entities.CampaignLead.update(campaignLead.id, {
-            status: 'pending', outcome: 'no_answer',
+            status: 'pending', outcome: 'not_answered',
             attempt_count: currentAttempts, call_log_id: null,
             followup_call_date: new Date(Date.now() + retryHours * 3600000).toISOString()
           });
-          console.log(`[campaignPostCall] No-answer retry ${currentAttempts}/${maxRetries} queued`);
+          console.log(`[campaignPostCall] Not-answered retry ${currentAttempts}/${maxRetries} queued`);
           retryScheduled = true;
         }
       }
@@ -141,22 +146,27 @@ Deno.serve(async (req) => {
     const alreadyAnalyzed = callLog.lead_status_updated && callLog.transcript;
     
     if (alreadyAnalyzed) {
-      // streamAudio already did AI analysis — use its results for follow-up actions only
-      outcome = callLog.lead_status_updated || outcome;
+      // streamAudio already did AI analysis — map its lead_status to our outcome values
+      const statusToOutcome = {
+        'interested': 'interested', 'not_interested': 'not_interested', 'callback': 'callback',
+        'no_answer': 'not_answered', 'converted': 'interested', 'contacted': 'neutral',
+        'do_not_call': 'not_interested'
+      };
+      outcome = statusToOutcome[callLog.lead_status_updated] || outcome;
       summary = callLog.conversation_summary || summary;
       await base44.entities.CampaignLead.update(campaignLead.id, { outcome, conversation_summary: summary });
       
       // Still run follow-up emails/activities based on outcome
       aiResult = await doFollowUpActions(base44, callLog, campaignLead, campaignId, outcome, summary);
-    } else if (outcome !== 'no_answer' && (callLog.transcript || callLog.conversation_summary)) {
+    } else if (outcome !== 'not_answered' && (callLog.transcript || callLog.conversation_summary)) {
       aiResult = await doAIAnalysis(base44, callLog, campaignLead, campaignId, outcome, summary);
     } else if (campaignLead.lead_id) {
-      const leadStatusMap = {
+      const outcomeToLeadStatus = {
         interested: 'interested', not_interested: 'not_interested', callback: 'callback',
-        no_answer: 'callback', converted: 'converted', contacted: 'contacted'
+        not_answered: 'callback', neutral: 'contacted'
       };
       await base44.entities.Lead.update(campaignLead.lead_id, {
-        status: leadStatusMap[outcome] || 'contacted',
+        status: outcomeToLeadStatus[outcome] || 'contacted',
         last_call_date: new Date().toISOString(),
         last_engagement_date: new Date().toISOString()
       });
@@ -370,16 +380,15 @@ SUMMARY:
 ${callLog.conversation_summary || 'No summary available'}
 
 Determine:
-1. outcome: one of "interested", "not_interested", "callback", "no_answer", "converted", "contacted"
+1. outcome: one of "neutral", "interested", "not_interested", "not_answered", "callback"
 2. summary: A brief 2-3 sentence summary.
 
 Rules:
-- "interested" = expressed clear interest, asked about pricing/details
+- "interested" = expressed clear interest, asked about pricing/details, agreed to meeting/demo
 - "callback" = asked to be called back later
 - "not_interested" = explicitly declined
-- "no_answer" = no real conversation happened
-- "converted" = agreed to sign up/purchase
-- "contacted" = conversation but no clear outcome`,
+- "not_answered" = no real conversation happened, call not picked up
+- "neutral" = conversation happened but no clear interest or rejection`,
       'You are a sales call analyst. Always respond in valid JSON.',
       { type: "object", properties: { outcome: { type: "string" }, summary: { type: "string" } } }
     );
@@ -450,7 +459,6 @@ SCORING (total 100):
         qualificationTier = 'disqualified';
         qualificationReason = `Low score ${aiScore}/100, ${aiSentiment}`;
       }
-      if (outcome === 'converted') { qualificationTier = 'hot'; qualificationReason = 'Converted'; }
       if (outcome === 'not_interested' && aiScore < 25) { qualificationTier = 'disqualified'; }
 
       console.log(`[campaignPostCall] AI Score: ${aiScore}, Tier: ${qualificationTier}`);
@@ -461,7 +469,7 @@ SCORING (total 100):
     // Update lead
     const leadUpdate = {
       status: { interested: 'interested', not_interested: 'not_interested', callback: 'callback',
-        converted: 'converted', contacted: 'contacted' }[outcome] || 'contacted',
+        not_answered: 'callback', neutral: 'contacted' }[outcome] || 'contacted',
       last_call_date: new Date().toISOString(), last_engagement_date: new Date().toISOString()
     };
     if (aiScore > 0) {
@@ -529,7 +537,7 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
 
   // Tier-based activities — only create TASK type (human notification), NOT call/followup
   // because those would trigger executeScheduledActivities to make duplicate calls
-  if (campaignLead.lead_id && qualificationTier && outcome !== 'no_answer') {
+  if (campaignLead.lead_id && qualificationTier && outcome !== 'not_answered') {
     if (qualificationTier === 'hot' && !callbackScheduled) {
       const due = new Date(); due.setHours(due.getHours() + 4);
       await base44.entities.Activity.create({
@@ -562,7 +570,7 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
   // ============================================================
   // AUTO-ENROLL INTO AI EMAIL SEQUENCE based on tier
   // ============================================================
-  if (campaignLead.lead_id && qualificationTier && !['disqualified'].includes(qualificationTier) && outcome !== 'no_answer') {
+  if (campaignLead.lead_id && qualificationTier && !['disqualified'].includes(qualificationTier) && outcome !== 'not_answered') {
     try {
       const enrollResult = await base44.functions.invoke('autoEnrollSequence', {
         lead_id: campaignLead.lead_id,
@@ -610,7 +618,7 @@ async function updateCampaignStats(base44, campaignId) {
 }
 
 function countOutcomes(allLeads) {
-  const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
+  const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0 };
   allLeads.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
   return outcomes;
 }

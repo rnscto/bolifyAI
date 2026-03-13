@@ -3,18 +3,25 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
 const COLORS = {
+  neutral: '#3b82f6',
   interested: '#22c55e',
   not_interested: '#ef4444',
+  not_answered: '#9ca3af',
   callback: '#eab308',
-  no_answer: '#9ca3af',
-  converted: '#10b981',
-  contacted: '#8b5cf6',
+};
+
+const LABELS = {
+  neutral: 'Neutral',
+  interested: 'Interested (Meeting/Demo)',
+  not_interested: 'Not Interested',
+  not_answered: 'Not Answered',
+  callback: 'Callback',
 };
 
 export default function CampaignOutcomeChart({ outcomes }) {
   const data = Object.entries(outcomes || {})
     .filter(([, v]) => v > 0)
-    .map(([k, v]) => ({ name: k.replace('_', ' '), value: v, key: k }));
+    .map(([k, v]) => ({ name: LABELS[k] || k.replace('_', ' '), value: v, key: k }));
 
   if (data.length === 0) {
     return (
