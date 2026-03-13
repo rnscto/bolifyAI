@@ -312,7 +312,7 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
     }
 
     // ===== EXISTING OUTBOUND/STATUS UPDATE LOGIC =====
-    const knownStatuses = ['ringing', 'answered', 'completed', 'failed', 'no_answer', 'busy', 'cancelled'];
+    const knownStatuses = ['ringing', 'answered', 'completed', 'failed', 'no_answer', 'busy', 'cancelled', 'missed', 'not_connected'];
     if (status && !knownStatuses.includes(status)) {
       console.warn('[smartfloWebhook] Unknown status:', status);
     }
