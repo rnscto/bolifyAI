@@ -331,22 +331,8 @@ async function saveCallRecord(session, reqId, duration) {
       }
     }
 
-    // ===== STEP 5: Auto-enroll in email sequence (fire-and-forget) =====
-    if (currentLog.lead_id && qualificationTier && !['disqualified'].includes(qualificationTier) && transcript.length > 30) {
-      serviceClient.functions.invoke('autoEnrollSequence', {
-        lead_id: currentLog.lead_id,
-        client_id: currentLog.client_id,
-        qualification_tier: qualificationTier,
-        call_outcome: leadStatus,
-        call_summary: summary.substring(0, 500),
-        call_topics: keyTopics.slice(0, 10),
-        objections: objections,
-        intent_signals: intentSignals,
-        ai_score: leadScore
-      }).then(r => {
-        if (r?.enrolled) console.log(`[${reqId}] ✉️ Auto-enrolled in sequence: ${r.sequence_name}`);
-      }).catch(e => console.error(`[${reqId}] ⚠️ Auto-enroll failed: ${e.message}`));
-    }
+    // NOTE: Auto-enroll in email sequence is handled EXCLUSIVELY by campaignPostCall.
+    // streamAudio only owns: CallLog (transcript/summary/AI) + Lead (scoring/status).
 
     // ===== STEP 6: Trigger post-call action extraction (fire-and-forget) =====
     if (transcript.length > 50) {
