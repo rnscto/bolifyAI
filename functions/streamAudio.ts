@@ -1357,6 +1357,10 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
         session.callSid = startData.callSid;
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}, call=${session.callSid}`);
 
+        // Reset audio conversion state for new call (prevents cross-call artifacts)
+        _lastUpsampleValue = 0;
+        _lastDownsampleRemainder = [];
+
         // Connect Realtime + load agent config IN PARALLEL for minimum latency
         // Both run concurrently — whichever finishes second triggers applySessionConfig
         connectRealtime();
