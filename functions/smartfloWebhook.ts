@@ -361,9 +361,16 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
 
     // Idempotency guard: don't regress a terminal status
     const terminalStatuses = ['completed', 'failed', 'no_answer'];
-    if (terminalStatuses.includes(callLog.status) && !terminalStatuses.includes(mappedStatus)) {
-      console.log(`[smartfloWebhook] Ignoring status ${status} — CallLog already terminal (${callLog.status})`);
-      return Response.json({ success: true, message: 'Ignoring — call already terminal' });
+    if (terminalStatuses.includes(callLog.status)) {
+      if (!terminalStatuses.includes(mappedStatus)) {
+        console.log(`[smartfloWebhook] Ignoring status ${status} — CallLog already terminal (${callLog.status})`);
+        return Response.json({ success: true, message: 'Ignoring — call already terminal' });
+      }
+      // Also skip if already same terminal status
+      if (callLog.status === mappedStatus) {
+        console.log(`[smartfloWebhook] Ignoring duplicate terminal ${status}`);
+        return Response.json({ success: true, message: 'Ignoring — duplicate terminal' });
+      }
     }
 
     const updateData = { status: mappedStatus };
