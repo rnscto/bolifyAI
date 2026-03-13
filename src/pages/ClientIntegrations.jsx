@@ -11,8 +11,17 @@ export default function ClientIntegrations() {
   const [client, setClient] = useState(null);
   const [config, setConfig] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [shopifyActive, setShopifyActive] = useState(false);
 
   useEffect(() => { loadData(); }, []);
+
+  useEffect(() => {
+    if (client?.id) {
+      base44.entities.MarketplaceIntegration.filter({ client_id: client.id, platform: 'shopify', status: 'active' })
+        .then(r => setShopifyActive(r.length > 0))
+        .catch(() => {});
+    }
+  }, [client?.id]);
 
   const loadData = async () => {
     const user = await base44.auth.me();
@@ -23,7 +32,6 @@ export default function ClientIntegrations() {
       if (configs.length > 0) {
         setConfig(configs[0]);
       } else {
-        // Create default config
         const newConfig = await base44.entities.ClientMessagingConfig.create({ client_id: clients[0].id });
         setConfig(newConfig);
       }
@@ -45,16 +53,6 @@ export default function ClientIntegrations() {
       </div>
     );
   }
-
-  const [shopifyActive, setShopifyActive] = useState(false);
-
-  useEffect(() => {
-    if (client?.id) {
-      base44.entities.MarketplaceIntegration.filter({ client_id: client.id, platform: 'shopify', status: 'active' })
-        .then(r => setShopifyActive(r.length > 0))
-        .catch(() => {});
-    }
-  }, [client?.id]);
 
   const connectedCount = [
     config?.whatsapp_provider !== 'none' && config?.whatsapp_provider,
