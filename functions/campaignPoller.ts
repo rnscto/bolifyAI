@@ -40,6 +40,7 @@ Deno.serve(async (req) => {
               const terminalStatuses = ['completed', 'failed', 'no_answer'];
 
               if (callLog && terminalStatuses.includes(callLog.status)) {
+                // CallLog reached terminal — sync CampaignLead
                 let outcome = 'neutral';
                 let callStatusVal = 'answered';
                 if (callLog.status === 'no_answer' || callLog.status === 'failed') { outcome = 'not_answered'; callStatusVal = 'not_answered'; }
@@ -53,7 +54,22 @@ Deno.serve(async (req) => {
                 });
                 console.log(`[campaignPoller] Fixed stuck lead ${cl.lead_name}: CallLog was ${callLog.status} → outcome=${outcome}`);
                 results.stuck_fixed++;
+              } else if (callLog && callLog.status === 'answered') {
+                // Call is actively in progress (WebSocket streaming) — skip, don't time it out
+                // Use a longer timeout (10 min) for answered calls since conversations can be long
+                const ACTIVE_CALL_TIMEOUT = 10 * 60 * 1000;
+                if (leadAge > ACTIVE_CALL_TIMEOUT) {
+                  console.log(`[campaignPoller] Answered call for ${cl.lead_name} exceeded 10min — forcing completion`);
+                  await svc.entities.CallLog.update(cl.call_log_id, {
+                    status: 'completed', call_end_time: new Date().toISOString(),
+                    conversation_summary: callLog.conversation_summary || 'Call timed out (10min limit).'
+                  });
+                  results.stuck_fixed++;
+                } else {
+                  console.log(`[campaignPoller] Skipping ${cl.lead_name} — call actively answered (${Math.round(leadAge/1000)}s)`);
+                }
               } else {
+                // CallLog in ringing/initiated or missing — true timeout
                 await svc.entities.CampaignLead.update(cl.id, {
                   status: 'completed', outcome: 'not_answered', call_status: 'not_answered',
                   conversation_summary: 'Call timed out — no response from telephony provider.'
