@@ -423,7 +423,9 @@ Deno.serve(async (req) => {
     _ttsAbort: null,          // AbortController for Azure Speech TTS (hybrid mode)
     chatHistory: [],          // GPT-5-nano conversation history (azure_speech mode)
     tools: [],                // Registered tools (e.g. shopify_order_lookup)
-    hasShopify: false         // Whether Shopify marketplace is connected
+    hasShopify: false,        // Whether Shopify marketplace is connected
+    _realtimeReconnectAttempts: 0, // Track reconnection attempts
+    _callEnded: false         // Whether the call has ended (prevent reconnect after hangup)
   };
 
   // ─── Connect to Azure Realtime API ───
