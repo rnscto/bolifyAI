@@ -13,8 +13,15 @@ export default function DIDSelectionStep({ selected, onSelect, onNext, onBack })
   }, []);
 
   const loadDIDs = async () => {
-    const available = await base44.entities.DID.filter({ status: 'available' });
-    setDids(available);
+    // Show demo pool DIDs for trial onboarding (shared, round-robin)
+    const demoDIDs = await base44.entities.DID.filter({ is_demo: true });
+    if (demoDIDs.length > 0) {
+      setDids(demoDIDs);
+    } else {
+      // Fallback to available DIDs if no demo pool set up
+      const available = await base44.entities.DID.filter({ status: 'available' });
+      setDids(available);
+    }
     setLoading(false);
   };
 
@@ -57,7 +64,7 @@ export default function DIDSelectionStep({ selected, onSelect, onNext, onBack })
                 <Phone className={`w-5 h-5 ${selected?.id === did.id ? 'text-blue-600' : 'text-gray-400'}`} />
                 <div className="text-left">
                   <p className="font-semibold text-gray-900">{did.country_code || '+91'} {did.number}</p>
-                  <p className="text-xs text-gray-500">Trial DID • Free for 7 days</p>
+                  <p className="text-xs text-gray-500">{did.is_demo ? 'Shared Demo DID • Free during trial' : 'Trial DID • Free for 7 days'}</p>
                 </div>
               </div>
               {selected?.id === did.id && (
