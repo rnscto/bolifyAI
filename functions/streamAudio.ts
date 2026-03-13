@@ -1212,6 +1212,19 @@ Deno.serve(async (req) => {
         if (cache.knowledge_base_content) {
           session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
         }
+        // Inject Shopify tool instructions if integration is active
+        if (session.hasShopify && !session.systemPrompt.includes('SHOPIFY STORE INTEGRATION')) {
+          session.systemPrompt += `\n\n--- SHOPIFY STORE INTEGRATION (ACTIVE) ---
+You have a LIVE connection to the client's Shopify store. You can look up real-time data using the shopify_lookup tool.
+WHEN TO USE:
+- Customer asks about order status → use lookup_type "order_by_number" with the order number
+- Customer gives phone/email but no order # → use "order_by_phone" or "order_by_email"
+- Customer asks about product availability → use "product_search"
+- Customer asks about refund → use "refund_status" with the Shopify order ID
+- Customer asks about delivery/tracking → use "tracking" with the Shopify order ID
+IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, NEVER make up statuses.`;
+          console.log(`[${reqId}] 🛒 Shopify tool instructions injected into system prompt`);
+        }
         if (cache.greeting_message) {
           session.greetingMessage = cache.greeting_message;
         }
