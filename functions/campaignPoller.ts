@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
 
                 const callLog = await svc.entities.CallLog.create({
                   client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
-                  call_sid: callSid, caller_id: selectedDID, callee_number: cl.lead_phone,
+                  call_sid: callSid, caller_id: selectedDID, callee_number: cleanPhone,
                   direction: 'outbound', status: 'initiated', call_start_time: new Date().toISOString(),
                   agent_config_cache: {
                     agent_name: agent.name, system_prompt: personalizedPrompt,
