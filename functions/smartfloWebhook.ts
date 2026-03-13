@@ -321,7 +321,7 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
     // Fallback: if Smartflo sends a different ID format, try matching by phone number
     if (callLogs.length === 0) {
       // Collect all phone numbers from webhook payload for matching
-      const phoneHints = [called_number, caller_number, customer_number].filter(Boolean);
+      const phoneHints = [called_number, caller_number, customer_number, payload.customer_number].filter(Boolean);
       if (phoneHints.length > 0) {
         console.log(`[smartfloWebhook] No match for call_sid=${call_id}, trying phone fallback with: ${phoneHints.join(', ')}`);
         
