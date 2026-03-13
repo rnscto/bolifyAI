@@ -3,23 +3,46 @@ import { createClient } from 'npm:@base44/sdk@0.8.20';
 // Map Smartflo call statuses to internal statuses
 // Smartflo webhook sends statuses like "Answered", "Missed", "completed" etc.
 const STATUS_MAP = {
+  // Answered / completed
   'ringing': 'ringing',
   'answered': 'completed',
   'Answered': 'completed',
   'completed': 'completed',
   'Completed': 'completed',
+  'connected': 'completed',
+  'Connected': 'completed',
+  // Not answered
   'missed': 'no_answer',
   'Missed': 'no_answer',
-  'failed': 'failed',
-  'Failed': 'failed',
   'no_answer': 'no_answer',
   'No Answer': 'no_answer',
+  'no-answer': 'no_answer',
+  'noanswer': 'no_answer',
+  'not_answered': 'no_answer',
+  'Not Answered': 'no_answer',
+  'unanswered': 'no_answer',
+  'Unanswered': 'no_answer',
+  'not_connected': 'no_answer',
+  'Not Connected': 'no_answer',
+  'not connected': 'no_answer',
+  'not_reachable': 'no_answer',
+  'Not Reachable': 'no_answer',
+  'unreachable': 'no_answer',
+  // Failed / busy / cancelled
+  'failed': 'failed',
+  'Failed': 'failed',
   'busy': 'failed',
   'Busy': 'failed',
   'cancelled': 'failed',
   'Cancelled': 'failed',
-  'not_connected': 'no_answer',
-  'Not Connected': 'no_answer'
+  'canceled': 'failed',
+  'Canceled': 'failed',
+  'rejected': 'failed',
+  'Rejected': 'failed',
+  'congestion': 'failed',
+  'Congestion': 'failed',
+  'hangup': 'completed',
+  'Hangup': 'completed'
 };
 
 Deno.serve(async (req) => {
