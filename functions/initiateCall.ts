@@ -198,6 +198,15 @@ IMPORTANT RULES:
     const cleanCallerID = callerDID.replace(/^\+/, '');
     const cleanPhoneNumber = phone_number.replace(/[^0-9]/g, '');
 
+    // Use agent-specific Smartflo API token if available, fallback to global
+    const smartfloApiKey = agent.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY');
+    if (!smartfloApiKey) {
+      return Response.json({ 
+        success: false, 
+        error: 'No Smartflo API token configured for this agent. Please set the Click to Call API Token in agent settings.' 
+      }, { status: 400 });
+    }
+
     // Initiate call via Smartflo Click-to-Call Support API
     const smartfloResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
       method: 'POST',
@@ -205,7 +214,7 @@ IMPORTANT RULES:
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        api_key: Deno.env.get('SMARTFLO_API_KEY'),
+        api_key: smartfloApiKey,
         customer_number: cleanPhoneNumber,
         caller_id: cleanCallerID,
         async: 1
