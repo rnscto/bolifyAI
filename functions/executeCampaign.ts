@@ -160,7 +160,7 @@ Deno.serve(async (req) => {
 
     if (pendingLeads.length === 0) {
       // Check if campaign should be completed
-      const allLeads = await svc.entities.CampaignLead.filter({ campaign_id });
+      const allLeads = await svc.entities.CampaignLead.filter({ campaign_id }, 'created_date', 1000);
       const callingCount = allLeads.filter(l => l.status === 'calling').length;
       const pendingWithFutureRetry = allLeads.filter(l =>
         l.status === 'pending' && l.followup_call_date && new Date(l.followup_call_date) > now
@@ -326,7 +326,7 @@ Deno.serve(async (req) => {
     }
 
     // Update campaign counts
-    const allLeads = await svc.entities.CampaignLead.filter({ campaign_id });
+    const allLeads = await svc.entities.CampaignLead.filter({ campaign_id }, 'created_date', 1000);
     const completedCount = allLeads.filter(l => l.status === 'completed').length;
     const failedCount = allLeads.filter(l => l.status === 'failed').length;
     await svc.entities.Campaign.update(campaign_id, {
