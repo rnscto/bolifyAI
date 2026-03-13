@@ -19,9 +19,7 @@ const STATUS_MAP = {
   'busy': 'failed',
   'Busy': 'failed',
   'cancelled': 'failed',
-  'Cancelled': 'failed',
-  'not_connected': 'no_answer',
-  'Not Connected': 'no_answer'
+  'Cancelled': 'failed'
 };
 
 Deno.serve(async (req) => {
