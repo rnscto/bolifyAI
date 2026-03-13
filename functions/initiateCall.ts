@@ -132,10 +132,43 @@ Deno.serve(async (req) => {
     const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
     const timeContext = `\n\n--- CURRENT DATE & TIME (IST) ---\nRight now it is: ${nowIST} (Indian Standard Time).\nUse this to calculate relative times when the customer says things like "call me after 30 minutes" or "call me tomorrow morning". Always confirm callback times in IST.`;
 
+    // Check for Shopify marketplace integration
+    let shopifyContext = '';
+    try {
+      const shopifyIntegrations = await base44.asServiceRole.entities.MarketplaceIntegration.filter({
+        client_id: agent.client_id,
+        platform: 'shopify',
+        status: 'active'
+      });
+      if (shopifyIntegrations.length > 0) {
+        shopifyContext = `\n\n--- SHOPIFY STORE INTEGRATION (ACTIVE) ---
+You have a LIVE connection to the client's Shopify store. You can look up real-time data using the shopify_lookup tool.
+
+WHEN TO USE:
+- Customer asks about order status → use lookup_type "order_by_number" with the order number
+- Customer gives phone/email but no order # → use "order_by_phone" or "order_by_email"
+- Customer asks about product availability → use "product_search"
+- Customer asks about refund → use "refund_status" with the Shopify order ID
+- Customer asks about delivery/tracking → use "tracking" with the Shopify order ID
+
+IMPORTANT RULES:
+1. Ask the customer for their order number, phone, or email to look up their order
+2. ALWAYS use the tool to get real data — NEVER make up order statuses
+3. After getting the result, communicate it clearly and helpfully
+4. If no results found, ask for alternative info (try phone if order# fails, etc.)
+5. For tracking, share the tracking number and carrier name
+`;
+        console.log('Shopify integration detected — tool context injected');
+      }
+    } catch (e) {
+      console.log('Shopify check failed:', e.message);
+    }
+
     // Combine agent system prompt with lead personalization
     const personalizedPrompt = [
       agent.system_prompt || '',
       timeContext,
+      shopifyContext,
       `\n\n--- LEAD CONTEXT (YOU MUST USE THIS DATA IN THE CONVERSATION) ---\n${leadContext}`
     ].filter(Boolean).join('\n');
 
