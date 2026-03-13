@@ -91,7 +91,16 @@ Deno.serve(async (req) => {
           calls_completed: completedCount, calls_failed: failedCount, outcomes_summary: outcomes
         });
 
-        if (pendingCount === 0 && callingCount === 0) {
+        // Filter out leads with future retry dates
+        const now = new Date();
+        const pendingReadyCount = allLeads.filter(l => 
+          l.status === 'pending' && (!l.followup_call_date || new Date(l.followup_call_date) <= now)
+        ).length;
+        const pendingRetryLaterCount = allLeads.filter(l => 
+          l.status === 'pending' && l.followup_call_date && new Date(l.followup_call_date) > now
+        ).length;
+
+        if (pendingReadyCount === 0 && callingCount === 0 && pendingRetryLaterCount === 0) {
           await svc.entities.Campaign.update(campaignId, {
             status: 'completed', completed_at: new Date().toISOString()
           });
@@ -100,9 +109,14 @@ Deno.serve(async (req) => {
           continue;
         }
 
+        if (pendingRetryLaterCount > 0 && pendingReadyCount === 0 && callingCount === 0) {
+          console.log(`[campaignPoller] Campaign "${campaign.name}": ${pendingRetryLaterCount} leads waiting for retry later. Skipping.`);
+          continue;
+        }
+
         // === STEP 3: Trigger next batch INLINE (no cross-function invoke) ===
         const maxConcurrent = campaign.max_concurrent_calls || 5;
-        if (pendingCount > 0 && callingCount < maxConcurrent) {
+        if (pendingReadyCount > 0 && callingCount < maxConcurrent) {
           console.log(`[campaignPoller] Campaign "${campaign.name}": ${pendingCount} pending, ${callingCount} calling — triggering next batch`);
           try {
             const agent = await svc.entities.Agent.get(campaign.agent_id);
@@ -126,9 +140,13 @@ Deno.serve(async (req) => {
             }
 
             const slotsAvailable = Math.max(0, maxConcurrent - callingCount);
-            const pendingBatch = await svc.entities.CampaignLead.filter(
-              { campaign_id: campaignId, status: 'pending' }, 'created_date', slotsAvailable
+            const pendingBatchRaw = await svc.entities.CampaignLead.filter(
+              { campaign_id: campaignId, status: 'pending' }, 'created_date', slotsAvailable + 10
             );
+            // Only pick leads that are ready to call (no future retry date)
+            const pendingBatch = pendingBatchRaw.filter(l => 
+              !l.followup_call_date || new Date(l.followup_call_date) <= now
+            ).slice(0, slotsAvailable);
 
             for (let i = 0; i < pendingBatch.length; i++) {
               const cl = pendingBatch[i];

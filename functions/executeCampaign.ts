@@ -156,16 +156,29 @@ Deno.serve(async (req) => {
         break;
       }
 
-      // Get next pending lead
-      const pendingLeads = await svc.entities.CampaignLead.filter(
-        { campaign_id, status: 'pending' }, 'created_date', 1
+      // Get next pending leads and filter out those with future retry dates
+      const pendingLeadsRaw = await svc.entities.CampaignLead.filter(
+        { campaign_id, status: 'pending' }, 'created_date', 20
       );
+      const now = new Date();
+      const pendingLeads = pendingLeadsRaw.filter(l => {
+        if (!l.followup_call_date) return true; // No retry date = ready to call
+        return new Date(l.followup_call_date) <= now; // Retry date has passed
+      });
 
       if (pendingLeads.length === 0) {
-        // Check if all done
+        // Check if all done or just waiting for retry timers
         const allLeads = await svc.entities.CampaignLead.filter({ campaign_id });
-        const stillActive = allLeads.filter(l => ['pending', 'calling'].includes(l.status)).length;
-        if (stillActive === 0) {
+        const callingCount = allLeads.filter(l => l.status === 'calling').length;
+        const pendingWithFutureRetry = allLeads.filter(l => 
+          l.status === 'pending' && l.followup_call_date && new Date(l.followup_call_date) > now
+        ).length;
+        const pendingReady = allLeads.filter(l => 
+          l.status === 'pending' && (!l.followup_call_date || new Date(l.followup_call_date) <= now)
+        ).length;
+
+        if (callingCount === 0 && pendingReady === 0 && pendingWithFutureRetry === 0) {
+          // Truly done — no active, no pending, no retries
           const completed = allLeads.filter(l => l.status === 'completed').length;
           const failed = allLeads.filter(l => l.status === 'failed').length;
           const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
@@ -175,6 +188,8 @@ Deno.serve(async (req) => {
             calls_completed: completed, calls_failed: failed, outcomes_summary: outcomes
           });
           console.log(`[campaign] Campaign completed: ${completed} done, ${failed} failed`);
+        } else if (pendingWithFutureRetry > 0) {
+          console.log(`[campaign] ${pendingWithFutureRetry} leads waiting for retry (scheduled later). Campaign continues.`);
         }
         break;
       }
