@@ -708,14 +708,38 @@ Deno.serve(async (req) => {
     if (type === 'session.created') {
       console.log(`[${reqId}] ✅ Realtime session created`);
       session.realtimeReady = true;
+      const isReconnect = session._agentConfigReady && session.transcript.length > 0;
 
-      // If agent config already loaded (race won by DB), apply full config immediately
-      if (session._agentConfigReady) {
+      if (isReconnect) {
+        // Reconnection — re-apply full config WITHOUT re-triggering the greeting
+        console.log(`[${reqId}] 🔄 Reconnected — re-applying session config (no greeting)`);
+        const isHybrid = session.voiceEngine === 'azure_speech';
+        const tools = buildToolDefinitions();
+        const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+        const timeInjection = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}.\n`;
+        const sessionConfig = {
+          input_audio_format: 'pcm16',
+          input_audio_transcription: { model: 'whisper-1' },
+          turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 600, silence_duration_ms: 800 }
+        };
+        if (isHybrid) {
+          sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
+          sessionConfig.modalities = ['text'];
+          sessionConfig.voice = 'alloy';
+        } else {
+          sessionConfig.modalities = ['text', 'audio'];
+          sessionConfig.instructions = timeInjection + session.systemPrompt;
+          sessionConfig.voice = session.voiceType;
+          sessionConfig.output_audio_format = 'pcm16';
+        }
+        if (tools.length > 0) { sessionConfig.tools = tools; sessionConfig.tool_choice = 'auto'; }
+        sendToRealtime({ type: 'session.update', session: sessionConfig });
+      } else if (session._agentConfigReady) {
+        // First connection, agent config already loaded
         console.log(`[${reqId}] ⚡ Agent config was ready before Realtime — applying immediately`);
         applySessionConfig();
       } else {
         // Realtime connected first — send minimal config so audio can flow
-        // Do NOT trigger greeting yet — wait for full agent config to arrive
         sendToRealtime({ type: 'session.update', session: {
           input_audio_format: 'pcm16',
           output_audio_format: 'pcm16',
