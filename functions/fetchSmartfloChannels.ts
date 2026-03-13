@@ -13,104 +13,100 @@ Deno.serve(async (req) => {
     const password = Deno.env.get('SMARTFLO_PASSWORD');
     const apiKey = Deno.env.get('SMARTFLO_API_KEY');
 
-    if (!email || !password) {
-      return Response.json({ error: 'SMARTFLO_EMAIL and SMARTFLO_PASSWORD not configured' }, { status: 500 });
-    }
-
-    // Step 1: Login to Smartflo to get bearer token
-    console.log('Logging in to Smartflo...');
-    const loginRes = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ email, password })
-    });
-
-    const loginData = await loginRes.json();
-    console.log('Login success:', loginData.success);
-
-    if (!loginData.success || !loginData.access_token) {
-      return Response.json({ 
-        error: 'Smartflo login failed', 
-        details: loginData.message || 'Unknown error' 
-      }, { status: 401 });
-    }
-
-    const bearerToken = loginData.access_token;
-
-    // Step 2: Try different auth header formats on the likely endpoints
-    const endpoints = [
-      'https://api-smartflo.tatateleservices.com/v1/click_to_call_api_keys',
-      'https://api-smartflo.tatateleservices.com/v1/api_connect/click_to_call',
-      'https://api-smartflo.tatateleservices.com/v1/channels',
-      'https://api-smartflo.tatateleservices.com/v1/voice_streaming',
+    // Step 1: Login to Smartflo portal (web app)
+    console.log('Trying portal login at cloudphone.tatateleservices.com...');
+    
+    // Try the portal API endpoints - cloudphone uses a separate web backend
+    const portalEndpoints = [
+      // The portal URL structure suggests internal APIs
+      'https://cloudphone.tatateleservices.com/api/click_to_call_api_keys',
+      'https://cloudphone.tatateleservices.com/api/v1/click_to_call_api_keys',
+      'https://cloudphone.tatateleservices.com/click_to_call_api_keys/list',
     ];
 
-    const authHeaders = [
-      { name: 'Bearer token', header: { 'Authorization': `Bearer ${bearerToken}` } },
-      { name: 'Raw token', header: { 'Authorization': bearerToken } },
-      { name: 'API key', header: { 'Authorization': apiKey } },
-      { name: 'X-Auth-Token', header: { 'X-Auth-Token': bearerToken } },
-      { name: 'Token in query (skip header)', header: {} },
+    // Also try the main API with the API key header (like fetchSmartfloDIDs does)
+    const apiEndpoints = [
+      'https://api-smartflo.tatateleservices.com/v1/click_to_call_api_keys',
+      'https://api-smartflo.tatateleservices.com/v1/click_to_call_support_keys',
+      'https://api-smartflo.tatateleservices.com/v1/c2c_api_keys',
+      'https://api-smartflo.tatateleservices.com/v1/api_connect/c2c',
+      'https://api-smartflo.tatateleservices.com/v1/api_connect',
     ];
 
     const results = [];
 
-    for (const endpoint of endpoints) {
-      for (const auth of authHeaders) {
+    // Try API key auth format (same as fetchSmartfloDIDs which works)
+    for (const endpoint of apiEndpoints) {
+      try {
+        console.log(`Trying API key auth: ${endpoint}`);
+        const res = await fetch(endpoint, {
+          method: 'GET',
+          headers: {
+            'Authorization': apiKey,
+            'Accept': 'application/json',
+            'Content-Type': 'application/json'
+          }
+        });
+        
+        const status = res.status;
+        let body = null;
+        try { body = await res.json(); } catch { body = (await res.text().catch(() => '')).substring(0, 500); }
+
+        console.log(`${endpoint} → ${status}: ${JSON.stringify(body).substring(0, 300)}`);
+        results.push({ endpoint, auth: 'API key', status, body });
+        
+        if (status >= 200 && status < 300) {
+          console.log('✅ SUCCESS!');
+          break;
+        }
+      } catch (e) {
+        results.push({ endpoint, auth: 'API key', status: 'error', error: e.message });
+      }
+    }
+
+    // Also try login + bearer on the portal endpoints
+    console.log('Logging into Smartflo for bearer token...');
+    const loginRes = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password })
+    });
+    const loginData = await loginRes.json();
+    
+    if (loginData.success && loginData.access_token) {
+      const token = loginData.access_token;
+      
+      for (const endpoint of portalEndpoints) {
         try {
-          const url = auth.name === 'Token in query (skip header)' 
-            ? `${endpoint}?token=${bearerToken}` 
-            : endpoint;
-          
-          console.log(`Trying: ${endpoint} with ${auth.name}`);
-          const res = await fetch(url, {
+          console.log(`Trying portal: ${endpoint}`);
+          const res = await fetch(endpoint, {
             method: 'GET',
             headers: {
+              'Authorization': `Bearer ${token}`,
               'Accept': 'application/json',
-              'Content-Type': 'application/json',
-              ...auth.header
+              'Cookie': `token=${token}`
             }
           });
           
           const status = res.status;
           let body = null;
-          try {
-            body = await res.json();
-          } catch {
-            const text = await res.text().catch(() => '');
-            body = text.substring(0, 500);
-          }
+          try { body = await res.json(); } catch { body = (await res.text().catch(() => '')).substring(0, 300); }
 
-          // Only log non-403 or successful ones to reduce noise
-          if (status !== 403) {
-            console.log(`✅ ${endpoint} [${auth.name}] → ${status}: ${JSON.stringify(body).substring(0, 300)}`);
-          }
-
-          results.push({
-            endpoint,
-            auth: auth.name,
-            status,
-            body: typeof body === 'object' ? body : (typeof body === 'string' ? body.substring(0, 300) : null)
-          });
-
-          // If successful, no need to try more auth methods for this endpoint
-          if (status >= 200 && status < 300) break;
+          console.log(`${endpoint} → ${status}`);
+          results.push({ endpoint, auth: 'Portal bearer', status, body: typeof body === 'string' ? body : body });
         } catch (e) {
-          results.push({ endpoint, auth: auth.name, status: 'error', error: e.message });
+          results.push({ endpoint, auth: 'Portal bearer', status: 'error', error: e.message });
         }
       }
-    }
 
-    // Cleanup
-    try {
-      await fetch('https://api-smartflo.tatateleservices.com/v1/auth/logout', {
-        method: 'POST',
-        headers: { 'Authorization': bearerToken, 'Content-Type': 'application/json' }
-      });
-    } catch (e) {}
+      // Logout
+      try {
+        await fetch('https://api-smartflo.tatateleservices.com/v1/auth/logout', {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+      } catch (e) {}
+    }
 
     return Response.json({ success: true, results });
 
