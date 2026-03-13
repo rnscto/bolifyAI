@@ -275,7 +275,7 @@ export default function AdminAgents() {
               Create Agent
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
             <DialogHeader>
               <DialogTitle>
                 {editingAgent ? 'Edit Agent' : 'Create New Agent'}
@@ -284,7 +284,7 @@ export default function AdminAgents() {
                 Configure the AI agent and assign it to a client
               </DialogDescription>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4 overflow-y-auto flex-1 pr-2">
               <div className="grid grid-cols-3 gap-4">
                 <div>
                   <Label htmlFor="name">Agent Name</Label>
