@@ -3,7 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Phone, Plus, X, AlertCircle, Crown } from 'lucide-react';
+import { Phone, Plus, X, AlertCircle, Crown, Share2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
@@ -11,6 +11,7 @@ import { createPageUrl } from '../../utils';
 
 export default function DIDManager({ agent, client, onUpdate }) {
   const [availableDIDs, setAvailableDIDs] = useState([]);
+  const [demoDIDs, setDemoDIDs] = useState([]);
   const [assignedDIDs, setAssignedDIDs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -22,17 +23,25 @@ export default function DIDManager({ agent, client, onUpdate }) {
     loadDIDs();
   }, [agent, client]);
 
+  const isDemo = client.account_status === 'trial' || client.account_status === 'onboarding';
+
   const loadDIDs = async () => {
     if (!client) return;
     try {
-      const allDIDs = await base44.entities.DID.filter({ client_id: client.id });
-      
       // Current assigned DIDs from agent
       const currentDIDs = agent?.assigned_dids || (agent?.assigned_did ? [agent.assigned_did] : []);
       setAssignedDIDs(currentDIDs);
 
-      // Available = DIDs assigned to this client but not yet assigned to this agent
-      setAvailableDIDs(allDIDs.filter(d => d.status === 'assigned' && !currentDIDs.includes(d.number)));
+      if (isDemo) {
+        // For demo/trial: load shared demo pool DIDs
+        const allDIDs = await base44.entities.DID.filter({ is_demo: true });
+        setDemoDIDs(allDIDs);
+        setAvailableDIDs(allDIDs.filter(d => !currentDIDs.includes(d.number)));
+      } else {
+        // For paid: load client-owned DIDs
+        const allDIDs = await base44.entities.DID.filter({ client_id: client.id });
+        setAvailableDIDs(allDIDs.filter(d => d.status === 'assigned' && !currentDIDs.includes(d.number)));
+      }
     } catch (error) {
       console.error('Error loading DIDs:', error);
     } finally {
@@ -40,20 +49,23 @@ export default function DIDManager({ agent, client, onUpdate }) {
     }
   };
 
-  const isTrial = client.account_status === 'trial' || client.account_status === 'onboarding';
-  const trialMaxDIDs = 1;
+  const isTrial = isDemo;
+  const trialMaxDIDs = 1; // Demo agents get 1 DID each (round-robin from pool)
 
   const addDID = async (didNumber) => {
-    // Trial clients can only have 1 DID
-    if (isTrial && assignedDIDs.length >= trialMaxDIDs) {
-      setShowUpgradePrompt(true);
-      return;
-    }
-
-    const maxAllowed = client.total_channels || 1;
-    if (assignedDIDs.length >= maxAllowed) {
-      toast.error(`You can only assign up to ${maxAllowed} DID(s) based on your subscription`);
-      return;
+    if (isDemo) {
+      // Demo agents: 1 DID from shared pool, no ownership check
+      if (assignedDIDs.length >= trialMaxDIDs) {
+        toast.error('Demo agents can only use 1 DID at a time. Remove the current one first.');
+        return;
+      }
+    } else {
+      // Paid clients: respect subscription limits
+      const maxAllowed = client.total_channels || 1;
+      if (assignedDIDs.length >= maxAllowed) {
+        toast.error(`You can only assign up to ${maxAllowed} DID(s) based on your subscription`);
+        return;
+      }
     }
 
     setSaving(true);
@@ -61,10 +73,10 @@ export default function DIDManager({ agent, client, onUpdate }) {
     try {
       await base44.entities.Agent.update(agent.id, {
         assigned_dids: newDIDs,
-        assigned_did: newDIDs[0] // keep primary for backward compatibility
+        assigned_did: newDIDs[0]
       });
       setAssignedDIDs(newDIDs);
-      setAvailableDIDs(prev => prev.filter(d => d.number !== didNumber));
+      setAvailableDIDs(prev => prev.filter(d => (d.number || d) !== didNumber));
       toast.success('DID added to agent');
       onUpdate?.();
     } catch (error) {
@@ -106,12 +118,17 @@ export default function DIDManager({ agent, client, onUpdate }) {
             <CardTitle className="flex items-center gap-2">
               <Phone className="w-5 h-5" />
               Assigned Phone Numbers (DIDs)
+              {isDemo && (
+                <Badge className="bg-amber-100 text-amber-800 text-xs">
+                  <Share2 className="w-3 h-3 mr-1" />Demo Pool
+                </Badge>
+              )}
             </CardTitle>
             <p className="text-sm text-gray-500 mt-1">
-              {isTrial 
-                ? 'Trial accounts can assign 1 DID. Subscribe to enable concurrent calling.'
+              {isDemo 
+                ? 'Demo accounts use shared DIDs. Each agent can use 1 DID for concurrent calling.'
                 : 'Assign multiple DIDs to enable concurrent calling.'}
-              <span className="font-medium"> {assignedDIDs.length}/{maxChannels} channels used.</span>
+              <span className="font-medium"> {assignedDIDs.length}/{maxChannels} used.</span>
             </p>
           </div>
         </div>
