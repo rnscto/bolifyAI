@@ -63,9 +63,11 @@ Deno.serve(async (req) => {
     const direction = payload.direction;
     const caller_number = payload.caller_id_number || payload.caller_number || payload.from;
     const called_number = payload.call_to_number || payload.called_number || payload.to;
-    const customer_number = payload.customer_no_with_prefix || '';
+    const customer_number = payload.customer_no_with_prefix || payload.customer_number || '';
+    const hangup_cause = payload.hangup_cause_description || payload.reason_key || '';
+    const customer_ring_time = payload.customer_ring_time || '';
 
-    console.log(`[smartfloWebhook] Received: status=${status}, call_id=${call_id}, direction=${direction}, caller=${caller_number}, callee=${called_number}, customer=${customer_number}, duration=${duration}`);
+    console.log(`[smartfloWebhook] Received: status=${status}, call_id=${call_id}, direction=${direction}, caller=${caller_number}, callee=${called_number}, customer=${customer_number}, duration=${duration}, hangup=${hangup_cause}, ring_time=${customer_ring_time}`);
 
     if (!call_id) {
       return Response.json({ success: false, error: 'Missing call_id' }, { status: 400 });
