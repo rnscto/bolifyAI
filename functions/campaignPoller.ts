@@ -198,20 +198,23 @@ Deno.serve(async (req) => {
                   if (isDemoAgent) smartfloApiKey = Deno.env.get('SMARTFLO_API_KEY');
                 } catch (_) {}
 
+                let cleanCallerID = selectedDID.replace(/[^0-9]/g, '');
+                if (cleanCallerID.length === 10) cleanCallerID = '91' + cleanCallerID;
+
                 const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     api_key: smartfloApiKey,
                     customer_number: cleanPhone,
-                    caller_id: selectedDID.replace(/^\+/, ''),
+                    caller_id: cleanCallerID,
                     async: 1
                   })
                 });
 
                 const smartfloData = await smartfloResp.json();
                 if (smartfloResp.ok && smartfloData.success !== false) {
-                  const newCallSid = smartfloData.call_id || smartfloData.call_sid || callSid;
+                  const newCallSid = smartfloData.call_id || smartfloData.ref_id || smartfloData.call_sid || callSid;
                   await svc.entities.CallLog.update(callLog.id, { call_sid: newCallSid, status: 'ringing' });
                   console.log(`[campaignPoller] Call initiated: ${cl.lead_name} → ${cleanPhone}`);
                 } else {
