@@ -10,6 +10,8 @@ const STATUS_MAP = {
   'Completed': 'completed',
   'missed': 'no_answer',
   'Missed': 'no_answer',
+  'not_connected': 'no_answer',
+  'Not Connected': 'no_answer',
   'failed': 'failed',
   'Failed': 'failed',
   'no_answer': 'no_answer',
