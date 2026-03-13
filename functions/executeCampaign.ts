@@ -100,6 +100,9 @@ Deno.serve(async (req) => {
               call_duration: callLog.duration || 0
             });
             console.log(`[campaign] Fixed stuck lead ${stuckLead.lead_name}: ${outcome}`);
+          } else if (callLog && callLog.status === 'answered') {
+            // Call is actively in progress — don't time it out, let streamAudio finish
+            console.log(`[campaign] Skipping ${stuckLead.lead_name} — call actively answered`);
           } else {
             const callAge = Date.now() - new Date(stuckLead.updated_date || stuckLead.created_date).getTime();
             if (callAge > 3 * 60 * 1000) {
