@@ -1,14 +1,25 @@
 import { createClient, createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
 
 // Map Smartflo call statuses to internal statuses
+// Smartflo webhook sends statuses like "Answered", "Missed", "completed" etc.
 const STATUS_MAP = {
   'ringing': 'ringing',
-  'answered': 'answered',
+  'answered': 'completed',
+  'Answered': 'completed',
   'completed': 'completed',
+  'Completed': 'completed',
+  'missed': 'no_answer',
+  'Missed': 'no_answer',
   'failed': 'failed',
+  'Failed': 'failed',
   'no_answer': 'no_answer',
+  'No Answer': 'no_answer',
   'busy': 'failed',
-  'cancelled': 'failed'
+  'Busy': 'failed',
+  'cancelled': 'failed',
+  'Cancelled': 'failed',
+  'not_connected': 'no_answer',
+  'Not Connected': 'no_answer'
 };
 
 Deno.serve(async (req) => {
