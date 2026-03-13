@@ -43,9 +43,18 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    console.log('[smartfloWebhook] Received:', payload.status, 'Call:', payload.call_id, 'Direction:', payload.direction);
+    // Smartflo webhook field mapping: Smartflo sends call_status, caller_id_number, call_to_number, etc.
+    // Normalize to our internal names
+    const call_id = payload.call_id || payload.uuid;
+    const status = payload.call_status || payload.status;
+    const duration = payload.duration || payload.billsec;
+    const recording_url = payload.recording_url;
+    const direction = payload.direction;
+    const caller_number = payload.caller_id_number || payload.caller_number || payload.from;
+    const called_number = payload.call_to_number || payload.called_number || payload.to;
+    const customer_number = payload.customer_no_with_prefix || '';
 
-    const { call_id, status, duration, recording_url, direction, caller_number, called_number } = payload;
+    console.log(`[smartfloWebhook] Received: status=${status}, call_id=${call_id}, direction=${direction}, caller=${caller_number}, callee=${called_number}, customer=${customer_number}, duration=${duration}`);
 
     if (!call_id) {
       return Response.json({ success: false, error: 'Missing call_id' }, { status: 400 });
