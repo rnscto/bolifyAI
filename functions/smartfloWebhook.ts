@@ -375,18 +375,18 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
     // Note: For 'answered' we just mark 'contacted' — the real outcome is set later 
     // by processTranscript → campaignPostCall after AI analyzes the conversation
     if (callLog.lead_id && callLog.lead_id !== 'unknown') {
-      if (status === 'answered') {
+      if (mappedStatus === 'completed') {
+        // Answered call — mark contacted, let processTranscript/campaignPostCall handle final status
         await base44.entities.Lead.update(callLog.lead_id, { 
           status: 'contacted',
           last_call_date: new Date().toISOString()
         });
-      } else if (status === 'no_answer') {
+      } else if (mappedStatus === 'no_answer' || mappedStatus === 'failed') {
         await base44.entities.Lead.update(callLog.lead_id, { 
           status: 'callback',
           last_call_date: new Date().toISOString()
         });
       }
-      // Don't update for 'completed' here — let processTranscript/campaignPostCall handle final status
     }
 
     // Handle terminal call statuses (use mappedStatus which normalizes Smartflo values like "Missed", "Answered")
