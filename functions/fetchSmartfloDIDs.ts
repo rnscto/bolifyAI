@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
 
 Deno.serve(async (req) => {
   try {
@@ -9,48 +9,17 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
-    const email = Deno.env.get('SMARTFLO_EMAIL');
-    const password = Deno.env.get('SMARTFLO_PASSWORD');
+    const apiKey = Deno.env.get('SMARTFLO_API_KEY');
     
-    if (!email || !password) {
-      return Response.json({ error: 'Smartflo credentials not configured' }, { status: 500 });
+    if (!apiKey) {
+      return Response.json({ error: 'SMARTFLO_API_KEY not configured' }, { status: 500 });
     }
 
-    // Step 1: Authenticate with Smartflo to get access token
-    const authResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      },
-      body: JSON.stringify({ email, password })
-    });
-
-    if (!authResponse.ok) {
-      const authError = await authResponse.text();
-      console.error('Smartflo authentication error:', authError);
-      return Response.json({ 
-        error: 'Failed to authenticate with Smartflo',
-        details: authError
-      }, { status: authResponse.status });
-    }
-
-    const authData = await authResponse.json();
-    
-    if (!authData.success || !authData.access_token) {
-      return Response.json({ 
-        error: 'Authentication failed',
-        details: authData.message || 'No access token received'
-      }, { status: 401 });
-    }
-
-    const accessToken = authData.access_token;
-
-    // Step 2: Fetch all DIDs from Smartflo API
+    // Fetch all DIDs from Smartflo API using API Key
     const response = await fetch('https://api-smartflo.tatateleservices.com/v1/my_number', {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
+        'Authorization': apiKey,
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       }
