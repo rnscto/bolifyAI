@@ -27,7 +27,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Phone, RefreshCw, Lock, Unlock } from 'lucide-react';
+import { Plus, Phone, RefreshCw, Lock, Unlock, Share2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminDIDs() {
@@ -155,7 +155,7 @@ export default function AdminDIDs() {
     }
   };
 
-  const handleReserve = async (didId) => {
+  const handleReserve = async (didId, markAsDemo = false) => {
     const did = dids.find(d => d.id === didId);
     if (!did) return;
     const isReserved = did.status === 'reserved';
@@ -164,16 +164,18 @@ export default function AdminDIDs() {
         // Unreserve → make available
         await base44.entities.DID.update(didId, {
           status: 'available',
-          reserved_note: ''
+          reserved_note: '',
+          is_demo: false
         });
         toast.success('DID unreserved');
       } else {
-        const note = prompt('Reserve note (optional):') || '';
+        const note = markAsDemo ? 'Shared Demo Pool DID' : (prompt('Reserve note (optional):') || '');
         await base44.entities.DID.update(didId, {
           status: 'reserved',
           client_id: null,
           agent_id: null,
-          reserved_note: note
+          reserved_note: note,
+          is_demo: markAsDemo
         });
         // Remove from any agent
         if (did.client_id && did.number) {
@@ -189,7 +191,7 @@ export default function AdminDIDs() {
             }
           }
         }
-        toast.success('DID reserved');
+        toast.success(markAsDemo ? 'DID added to Demo Pool' : 'DID reserved');
       }
       loadData();
     } catch (error) {
