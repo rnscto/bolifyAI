@@ -325,12 +325,13 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
       if (phoneHints.length > 0) {
         console.log(`[smartfloWebhook] No match for call_sid=${call_id}, trying phone fallback with: ${phoneHints.join(', ')}`);
         
-        // Look for recent calls (last 5 min) across ringing and initiated statuses
-        const [ringingLogs, initiatedLogs] = await Promise.all([
+        // Look for recent calls (last 5 min) across ringing, initiated, and answered statuses
+        const [ringingLogs, initiatedLogs, answeredLogs] = await Promise.all([
           base44.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20),
-          base44.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20)
+          base44.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20),
+          base44.entities.CallLog.filter({ status: 'answered' }, '-created_date', 20)
         ]);
-        const allRecent = [...ringingLogs, ...initiatedLogs];
+        const allRecent = [...ringingLogs, ...initiatedLogs, ...answeredLogs];
         const cutoff = Date.now() - 5 * 60 * 1000;
         
         const match = allRecent.find(l => {
