@@ -391,9 +391,16 @@ Deno.serve(async (req) => {
     const completedCount = allLeads.filter(l => l.status === 'completed').length;
     const failedCount = allLeads.filter(l => l.status === 'failed').length;
     
-    const stillActive = allLeads.filter(l => ['pending', 'calling'].includes(l.status)).length;
+    const nowFinal = new Date();
+    const stillCalling = allLeads.filter(l => l.status === 'calling').length;
+    const pendingReadyFinal = allLeads.filter(l => 
+      l.status === 'pending' && (!l.followup_call_date || new Date(l.followup_call_date) <= nowFinal)
+    ).length;
+    const pendingRetryFinal = allLeads.filter(l => 
+      l.status === 'pending' && l.followup_call_date && new Date(l.followup_call_date) > nowFinal
+    ).length;
     const campaignUpdate = { calls_completed: completedCount, calls_failed: failedCount };
-    if (stillActive === 0) {
+    if (stillCalling === 0 && pendingReadyFinal === 0 && pendingRetryFinal === 0) {
       const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
       allLeads.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
       campaignUpdate.status = 'completed';
