@@ -463,6 +463,21 @@ Deno.serve(async (req) => {
     ws.onclose = (event) => {
       console.log(`[${reqId}] 🔴 Azure Realtime closed: code=${event.code} reason=${event.reason}`);
       session.realtimeReady = false;
+
+      // Auto-reconnect if call is still active and we haven't exhausted retries
+      const MAX_RECONNECT = 3;
+      if (!session._callEnded && session._realtimeReconnectAttempts < MAX_RECONNECT) {
+        session._realtimeReconnectAttempts++;
+        const delay = session._realtimeReconnectAttempts * 1000; // 1s, 2s, 3s backoff
+        console.log(`[${reqId}] 🔄 Reconnecting Azure Realtime (attempt ${session._realtimeReconnectAttempts}/${MAX_RECONNECT}) in ${delay}ms...`);
+        setTimeout(() => {
+          if (!session._callEnded) {
+            connectRealtime();
+          }
+        }, delay);
+      } else if (!session._callEnded) {
+        console.error(`[${reqId}] ❌ Azure Realtime reconnect exhausted (${MAX_RECONNECT} attempts). Call voice is dead.`);
+      }
     };
 
     ws.onerror = (event) => {
