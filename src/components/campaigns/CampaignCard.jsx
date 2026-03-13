@@ -89,6 +89,16 @@ export default function CampaignCard({ campaign, onStart, onPause }) {
               <Users className="w-3 h-3" /> {outcomes.not_answered} not answered
             </span>
           )}
+          {outcomes.converted > 0 && (
+            <span className="flex items-center gap-1 text-emerald-700">
+              <CheckCircle2 className="w-3 h-3" /> {outcomes.converted} converted
+            </span>
+          )}
+          {outcomes.do_not_call > 0 && (
+            <span className="flex items-center gap-1 text-rose-600">
+              <XCircle className="w-3 h-3" /> {outcomes.do_not_call} DNC
+            </span>
+          )}
         </div>
 
         {campaign.created_date && (

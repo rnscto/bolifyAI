@@ -27,6 +27,8 @@ const outcomeColors = {
   not_interested: 'bg-red-100 text-red-700',
   not_answered: 'bg-gray-100 text-gray-600',
   callback: 'bg-yellow-100 text-yellow-700',
+  converted: 'bg-emerald-100 text-emerald-700',
+  do_not_call: 'bg-rose-100 text-rose-700',
 };
 
 const callStatusColors = {
@@ -40,6 +42,8 @@ const outcomeLabels = {
   not_interested: 'Not Interested',
   not_answered: 'Not Answered',
   callback: 'Callback',
+  converted: 'Converted',
+  do_not_call: 'Do Not Call',
 };
 
 const callStatusLabels = {
@@ -79,6 +83,8 @@ export default function CampaignLeadsTable({ campaignLeads }) {
               <SelectItem value="not_interested">Not Interested</SelectItem>
               <SelectItem value="not_answered">Not Answered</SelectItem>
               <SelectItem value="callback">Callback</SelectItem>
+              <SelectItem value="converted">Converted</SelectItem>
+              <SelectItem value="do_not_call">Do Not Call</SelectItem>
               <SelectItem value="has_transcript">Has Transcript</SelectItem>
             </SelectContent>
           </Select>

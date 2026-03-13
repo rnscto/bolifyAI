@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
       if (callingCount === 0 && pendingReady === 0 && pendingWithFutureRetry === 0) {
         const completed = allLeads.filter(l => l.status === 'completed').length;
         const failed = allLeads.filter(l => l.status === 'failed').length;
-        const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0 };
+        const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0, converted: 0, do_not_call: 0 };
         allLeads.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
         await svc.entities.Campaign.update(campaign_id, {
           status: 'completed', completed_at: new Date().toISOString(),

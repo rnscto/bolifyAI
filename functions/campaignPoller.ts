@@ -84,7 +84,7 @@ Deno.serve(async (req) => {
         const completedCount = allLeads.filter(l => l.status === 'completed').length;
         const failedCount = allLeads.filter(l => l.status === 'failed').length;
 
-        const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0 };
+        const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0, converted: 0, do_not_call: 0 };
         allLeads.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
         await svc.entities.Campaign.update(campaignId, {
           calls_completed: completedCount, calls_failed: failedCount, outcomes_summary: outcomes

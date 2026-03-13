@@ -8,6 +8,8 @@ const COLORS = {
   not_interested: '#ef4444',
   not_answered: '#9ca3af',
   callback: '#eab308',
+  converted: '#10b981',
+  do_not_call: '#e11d48',
 };
 
 const LABELS = {
@@ -16,6 +18,8 @@ const LABELS = {
   not_interested: 'Not Interested',
   not_answered: 'Not Answered',
   callback: 'Callback',
+  converted: 'Converted',
+  do_not_call: 'Do Not Call',
 };
 
 export default function CampaignOutcomeChart({ outcomes }) {

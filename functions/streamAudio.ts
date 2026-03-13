@@ -368,8 +368,8 @@ async function saveCallRecord(session, reqId, duration) {
           // Map streamAudio leadStatus to new outcome values
           const statusToOutcome = {
             'interested': 'interested', 'not_interested': 'not_interested', 'callback': 'callback',
-            'no_answer': 'not_answered', 'converted': 'interested', 'contacted': 'neutral',
-            'do_not_call': 'not_interested'
+            'no_answer': 'not_answered', 'converted': 'converted', 'contacted': 'neutral',
+            'do_not_call': 'do_not_call'
           };
           const mappedOutcome = statusToOutcome[leadStatus] || 'neutral';
           const mappedCallStatus = (leadStatus === 'no_answer') ? 'not_answered' : 'answered';

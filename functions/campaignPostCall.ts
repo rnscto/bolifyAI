@@ -149,8 +149,8 @@ Deno.serve(async (req) => {
       // streamAudio already did AI analysis — map its lead_status to our outcome values
       const statusToOutcome = {
         'interested': 'interested', 'not_interested': 'not_interested', 'callback': 'callback',
-        'no_answer': 'not_answered', 'converted': 'interested', 'contacted': 'neutral',
-        'do_not_call': 'not_interested'
+        'no_answer': 'not_answered', 'converted': 'converted', 'contacted': 'neutral',
+        'do_not_call': 'do_not_call'
       };
       outcome = statusToOutcome[callLog.lead_status_updated] || outcome;
       summary = callLog.conversation_summary || summary;
@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
     } else if (campaignLead.lead_id) {
       const outcomeToLeadStatus = {
         interested: 'interested', not_interested: 'not_interested', callback: 'callback',
-        not_answered: 'callback', neutral: 'contacted'
+        not_answered: 'callback', neutral: 'contacted', converted: 'converted', do_not_call: 'do_not_call'
       };
       await base44.entities.Lead.update(campaignLead.lead_id, {
         status: outcomeToLeadStatus[outcome] || 'contacted',
@@ -380,7 +380,7 @@ SUMMARY:
 ${callLog.conversation_summary || 'No summary available'}
 
 Determine:
-1. outcome: one of "neutral", "interested", "not_interested", "not_answered", "callback"
+1. outcome: one of "neutral", "interested", "not_interested", "not_answered", "callback", "converted", "do_not_call"
 2. summary: A brief 2-3 sentence summary.
 
 Rules:
@@ -388,7 +388,9 @@ Rules:
 - "callback" = asked to be called back later
 - "not_interested" = explicitly declined
 - "not_answered" = no real conversation happened, call not picked up
-- "neutral" = conversation happened but no clear interest or rejection`,
+- "neutral" = conversation happened but no clear interest or rejection
+- "converted" = agreed to sign up, purchase, or confirmed a deal
+- "do_not_call" = explicitly asked to never be called again, remove from list`,
       'You are a sales call analyst. Always respond in valid JSON.',
       { type: "object", properties: { outcome: { type: "string" }, summary: { type: "string" } } }
     );
@@ -469,7 +471,7 @@ SCORING (total 100):
     // Update lead
     const leadUpdate = {
       status: { interested: 'interested', not_interested: 'not_interested', callback: 'callback',
-        not_answered: 'callback', neutral: 'contacted' }[outcome] || 'contacted',
+        not_answered: 'callback', neutral: 'contacted', converted: 'converted', do_not_call: 'do_not_call' }[outcome] || 'contacted',
       last_call_date: new Date().toISOString(), last_engagement_date: new Date().toISOString()
     };
     if (aiScore > 0) {
@@ -618,7 +620,7 @@ async function updateCampaignStats(base44, campaignId) {
 }
 
 function countOutcomes(allLeads) {
-  const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0 };
+  const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0, converted: 0, do_not_call: 0 };
   allLeads.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
   return outcomes;
 }
