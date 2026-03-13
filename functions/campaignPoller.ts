@@ -40,12 +40,13 @@ Deno.serve(async (req) => {
               const terminalStatuses = ['completed', 'failed', 'no_answer'];
 
               if (callLog && terminalStatuses.includes(callLog.status)) {
-                let outcome = 'contacted';
-                if (callLog.status === 'no_answer' || callLog.status === 'failed') outcome = 'no_answer';
-                if (callLog.transcript && callLog.transcript.length > 30) outcome = 'contacted';
+                let outcome = 'neutral';
+                let callStatusVal = 'answered';
+                if (callLog.status === 'no_answer' || callLog.status === 'failed') { outcome = 'not_answered'; callStatusVal = 'not_answered'; }
+                if (callLog.transcript && callLog.transcript.length > 30) { outcome = 'neutral'; callStatusVal = 'answered'; }
 
                 await svc.entities.CampaignLead.update(cl.id, {
-                  status: 'completed', outcome,
+                  status: 'completed', outcome, call_status: callStatusVal,
                   conversation_summary: callLog.conversation_summary || 'Call completed (recovered by poller)',
                   transcript: callLog.transcript || '',
                   call_duration: callLog.duration || 0
@@ -54,7 +55,7 @@ Deno.serve(async (req) => {
                 results.stuck_fixed++;
               } else {
                 await svc.entities.CampaignLead.update(cl.id, {
-                  status: 'completed', outcome: 'no_answer',
+                  status: 'completed', outcome: 'not_answered', call_status: 'not_answered',
                   conversation_summary: 'Call timed out — no response from telephony provider.'
                 });
                 if (cl.call_log_id) {
@@ -83,10 +84,8 @@ Deno.serve(async (req) => {
         const completedCount = allLeads.filter(l => l.status === 'completed').length;
         const failedCount = allLeads.filter(l => l.status === 'failed').length;
 
-        const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
-        allLeads.forEach(l => {
-          if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++;
-        });
+        const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0 };
+        allLeads.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
         await svc.entities.Campaign.update(campaignId, {
           calls_completed: completedCount, calls_failed: failedCount, outcomes_summary: outcomes
         });
@@ -220,7 +219,7 @@ Deno.serve(async (req) => {
                 } else {
                   await svc.entities.CallLog.update(callLog.id, { status: 'failed' });
                   await svc.entities.CampaignLead.update(cl.id, {
-                    status: 'completed', outcome: 'no_answer',
+                    status: 'completed', outcome: 'not_answered', call_status: 'not_answered',
                     conversation_summary: `Smartflo error: ${smartfloData.message || 'Unknown'}`
                   });
                 }
@@ -229,7 +228,7 @@ Deno.serve(async (req) => {
               } catch (e) {
                 console.error(`[campaignPoller] Call error for ${cl.lead_name}: ${e.message}`);
                 await svc.entities.CampaignLead.update(cl.id, {
-                  status: 'completed', outcome: 'no_answer',
+                  status: 'completed', outcome: 'not_answered', call_status: 'not_answered',
                   conversation_summary: `Error: ${e.message}`
                 });
               }

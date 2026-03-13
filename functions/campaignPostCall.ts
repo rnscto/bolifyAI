@@ -694,7 +694,7 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
   });
 
   // Auto-enroll into email sequence if not already done by streamAudio
-  if (campaignLead.lead_id && qualificationTier && !['disqualified'].includes(qualificationTier) && outcome !== 'no_answer') {
+  if (campaignLead.lead_id && qualificationTier && !['disqualified'].includes(qualificationTier) && outcome !== 'not_answered') {
     try {
       const enrollResult = await base44.functions.invoke('autoEnrollSequence', {
         lead_id: campaignLead.lead_id, client_id: campaign.client_id,

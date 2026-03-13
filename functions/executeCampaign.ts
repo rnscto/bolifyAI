@@ -90,10 +90,11 @@ Deno.serve(async (req) => {
           const callLog = await svc.entities.CallLog.get(stuckLead.call_log_id);
           const terminalStatuses = ['completed', 'failed', 'no_answer'];
           if (callLog && terminalStatuses.includes(callLog.status)) {
-            let outcome = 'contacted';
-            if (callLog.status === 'no_answer' || callLog.status === 'failed') outcome = 'no_answer';
+            let outcome = 'neutral';
+            let callStatusVal = 'answered';
+            if (callLog.status === 'no_answer' || callLog.status === 'failed') { outcome = 'not_answered'; callStatusVal = 'not_answered'; }
             await svc.entities.CampaignLead.update(stuckLead.id, {
-              status: 'completed', outcome,
+              status: 'completed', outcome, call_status: callStatusVal,
               conversation_summary: callLog.conversation_summary || '',
               transcript: callLog.transcript || '',
               call_duration: callLog.duration || 0
@@ -103,7 +104,7 @@ Deno.serve(async (req) => {
             const callAge = Date.now() - new Date(stuckLead.updated_date || stuckLead.created_date).getTime();
             if (callAge > 3 * 60 * 1000) {
               await svc.entities.CampaignLead.update(stuckLead.id, {
-                status: 'completed', outcome: 'no_answer',
+                status: 'completed', outcome: 'not_answered', call_status: 'not_answered',
                 conversation_summary: 'Call timed out — no response within 3 minutes.'
               });
               if (stuckLead.call_log_id) {
@@ -169,7 +170,7 @@ Deno.serve(async (req) => {
       if (callingCount === 0 && pendingReady === 0 && pendingWithFutureRetry === 0) {
         const completed = allLeads.filter(l => l.status === 'completed').length;
         const failed = allLeads.filter(l => l.status === 'failed').length;
-        const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
+        const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0 };
         allLeads.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
         await svc.entities.Campaign.update(campaign_id, {
           status: 'completed', completed_at: new Date().toISOString(),
@@ -291,7 +292,7 @@ Deno.serve(async (req) => {
         if (!(smartfloResp.ok && smartfloData.success !== false)) {
           await svc.entities.CallLog.update(callLog.id, { status: 'failed' });
           await svc.entities.CampaignLead.update(cl.id, {
-            status: 'completed', outcome: 'no_answer',
+            status: 'completed', outcome: 'not_answered', call_status: 'not_answered',
             conversation_summary: `Smartflo API error: ${smartfloData.message || JSON.stringify(smartfloData)}`
           });
           results.failed++;
@@ -314,7 +315,7 @@ Deno.serve(async (req) => {
       } catch (err) {
         console.error(`[campaign] Error calling ${cl.lead_phone}:`, err.message);
         await svc.entities.CampaignLead.update(cl.id, {
-          status: 'completed', outcome: 'no_answer',
+          status: 'completed', outcome: 'not_answered', call_status: 'not_answered',
           conversation_summary: `Error: ${err.message}`
         });
         results.failed++;
