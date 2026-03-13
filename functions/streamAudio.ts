@@ -1203,17 +1203,33 @@ Deno.serve(async (req) => {
         }
       }
 
-      // ── Strategy 2: Recent unclaimed ringing/initiated calls (pick newest) ──
+      // ── Strategy 2: Recent unclaimed ringing/initiated calls ──
+      // When multiple calls are ringing (e.g. campaign batch), prefer matching by callee number
       if (!callLog) {
         try {
-          const recentLogs = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 10);
+          const recentLogs = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20);
           const unclaimed = recentLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
-          console.log(`[${reqId}] 🔍 Ringing unclaimed: ${unclaimed.length} (total ringing: ${recentLogs.length})`);
+          console.log(`[${reqId}] 🔍 Ringing unclaimed: ${unclaimed.length} (total ringing: ${recentLogs.length}), calleeNumber=${session.calleeNumber}`);
 
           if (unclaimed.length >= 1) {
-            // Pick the most recent unclaimed one
-            callLog = unclaimed[0];
-            console.log(`[${reqId}] ⚡ Fast match: ringing call ${callLog.id} (${callLog.callee_number})`);
+            // Try to match by callee_number first (critical for concurrent campaign calls)
+            if (session.calleeNumber) {
+              const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '');
+              const phoneMatch = unclaimed.find(l => {
+                const logPhone = (l.callee_number || '').replace(/[^0-9]/g, '');
+                // Match last 10 digits (ignore country code differences)
+                return logPhone.slice(-10) === cleanCallee.slice(-10);
+              });
+              if (phoneMatch) {
+                callLog = phoneMatch;
+                console.log(`[${reqId}] ⚡ Phone match: ringing call ${callLog.id} (${callLog.callee_number})`);
+              }
+            }
+            // Fallback: pick most recent unclaimed
+            if (!callLog) {
+              callLog = unclaimed[0];
+              console.log(`[${reqId}] ⚡ Recent match: ringing call ${callLog.id} (${callLog.callee_number})`);
+            }
           }
         } catch (e) {
           console.log(`[${reqId}] ⚠️ Ringing lookup failed: ${e.message}`);
@@ -1222,23 +1238,36 @@ Deno.serve(async (req) => {
 
       if (!callLog) {
         try {
-          const initLogs = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 10);
+          const initLogs = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20);
           const unclaimed = initLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
           console.log(`[${reqId}] 🔍 Initiated unclaimed: ${unclaimed.length}`);
 
           if (unclaimed.length >= 1) {
-            callLog = unclaimed[0];
-            console.log(`[${reqId}] ⚡ Fast match: initiated call ${callLog.id} (${callLog.callee_number})`);
+            if (session.calleeNumber) {
+              const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '');
+              const phoneMatch = unclaimed.find(l => {
+                const logPhone = (l.callee_number || '').replace(/[^0-9]/g, '');
+                return logPhone.slice(-10) === cleanCallee.slice(-10);
+              });
+              if (phoneMatch) {
+                callLog = phoneMatch;
+                console.log(`[${reqId}] ⚡ Phone match: initiated call ${callLog.id} (${callLog.callee_number})`);
+              }
+            }
+            if (!callLog) {
+              callLog = unclaimed[0];
+              console.log(`[${reqId}] ⚡ Recent match: initiated call ${callLog.id} (${callLog.callee_number})`);
+            }
           }
         } catch (e) {
           console.log(`[${reqId}] ⚠️ Initiated lookup failed: ${e.message}`);
         }
       }
 
-      // ── Strategy 3: Broadest fallback — any recent call with agent_config_cache that has no stream_sid ──
+      // ── Strategy 3: Broadest fallback ──
       if (!callLog) {
         try {
-          const allRecent = await svc.entities.CallLog.list('-created_date', 10);
+          const allRecent = await svc.entities.CallLog.list('-created_date', 15);
           const candidates = allRecent.filter(l =>
             !l.stream_sid &&
             l.created_date >= cutoff &&
@@ -1246,8 +1275,22 @@ Deno.serve(async (req) => {
             ['initiated', 'ringing', 'answered'].includes(l.status)
           );
           if (candidates.length > 0) {
-            callLog = candidates[0];
-            console.log(`[${reqId}] 🔍 Broad fallback match: ${callLog.id} (status=${callLog.status})`);
+            // Try phone match first
+            if (session.calleeNumber) {
+              const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '');
+              const phoneMatch = candidates.find(l => {
+                const logPhone = (l.callee_number || '').replace(/[^0-9]/g, '');
+                return logPhone.slice(-10) === cleanCallee.slice(-10);
+              });
+              if (phoneMatch) {
+                callLog = phoneMatch;
+                console.log(`[${reqId}] 🔍 Broad phone match: ${callLog.id} (${callLog.callee_number})`);
+              }
+            }
+            if (!callLog) {
+              callLog = candidates[0];
+              console.log(`[${reqId}] 🔍 Broad fallback match: ${callLog.id} (status=${callLog.status})`);
+            }
           }
         } catch (e) {
           console.log(`[${reqId}] ⚠️ Broad fallback failed: ${e.message}`);
