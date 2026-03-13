@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.20';
 import { Resend } from 'npm:resend@4.0.0';
 
 const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
@@ -316,13 +316,21 @@ Deno.serve(async (req) => {
             }
           });
 
-          // Smartflo call
+          // Smartflo call — use agent's own API token
           const cleanPhone = lead.phone.replace(/\D/g, '');
+          let followupApiKey = agent.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY');
+          try {
+            const clientData = await svc.entities.Client.get(activity.client_id);
+            if (clientData && (clientData.account_status === 'trial' || clientData.account_status === 'onboarding')) {
+              followupApiKey = Deno.env.get('SMARTFLO_API_KEY');
+            }
+          } catch (_) {}
+
           const smartfloRes = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              api_key: Deno.env.get('SMARTFLO_API_KEY'),
+              api_key: followupApiKey,
               customer_number: cleanPhone,
               caller_id: callerDID.replace(/^\+/, ''),
               async: 1

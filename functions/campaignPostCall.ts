@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.20';
 import { Resend } from 'npm:resend@4.0.0';
 
 const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
@@ -294,11 +294,20 @@ async function triggerNextBatch(base44, campaignId) {
 
       await base44.entities.CampaignLead.update(cl.id, { call_log_id: newCallLog.id });
 
+      // Use agent's own API token (falls back to global key for demo agents)
+      let smartfloApiKey = agent.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY');
+      try {
+        const clientData = await base44.entities.Client.get(campaign.client_id);
+        if (clientData && (clientData.account_status === 'trial' || clientData.account_status === 'onboarding')) {
+          smartfloApiKey = Deno.env.get('SMARTFLO_API_KEY');
+        }
+      } catch (_) {}
+
       const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          api_key: Deno.env.get('SMARTFLO_API_KEY'),
+          api_key: smartfloApiKey,
           customer_number: cleanPhone,
           caller_id: selectedDID.replace(/^\+/, ''),
           async: 1
