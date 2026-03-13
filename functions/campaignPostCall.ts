@@ -199,13 +199,18 @@ async function triggerNextBatch(base44, campaignId) {
       return { skipped: `campaign_${campaign?.status || 'missing'}` };
     }
 
-    const allLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId });
+    const now = new Date();
+    const allLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId }, 'created_date', 1000);
     const pendingLeads = allLeads.filter(l => l.status === 'pending');
     const callingLeads = allLeads.filter(l => l.status === 'calling');
     const maxConcurrent = campaign.max_concurrent_calls || 5;
 
-    // Check completion
-    if (pendingLeads.length === 0 && callingLeads.length === 0) {
+    // Separate ready-to-call vs retry-later pending leads
+    const readyPending = pendingLeads.filter(l => !l.followup_call_date || new Date(l.followup_call_date) <= now);
+    const retryLaterPending = pendingLeads.filter(l => l.followup_call_date && new Date(l.followup_call_date) > now);
+
+    // Check completion — only complete if NO pending leads of any kind
+    if (readyPending.length === 0 && callingLeads.length === 0 && retryLaterPending.length === 0) {
       const completedCount = allLeads.filter(l => l.status === 'completed').length;
       const failedCount = allLeads.filter(l => l.status === 'failed').length;
       const outcomes = countOutcomes(allLeads);
