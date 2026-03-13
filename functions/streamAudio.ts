@@ -409,6 +409,7 @@ Deno.serve(async (req) => {
     streamSid: null,
     callSid: null,
     callLogId: null,
+    clientId: null,           // Client ID for marketplace lookups
     transcript: [],
     startTime: Date.now(),
     systemPrompt: 'You are a friendly AI voice assistant. Be professional and concise. Keep responses to 1-3 sentences.',
@@ -420,7 +421,9 @@ Deno.serve(async (req) => {
     realtimeReady: false,     // Whether session.created has been received
     isSpeaking: false,        // Track if model is currently outputting audio
     _ttsAbort: null,          // AbortController for Azure Speech TTS (hybrid mode)
-    chatHistory: []           // GPT-5-nano conversation history (azure_speech mode)
+    chatHistory: [],          // GPT-5-nano conversation history (azure_speech mode)
+    tools: [],                // Registered tools (e.g. shopify_order_lookup)
+    hasShopify: false         // Whether Shopify marketplace is connected
   };
 
   // ─── Connect to Azure Realtime API ───
@@ -467,8 +470,176 @@ Deno.serve(async (req) => {
     session.realtimeWs = ws;
   }
 
+  // ─── Build marketplace tool definitions ───
+  function buildToolDefinitions() {
+    const tools = [];
+    if (session.hasShopify) {
+      tools.push({
+        type: 'function',
+        name: 'shopify_lookup',
+        description: 'Look up information from the customer\'s Shopify store. Use this when the customer asks about their order status, tracking, products, or refunds.',
+        parameters: {
+          type: 'object',
+          properties: {
+            lookup_type: {
+              type: 'string',
+              enum: ['order_by_number', 'order_by_phone', 'order_by_email', 'product_search', 'refund_status', 'tracking'],
+              description: 'Type of lookup. Use order_by_number for order #, order_by_phone for phone-based search, order_by_email for email-based search, product_search for product availability, refund_status for refund info (needs order ID), tracking for shipment tracking (needs order ID).'
+            },
+            query: {
+              type: 'string',
+              description: 'The search query: order number (e.g. #1234 or 1234), phone number, email, product name, or Shopify order ID (for refund_status/tracking).'
+            }
+          },
+          required: ['lookup_type', 'query']
+        }
+      });
+      console.log(`[${reqId}] 🛒 Shopify tool registered for client ${session.clientId}`);
+    }
+    session.tools = tools;
+    return tools;
+  }
+
+  // ─── Execute a tool call from the Realtime API ───
+  async function executeToolCall(callId, functionName, argsStr) {
+    console.log(`[${reqId}] 🔧 Tool call: ${functionName}(${argsStr.substring(0, 200)})`);
+    let result = { error: `Unknown tool: ${functionName}` };
+
+    if (functionName === 'shopify_lookup' && session.clientId) {
+      try {
+        const args = JSON.parse(argsStr);
+        const { createClient } = await import('npm:@base44/sdk@0.8.18');
+        const appId = Deno.env.get('BASE44_APP_ID');
+        const svc = createClient({ appId, asServiceRole: true });
+
+        const integrations = await svc.entities.MarketplaceIntegration.filter({
+          client_id: session.clientId,
+          platform: 'shopify',
+          status: 'active'
+        });
+
+        if (integrations.length === 0) {
+          result = { error: 'No active Shopify integration' };
+        } else {
+          const shop = integrations[0];
+          const storeUrl = shop.store_url.replace(/^https?:\/\//, '').replace(/\/$/, '');
+          const apiVersion = shop.api_version || '2024-01';
+          const baseUrl = `https://${storeUrl}/admin/api/${apiVersion}`;
+          const headers = {
+            'X-Shopify-Access-Token': shop.api_access_token,
+            'Content-Type': 'application/json'
+          };
+
+          if (args.lookup_type === 'order_by_number') {
+            const orderName = args.query.startsWith('#') ? args.query : `#${args.query}`;
+            const res = await fetch(`${baseUrl}/orders.json?name=${encodeURIComponent(orderName)}&status=any&limit=3`, { headers });
+            if (res.ok) {
+              const data = await res.json();
+              result = { orders: (data.orders || []).map(o => formatShopifyOrder(o)) };
+            } else {
+              result = { error: `Shopify API error: ${res.status}` };
+            }
+          } else if (args.lookup_type === 'order_by_phone') {
+            const res = await fetch(`${baseUrl}/orders.json?status=any&limit=20`, { headers });
+            if (res.ok) {
+              const data = await res.json();
+              const cleanQ = args.query.replace(/[^0-9]/g, '');
+              const filtered = (data.orders || []).filter(o => {
+                const ph = (o.customer?.phone || o.phone || o.billing_address?.phone || '').replace(/[^0-9]/g, '');
+                return ph.includes(cleanQ) || cleanQ.includes(ph);
+              });
+              result = { orders: filtered.slice(0, 5).map(o => formatShopifyOrder(o)) };
+            } else {
+              result = { error: `Shopify API error: ${res.status}` };
+            }
+          } else if (args.lookup_type === 'order_by_email') {
+            const custRes = await fetch(`${baseUrl}/customers/search.json?query=email:${encodeURIComponent(args.query)}&limit=1`, { headers });
+            if (custRes.ok) {
+              const custData = await custRes.json();
+              if (custData.customers?.length > 0) {
+                const cId = custData.customers[0].id;
+                const ordRes = await fetch(`${baseUrl}/customers/${cId}/orders.json?status=any&limit=5`, { headers });
+                const ordData = await ordRes.json();
+                result = { customer_name: `${custData.customers[0].first_name || ''} ${custData.customers[0].last_name || ''}`.trim(), orders: (ordData.orders || []).map(o => formatShopifyOrder(o)) };
+              } else {
+                result = { orders: [], message: 'No customer found with that email' };
+              }
+            } else {
+              result = { error: `Shopify API error: ${custRes.status}` };
+            }
+          } else if (args.lookup_type === 'product_search') {
+            const res = await fetch(`${baseUrl}/products.json?title=${encodeURIComponent(args.query)}&limit=5`, { headers });
+            if (res.ok) {
+              const data = await res.json();
+              result = { products: (data.products || []).map(p => ({ title: p.title, available: p.variants?.some(v => (v.inventory_quantity || 0) > 0), variants: p.variants?.map(v => ({ title: v.title, price: v.price, stock: v.inventory_quantity })) })) };
+            } else {
+              result = { error: `Shopify API error: ${res.status}` };
+            }
+          } else if (args.lookup_type === 'tracking') {
+            const res = await fetch(`${baseUrl}/orders/${args.query}/fulfillments.json`, { headers });
+            if (res.ok) {
+              const data = await res.json();
+              result = { fulfillments: (data.fulfillments || []).map(f => ({ tracking_number: f.tracking_number, tracking_company: f.tracking_company, tracking_url: f.tracking_url, status: f.status, shipment_status: f.shipment_status })) };
+            } else {
+              result = { error: `Shopify API error: ${res.status}` };
+            }
+          } else if (args.lookup_type === 'refund_status') {
+            const res = await fetch(`${baseUrl}/orders/${args.query}/refunds.json`, { headers });
+            if (res.ok) {
+              const data = await res.json();
+              result = { refunds: (data.refunds || []).map(r => ({ created_at: r.created_at, note: r.note, items: r.refund_line_items?.map(li => li.line_item?.title) })) };
+            } else {
+              result = { error: `Shopify API error: ${res.status}` };
+            }
+          } else {
+            result = { error: `Unknown lookup_type: ${args.lookup_type}` };
+          }
+        }
+      } catch (err) {
+        console.error(`[${reqId}] ❌ Tool execution error: ${err.message}`);
+        result = { error: err.message };
+      }
+    }
+
+    console.log(`[${reqId}] 🔧 Tool result: ${JSON.stringify(result).substring(0, 300)}`);
+
+    // Send the result back to the Realtime API
+    sendToRealtime({
+      type: 'conversation.item.create',
+      item: {
+        type: 'function_call_output',
+        call_id: callId,
+        output: JSON.stringify(result)
+      }
+    });
+    // Trigger a new response from the model with the tool result
+    sendToRealtime({ type: 'response.create' });
+  }
+
+  // ─── Format Shopify order for concise voice response ───
+  function formatShopifyOrder(order) {
+    const fulfillment = order.fulfillment_status || 'unfulfilled';
+    const tracking = (order.fulfillments || []).filter(f => f.tracking_number).map(f => ({
+      tracking_number: f.tracking_number,
+      company: f.tracking_company,
+      url: f.tracking_url,
+      status: f.shipment_status || f.status
+    }));
+    return {
+      order_number: order.name || `#${order.order_number}`,
+      date: order.created_at?.substring(0, 10),
+      status: order.cancelled_at ? 'cancelled' : fulfillment,
+      payment: order.financial_status,
+      total: `${order.currency} ${order.total_price}`,
+      items: (order.line_items || []).map(li => `${li.title} x${li.quantity}`).join(', '),
+      tracking: tracking.length > 0 ? tracking : 'no tracking yet',
+      shipping_city: order.shipping_address?.city || ''
+    };
+  }
+
   function applySessionConfig() {
     const isHybrid = session.voiceEngine === 'azure_speech';
+    const tools = buildToolDefinitions();
     const sessionConfig = {
       input_audio_format: 'pcm16',
       input_audio_transcription: { model: 'whisper-1' },
@@ -497,8 +668,15 @@ Deno.serve(async (req) => {
       sessionConfig.output_audio_format = 'pcm16';
     }
 
+    // Add tools if any are registered
+    if (tools.length > 0) {
+      sessionConfig.tools = tools;
+      sessionConfig.tool_choice = 'auto';
+      console.log(`[${reqId}] 🔧 ${tools.length} tool(s) registered with Realtime session`);
+    }
+
     sendToRealtime({ type: 'session.update', session: sessionConfig });
-    console.log(`[${reqId}] 📤 Session configured: engine=${session.voiceEngine}, voice=${session.voiceType}`);
+    console.log(`[${reqId}] 📤 Session configured: engine=${session.voiceEngine}, voice=${session.voiceType}, tools=${tools.length}`);
 
     // ─── TRIGGER INITIAL GREETING so the agent speaks first ───
     triggerGreeting();
