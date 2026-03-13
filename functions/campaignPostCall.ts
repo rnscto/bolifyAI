@@ -61,10 +61,16 @@ Deno.serve(async (req) => {
     }
 
     const campaignLead = campaignLeads[0];
+    
+    // Idempotency: if CampaignLead is already completed/failed, just check next batch
     if (['completed', 'failed'].includes(campaignLead.status)) {
-      // Already processed — but still check if next batch needs triggering
       await triggerNextBatch(base44, campaignLead.campaign_id);
       return Response.json({ success: true, skipped: 'already_processed', next_batch_checked: true });
+    }
+    
+    // Idempotency: if CampaignLead is still pending (retry queued), skip
+    if (campaignLead.status === 'pending') {
+      return Response.json({ success: true, skipped: 'already_pending_retry' });
     }
 
     const callLog = data;
