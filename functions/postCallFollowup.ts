@@ -40,8 +40,8 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
 
 Deno.serve(async (req) => {
   try {
-    const base44 = createClientFromRequest(req);
-    const svc = base44.asServiceRole;
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const svc = createClient({ appId, asServiceRole: true });
 
     const payload = await req.json();
     const { event, data, old_data } = payload;
