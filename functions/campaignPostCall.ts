@@ -152,7 +152,7 @@ Deno.serve(async (req) => {
     const alreadyAnalyzed = callLog.lead_status_updated && callLog.transcript;
     
     if (alreadyAnalyzed) {
-      // streamAudio already did AI analysis — map its lead_status to our outcome values
+      // streamAudio already did AI analysis + Lead scoring — just map outcome for CampaignLead
       const statusToOutcome = {
         'interested': 'interested', 'not_interested': 'not_interested', 'callback': 'callback',
         'no_answer': 'not_answered', 'converted': 'converted', 'contacted': 'neutral',
@@ -160,9 +160,10 @@ Deno.serve(async (req) => {
       };
       outcome = statusToOutcome[callLog.lead_status_updated] || outcome;
       summary = callLog.conversation_summary || summary;
+      // NOTE: Lead is already updated by streamAudio — only update CampaignLead here
       await base44.entities.CampaignLead.update(campaignLead.id, { outcome, conversation_summary: summary });
       
-      // Still run follow-up emails/activities based on outcome
+      // Run follow-up emails/activities (but skip Lead updates — streamAudio did them)
       aiResult = await doFollowUpActions(base44, callLog, campaignLead, campaignId, outcome, summary);
     } else if (outcome !== 'not_answered' && (callLog.transcript || callLog.conversation_summary)) {
       aiResult = await doAIAnalysis(base44, callLog, campaignLead, campaignId, outcome, summary);
