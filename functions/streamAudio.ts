@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
 
 // ─── Audio Conversion Helpers ───
 
@@ -106,7 +106,7 @@ async function saveCallRecord(session, reqId, duration) {
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    const { createClient } = await import('npm:@base44/sdk@0.8.18');
+    const { createClient } = await import('npm:@base44/sdk@0.8.20');
     const appId = Deno.env.get('BASE44_APP_ID');
     const serviceClient = createClient({ appId, asServiceRole: true });
 
@@ -508,7 +508,7 @@ Deno.serve(async (req) => {
     if (functionName === 'shopify_lookup' && session.clientId) {
       try {
         const args = JSON.parse(argsStr);
-        const { createClient } = await import('npm:@base44/sdk@0.8.18');
+        const { createClient } = await import('npm:@base44/sdk@0.8.20');
         const appId = Deno.env.get('BASE44_APP_ID');
         const svc = createClient({ appId, asServiceRole: true });
 
@@ -1099,7 +1099,7 @@ Deno.serve(async (req) => {
   // Finds the matching CallLog for this WebSocket stream, extracts the cached agent config
   async function loadAgentConfig() {
     try {
-      const { createClient } = await import('npm:@base44/sdk@0.8.18');
+      const { createClient } = await import('npm:@base44/sdk@0.8.20');
       const appId = Deno.env.get('BASE44_APP_ID');
       const svc = createClient({ appId, asServiceRole: true });
 
