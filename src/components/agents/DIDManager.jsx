@@ -134,11 +134,35 @@ export default function DIDManager({ agent, client, onUpdate }) {
         </div>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Auto-assign demo DID prompt */}
+        {isDemo && assignedDIDs.length === 0 && demoDIDs.length > 0 && (
+          <div className="flex items-center justify-between p-4 bg-amber-50 border border-amber-200 rounded-lg">
+            <div className="flex items-center gap-2 text-sm text-amber-800">
+              <Share2 className="w-4 h-4 shrink-0" />
+              <span>Auto-assign a shared demo DID to start making calls</span>
+            </div>
+            <Button
+              size="sm"
+              className="bg-amber-500 hover:bg-amber-600 text-white"
+              disabled={saving}
+              onClick={() => {
+                // Round-robin: pick based on agent creation order
+                const idx = Math.floor(Math.random() * demoDIDs.length);
+                addDID(demoDIDs[idx].number);
+              }}
+            >
+              <Plus className="w-4 h-4 mr-1" /> Auto-Assign
+            </Button>
+          </div>
+        )}
+
         {/* Assigned DIDs */}
         {assignedDIDs.length === 0 ? (
           <div className="flex items-center gap-2 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-800">
             <AlertCircle className="w-4 h-4 shrink-0" />
-            No DIDs assigned. Your agent cannot make calls without a phone number.
+            {isDemo && demoDIDs.length === 0 
+              ? 'No demo DIDs available. Contact admin to set up the demo pool.'
+              : 'No DIDs assigned. Your agent cannot make calls without a phone number.'}
           </div>
         ) : (
           <div className="space-y-2">
