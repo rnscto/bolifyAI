@@ -389,8 +389,8 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
       // Don't update for 'completed' here — let processTranscript/campaignPostCall handle final status
     }
 
-    // Handle terminal call statuses
-    if (status === 'completed' || status === 'no_answer' || status === 'failed' || status === 'busy' || status === 'cancelled') {
+    // Handle terminal call statuses (use mappedStatus which normalizes Smartflo values like "Missed", "Answered")
+    if (mappedStatus === 'completed' || mappedStatus === 'no_answer' || mappedStatus === 'failed') {
       // Set end time
       if (!updateData.call_end_time) {
         updateData.call_end_time = new Date().toISOString();
