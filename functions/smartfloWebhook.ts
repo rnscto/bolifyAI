@@ -4,8 +4,8 @@ import { createClient } from 'npm:@base44/sdk@0.8.20';
 // Smartflo webhook sends statuses like "Answered", "Missed", "completed" etc.
 const STATUS_MAP = {
   'ringing': 'ringing',
-  'answered': 'completed',
-  'Answered': 'completed',
+  'answered': 'answered',
+  'Answered': 'answered',
   'completed': 'completed',
   'Completed': 'completed',
   'missed': 'no_answer',
