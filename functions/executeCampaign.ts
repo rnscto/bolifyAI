@@ -147,9 +147,11 @@ Deno.serve(async (req) => {
     }
 
     // Get next pending leads ready to call
+    // Fetch a large batch because some leads may have future followup_call_date (retry-scheduled)
+    // and we need to skip past them to find fresh leads
     const now = new Date();
     const pendingLeadsRaw = await svc.entities.CampaignLead.filter(
-      { campaign_id, status: 'pending' }, 'created_date', slotsAvailable + 10
+      { campaign_id, status: 'pending' }, 'created_date', 200
     );
     const pendingLeads = pendingLeadsRaw.filter(l => {
       if (!l.followup_call_date) return true;

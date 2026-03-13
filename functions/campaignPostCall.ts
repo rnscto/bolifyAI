@@ -216,8 +216,13 @@ async function triggerNextBatch(base44, campaignId) {
       return { completed: true };
     }
 
+    // If only retry-later leads remain and no active calls, skip (campaign continues via poller)
+    if (readyPending.length === 0 && callingLeads.length === 0 && retryLaterPending.length > 0) {
+      return { waiting: true, pending: pendingLeads.length, retry_later: retryLaterPending.length };
+    }
+
     const slotsAvailable = Math.max(0, maxConcurrent - callingLeads.length);
-    if (slotsAvailable === 0 || pendingLeads.length === 0) {
+    if (slotsAvailable === 0 || readyPending.length === 0) {
       return { waiting: true, pending: pendingLeads.length, calling: callingLeads.length };
     }
 
@@ -245,7 +250,7 @@ async function triggerNextBatch(base44, campaignId) {
     // Initiate ONE call only (fire-and-forget style — no polling/waiting)
     // The call lifecycle is: initiated → ringing → streamAudio connects → call completes → 
     // CallLog update triggers this automation again → next call initiated
-    const cl = pendingLeads[0];
+    const cl = readyPending[0];
     try {
       const selectedDID = agentDIDs[0];
       await base44.entities.CampaignLead.update(cl.id, {
