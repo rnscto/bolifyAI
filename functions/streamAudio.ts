@@ -448,7 +448,9 @@ Deno.serve(async (req) => {
     const ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      console.log(`[${reqId}] ✅ Azure Realtime WebSocket connected`);
+      console.log(`[${reqId}] ✅ Azure Realtime WebSocket connected (attempt ${session._realtimeReconnectAttempts})`);
+      // Reset reconnect counter on successful connection
+      session._realtimeReconnectAttempts = 0;
     };
 
     ws.onmessage = (event) => {
@@ -1349,6 +1351,7 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
 
       if (msg.event === 'stop') {
         console.log(`[${reqId}] 📴 Smartflo stop event`);
+        session._callEnded = true; // Prevent reconnect after hangup
         const duration = Math.round((Date.now() - session.startTime) / 1000);
 
         // Close Realtime WebSocket
@@ -1365,6 +1368,7 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
   };
 
   smartfloSocket.onclose = async () => {
+    session._callEnded = true; // Prevent Azure reconnect after call ends
     const duration = Math.round((Date.now() - session.startTime) / 1000);
     console.log(`[${reqId}] 🔴 Smartflo socket closed, duration=${duration}s`);
 
