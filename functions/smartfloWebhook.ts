@@ -3,46 +3,23 @@ import { createClient } from 'npm:@base44/sdk@0.8.20';
 // Map Smartflo call statuses to internal statuses
 // Smartflo webhook sends statuses like "Answered", "Missed", "completed" etc.
 const STATUS_MAP = {
-  // Answered / completed
   'ringing': 'ringing',
   'answered': 'completed',
   'Answered': 'completed',
   'completed': 'completed',
   'Completed': 'completed',
-  'connected': 'completed',
-  'Connected': 'completed',
-  // Not answered
   'missed': 'no_answer',
   'Missed': 'no_answer',
-  'no_answer': 'no_answer',
-  'No Answer': 'no_answer',
-  'no-answer': 'no_answer',
-  'noanswer': 'no_answer',
-  'not_answered': 'no_answer',
-  'Not Answered': 'no_answer',
-  'unanswered': 'no_answer',
-  'Unanswered': 'no_answer',
-  'not_connected': 'no_answer',
-  'Not Connected': 'no_answer',
-  'not connected': 'no_answer',
-  'not_reachable': 'no_answer',
-  'Not Reachable': 'no_answer',
-  'unreachable': 'no_answer',
-  // Failed / busy / cancelled
   'failed': 'failed',
   'Failed': 'failed',
+  'no_answer': 'no_answer',
+  'No Answer': 'no_answer',
   'busy': 'failed',
   'Busy': 'failed',
   'cancelled': 'failed',
   'Cancelled': 'failed',
-  'canceled': 'failed',
-  'Canceled': 'failed',
-  'rejected': 'failed',
-  'Rejected': 'failed',
-  'congestion': 'failed',
-  'Congestion': 'failed',
-  'hangup': 'completed',
-  'Hangup': 'completed'
+  'not_connected': 'no_answer',
+  'Not Connected': 'no_answer'
 };
 
 Deno.serve(async (req) => {
@@ -77,19 +54,16 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Invalid JSON body' }, { status: 400 });
     }
 
-    // Log FULL raw payload so we can see exactly what Smartflo sends (especially for not-answered calls)
-    console.log(`[smartfloWebhook] RAW PAYLOAD: ${JSON.stringify(payload).substring(0, 1000)}`);
-
     // Smartflo webhook field mapping: Smartflo sends call_status, caller_id_number, call_to_number, etc.
     // Normalize to our internal names
-    const call_id = payload.call_id || payload.uuid || payload.ref_id;
-    const status = payload.call_status || payload.status || payload.event;
-    const duration = payload.duration || payload.billsec || payload.talk_time;
-    const recording_url = payload.recording_url || payload.recording;
-    const direction = payload.direction || payload.call_type;
-    const caller_number = payload.caller_id_number || payload.caller_number || payload.from || payload.agent_number;
-    const called_number = payload.call_to_number || payload.called_number || payload.to || payload.customer_number || payload.destination;
-    const customer_number = payload.customer_no_with_prefix || payload.customer_number || '';
+    const call_id = payload.call_id || payload.uuid;
+    const status = payload.call_status || payload.status;
+    const duration = payload.duration || payload.billsec;
+    const recording_url = payload.recording_url;
+    const direction = payload.direction;
+    const caller_number = payload.caller_id_number || payload.caller_number || payload.from;
+    const called_number = payload.call_to_number || payload.called_number || payload.to;
+    const customer_number = payload.customer_no_with_prefix || '';
 
     console.log(`[smartfloWebhook] Received: status=${status}, call_id=${call_id}, direction=${direction}, caller=${caller_number}, callee=${called_number}, customer=${customer_number}, duration=${duration}`);
 
