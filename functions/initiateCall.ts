@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
 
 Deno.serve(async (req) => {
   try {
@@ -50,6 +50,10 @@ Deno.serve(async (req) => {
         error: 'No DID assigned to agent. Please assign a DID to the agent before making calls.' 
       }, { status: 400 });
     }
+
+    // Check if this is a demo agent (client is trial/onboarding and DID is from demo pool)
+    const clientData = clients[0];
+    const isDemoAgent = clientData.account_status === 'trial' || clientData.account_status === 'onboarding';
 
     // Use primary DID for single calls
     const callerDID = allDIDs[0];
@@ -198,8 +202,11 @@ IMPORTANT RULES:
     const cleanCallerID = callerDID.replace(/^\+/, '');
     const cleanPhoneNumber = phone_number.replace(/[^0-9]/g, '');
 
-    // Use agent-specific Smartflo API token if available, fallback to global
-    const smartfloApiKey = agent.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY');
+    // Demo agents always use the global/base API key; production agents use their own token
+    const smartfloApiKey = isDemoAgent 
+      ? Deno.env.get('SMARTFLO_API_KEY') 
+      : (agent.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY'));
+    console.log(`Call mode: ${isDemoAgent ? 'DEMO (shared key)' : 'PRODUCTION (agent token)'}, DID: ${callerDID}`);
     if (!smartfloApiKey) {
       return Response.json({ 
         success: false, 
