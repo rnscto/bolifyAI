@@ -10,11 +10,9 @@ Deno.serve(async (req) => {
     let user = null;
 
     if (_internal) {
-      // Internal calls from campaignPostCall/poller — use service role directly
       const appId = Deno.env.get('BASE44_APP_ID');
       base44 = createClient({ appId, asServiceRole: true });
     } else {
-      // User-initiated calls — require authentication
       base44 = createClientFromRequest(req);
       user = await base44.auth.me();
       if (!user) {
@@ -26,7 +24,7 @@ Deno.serve(async (req) => {
     const campaign = await svc.entities.Campaign.get(campaign_id);
     if (!campaign) return Response.json({ error: 'Campaign not found' }, { status: 404 });
 
-    // Ownership check only for direct user calls (not internal triggers)
+    // Ownership check only for direct user calls
     if (user && !_internal) {
       if (user.role !== 'admin') {
         const clients = await base44.entities.Client.filter({ user_id: user.id });
@@ -102,22 +100,20 @@ Deno.serve(async (req) => {
             });
             console.log(`[campaign] Fixed stuck lead ${stuckLead.lead_name}: ${outcome}`);
           } else {
-            // Call is still ringing or stuck — check age. If > 3 min, mark failed.
             const callAge = Date.now() - new Date(stuckLead.updated_date || stuckLead.created_date).getTime();
             if (callAge > 3 * 60 * 1000) {
               await svc.entities.CampaignLead.update(stuckLead.id, {
                 status: 'completed', outcome: 'no_answer',
-                conversation_summary: 'Call timed out — no response from Smartflo within 5 minutes.'
+                conversation_summary: 'Call timed out — no response within 3 minutes.'
               });
               if (stuckLead.call_log_id) {
                 await svc.entities.CallLog.update(stuckLead.call_log_id, {
                   status: 'no_answer', call_end_time: new Date().toISOString(),
-                  conversation_summary: 'Call timed out — no Smartflo webhook callback received within 5 minutes.'
+                  conversation_summary: 'Call timed out — no Smartflo webhook callback received.'
                 });
               }
               console.log(`[campaign] Timed out stuck lead ${stuckLead.lead_name}`);
             } else {
-              // Still fresh — reset to pending for retry
               await svc.entities.CampaignLead.update(stuckLead.id, { status: 'pending', call_log_id: null });
               console.log(`[campaign] Reset stuck lead ${stuckLead.lead_name} to pending`);
             }
@@ -130,77 +126,83 @@ Deno.serve(async (req) => {
       }
     }
 
-    const results = { initiated: 0, failed: 0, connected: 0, no_answer_timeout: 0, errors: [] };
-    const CONNECT_TIMEOUT_MS = 50000; // 50 seconds to connect to streamAudio
-    const POLL_INTERVAL_MS = 3000;    // Check every 3 seconds
-    const MAX_CALLS_PER_RUN = 20;     // Safety limit to prevent infinite execution
-    let totalCallsThisRun = 0;
+    // ─── FIRE-AND-FORGET BATCH: Initiate up to maxConcurrent calls without waiting ───
+    // Instead of waiting 50s per call, fire all calls and let streamAudio/campaignPostCall
+    // handle completion asynchronously. The campaignPoller automation handles retries.
+
+    const results = { initiated: 0, failed: 0, errors: [] };
+    const MAX_CALLS_PER_RUN = maxConcurrent * 2; // Fire up to 2x concurrency slots
     let didIndex = 0;
 
-    // Outer loop: keep fetching and processing pending leads until none left or limits hit
-    while (totalCallsThisRun < MAX_CALLS_PER_RUN) {
-      // Check if campaign was paused/cancelled
-      const freshCampaign = await svc.entities.Campaign.get(campaign_id);
-      if (['paused', 'cancelled', 'completed'].includes(freshCampaign?.status)) {
-        console.log(`[campaign] Campaign ${freshCampaign.status}, stopping execution`);
-        break;
+    // Count currently active calls
+    const currentlyCalling = await svc.entities.CampaignLead.filter(
+      { campaign_id, status: 'calling' }, 'created_date', 100
+    );
+    const slotsAvailable = Math.max(0, maxConcurrent - currentlyCalling.length);
+
+    if (slotsAvailable === 0) {
+      console.log(`[campaign] All ${maxConcurrent} slots occupied. Waiting for completions.`);
+      return Response.json({ success: true, message: 'All slots occupied', currently_calling: currentlyCalling.length });
+    }
+
+    // Get next pending leads ready to call
+    const now = new Date();
+    const pendingLeadsRaw = await svc.entities.CampaignLead.filter(
+      { campaign_id, status: 'pending' }, 'created_date', slotsAvailable + 10
+    );
+    const pendingLeads = pendingLeadsRaw.filter(l => {
+      if (!l.followup_call_date) return true;
+      return new Date(l.followup_call_date) <= now;
+    }).slice(0, slotsAvailable);
+
+    if (pendingLeads.length === 0) {
+      // Check if campaign should be completed
+      const allLeads = await svc.entities.CampaignLead.filter({ campaign_id });
+      const callingCount = allLeads.filter(l => l.status === 'calling').length;
+      const pendingWithFutureRetry = allLeads.filter(l =>
+        l.status === 'pending' && l.followup_call_date && new Date(l.followup_call_date) > now
+      ).length;
+      const pendingReady = allLeads.filter(l =>
+        l.status === 'pending' && (!l.followup_call_date || new Date(l.followup_call_date) <= now)
+      ).length;
+
+      if (callingCount === 0 && pendingReady === 0 && pendingWithFutureRetry === 0) {
+        const completed = allLeads.filter(l => l.status === 'completed').length;
+        const failed = allLeads.filter(l => l.status === 'failed').length;
+        const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
+        allLeads.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
+        await svc.entities.Campaign.update(campaign_id, {
+          status: 'completed', completed_at: new Date().toISOString(),
+          calls_completed: completed, calls_failed: failed, outcomes_summary: outcomes
+        });
+        console.log(`[campaign] Campaign completed: ${completed} done, ${failed} failed`);
+        return Response.json({ success: true, status: 'completed', completed, failed });
       }
 
-      // Count in-flight calls
-      const currentlyCalling = await svc.entities.CampaignLead.filter(
-        { campaign_id, status: 'calling' }, 'created_date', 100
-      );
-      const slotsAvailable = Math.max(0, maxConcurrent - currentlyCalling.length);
-      if (slotsAvailable === 0) {
-        console.log(`[campaign] All ${maxConcurrent} slots occupied, waiting for calls to complete.`);
-        break;
+      if (pendingWithFutureRetry > 0) {
+        console.log(`[campaign] ${pendingWithFutureRetry} leads waiting for retry. Campaign continues.`);
       }
+      return Response.json({ success: true, message: 'No ready leads', pending_retry: pendingWithFutureRetry, calling: callingCount });
+    }
 
-      // Get next pending leads and filter out those with future retry dates
-      const pendingLeadsRaw = await svc.entities.CampaignLead.filter(
-        { campaign_id, status: 'pending' }, 'created_date', 20
-      );
-      const now = new Date();
-      const pendingLeads = pendingLeadsRaw.filter(l => {
-        if (!l.followup_call_date) return true; // No retry date = ready to call
-        return new Date(l.followup_call_date) <= now; // Retry date has passed
-      });
+    // Determine Smartflo API key
+    let smartfloApiKey;
+    try {
+      const clientData = await svc.entities.Client.get(campaign.client_id);
+      const isDemoAgent = clientData && (clientData.account_status === 'trial' || clientData.account_status === 'onboarding');
+      smartfloApiKey = isDemoAgent
+        ? Deno.env.get('SMARTFLO_API_KEY')
+        : (agent.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY'));
+    } catch (_) {
+      smartfloApiKey = agent.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY');
+    }
 
-      if (pendingLeads.length === 0) {
-        // Check if all done or just waiting for retry timers
-        const allLeads = await svc.entities.CampaignLead.filter({ campaign_id });
-        const callingCount = allLeads.filter(l => l.status === 'calling').length;
-        const pendingWithFutureRetry = allLeads.filter(l => 
-          l.status === 'pending' && l.followup_call_date && new Date(l.followup_call_date) > now
-        ).length;
-        const pendingReady = allLeads.filter(l => 
-          l.status === 'pending' && (!l.followup_call_date || new Date(l.followup_call_date) <= now)
-        ).length;
-
-        if (callingCount === 0 && pendingReady === 0 && pendingWithFutureRetry === 0) {
-          // Truly done — no active, no pending, no retries
-          const completed = allLeads.filter(l => l.status === 'completed').length;
-          const failed = allLeads.filter(l => l.status === 'failed').length;
-          const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
-          allLeads.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
-          await svc.entities.Campaign.update(campaign_id, {
-            status: 'completed', completed_at: new Date().toISOString(),
-            calls_completed: completed, calls_failed: failed, outcomes_summary: outcomes
-          });
-          console.log(`[campaign] Campaign completed: ${completed} done, ${failed} failed`);
-        } else if (pendingWithFutureRetry > 0) {
-          console.log(`[campaign] ${pendingWithFutureRetry} leads waiting for retry (scheduled later). Campaign continues.`);
-        }
-        break;
-      }
-
-      const cl = pendingLeads[0];
-      totalCallsThisRun++;
-      console.log(`[campaign] Call #${totalCallsThisRun}: ${cl.lead_name} (${cl.lead_phone})`);
-
+    // ─── Fire all calls in quick succession (no 50s wait per call) ───
+    for (const cl of pendingLeads) {
       try {
         const selectedDID = agentDIDs[didIndex % agentDIDs.length];
         didIndex++;
+
         await svc.entities.CampaignLead.update(cl.id, {
           status: 'calling', attempt_count: (cl.attempt_count || 0) + 1
         });
@@ -208,7 +210,7 @@ Deno.serve(async (req) => {
         const cleanPhone = cl.lead_phone.replace(/[^0-9]/g, '');
         const callSid = `camp_${campaign_id.slice(-8)}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
-        // Build lead context INLINE (avoid cross-function auth issues)
+        // Build lead context inline
         let leadContext = '';
         try {
           let lead = null;
@@ -237,13 +239,11 @@ Deno.serve(async (req) => {
           }
           console.log(`[campaign] Lead context built for ${cl.lead_name}: ${leadContext.length} chars`);
         } catch (e) {
-          console.log(`[campaign] Lead context failed for ${cl.lead_name}: ${e.message}`);
           leadContext = `CUSTOMER: ${cl.lead_name || 'Unknown'}\nCRITICAL: Address the customer by name "${cl.lead_name || 'Sir/Madam'}".`;
         }
 
-        // Inject current IST date/time so the agent is time-aware
         const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
-        const timeContext = `\n\n--- CURRENT DATE & TIME (IST) ---\nRight now it is: ${nowIST} (Indian Standard Time).\nUse this to calculate relative times when the customer says "call me after 30 minutes" or "call me tomorrow morning". Always confirm callback times in IST.`;
+        const timeContext = `\n\n--- CURRENT DATE & TIME (IST) ---\nRight now it is: ${nowIST} (Indian Standard Time).\nUse this to calculate relative times. Always confirm callback times in IST.`;
 
         const personalizedPrompt = [
           agent.system_prompt || '',
@@ -257,7 +257,7 @@ Deno.serve(async (req) => {
 
         const callLog = await svc.entities.CallLog.create({
           client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
-          call_sid: callSid, caller_id: selectedDID, callee_number: cl.lead_phone,
+          call_sid: callSid, caller_id: selectedDID, callee_number: cleanPhone,
           direction: 'outbound', status: 'initiated', call_start_time: new Date().toISOString(),
           conversation_summary: leadContext ? `[LEAD CONTEXT] ${cl.lead_name}\n${leadContext}` : '',
           agent_config_cache: {
@@ -271,11 +271,8 @@ Deno.serve(async (req) => {
         await svc.entities.CampaignLead.update(cl.id, { call_log_id: callLog.id });
 
         // ─── Initiate the call via Smartflo ───
-        const clientData = await svc.entities.Client.get(campaign.client_id);
-        const isDemoAgent = clientData && (clientData.account_status === 'trial' || clientData.account_status === 'onboarding');
-        const smartfloApiKey = isDemoAgent
-          ? Deno.env.get('SMARTFLO_API_KEY')
-          : (agent.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY'));
+        let cleanCallerID = selectedDID.replace(/[^0-9]/g, '');
+        if (cleanCallerID.length === 10) cleanCallerID = '91' + cleanCallerID;
 
         const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
           method: 'POST',
@@ -283,7 +280,7 @@ Deno.serve(async (req) => {
           body: JSON.stringify({
             api_key: smartfloApiKey,
             customer_number: cleanPhone,
-            caller_id: selectedDID.replace(/^\+/, ''),
+            caller_id: cleanCallerID,
             async: 1
           })
         });
@@ -299,81 +296,20 @@ Deno.serve(async (req) => {
           });
           results.failed++;
           results.errors.push({ lead: cl.lead_phone, error: smartfloData.message || 'API error' });
-          await new Promise(r => setTimeout(r, 1000));
-          continue; // Loop back to next lead
+          continue;
         }
 
-        // Smartflo accepted the call
-        const smartfloCallId = smartfloData.call_id || null;
-        const smartfloRefId = smartfloData.ref_id || null;
-        const newCallSid = smartfloCallId || smartfloData.call_sid || callSid;
-        const updateFields = { call_sid: newCallSid, status: 'ringing' };
-        if (smartfloRefId && !smartfloCallId) {
-          updateFields.call_sid = smartfloRefId;
-        }
-        await svc.entities.CallLog.update(callLog.id, updateFields);
+        // Update call log with Smartflo ref — use ref_id as fallback when call_id is null
+        const smartfloCallId = smartfloData.call_id || smartfloData.ref_id || smartfloData.call_sid || callSid;
+        await svc.entities.CallLog.update(callLog.id, {
+          call_sid: smartfloCallId,
+          status: 'ringing'
+        });
         results.initiated++;
+        console.log(`[campaign] ✅ Call fired for ${cl.lead_name} (callLog=${callLog.id}, sid=${smartfloCallId})`);
 
-        // ─── WAIT for streamAudio to connect ───
-        console.log(`[campaign] ⏳ Waiting up to ${CONNECT_TIMEOUT_MS/1000}s for call ${callLog.id}...`);
-        const waitStart = Date.now();
-        let callConnected = false;
-        let callTerminal = false;
-
-        while (Date.now() - waitStart < CONNECT_TIMEOUT_MS) {
-          await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
-          try {
-            const updatedLog = await svc.entities.CallLog.get(callLog.id);
-            if (updatedLog.stream_sid) {
-              console.log(`[campaign] ✅ Call ${callLog.id} connected after ${Math.round((Date.now() - waitStart)/1000)}s`);
-              callConnected = true;
-              results.connected++;
-              break;
-            }
-            if (['completed', 'failed', 'no_answer'].includes(updatedLog.status)) {
-              console.log(`[campaign] 📴 Call ${callLog.id} terminal: ${updatedLog.status}`);
-              callTerminal = true;
-              break;
-            }
-          } catch (pollErr) {
-            console.error(`[campaign] Poll error: ${pollErr.message}`);
-          }
-        }
-
-        // ─── TIMEOUT handling ───
-        if (!callConnected && !callTerminal) {
-          console.log(`[campaign] ⏰ TIMEOUT for ${cl.lead_name}`);
-          await svc.entities.CallLog.update(callLog.id, {
-            status: 'no_answer',
-            call_end_time: new Date().toISOString(),
-            conversation_summary: `Call not answered — no connection within ${CONNECT_TIMEOUT_MS/1000}s.`
-          });
-
-          const currentAttempts = (cl.attempt_count || 0) + 1;
-          const retryRules = freshCampaign?.followup_rules || {};
-          const maxRetries = retryRules.no_answer_max_retries || 3;
-          const shouldRetry = retryRules.no_answer_retry !== false && currentAttempts < maxRetries;
-
-          if (shouldRetry) {
-            const retryHours = retryRules.no_answer_retry_hours || 4;
-            await svc.entities.CampaignLead.update(cl.id, {
-              status: 'pending', outcome: 'no_answer',
-              attempt_count: currentAttempts, call_log_id: null,
-              followup_call_date: new Date(Date.now() + retryHours * 3600000).toISOString(),
-              conversation_summary: `No answer (attempt ${currentAttempts}/${maxRetries}). Retry in ${retryHours}h.`
-            });
-            console.log(`[campaign] ♻️ Retry ${currentAttempts}/${maxRetries} queued for ${cl.lead_name}`);
-          } else {
-            await svc.entities.CampaignLead.update(cl.id, {
-              status: 'completed', outcome: 'no_answer',
-              conversation_summary: `Not answered after ${currentAttempts} attempt(s).`
-            });
-          }
-          results.no_answer_timeout++;
-        }
-
-        // Small delay before next call
-        await new Promise(r => setTimeout(r, 1000));
+        // Small delay between calls to avoid Smartflo rate limits
+        await new Promise(r => setTimeout(r, 1500));
 
       } catch (err) {
         console.error(`[campaign] Error calling ${cl.lead_phone}:`, err.message);
@@ -384,33 +320,18 @@ Deno.serve(async (req) => {
         results.failed++;
         results.errors.push({ lead: cl.lead_phone, error: err.message });
       }
-    } // end outer while loop
+    }
 
     // Update campaign counts
     const allLeads = await svc.entities.CampaignLead.filter({ campaign_id });
     const completedCount = allLeads.filter(l => l.status === 'completed').length;
     const failedCount = allLeads.filter(l => l.status === 'failed').length;
-    
-    const nowFinal = new Date();
-    const stillCalling = allLeads.filter(l => l.status === 'calling').length;
-    const pendingReadyFinal = allLeads.filter(l => 
-      l.status === 'pending' && (!l.followup_call_date || new Date(l.followup_call_date) <= nowFinal)
-    ).length;
-    const pendingRetryFinal = allLeads.filter(l => 
-      l.status === 'pending' && l.followup_call_date && new Date(l.followup_call_date) > nowFinal
-    ).length;
-    const campaignUpdate = { calls_completed: completedCount, calls_failed: failedCount };
-    if (stillCalling === 0 && pendingReadyFinal === 0 && pendingRetryFinal === 0) {
-      const outcomes = { interested: 0, not_interested: 0, callback: 0, no_answer: 0, converted: 0, contacted: 0 };
-      allLeads.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
-      campaignUpdate.status = 'completed';
-      campaignUpdate.completed_at = new Date().toISOString();
-      campaignUpdate.outcomes_summary = outcomes;
-    }
-    await svc.entities.Campaign.update(campaign_id, campaignUpdate);
+    await svc.entities.Campaign.update(campaign_id, {
+      calls_completed: completedCount, calls_failed: failedCount
+    });
 
     return Response.json({
-      success: true, ...results, total_calls_this_run: totalCallsThisRun,
+      success: true, ...results,
       pending_remaining: allLeads.filter(l => l.status === 'pending').length,
       currently_calling: allLeads.filter(l => l.status === 'calling').length
     });
