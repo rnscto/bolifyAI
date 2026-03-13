@@ -515,9 +515,18 @@ export default function AdminAgents() {
                       </SelectTrigger>
                       <SelectContent>
                         {dids
-                          .filter(d => (d.status === 'available' || (d.client_id === formData.client_id && d.status === 'assigned')) && !(formData.assigned_dids || []).includes(d.number))
+                          .filter(d => {
+                            const alreadyAssigned = (formData.assigned_dids || []).includes(d.number);
+                            if (alreadyAssigned) return false;
+                            // Show: available DIDs, client-assigned DIDs, and demo pool DIDs
+                            return d.status === 'available' 
+                              || (d.client_id === formData.client_id && d.status === 'assigned')
+                              || d.is_demo;
+                          })
                           .map((did) => (
-                            <SelectItem key={did.id} value={did.number}>{did.number}</SelectItem>
+                            <SelectItem key={did.id} value={did.number}>
+                              {did.number} {did.is_demo ? '(Demo Pool)' : ''}
+                            </SelectItem>
                           ))}
                       </SelectContent>
                     </Select>
