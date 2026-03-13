@@ -813,6 +813,16 @@ Deno.serve(async (req) => {
       return;
     }
 
+    // ─── Tool/function call from Realtime API ───
+    if (type === 'response.function_call_arguments.done') {
+      const callId = msg.call_id;
+      const fnName = msg.name;
+      const fnArgs = msg.arguments || '{}';
+      console.log(`[${reqId}] 🔧 Function call received: ${fnName} (call_id=${callId})`);
+      executeToolCall(callId, fnName, fnArgs);
+      return;
+    }
+
     if (type === 'error') {
       console.error(`[${reqId}] ❌ Realtime API error:`, JSON.stringify(msg.error || msg));
       return;
@@ -1177,7 +1187,25 @@ Deno.serve(async (req) => {
 
       // ── IMMEDIATELY extract config and apply to session (before any DB writes) ──
       session.callLogId = callLog.id;
+      session.clientId = callLog.client_id;
       const cache = callLog.agent_config_cache;
+
+      // ── Check for Shopify marketplace integration ──
+      if (callLog.client_id) {
+        try {
+          const shopifyIntegrations = await svc.entities.MarketplaceIntegration.filter({
+            client_id: callLog.client_id,
+            platform: 'shopify',
+            status: 'active'
+          });
+          if (shopifyIntegrations.length > 0) {
+            session.hasShopify = true;
+            console.log(`[${reqId}] 🛒 Shopify integration found for client ${callLog.client_id}`);
+          }
+        } catch (e) {
+          console.log(`[${reqId}] ⚠️ Shopify check failed: ${e.message}`);
+        }
+      }
 
       if (cache && cache.system_prompt) {
         session.systemPrompt = cache.system_prompt;
