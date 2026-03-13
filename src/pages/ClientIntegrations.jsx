@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
-import { Loader2, Plug, MessageSquare, Smartphone, Mail, CheckCircle2 } from 'lucide-react';
+import { Loader2, Plug, MessageSquare, Smartphone, Mail, CheckCircle2, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
 import WhatsAppSetup from '../components/integrations/WhatsAppSetup';
 import RCSSetup from '../components/integrations/RCSSetup';
@@ -46,10 +46,21 @@ export default function ClientIntegrations() {
     );
   }
 
+  const [shopifyActive, setShopifyActive] = useState(false);
+
+  useEffect(() => {
+    if (client?.id) {
+      base44.entities.MarketplaceIntegration.filter({ client_id: client.id, platform: 'shopify', status: 'active' })
+        .then(r => setShopifyActive(r.length > 0))
+        .catch(() => {});
+    }
+  }, [client?.id]);
+
   const connectedCount = [
     config?.whatsapp_provider !== 'none' && config?.whatsapp_provider,
     config?.rcs_provider !== 'none' && config?.rcs_provider,
     config?.email_provider !== 'none' && config?.email_provider,
+    shopifyActive,
   ].filter(Boolean).length;
 
   return (
@@ -62,7 +73,7 @@ export default function ClientIntegrations() {
       </div>
 
       {/* Status Overview */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className={`flex items-center gap-3 p-4 rounded-xl border-2 ${config?.whatsapp_provider && config?.whatsapp_provider !== 'none' ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
           <MessageSquare className={`w-6 h-6 ${config?.whatsapp_provider && config?.whatsapp_provider !== 'none' ? 'text-green-600' : 'text-gray-400'}`} />
           <div>
@@ -86,6 +97,14 @@ export default function ClientIntegrations() {
             <p className="text-xs text-gray-500">{config?.email_provider && config?.email_provider !== 'none' ? config.email_provider : 'Not connected'}</p>
           </div>
           {config?.email_provider && config?.email_provider !== 'none' && <CheckCircle2 className="w-5 h-5 text-green-600 ml-auto" />}
+        </div>
+        <div className={`flex items-center gap-3 p-4 rounded-xl border-2 ${shopifyActive ? 'border-green-200 bg-green-50' : 'border-gray-200 bg-gray-50'}`}>
+          <ShoppingBag className={`w-6 h-6 ${shopifyActive ? 'text-green-600' : 'text-gray-400'}`} />
+          <div>
+            <p className="text-sm font-medium">Shopify</p>
+            <p className="text-xs text-gray-500">{shopifyActive ? 'Connected' : 'Not connected'}</p>
+          </div>
+          {shopifyActive && <CheckCircle2 className="w-5 h-5 text-green-600 ml-auto" />}
         </div>
       </div>
 
