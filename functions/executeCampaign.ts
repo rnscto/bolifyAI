@@ -1,4 +1,4 @@
-import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.18';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.20';
 
 Deno.serve(async (req) => {
   try {
@@ -251,11 +251,19 @@ Deno.serve(async (req) => {
         await svc.entities.CampaignLead.update(cl.id, { call_log_id: callLog.id });
 
         // ─── Initiate the call via Smartflo ───
+        // Use agent's own API token (falls back to global key for demo agents)
+        const clientData = await svc.entities.Client.get(campaign.client_id);
+        const isDemoAgent = clientData && (clientData.account_status === 'trial' || clientData.account_status === 'onboarding');
+        const smartfloApiKey = isDemoAgent
+          ? Deno.env.get('SMARTFLO_API_KEY')
+          : (agent.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY'));
+        console.log(`[campaign] Using API token: ${isDemoAgent ? 'DEMO (global)' : 'PRODUCTION (agent token)'}`);
+
         const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            api_key: Deno.env.get('SMARTFLO_API_KEY'),
+            api_key: smartfloApiKey,
             customer_number: cleanPhone,
             caller_id: selectedDID.replace(/^\+/, ''),
             async: 1

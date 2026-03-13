@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.20';
 
 // This function runs every 5 minutes as a SCHEDULED AUTOMATION to:
 // 1. Fix stuck "calling" leads (calls that never got a webhook callback)
@@ -172,11 +172,19 @@ Deno.serve(async (req) => {
 
                 await svc.entities.CampaignLead.update(cl.id, { call_log_id: callLog.id });
 
+                // Use agent's own API token (falls back to global key for demo agents)
+                let smartfloApiKey = agent.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY');
+                try {
+                  const clientData = await svc.entities.Client.get(campaign.client_id);
+                  const isDemoAgent = clientData && (clientData.account_status === 'trial' || clientData.account_status === 'onboarding');
+                  if (isDemoAgent) smartfloApiKey = Deno.env.get('SMARTFLO_API_KEY');
+                } catch (_) {}
+
                 const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
-                    api_key: Deno.env.get('SMARTFLO_API_KEY'),
+                    api_key: smartfloApiKey,
                     customer_number: cleanPhone,
                     caller_id: selectedDID.replace(/^\+/, ''),
                     async: 1

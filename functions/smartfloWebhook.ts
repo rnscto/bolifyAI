@@ -1,4 +1,4 @@
-import { createClient, createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClient, createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
 
 // Map Smartflo call statuses to internal statuses
 const STATUS_MAP = {
