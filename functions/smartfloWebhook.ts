@@ -403,24 +403,9 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
           console.log(`[smartfloWebhook] Terminal ${statusLabel} — WebSocket transcript already present, skipping summary override`);
         }
 
-        // Update CampaignLead if this call belongs to a campaign (so campaign doesn't get stuck)
-        try {
-          const campaignLeads = await base44.entities.CampaignLead.filter({ call_log_id: callLog.id });
-          for (const cl of campaignLeads) {
-            if (cl.status === 'calling') {
-              await base44.entities.CampaignLead.update(cl.id, {
-                status: 'completed',
-                outcome: 'not_answered',
-                call_status: 'not_answered',
-                conversation_summary: `Call ${statusLabel}. No conversation.`,
-                call_duration: parseInt(duration) || 0
-              });
-              console.log(`[smartfloWebhook] Updated CampaignLead ${cl.id} to completed/no_answer`);
-            }
-          }
-        } catch (e) {
-          console.log(`[smartfloWebhook] CampaignLead update failed: ${e.message}`);
-        }
+        // NOTE: CampaignLead updates are handled EXCLUSIVELY by campaignPostCall entity automation
+        // which triggers when this CallLog update is saved. No direct CampaignLead writes here
+        // to avoid race conditions with campaignPostCall doing the same update.
       }
 
       // NOTE: For answered+completed calls, streamAudio's saveCallRecord handles
