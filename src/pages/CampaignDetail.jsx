@@ -275,21 +275,21 @@ export default function CampaignDetail() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div>
-              <p className="text-xs font-semibold text-green-700 uppercase mb-1">Interested (Meeting/Demo)</p>
+              <p className="text-xs font-semibold text-yellow-700 uppercase mb-1">Interested (Meeting/Demo)</p>
               {campaign.followup_rules?.interested_email && (
-                <p className="text-green-600">✓ AI-personalized follow-up email{campaign.followup_rules?.interested_ai_email ? ' ✨' : ''}</p>
+                <p className="text-yellow-600">✓ AI-personalized follow-up email{campaign.followup_rules?.interested_ai_email ? ' ✨' : ''}</p>
               )}
               {campaign.followup_rules?.interested_callback_days && (
-                <p className="text-green-600">✓ Callback in {campaign.followup_rules.interested_callback_days} days</p>
+                <p className="text-yellow-600">✓ Callback in {campaign.followup_rules.interested_callback_days} days</p>
               )}
             </div>
             <div>
-              <p className="text-xs font-semibold text-yellow-700 uppercase mb-1">Callback</p>
+              <p className="text-xs font-semibold text-purple-700 uppercase mb-1">Callback</p>
               {campaign.followup_rules?.callback_create_task !== false && (
-                <p className="text-yellow-600">✓ Auto-create agent task{campaign.followup_rules?.callback_ai_talking_points !== false ? ' with AI talking points ✨' : ''}</p>
+                <p className="text-purple-600">✓ Auto-create agent task{campaign.followup_rules?.callback_ai_talking_points !== false ? ' with AI talking points ✨' : ''}</p>
               )}
               {campaign.followup_rules?.callback_email && (
-                <p className="text-yellow-600">✓ Confirmation email</p>
+                <p className="text-purple-600">✓ Confirmation email</p>
               )}
             </div>
             <div>

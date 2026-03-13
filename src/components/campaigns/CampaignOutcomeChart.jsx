@@ -3,13 +3,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
 
 const COLORS = {
-  neutral: '#3b82f6',
-  interested: '#22c55e',
+  neutral: '#f97316',
+  interested: '#eab308',
   not_interested: '#ef4444',
   not_answered: '#9ca3af',
-  callback: '#eab308',
-  converted: '#10b981',
-  do_not_call: '#e11d48',
+  callback: '#a855f7',
+  converted: '#22c55e',
+  do_not_call: '#111827',
 };
 
 const LABELS = {

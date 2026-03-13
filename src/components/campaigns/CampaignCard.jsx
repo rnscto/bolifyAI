@@ -65,17 +65,17 @@ export default function CampaignCard({ campaign, onStart, onPause }) {
         {/* Outcome badges */}
         <div className="flex flex-wrap gap-2 text-xs">
           {outcomes.interested > 0 && (
-            <span className="flex items-center gap-1 text-green-700">
+            <span className="flex items-center gap-1 text-yellow-700">
               <CheckCircle2 className="w-3 h-3" /> {outcomes.interested} interested
             </span>
           )}
           {outcomes.neutral > 0 && (
-            <span className="flex items-center gap-1 text-blue-600">
+            <span className="flex items-center gap-1 text-orange-600">
               <Users className="w-3 h-3" /> {outcomes.neutral} neutral
             </span>
           )}
           {outcomes.callback > 0 && (
-            <span className="flex items-center gap-1 text-yellow-700">
+            <span className="flex items-center gap-1 text-purple-600">
               <Phone className="w-3 h-3" /> {outcomes.callback} callback
             </span>
           )}
@@ -90,12 +90,12 @@ export default function CampaignCard({ campaign, onStart, onPause }) {
             </span>
           )}
           {outcomes.converted > 0 && (
-            <span className="flex items-center gap-1 text-emerald-700">
+            <span className="flex items-center gap-1 text-green-700">
               <CheckCircle2 className="w-3 h-3" /> {outcomes.converted} converted
             </span>
           )}
           {outcomes.do_not_call > 0 && (
-            <span className="flex items-center gap-1 text-rose-600">
+            <span className="flex items-center gap-1 text-gray-900">
               <XCircle className="w-3 h-3" /> {outcomes.do_not_call} DNC
             </span>
           )}
