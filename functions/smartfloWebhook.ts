@@ -422,7 +422,8 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
             if (cl.status === 'calling') {
               await base44.entities.CampaignLead.update(cl.id, {
                 status: 'completed',
-                outcome: mappedStatus === 'no_answer' ? 'no_answer' : 'no_answer',
+                outcome: 'not_answered',
+                call_status: 'not_answered',
                 conversation_summary: `Call ${statusLabel}. No conversation.`,
                 call_duration: parseInt(duration) || 0
               });

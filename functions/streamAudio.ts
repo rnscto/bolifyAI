@@ -365,9 +365,18 @@ async function saveCallRecord(session, reqId, duration) {
       if (campaignLeads.length > 0) {
         const cl = campaignLeads[0];
         if (cl.status === 'calling') {
+          // Map streamAudio leadStatus to new outcome values
+          const statusToOutcome = {
+            'interested': 'interested', 'not_interested': 'not_interested', 'callback': 'callback',
+            'no_answer': 'not_answered', 'converted': 'interested', 'contacted': 'neutral',
+            'do_not_call': 'not_interested'
+          };
+          const mappedOutcome = statusToOutcome[leadStatus] || 'neutral';
+          const mappedCallStatus = (leadStatus === 'no_answer') ? 'not_answered' : 'answered';
           await serviceClient.entities.CampaignLead.update(cl.id, {
             status: 'completed',
-            outcome: leadStatus || 'contacted',
+            outcome: mappedOutcome,
+            call_status: mappedCallStatus,
             conversation_summary: enrichedSummary || summary || 'Call completed.',
             transcript: transcript || '',
             call_duration: duration || 0

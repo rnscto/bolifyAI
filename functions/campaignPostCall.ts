@@ -328,7 +328,7 @@ async function triggerNextBatch(base44, campaignId) {
       if (!(smartfloResp.ok && smartfloData.success !== false)) {
         await base44.entities.CallLog.update(newCallLog.id, { status: 'failed' });
         await base44.entities.CampaignLead.update(cl.id, {
-          status: 'completed', outcome: 'no_answer',
+          status: 'completed', outcome: 'not_answered', call_status: 'not_answered',
           conversation_summary: `Smartflo error: ${smartfloData.message || 'Unknown'}`
         });
         return { initiated: 0, error: 'smartflo_failed', pending_remaining: pendingLeads.length - 1 };
@@ -347,7 +347,7 @@ async function triggerNextBatch(base44, campaignId) {
     } catch (callErr) {
       console.error(`[campaignPostCall] Call error for ${cl.lead_name}: ${callErr.message}`);
       await base44.entities.CampaignLead.update(cl.id, {
-        status: 'completed', outcome: 'no_answer',
+        status: 'completed', outcome: 'not_answered', call_status: 'not_answered',
         conversation_summary: `Error: ${callErr.message}`
       });
       return { initiated: 0, error: callErr.message, pending_remaining: pendingLeads.length - 1 };
