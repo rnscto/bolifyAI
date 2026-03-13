@@ -316,26 +316,36 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
     // Find call log by call_sid — try multiple ID formats
     let callLogs = await base44.entities.CallLog.filter({ call_sid: call_id });
 
-    // Fallback: if Smartflo sends a different ID format, try matching recent ringing/initiated logs
-    if (callLogs.length === 0 && (caller_number || called_number)) {
-      console.log(`[smartfloWebhook] No match for call_sid=${call_id}, trying callee_number fallback`);
-      const calledNum = called_number || '';
-      const callerNum = caller_number || '';
-      // Look for recent calls (last 5 min) that are still ringing/initiated
-      const recentLogs = await base44.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 10);
-      const cutoff = Date.now() - 5 * 60 * 1000;
-      const match = recentLogs.find(l => {
-        if (new Date(l.created_date).getTime() < cutoff) return false;
-        const logCallee = (l.callee_number || '').replace(/\D/g, '').slice(-10);
-        const webhookCallee = calledNum.replace(/\D/g, '').slice(-10);
-        const webhookCaller = callerNum.replace(/\D/g, '').slice(-10);
-        return (logCallee && (logCallee === webhookCallee || logCallee === webhookCaller));
-      });
-      if (match) {
-        callLogs = [match];
-        // Update the call_sid so future webhooks match
-        await base44.entities.CallLog.update(match.id, { call_sid: call_id });
-        console.log(`[smartfloWebhook] Matched by phone number: CallLog ${match.id}, updated call_sid to ${call_id}`);
+    // Fallback: if Smartflo sends a different ID format, try matching by phone number
+    if (callLogs.length === 0) {
+      // Collect all phone numbers from webhook payload for matching
+      const phoneHints = [called_number, caller_number, customer_number].filter(Boolean);
+      if (phoneHints.length > 0) {
+        console.log(`[smartfloWebhook] No match for call_sid=${call_id}, trying phone fallback with: ${phoneHints.join(', ')}`);
+        
+        // Look for recent calls (last 5 min) across ringing and initiated statuses
+        const [ringingLogs, initiatedLogs] = await Promise.all([
+          base44.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20),
+          base44.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20)
+        ]);
+        const allRecent = [...ringingLogs, ...initiatedLogs];
+        const cutoff = Date.now() - 5 * 60 * 1000;
+        
+        const match = allRecent.find(l => {
+          if (new Date(l.created_date).getTime() < cutoff) return false;
+          const logCallee = (l.callee_number || '').replace(/\D/g, '').slice(-10);
+          if (!logCallee) return false;
+          return phoneHints.some(hint => {
+            const hintClean = hint.replace(/\D/g, '').slice(-10);
+            return hintClean && logCallee === hintClean;
+          });
+        });
+        
+        if (match) {
+          callLogs = [match];
+          await base44.entities.CallLog.update(match.id, { call_sid: call_id });
+          console.log(`[smartfloWebhook] Matched by phone number: CallLog ${match.id} (callee=${match.callee_number}), updated call_sid to ${call_id}`);
+        }
       }
     }
 
