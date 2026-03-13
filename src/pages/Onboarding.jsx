@@ -126,10 +126,14 @@ export default function Onboarding() {
     // 3. Assign DID if selected
     if (selectedDID) {
       agentPayload.assigned_did = selectedDID.number;
-      await base44.entities.DID.update(selectedDID.id, {
-        status: 'assigned',
-        client_id: client.id,
-      });
+      agentPayload.assigned_dids = [selectedDID.number];
+      // Demo pool DIDs stay as reserved/shared — don't change ownership
+      if (!selectedDID.is_demo) {
+        await base44.entities.DID.update(selectedDID.id, {
+          status: 'assigned',
+          client_id: client.id,
+        });
+      }
     }
 
     await base44.entities.Agent.create(agentPayload);
