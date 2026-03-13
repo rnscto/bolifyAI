@@ -127,7 +127,8 @@ export default function AdminAgents() {
     assigned_did: '',
     assigned_dids: [],
     status: 'inactive',
-    industry: ''
+    industry: '',
+    smartflo_api_token: ''
   });
 
   useEffect(() => {
@@ -171,6 +172,7 @@ export default function AdminAgents() {
         assigned_dids: formData.assigned_dids || [],
         status: formData.status,
         industry: formData.industry,
+        smartflo_api_token: formData.smartflo_api_token || '',
         knowledge_base_ids: []
       };
 
@@ -205,7 +207,8 @@ export default function AdminAgents() {
       assigned_did: '',
       assigned_dids: [],
       status: 'inactive',
-      industry: ''
+      industry: '',
+      smartflo_api_token: ''
     });
   };
 
@@ -226,7 +229,8 @@ export default function AdminAgents() {
       assigned_did: didsArray[0] || '',
       assigned_dids: didsArray,
       status: agent.status || 'inactive',
-      industry: agent.industry || ''
+      industry: agent.industry || '',
+      smartflo_api_token: agent.smartflo_api_token || ''
     });
     setDialogOpen(true);
   };
@@ -465,6 +469,20 @@ export default function AdminAgents() {
                 />
               </div>
 
+              <div>
+                <Label htmlFor="smartflo_api_token">Smartflo API Token (Click to Call)</Label>
+                <p className="text-xs text-gray-500 mb-1">
+                  Paste the Click to Call API Token from Smartflo that is assigned to this agent's Voice Streaming channel. Each token can map up to 3 DIDs.
+                </p>
+                <Input
+                  id="smartflo_api_token"
+                  value={formData.smartflo_api_token}
+                  onChange={(e) => setFormData({ ...formData, smartflo_api_token: e.target.value })}
+                  placeholder="e.g., 5457572800c4..."
+                  className="font-mono text-sm"
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>Assigned DIDs</Label>
@@ -550,6 +568,7 @@ export default function AdminAgents() {
                 <TableHead>Voice</TableHead>
                 <TableHead>Tone/Language</TableHead>
                 <TableHead>DID</TableHead>
+                <TableHead>API Token</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -557,7 +576,7 @@ export default function AdminAgents() {
             <TableBody>
               {agents.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-gray-500">
+                  <TableCell colSpan={9} className="text-center text-gray-500">
                     No agents found. Create your first agent to get started.
                   </TableCell>
                 </TableRow>
@@ -584,6 +603,11 @@ export default function AdminAgents() {
                             </span>
                           ))
                         : (agent.assigned_did || '-')}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {agent.smartflo_api_token 
+                        ? `${agent.smartflo_api_token.substring(0, 8)}...` 
+                        : <span className="text-gray-400">Not set</span>}
                     </TableCell>
                     <TableCell>
                       <Badge className={agent.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
