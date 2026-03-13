@@ -33,6 +33,10 @@ function encodeMulaw(sample) {
 // Realtime API uses 24kHz PCM16, Smartflo uses 8kHz mu-law
 // We need to upsample 8k→24k on input, downsample 24k→8k on output
 
+// ─── Persistent state for cross-chunk continuity (avoids clicks at boundaries) ───
+let _lastUpsampleValue = 0;  // Last sample from previous upsampling chunk
+let _lastDownsampleRemainder = []; // Leftover samples from previous downsampling chunk
+
 // Convert mu-law 8kHz → PCM16 24kHz LE base64 (upsample 3x for Realtime API)
 function mulawToBase64PCM16_24k(mulawBytes) {
   // Decode mu-law to PCM16 at 8kHz
@@ -40,21 +44,22 @@ function mulawToBase64PCM16_24k(mulawBytes) {
   for (let i = 0; i < mulawBytes.length; i++) {
     pcm8k[i] = decodeMulaw(mulawBytes[i]);
   }
-  
-  // Upsample 8kHz → 24kHz (3x linear interpolation)
+
+  // Upsample 8kHz → 24kHz using cubic-style interpolation with cross-chunk continuity
   const pcm24k = new Int16Array(pcm8k.length * 3);
-  for (let i = 0; i < pcm8k.length - 1; i++) {
-    const s0 = pcm8k[i];
-    const s1 = pcm8k[i + 1];
-    pcm24k[i * 3] = s0;
-    pcm24k[i * 3 + 1] = Math.round(s0 + (s1 - s0) / 3);
-    pcm24k[i * 3 + 2] = Math.round(s0 + (s1 - s0) * 2 / 3);
+  for (let i = 0; i < pcm8k.length; i++) {
+    const s0 = i === 0 ? _lastUpsampleValue : pcm8k[i - 1];
+    const s1 = pcm8k[i];
+    const s2 = i < pcm8k.length - 1 ? pcm8k[i + 1] : s1;
+
+    // 3-point interpolation: smoother than linear, avoids metallic artifacts
+    pcm24k[i * 3] = s1;
+    pcm24k[i * 3 + 1] = Math.round(s1 + (s2 - s0) / 6);
+    pcm24k[i * 3 + 2] = Math.round(s1 + (s2 - s0) / 3);
   }
-  // Last sample
-  const last = pcm8k.length - 1;
-  pcm24k[last * 3] = pcm8k[last];
-  pcm24k[last * 3 + 1] = pcm8k[last];
-  pcm24k[last * 3 + 2] = pcm8k[last];
+  if (pcm8k.length > 0) {
+    _lastUpsampleValue = pcm8k[pcm8k.length - 1];
+  }
 
   // Convert to base64 (little-endian bytes)
   const buffer = new Uint8Array(pcm24k.length * 2);
@@ -70,24 +75,51 @@ function mulawToBase64PCM16_24k(mulawBytes) {
 }
 
 // Convert PCM16 24kHz LE base64 (from Realtime API) → mu-law 8kHz bytes (downsample 3x)
+// Uses a 3-tap averaging low-pass filter before decimation to prevent aliasing
 function base64PCM16_24kToMulaw(base64Pcm16) {
   const raw = atob(base64Pcm16);
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) {
     bytes[i] = raw.charCodeAt(i);
   }
-  
-  // Read PCM16 LE samples safely using DataView (avoids alignment issues)
+
+  // Read PCM16 LE samples safely using DataView
   const numSamples = Math.floor(bytes.length / 2);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  
-  // Downsample 24kHz → 8kHz (take every 3rd sample)
-  const downsampledLen = Math.floor(numSamples / 3);
-  const mulaw = new Uint8Array(downsampledLen);
-  for (let i = 0; i < downsampledLen; i++) {
-    const sample = view.getInt16(i * 3 * 2, true);
-    mulaw[i] = encodeMulaw(sample);
+
+  // Prepend leftover samples from previous chunk for continuity
+  const allSamples = new Int16Array(_lastDownsampleRemainder.length + numSamples);
+  for (let i = 0; i < _lastDownsampleRemainder.length; i++) {
+    allSamples[i] = _lastDownsampleRemainder[i];
   }
+  for (let i = 0; i < numSamples; i++) {
+    allSamples[_lastDownsampleRemainder.length + i] = view.getInt16(i * 2, true);
+  }
+
+  const totalSamples = allSamples.length;
+  // How many complete groups of 3 we can process
+  const downsampledLen = Math.floor(totalSamples / 3);
+  const mulaw = new Uint8Array(downsampledLen);
+
+  for (let i = 0; i < downsampledLen; i++) {
+    const idx = i * 3;
+    // 3-tap averaging filter: (s[n-1] + 2*s[n] + s[n+1]) / 4
+    const prev = idx > 0 ? allSamples[idx - 1] : allSamples[idx];
+    const curr = allSamples[idx];
+    const next = idx + 1 < totalSamples ? allSamples[idx + 1] : curr;
+    const filtered = Math.round((prev + 2 * curr + next) / 4);
+    // Clamp to Int16 range
+    const clamped = Math.max(-32768, Math.min(32767, filtered));
+    mulaw[i] = encodeMulaw(clamped);
+  }
+
+  // Save leftover samples for next chunk
+  const consumed = downsampledLen * 3;
+  _lastDownsampleRemainder = [];
+  for (let i = consumed; i < totalSamples; i++) {
+    _lastDownsampleRemainder.push(allSamples[i]);
+  }
+
   return mulaw;
 }
 
