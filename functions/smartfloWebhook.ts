@@ -401,18 +401,36 @@ VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at
       // No recording_url processing needed. For calls that ended without WebSocket
       // (no_answer, failed, busy, cancelled), add a status summary so campaignPostCall
       // entity automation can process them.
-      if (status === 'no_answer' || status === 'failed' || status === 'busy' || status === 'cancelled') {
-        const statusLabel = status === 'no_answer' ? 'No Answer' : status === 'busy' ? 'Busy' : status === 'cancelled' ? 'Cancelled' : 'Failed';
+      if (mappedStatus === 'no_answer' || mappedStatus === 'failed') {
+        const statusLabel = status; // preserve original Smartflo status for clarity
         // Only update summary if streamAudio hasn't already saved one
         const freshLog = await base44.entities.CallLog.get(callLog.id);
         if (!freshLog.transcript) {
           await base44.entities.CallLog.update(callLog.id, {
             conversation_summary: `Call ended: ${statusLabel}. No conversation captured.`,
-            lead_status_updated: status === 'no_answer' ? 'no_answer' : 'callback'
+            lead_status_updated: mappedStatus === 'no_answer' ? 'no_answer' : 'callback'
           });
-          console.log(`[smartfloWebhook] Terminal ${status} — no WebSocket transcript, updated for campaign processing`);
+          console.log(`[smartfloWebhook] Terminal ${statusLabel} (mapped: ${mappedStatus}) — updated for campaign processing`);
         } else {
-          console.log(`[smartfloWebhook] Terminal ${status} — WebSocket transcript already present, skipping summary override`);
+          console.log(`[smartfloWebhook] Terminal ${statusLabel} — WebSocket transcript already present, skipping summary override`);
+        }
+
+        // Update CampaignLead if this call belongs to a campaign (so campaign doesn't get stuck)
+        try {
+          const campaignLeads = await base44.entities.CampaignLead.filter({ call_log_id: callLog.id });
+          for (const cl of campaignLeads) {
+            if (cl.status === 'calling') {
+              await base44.entities.CampaignLead.update(cl.id, {
+                status: 'completed',
+                outcome: mappedStatus === 'no_answer' ? 'no_answer' : 'no_answer',
+                conversation_summary: `Call ${statusLabel}. No conversation.`,
+                call_duration: parseInt(duration) || 0
+              });
+              console.log(`[smartfloWebhook] Updated CampaignLead ${cl.id} to completed/no_answer`);
+            }
+          }
+        } catch (e) {
+          console.log(`[smartfloWebhook] CampaignLead update failed: ${e.message}`);
         }
       }
 
