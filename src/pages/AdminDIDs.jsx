@@ -310,7 +310,7 @@ export default function AdminDIDs() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
@@ -337,6 +337,21 @@ export default function AdminDIDs() {
                   {dids.filter(d => d.status === 'assigned').length}
                 </p>
                 <p className="text-sm text-gray-600">Assigned DIDs</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="border-amber-200 bg-amber-50/30">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-amber-50 rounded-lg">
+                <Share2 className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold">
+                  {dids.filter(d => d.is_demo).length}
+                </p>
+                <p className="text-sm text-gray-600">Demo Pool DIDs</p>
               </div>
             </div>
           </CardContent>
@@ -385,9 +400,16 @@ export default function AdminDIDs() {
                     <TableCell className="font-medium">{did.number}</TableCell>
                     <TableCell>{did.country_code}</TableCell>
                     <TableCell>
-                      <Badge className={statusColors[did.status]}>
-                        {did.status}
-                      </Badge>
+                      <div className="flex items-center gap-1">
+                        <Badge className={statusColors[did.status]}>
+                          {did.status}
+                        </Badge>
+                        {did.is_demo && (
+                          <Badge className="bg-amber-100 text-amber-800">
+                            <Share2 className="w-3 h-3 mr-1" />Demo Pool
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>{getClientName(did.client_id)}</TableCell>
                     <TableCell>₹{did.monthly_cost?.toLocaleString()}</TableCell>
@@ -410,15 +432,37 @@ export default function AdminDIDs() {
                             ))}
                           </SelectContent>
                         </Select>
-                        <Button
-                          size="sm"
-                          variant={did.status === 'reserved' ? 'default' : 'outline'}
-                          className={did.status === 'reserved' ? 'bg-amber-500 hover:bg-amber-600 text-white' : ''}
-                          onClick={() => handleReserve(did.id)}
-                          title={did.status === 'reserved' ? `Reserved: ${did.reserved_note || 'No note'}. Click to unreserve.` : 'Reserve this DID'}
-                        >
-                          {did.status === 'reserved' ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-                        </Button>
+                        {did.status === 'reserved' ? (
+                          <Button
+                            size="sm"
+                            variant="default"
+                            className="bg-amber-500 hover:bg-amber-600 text-white"
+                            onClick={() => handleReserve(did.id)}
+                            title={`Reserved: ${did.reserved_note || 'No note'}. Click to unreserve.`}
+                          >
+                            <Unlock className="w-4 h-4" />
+                          </Button>
+                        ) : (
+                          <div className="flex gap-1">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleReserve(did.id, true)}
+                              title="Add to shared Demo Pool (trial/demo agents will use this)"
+                              className="text-amber-600 border-amber-300 hover:bg-amber-50"
+                            >
+                              <Share2 className="w-4 h-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => handleReserve(did.id, false)}
+                              title="Reserve this DID (not for demo)"
+                            >
+                              <Lock className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>
