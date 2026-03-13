@@ -275,7 +275,7 @@ export default function CampaignDetail() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div>
-              <p className="text-xs font-semibold text-green-700 uppercase mb-1">Interested</p>
+              <p className="text-xs font-semibold text-green-700 uppercase mb-1">Interested (Meeting/Demo)</p>
               {campaign.followup_rules?.interested_email && (
                 <p className="text-green-600">✓ AI-personalized follow-up email{campaign.followup_rules?.interested_ai_email ? ' ✨' : ''}</p>
               )}
@@ -293,7 +293,7 @@ export default function CampaignDetail() {
               )}
             </div>
             <div>
-              <p className="text-xs font-semibold text-gray-600 uppercase mb-1">No Answer</p>
+              <p className="text-xs font-semibold text-gray-600 uppercase mb-1">Not Answered</p>
               {campaign.followup_rules?.no_answer_retry ? (
                 <p className="text-gray-600">✓ Auto-retry every {campaign.followup_rules.no_answer_retry_hours || 4}h, max {campaign.followup_rules.no_answer_max_retries || 3} retries</p>
               ) : (
