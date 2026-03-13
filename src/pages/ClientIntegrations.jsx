@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import WhatsAppSetup from '../components/integrations/WhatsAppSetup';
 import RCSSetup from '../components/integrations/RCSSetup';
 import EmailSetup from '../components/integrations/EmailSetup';
+import ShopifySetup from '../components/integrations/ShopifySetup';
 
 export default function ClientIntegrations() {
   const [client, setClient] = useState(null);
@@ -96,7 +97,17 @@ export default function ClientIntegrations() {
         </div>
       )}
 
-      {/* Integration Cards */}
+      {/* Marketplace Integrations */}
+      <div className="pt-4 border-t">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Marketplace Integrations</h2>
+        <p className="text-sm text-gray-500 mb-4">Connect your e-commerce store so AI agents can look up orders, products, and tracking during customer calls.</p>
+        <ShopifySetup clientId={client?.id} />
+      </div>
+
+      {/* Messaging Integration Cards */}
+      <div className="pt-4 border-t">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Messaging Channels</h2>
+      </div>
       <WhatsAppSetup config={config} onSave={handleSave} />
       <RCSSetup config={config} onSave={handleSave} />
       <EmailSetup config={config} onSave={handleSave} />
