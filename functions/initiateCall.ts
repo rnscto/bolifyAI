@@ -198,9 +198,16 @@ IMPORTANT RULES:
       }
     });
 
-    // Clean phone number — strip "+" prefix but keep digits (Smartflo rejects "+" in caller_id)
-    const cleanCallerID = callerDID.replace(/^\+/, '');
+    // Clean phone number for Smartflo API
+    // Smartflo expects caller_id WITHOUT "+" prefix — keep full digits (e.g., 918065489180)
+    // If that fails, some Smartflo channels need just the 10-digit number
+    let cleanCallerID = callerDID.replace(/[^0-9]/g, '');
+    // If stored as just 10 digits, prepend 91
+    if (cleanCallerID.length === 10) {
+      cleanCallerID = '91' + cleanCallerID;
+    }
     const cleanPhoneNumber = phone_number.replace(/[^0-9]/g, '');
+    console.log(`Cleaned caller_id: ${cleanCallerID}, callee: ${cleanPhoneNumber}`);
 
     // Demo agents always use the global/base API key; production agents use their own token
     const smartfloApiKey = isDemoAgent 
