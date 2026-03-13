@@ -356,44 +356,11 @@ async function saveCallRecord(session, reqId, duration) {
         .catch(e => console.error(`[${reqId}] ⚠️ Action extraction failed: ${e.message}`));
     }
 
-    // ===== STEP 7: Directly update CampaignLead if this is a campaign call =====
-    // The entity automation (campaignPostCall) should also handle this, but as a
-    // reliability measure we update the CampaignLead directly here to prevent
-    // "stuck calling" issues when the automation doesn't fire or races.
-    try {
-      const campaignLeads = await serviceClient.entities.CampaignLead.filter({ call_log_id: session.callLogId });
-      if (campaignLeads.length > 0) {
-        const cl = campaignLeads[0];
-        if (cl.status === 'calling') {
-          // Map streamAudio leadStatus to new outcome values
-          const statusToOutcome = {
-            'interested': 'interested', 'not_interested': 'not_interested', 'callback': 'callback',
-            'no_answer': 'not_answered', 'converted': 'converted', 'contacted': 'neutral',
-            'do_not_call': 'do_not_call'
-          };
-          const mappedOutcome = statusToOutcome[leadStatus] || 'neutral';
-          const mappedCallStatus = (leadStatus === 'no_answer') ? 'not_answered' : 'answered';
-          await serviceClient.entities.CampaignLead.update(cl.id, {
-            status: 'completed',
-            outcome: mappedOutcome,
-            call_status: mappedCallStatus,
-            conversation_summary: enrichedSummary || summary || 'Call completed.',
-            transcript: transcript || '',
-            call_duration: duration || 0
-          });
-          console.log(`[${reqId}] 📋 CampaignLead ${cl.id} (${cl.lead_name}) updated to completed directly`);
-
-          // Trigger next campaign call via executeCampaign (fire-and-forget)
-          serviceClient.functions.invoke('executeCampaign', {
-            campaign_id: cl.campaign_id,
-            _internal: true
-          }).then(r => console.log(`[${reqId}] 🚀 Next campaign batch triggered: ${JSON.stringify(r).substring(0, 200)}`))
-            .catch(e => console.error(`[${reqId}] ⚠️ Next batch trigger failed: ${e.message}`));
-        }
-      }
-    } catch (clErr) {
-      console.error(`[${reqId}] ⚠️ CampaignLead direct update failed: ${clErr.message}`);
-    }
+    // NOTE: CampaignLead updates and next-batch triggering are handled EXCLUSIVELY
+    // by the campaignPostCall entity automation (triggers on CallLog update).
+    // streamAudio only owns: CallLog transcript/summary/AI-analysis + Lead scoring.
+    // This avoids race conditions where both streamAudio and campaignPostCall
+    // were updating the same CampaignLead record simultaneously.
 
     try { serviceClient.cleanup(); } catch (_) { /* ignore */ }
   } catch (err) {
