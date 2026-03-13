@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { createClient } from 'npm:@base44/sdk@0.8.20';
 
 // Map Smartflo call statuses to internal statuses
 // Smartflo webhook sends statuses like "Answered", "Missed", "completed" etc.
@@ -24,9 +24,9 @@ const STATUS_MAP = {
 
 Deno.serve(async (req) => {
   try {
-    // For webhooks, use createClientFromRequest then access .asServiceRole for DB operations
-    const base44Client = createClientFromRequest(req);
-    const base44 = base44Client.asServiceRole;
+    // Use createClient with asServiceRole — same pattern as streamAudio which works
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const base44 = createClient({ appId, asServiceRole: true });
 
     // Webhook authentication: verify shared secret (always required)
     const url = new URL(req.url);
