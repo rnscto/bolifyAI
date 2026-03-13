@@ -238,8 +238,11 @@ IMPORTANT RULES:
     const smartfloData = await smartfloResponse.json();
     console.log('Smartflo response:', JSON.stringify(smartfloData));
 
-    if (!smartfloResponse.ok || smartfloData.success === false) {
-      const errorMsg = smartfloData.message || 'Unknown error';
+    if (!smartfloResponse.ok || smartfloData.success === false || smartfloData.caller_id) {
+      // Smartflo returns {caller_id: "Provide a vaild caller_id."} when the DID is not mapped to the API token's channel
+      const errorMsg = smartfloData.caller_id 
+        ? `Invalid caller_id: DID ${callerDID} is not mapped to this API token's Smartflo channel. Please verify the DID is assigned to this token in Smartflo dashboard.`
+        : (smartfloData.message || smartfloData.error || JSON.stringify(smartfloData));
       console.error('Smartflo API error:', errorMsg);
       
       await base44.asServiceRole.entities.CallLog.update(callLog.id, {
