@@ -22,12 +22,29 @@ const statusColors = {
 };
 
 const outcomeColors = {
+  neutral: 'bg-blue-100 text-blue-700',
   interested: 'bg-green-100 text-green-700',
   not_interested: 'bg-red-100 text-red-700',
+  not_answered: 'bg-gray-100 text-gray-600',
   callback: 'bg-yellow-100 text-yellow-700',
-  no_answer: 'bg-gray-100 text-gray-600',
-  converted: 'bg-emerald-100 text-emerald-700',
-  contacted: 'bg-purple-100 text-purple-700',
+};
+
+const callStatusColors = {
+  answered: 'bg-green-100 text-green-700',
+  not_answered: 'bg-gray-100 text-gray-600',
+};
+
+const outcomeLabels = {
+  neutral: 'Neutral',
+  interested: 'Interested (Meeting/Demo)',
+  not_interested: 'Not Interested',
+  not_answered: 'Not Answered',
+  callback: 'Callback',
+};
+
+const callStatusLabels = {
+  answered: 'Answered',
+  not_answered: 'Not Answered (Missed)',
 };
 
 export default function CampaignLeadsTable({ campaignLeads }) {
@@ -57,8 +74,10 @@ export default function CampaignLeadsTable({ campaignLeads }) {
               <SelectItem value="pending">Pending</SelectItem>
               <SelectItem value="completed">Completed</SelectItem>
               <SelectItem value="failed">Failed</SelectItem>
+              <SelectItem value="neutral">Neutral</SelectItem>
               <SelectItem value="interested">Interested</SelectItem>
               <SelectItem value="not_interested">Not Interested</SelectItem>
+              <SelectItem value="not_answered">Not Answered</SelectItem>
               <SelectItem value="callback">Callback</SelectItem>
               <SelectItem value="has_transcript">Has Transcript</SelectItem>
             </SelectContent>
@@ -71,6 +90,7 @@ export default function CampaignLeadsTable({ campaignLeads }) {
                 <TableHead>Lead</TableHead>
                 <TableHead>Phone</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Call Status</TableHead>
                 <TableHead>Outcome</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Follow-up</TableHead>
@@ -80,7 +100,7 @@ export default function CampaignLeadsTable({ campaignLeads }) {
             <TableBody>
               {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-gray-500">No leads match filter</TableCell>
+                   <TableCell colSpan={8} className="text-center text-gray-500">No leads match filter</TableCell>
                 </TableRow>
               ) : (
                 filtered.map(cl => (
@@ -94,8 +114,17 @@ export default function CampaignLeadsTable({ campaignLeads }) {
                       </Badge>
                     </TableCell>
                     <TableCell>
+                      {cl.call_status ? (
+                        <Badge className={callStatusColors[cl.call_status] || 'bg-gray-100'}>
+                          {callStatusLabels[cl.call_status] || cl.call_status}
+                        </Badge>
+                      ) : '-'}
+                    </TableCell>
+                    <TableCell>
                       {cl.outcome ? (
-                        <Badge className={outcomeColors[cl.outcome]}>{cl.outcome.replace('_', ' ')}</Badge>
+                        <Badge className={outcomeColors[cl.outcome] || 'bg-gray-100'}>
+                          {outcomeLabels[cl.outcome] || cl.outcome}
+                        </Badge>
                       ) : '-'}
                     </TableCell>
                     <TableCell>{formatDuration(cl.call_duration)}</TableCell>
@@ -128,11 +157,17 @@ export default function CampaignLeadsTable({ campaignLeads }) {
           </DialogHeader>
           {selected && (
             <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-4 gap-4">
+                <div>
+                  <p className="text-xs text-gray-500">Call Status</p>
+                  <Badge className={callStatusColors[selected.call_status] || 'bg-gray-100'}>
+                    {callStatusLabels[selected.call_status] || selected.call_status || 'N/A'}
+                  </Badge>
+                </div>
                 <div>
                   <p className="text-xs text-gray-500">Outcome</p>
                   <Badge className={outcomeColors[selected.outcome] || 'bg-gray-100'}>
-                    {selected.outcome || 'N/A'}
+                    {outcomeLabels[selected.outcome] || selected.outcome || 'N/A'}
                   </Badge>
                 </div>
                 <div>
