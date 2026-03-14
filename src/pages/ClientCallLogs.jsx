@@ -154,6 +154,7 @@ export default function ClientCallLogs() {
                 <TableHead>Lead</TableHead>
                 <TableHead>Duration</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Transcript</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
