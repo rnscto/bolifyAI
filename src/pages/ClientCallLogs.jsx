@@ -240,29 +240,44 @@ export default function ClientCallLogs() {
                   </Badge>
                 </div>
               </div>
+
+              {selectedCall.lead_status_updated && (
+                <div>
+                  <p className="text-sm text-gray-600">Call Outcome</p>
+                  <Badge className="bg-blue-100 text-blue-800 mt-1">{selectedCall.lead_status_updated}</Badge>
+                </div>
+              )}
               
               {selectedCall.conversation_summary && (
                 <div>
-                  <p className="text-sm text-gray-600 mb-2">Summary</p>
-                  <p className="text-sm bg-gray-50 p-3 rounded-lg">
-                    {selectedCall.conversation_summary}
+                  <p className="text-sm font-medium text-gray-700 mb-2">Summary</p>
+                  <p className="text-sm bg-blue-50 p-3 rounded-lg border border-blue-100">
+                    {selectedCall.conversation_summary.replace(/^\[LEAD CONTEXT\][\s\S]*?---\n*/m, '').trim() || selectedCall.conversation_summary}
                   </p>
                 </div>
               )}
 
-              {selectedCall.transcript && (
+              {selectedCall.transcript ? (
                 <div>
-                  <p className="text-sm text-gray-600 mb-2">Transcript</p>
-                  <div className="text-sm bg-gray-50 p-3 rounded-lg max-h-64 overflow-y-auto whitespace-pre-wrap">
-                    {selectedCall.transcript}
+                  <p className="text-sm font-medium text-gray-700 mb-2">Transcript</p>
+                  <div className="text-sm bg-gray-50 p-3 rounded-lg max-h-72 overflow-y-auto border border-gray-200 space-y-2">
+                    {selectedCall.transcript.split('\n').map((line, i) => {
+                      const isAI = line.startsWith('AI:');
+                      const isCustomer = line.startsWith('Customer:');
+                      return line.trim() ? (
+                        <div key={i} className={`px-2 py-1 rounded ${isAI ? 'bg-blue-50 text-blue-900' : isCustomer ? 'bg-green-50 text-green-900' : 'text-gray-700'}`}>
+                          {line}
+                        </div>
+                      ) : null;
+                    })}
                   </div>
                 </div>
-              )}
-
-              {selectedCall.lead_status_updated && (
+              ) : (
                 <div>
-                  <p className="text-sm text-gray-600">Lead Status Updated</p>
-                  <p className="font-medium">{selectedCall.lead_status_updated}</p>
+                  <p className="text-sm font-medium text-gray-700 mb-2">Transcript</p>
+                  <p className="text-sm text-gray-400 italic bg-gray-50 p-3 rounded-lg border border-gray-200">
+                    No transcript available for this call.
+                  </p>
                 </div>
               )}
 
