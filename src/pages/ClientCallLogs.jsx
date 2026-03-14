@@ -162,7 +162,7 @@ export default function ClientCallLogs() {
             <TableBody>
               {calls.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-gray-500">
+                  <TableCell colSpan={8} className="text-center text-gray-500">
                     No call history yet
                   </TableCell>
                 </TableRow>
