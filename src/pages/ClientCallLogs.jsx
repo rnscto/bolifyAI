@@ -18,7 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing, Play, ExternalLink } from 'lucide-react';
+import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing, FileText, ExternalLink } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import AudioPlayer from '../components/calls/AudioPlayer';
