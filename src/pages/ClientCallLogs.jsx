@@ -194,6 +194,15 @@ export default function ClientCallLogs() {
                       </Badge>
                     </TableCell>
                     <TableCell>
+                      {call.transcript ? (
+                        <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
+                          <FileText className="w-3.5 h-3.5" /> Available
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
                       {call.call_start_time ? 
                         new Date(call.call_start_time).toLocaleString() : '-'}
                     </TableCell>
