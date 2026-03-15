@@ -42,8 +42,8 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
 // There is NO user session — we MUST use service role directly.
 Deno.serve(async (req) => {
   try {
-    // Entity automation — platform injects service-level token in the request
-    const base44 = createClientFromRequest(req);
+    // Entity automation — no user session, use service role directly (same as campaignPoller)
+    const base44 = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
     const payload = await req.json();
     const { event, data, old_data } = payload;
 

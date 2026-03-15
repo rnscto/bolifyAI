@@ -11,8 +11,8 @@ import { createClient } from 'npm:@base44/sdk@0.8.20';
 
 Deno.serve(async (req) => {
   try {
-    // Entity automation — platform injects service-level token in the request
-    const svc = createClientFromRequest(req);
+    // Entity automation — no user session, use service role directly (same as campaignPoller)
+    const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
 
     // Accept either direct invocation or entity automation payload
     const body = await req.json();
