@@ -772,27 +772,7 @@ Deno.serve(async (req) => {
       const mulawBytes = base64PCM16_24kToMulaw(msg.delta);
 
       if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
-        // Send in chunks padded to 160-byte boundaries
-        const CHUNK_SIZE = 800;
-        for (let i = 0; i < mulawBytes.length; i += CHUNK_SIZE) {
-          const end = Math.min(i + CHUNK_SIZE, mulawBytes.length);
-          let chunk = mulawBytes.slice(i, end);
-
-          if (chunk.length % 160 !== 0) {
-            const paddedLen = Math.ceil(chunk.length / 160) * 160;
-            const padded = new Uint8Array(paddedLen);
-            padded.set(chunk);
-            padded.fill(0xFF, chunk.length);
-            chunk = padded;
-          }
-
-          const payload = btoa(String.fromCharCode(...chunk));
-          smartfloSocket.send(JSON.stringify({
-            event: 'media',
-            streamSid: session.streamSid,
-            media: { payload }
-          }));
-        }
+        sendMulawToSmartflo(mulawBytes);
       }
       return;
     }
@@ -943,6 +923,41 @@ Deno.serve(async (req) => {
     }
   }
 
+  // ─── Safe base64 encoding for large Uint8Array (avoids stack overflow from spread) ───
+  function uint8ToBase64(bytes) {
+    let binary = '';
+    const len = bytes.length;
+    for (let i = 0; i < len; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+
+  // ─── Send mu-law audio to Smartflo in 160-byte aligned chunks ───
+  function sendMulawToSmartflo(mulawBytes) {
+    const CHUNK_SIZE = 1600; // 200ms at 8kHz mu-law (larger = fewer sends, less overhead)
+    for (let i = 0; i < mulawBytes.length; i += CHUNK_SIZE) {
+      const end = Math.min(i + CHUNK_SIZE, mulawBytes.length);
+      let chunk = mulawBytes.slice(i, end);
+
+      // Pad to 160-byte boundary (20ms frame alignment)
+      if (chunk.length % 160 !== 0) {
+        const paddedLen = Math.ceil(chunk.length / 160) * 160;
+        const padded = new Uint8Array(paddedLen);
+        padded.set(chunk);
+        padded.fill(0xFF, chunk.length); // silence padding
+        chunk = padded;
+      }
+
+      const payload = uint8ToBase64(chunk);
+      smartfloSocket.send(JSON.stringify({
+        event: 'media',
+        streamSid: session.streamSid,
+        media: { payload }
+      }));
+    }
+  }
+
   // ─── Azure Speech TTS (hybrid mode) ───
   async function synthesizeWithAzureSpeech(text) {
     const speechKey = Deno.env.get('AZURE_SPEECH_KEY');
@@ -993,7 +1008,8 @@ Deno.serve(async (req) => {
       console.log(`[${reqId}] 🔊 Azure Speech TTS: ${audioBuffer.length} bytes of mu-law audio`);
 
       if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
-        const CHUNK_SIZE = 800;
+        // Send in smaller chunks to allow barge-in checking
+        const CHUNK_SIZE = 1600;
         for (let i = 0; i < audioBuffer.length; i += CHUNK_SIZE) {
           if (controller.signal.aborted) {
             console.log(`[${reqId}] 🛑 TTS playback aborted (barge-in)`);
@@ -1010,7 +1026,7 @@ Deno.serve(async (req) => {
             chunk = padded;
           }
 
-          const payload = btoa(String.fromCharCode(...chunk));
+          const payload = uint8ToBase64(chunk);
           smartfloSocket.send(JSON.stringify({
             event: 'media',
             streamSid: session.streamSid,
