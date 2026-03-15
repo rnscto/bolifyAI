@@ -102,6 +102,25 @@ Deno.serve(async (req) => {
       }
 
       const step = steps[stepIndex];
+
+      // Dedup: check if this step was already sent (prevent duplicate sends)
+      const sendLog = enrollment.send_log || [];
+      const alreadySent = sendLog.some(s => s.step_number === stepIndex + 1 && s.status === 'sent');
+      if (alreadySent) {
+        // Advance to next step
+        const nextStepIdx = stepIndex + 1;
+        const isLast = nextStepIdx >= steps.length;
+        const nextStep = !isLast ? steps[nextStepIdx] : null;
+        const nextSendDate = nextStep ? new Date(Date.now() + nextStep.delay_days * 86400000).toISOString() : null;
+        await base44.entities.SequenceEnrollment.update(enrollment.id, {
+          steps_completed: nextStepIdx, current_step: nextStepIdx,
+          next_send_date: nextSendDate, status: isLast ? 'completed' : 'active'
+        });
+        console.log(`[processSequences] Dedup: step ${stepIndex + 1} already sent to ${enrollment.recipient_email}, advancing`);
+        results.skipped++;
+        continue;
+      }
+
       let subject = step.subject || 'Follow-up';
       let bodyHtml = step.body_html || '';
 
