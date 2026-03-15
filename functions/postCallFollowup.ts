@@ -67,13 +67,24 @@ Deno.serve(async (req) => {
     }
 
     // Skip campaign calls — campaignPostCall handles their follow-up emails to avoid duplicates
+    // Check BOTH by call_log_id AND by lead_id to catch race conditions where
+    // call_log_id hasn't been linked yet but the lead is in an active campaign
     const callLogId_check = callLog.id || event?.entity_id;
+    let isCampaignCall = false;
     if (callLogId_check) {
       const campaignLeadCheck = await svc.entities.CampaignLead.filter({ call_log_id: callLogId_check });
-      if (campaignLeadCheck.length > 0) {
-        console.log('[postCallFollowup] Skipping campaign call — handled by campaignPostCall');
-        return Response.json({ success: true, skipped: 'campaign_call' });
-      }
+      if (campaignLeadCheck.length > 0) isCampaignCall = true;
+    }
+    if (!isCampaignCall && callLog.lead_id) {
+      const leadCampaignCheck = await svc.entities.CampaignLead.filter({ lead_id: callLog.lead_id });
+      const inActiveCampaign = leadCampaignCheck.some(cl => 
+        ['pending', 'calling', 'processing', 'completed'].includes(cl.status)
+      );
+      if (inActiveCampaign) isCampaignCall = true;
+    }
+    if (isCampaignCall) {
+      console.log('[postCallFollowup] Skipping campaign call — handled by campaignPostCall');
+      return Response.json({ success: true, skipped: 'campaign_call' });
     }
 
     const results = {
