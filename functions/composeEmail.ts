@@ -197,7 +197,7 @@ RULES:
         });
       }
 
-      return Response.json({ success: true, email_id: data?.id, to: to_email });
+      return Response.json({ success: true, to: to_email });
     }
 
     return Response.json({ error: 'Invalid action. Use generate_template or send_email' }, { status: 400 });
