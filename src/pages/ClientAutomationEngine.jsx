@@ -38,6 +38,7 @@ export default function ClientAutomationEngine() {
       return base44.entities.Activity.filter({ client_id: client.id, auto_created: true }, '-scheduled_date', 200);
     },
     enabled: !!client,
+    refetchInterval: 30000,
   });
 
   const { data: leads = [] } = useQuery({
@@ -50,6 +51,7 @@ export default function ClientAutomationEngine() {
       return base44.entities.Lead.filter({ client_id: client.id }, '-updated_date', 200);
     },
     enabled: !!client,
+    refetchInterval: 30000,
   });
 
   const handleRefresh = async () => {

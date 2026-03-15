@@ -22,6 +22,8 @@ export default function ClientDashboard() {
 
   useEffect(() => {
     loadData();
+    const interval = setInterval(loadData, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
