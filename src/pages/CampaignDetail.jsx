@@ -7,7 +7,7 @@ import CampaignLeadsTable from '../components/campaigns/CampaignLeadsTable';
 import CampaignOutcomeChart from '../components/campaigns/CampaignOutcomeChart';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
-import { ArrowLeft, Play, Pause, Square, RefreshCw, Users, Phone, Mail, Clock } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Square, RefreshCw, Users, Phone, Mail, Clock, AlertCircle, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 
 const statusColors = {
@@ -195,14 +195,66 @@ export default function CampaignDetail() {
         </CardContent>
       </Card>
 
+      {/* Pending retry banner */}
+      {pendingWaitingRetry > 0 && (
+        <Card className="border-amber-200 bg-amber-50">
+          <CardContent className="pt-4 pb-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-amber-600" />
+              <div>
+                <p className="text-sm font-medium text-amber-800">
+                  {pendingWaitingRetry} leads waiting for scheduled retry
+                </p>
+                <p className="text-xs text-amber-600">
+                  These leads were not answered and are scheduled for auto-retry later.
+                  {pendingReadyNow > 0 && ` ${pendingReadyNow} leads are ready to call now.`}
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="border-amber-300 text-amber-700 hover:bg-amber-100"
+              onClick={async () => {
+                try {
+                  const waitingLeads = campaignLeads.filter(cl =>
+                    cl.status === 'pending' && cl.followup_call_date && new Date(cl.followup_call_date) > new Date()
+                  );
+                  for (const cl of waitingLeads) {
+                    await base44.entities.CampaignLead.update(cl.id, { followup_call_date: null });
+                  }
+                  toast.success(`${waitingLeads.length} leads cleared for immediate calling`);
+                  loadData();
+                } catch (err) {
+                  toast.error('Failed to clear retry schedule');
+                }
+              }}
+            >
+              <RotateCcw className="w-4 h-4 mr-1" /> Call All Now
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Stats grid */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <Card>
           <CardContent className="pt-4 pb-4 flex items-center gap-3">
             <Users className="w-6 h-6 text-blue-600" />
             <div>
               <p className="text-xl font-bold">{totalLeads}</p>
               <p className="text-xs text-gray-500">Total Leads</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className={pendingLeads > 0 ? 'border-amber-200' : ''}>
+          <CardContent className="pt-4 pb-4 flex items-center gap-3">
+            <Clock className="w-6 h-6 text-amber-600" />
+            <div>
+              <p className="text-xl font-bold">{pendingLeads}</p>
+              <p className="text-xs text-gray-500">
+                Pending {pendingWaitingRetry > 0 ? `(${pendingWaitingRetry} waiting)` : ''}
+              </p>
             </div>
           </CardContent>
         </Card>
