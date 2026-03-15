@@ -244,9 +244,9 @@ Be specific and Indian business context aware. If the account is expired, priori
         } else {
           console.log('[smartfloWebhook] Unknown caller:', incomingNumber);
 
-          // AI: handle unknown caller with general greeting + lead qualification
-          const unknownAnalysis = await base44.integrations.Core.InvokeLLM({
-            prompt: `You are VaaniAI's intelligent call routing assistant. An incoming call has been received from an UNKNOWN number (not a registered client).
+          // AI: handle unknown caller (Azure OpenAI — zero Base44 credits)
+          const unknownAnalysis = await azureLLM(
+            `You are VaaniAI's intelligent call routing assistant. An incoming call has been received from an UNKNOWN number (not a registered client).
 
 Caller Number: ${incomingNumber}
 ${retentionConfig.active_offer ? `Active Offer: ${retentionConfig.active_offer}` : ''}
@@ -258,28 +258,21 @@ Generate:
 4. Routing recommendation
 5. Whether this should be flagged as a potential new lead
 
-VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at ₹6,500/month per channel.`,
-            response_json_schema: {
+VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at ₹6,500/month per channel.
+Respond with JSON: {greeting, likely_intent, qualifying_questions, routing, is_potential_lead, suggested_response}`,
+            'You are VaaniAI call routing AI. Always respond in valid JSON.',
+            {
               type: "object",
               properties: {
                 greeting: { type: "string" },
-                likely_intent: {
-                  type: "string",
-                  enum: ["new_lead", "wrong_number", "partner_inquiry", "media", "general"]
-                },
-                qualifying_questions: {
-                  type: "array",
-                  items: { type: "string" }
-                },
-                routing: {
-                  type: "string",
-                  enum: ["sales_team", "support_team", "auto_response", "voicemail"]
-                },
+                likely_intent: { type: "string" },
+                qualifying_questions: { type: "array", items: { type: "string" } },
+                routing: { type: "string" },
                 is_potential_lead: { type: "boolean" },
                 suggested_response: { type: "string" }
               }
             }
-          });
+          );
 
           console.log('[smartfloWebhook] Unknown caller AI - Intent:', unknownAnalysis.likely_intent, 'Potential lead:', unknownAnalysis.is_potential_lead);
 
