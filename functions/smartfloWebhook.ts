@@ -435,17 +435,105 @@ Respond with JSON: {greeting, likely_intent, qualifying_questions, routing, is_p
       // Re-read fresh CallLog to pass complete data
       const freshCallLog = await base44.entities.CallLog.get(callLog.id);
       
-      // 1. Invoke campaignPostCall — handles campaign lead progression + next batch
+      // 1. Campaign post-call processing — handles lead progression + triggers next call
+      //    IMPORTANT: We do this INLINE instead of via functions.invoke() because:
+      //    - functions.invoke() adds latency and can timeout
+      //    - Service-role clients can't always invoke functions reliably
+      //    - Inline execution ensures the next call triggers immediately
       try {
-        console.log(`[smartfloWebhook] Direct-invoking campaignPostCall for CallLog ${callLog.id}`);
-        const postCallResult = await base44.functions.invoke('campaignPostCall', {
-          event: { type: 'update', entity_name: 'CallLog', entity_id: callLog.id },
-          data: freshCallLog,
-          old_data: { ...freshCallLog, status: callLog.status } // simulate old_data with previous status
-        });
-        console.log(`[smartfloWebhook] campaignPostCall result:`, JSON.stringify(postCallResult?.data || postCallResult).substring(0, 300));
+        console.log(`[smartfloWebhook] Processing campaign post-call for CallLog ${callLog.id}`);
+        
+        // Check if this is a campaign call
+        const campaignLeads = await base44.entities.CampaignLead.filter({ call_log_id: callLog.id });
+        
+        if (campaignLeads.length > 0) {
+          const campaignLead = campaignLeads[0];
+          
+          // Skip if already processed
+          if (!['calling'].includes(campaignLead.status)) {
+            console.log(`[smartfloWebhook] CampaignLead ${campaignLead.id} already ${campaignLead.status} — skipping`);
+          } else {
+            // Lock it
+            await base44.entities.CampaignLead.update(campaignLead.id, { status: 'processing' });
+            
+            // Determine basic outcome (fast, no LLM)
+            let outcome = 'neutral';
+            let clCallStatus = 'answered';
+            let clSummary = freshCallLog.conversation_summary || '';
+            
+            if (freshCallLog.status === 'no_answer') {
+              outcome = 'not_answered'; clCallStatus = 'not_answered';
+              clSummary = clSummary || 'Call was not answered.';
+            } else if (freshCallLog.status === 'failed') {
+              outcome = 'not_answered'; clCallStatus = 'not_answered';
+              clSummary = clSummary || 'Call failed to connect.';
+            } else if (freshCallLog.lead_status_updated) {
+              // streamAudio already analyzed — map its outcome
+              const statusToOutcome = {
+                'interested': 'interested', 'not_interested': 'not_interested', 'callback': 'callback',
+                'no_answer': 'not_answered', 'converted': 'converted', 'contacted': 'neutral', 'do_not_call': 'do_not_call'
+              };
+              outcome = statusToOutcome[freshCallLog.lead_status_updated] || 'neutral';
+              clSummary = freshCallLog.conversation_summary || clSummary;
+            }
+            
+            // Mark completed
+            await base44.entities.CampaignLead.update(campaignLead.id, {
+              status: 'completed', outcome, call_status: clCallStatus,
+              conversation_summary: clSummary,
+              transcript: freshCallLog.transcript || '',
+              call_duration: freshCallLog.duration || 0
+            });
+            console.log(`[smartfloWebhook] CampaignLead ${campaignLead.lead_name} → ${outcome}`);
+            
+            // Handle no-answer retry
+            if (outcome === 'not_answered') {
+              const campaign = await base44.entities.Campaign.get(campaignLead.campaign_id);
+              const rules = campaign?.followup_rules || {};
+              if (rules.no_answer_retry !== false) {
+                const maxRetries = rules.no_answer_max_retries || 3;
+                const currentAttempts = (campaignLead.attempt_count || 0) + 1;
+                if (currentAttempts < maxRetries) {
+                  const retryHours = rules.no_answer_retry_hours || 4;
+                  await base44.entities.CampaignLead.update(campaignLead.id, {
+                    status: 'pending', outcome: 'not_answered',
+                    attempt_count: currentAttempts, call_log_id: null,
+                    followup_call_date: new Date(Date.now() + retryHours * 3600000).toISOString()
+                  });
+                  console.log(`[smartfloWebhook] No-answer retry ${currentAttempts}/${maxRetries} queued`);
+                }
+              }
+            }
+            
+            // TRIGGER NEXT CALL IMMEDIATELY (inline — no function invoke)
+            await triggerNextCampaignCall(base44, campaignLead.campaign_id);
+            
+            // Update campaign stats
+            const allCLs = await base44.entities.CampaignLead.filter({ campaign_id: campaignLead.campaign_id });
+            const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0, converted: 0, do_not_call: 0 };
+            allCLs.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
+            const completedCount = allCLs.filter(l => l.status === 'completed').length;
+            const failedCount = allCLs.filter(l => l.status === 'failed').length;
+            await base44.entities.Campaign.update(campaignLead.campaign_id, {
+              outcomes_summary: outcomes, calls_completed: completedCount, calls_failed: failedCount
+            });
+          }
+        } else {
+          console.log(`[smartfloWebhook] Not a campaign call — skipping campaign processing`);
+        }
+        
+        // Invoke campaignPostCall for SLOW AI analysis (emails, scoring, sequences)
+        // This runs async — next call is already triggered above
+        try {
+          base44.functions.invoke('campaignPostCall', {
+            event: { type: 'update', entity_name: 'CallLog', entity_id: callLog.id },
+            data: freshCallLog,
+            old_data: { ...freshCallLog, status: callLog.status }
+          }).catch(e => console.error(`[smartfloWebhook] campaignPostCall async failed: ${e.message}`));
+        } catch (_) {}
+        
       } catch (pcErr) {
-        console.error(`[smartfloWebhook] campaignPostCall invoke failed: ${pcErr.message}`);
+        console.error(`[smartfloWebhook] Campaign processing failed: ${pcErr.message}`);
       }
 
       // 2. Invoke postCallFollowup — handles email/RCS outreach for non-campaign calls
