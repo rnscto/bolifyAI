@@ -1354,7 +1354,7 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
         if (cache.persona.voice_engine) session.voiceEngine = cache.persona.voice_engine;
         if (cache.persona.voice_type) {
           if (session.voiceEngine === 'realtime') {
-            const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
+            const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'marin', 'cedar', 'nova', 'onyx', 'sage', 'shimmer', 'verse'];
             const voice = cache.persona.voice_type.toLowerCase();
             if (validVoices.includes(voice)) session.voiceType = voice;
           } else {
