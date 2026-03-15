@@ -99,7 +99,7 @@ export default function EmailComposer({ open, onOpenChange, lead, client, activi
       }
     } catch (err) {
       const errMsg = err?.response?.data?.error || err?.message || 'Failed to send email';
-      toast.error(errMsg);
+      toast.error(`Email error: ${errMsg}`);
     } finally {
       setSending(false);
     }
