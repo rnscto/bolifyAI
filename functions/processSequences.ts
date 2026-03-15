@@ -59,7 +59,9 @@ Deno.serve(async (req) => {
     const appId = Deno.env.get('BASE44_APP_ID');
     const base44 = createClient({ appId, asServiceRole: true });
 
-    const results = { sent: 0, skipped: 0, completed: 0, errors: 0, adapted: 0 };
+    const results = { sent: 0, skipped: 0, completed: 0, errors: 0, adapted: 0, total_active: 0 };
+    const BATCH_LIMIT = 15; // Max emails per run to avoid timeout
+    const SEND_DELAY_MS = 1200; // 1.2s between sends to respect Resend 2/sec rate limit
 
     // Get all active sequences
     const sequences = await base44.entities.EmailSequence.filter({ status: 'active' });
@@ -72,13 +74,17 @@ Deno.serve(async (req) => {
 
     // Get all active enrollments
     const activeEnrollments = await base44.entities.SequenceEnrollment.filter({ status: 'active' });
+    results.total_active = activeEnrollments.length;
 
-    for (const enrollment of activeEnrollments) {
-      // Check if it's time to send
-      if (!enrollment.next_send_date || new Date(enrollment.next_send_date) > new Date()) {
-        results.skipped++;
-        continue;
-      }
+    // Filter to only due enrollments and limit batch size
+    const now = new Date();
+    const dueEnrollments = activeEnrollments
+      .filter(e => e.next_send_date && new Date(e.next_send_date) <= now)
+      .slice(0, BATCH_LIMIT);
+
+    console.log(`[processSequences] ${activeEnrollments.length} active, ${dueEnrollments.length} due (batch limit ${BATCH_LIMIT})`);
+
+    for (const enrollment of dueEnrollments) {
 
       const sequence = sequenceMap[enrollment.sequence_id];
       if (!sequence) { results.skipped++; continue; }
