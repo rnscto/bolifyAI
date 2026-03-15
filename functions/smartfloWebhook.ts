@@ -480,25 +480,25 @@ Respond with JSON: {greeting, likely_intent, qualifying_questions, routing, is_p
             if (latestCallLog.status === 'no_answer' || freshCallLog.status === 'no_answer') {
               outcome = 'not_answered'; clCallStatus = 'not_answered';
               clSummary = clSummary || 'Call was not answered.';
-            } else if (freshCallLog.status === 'failed') {
+            } else if (latestCallLog.status === 'failed' || freshCallLog.status === 'failed') {
               outcome = 'not_answered'; clCallStatus = 'not_answered';
               clSummary = clSummary || 'Call failed to connect.';
-            } else if (freshCallLog.lead_status_updated) {
+            } else if (latestCallLog.lead_status_updated) {
               // streamAudio already analyzed — map its outcome
               const statusToOutcome = {
                 'interested': 'interested', 'not_interested': 'not_interested', 'callback': 'callback',
                 'no_answer': 'not_answered', 'converted': 'converted', 'contacted': 'neutral', 'do_not_call': 'do_not_call'
               };
-              outcome = statusToOutcome[freshCallLog.lead_status_updated] || 'neutral';
-              clSummary = freshCallLog.conversation_summary || clSummary;
+              outcome = statusToOutcome[latestCallLog.lead_status_updated] || 'neutral';
+              clSummary = latestCallLog.conversation_summary || clSummary;
             }
             
-            // Mark completed
+            // Mark completed — include transcript/recording from latest CallLog
             await base44.entities.CampaignLead.update(campaignLead.id, {
               status: 'completed', outcome, call_status: clCallStatus,
               conversation_summary: clSummary,
-              transcript: freshCallLog.transcript || '',
-              call_duration: freshCallLog.duration || 0
+              transcript: latestCallLog.transcript || '',
+              call_duration: latestCallLog.duration || parseInt(duration) || 0
             });
             console.log(`[smartfloWebhook] CampaignLead ${campaignLead.lead_name} → ${outcome}`);
             
