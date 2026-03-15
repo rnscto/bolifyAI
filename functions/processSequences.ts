@@ -274,6 +274,9 @@ Return the adapted subject and body_html.`,
         results.sent++;
         console.log(`[processSequences] Sent step ${stepIndex + 1}/${steps.length} to ${enrollment.recipient_email} (tier: ${enrollment.qualification_tier || 'N/A'})`);
 
+        // Rate limit: wait between sends to avoid Resend 429 errors
+        await new Promise(r => setTimeout(r, SEND_DELAY_MS));
+
       } catch (sendErr) {
         console.error(`[processSequences] Send failed for ${enrollment.recipient_email}: ${sendErr.message}`);
         await base44.entities.OutreachLog.create({
