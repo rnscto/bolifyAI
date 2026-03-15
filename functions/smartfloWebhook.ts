@@ -413,14 +413,14 @@ Respond with JSON: {greeting, likely_intent, qualifying_questions, routing, is_p
       // No recording_url processing needed. For calls that ended without WebSocket
       // (no_answer, failed, busy, cancelled), add a status summary so campaignPostCall
       // entity automation can process them.
-      if (mappedStatus === 'no_answer' || mappedStatus === 'failed') {
+      if (effectiveStatus === 'no_answer' || effectiveStatus === 'failed') {
         const statusLabel = status; // preserve original Smartflo status for clarity
         // Only update summary if streamAudio hasn't already saved one
         const freshLog = await base44.entities.CallLog.get(callLog.id);
         if (!freshLog.transcript) {
           await base44.entities.CallLog.update(callLog.id, {
             conversation_summary: `Call ended: ${statusLabel}${hangup_cause ? ' (' + hangup_cause + ')' : ''}${customer_ring_time ? '. Customer rang for ' + customer_ring_time + 's' : ''}. No conversation captured.`,
-            lead_status_updated: mappedStatus === 'no_answer' ? 'no_answer' : 'callback'
+            lead_status_updated: effectiveStatus === 'no_answer' ? 'no_answer' : 'callback'
           });
           console.log(`[smartfloWebhook] Terminal ${statusLabel} (effective: ${effectiveStatus}) — updated for campaign processing`);
         } else {
