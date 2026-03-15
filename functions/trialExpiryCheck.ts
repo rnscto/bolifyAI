@@ -4,9 +4,10 @@ import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
 const emailClient = new EmailClient(connStr);
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html, displayName }) {
   const message = {
     senderAddress: 'DoNotReply@vaaniai.io',
+    displayName: displayName || 'VaaniAI',
     content: { subject, html },
     recipients: { to: [{ address: to }] }
   };

@@ -126,6 +126,7 @@ Deno.serve(async (req) => {
 
     const message = {
       senderAddress: 'DoNotReply@vaaniai.io',
+      displayName: 'VaaniAI',
       content: { subject: template.subject, html: finalBody },
       recipients: { to: [{ address: email }] }
     };
