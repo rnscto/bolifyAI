@@ -208,7 +208,7 @@ Generate the subject line and HTML body.`,
         // Log the outreach
         await svc.entities.OutreachLog.create({
           client_id: clientId,
-          lead_id: leadId,
+          lead_id: resolvedLeadId,
           call_log_id: callLogId,
           channel: 'email',
           recipient_email: lead.email,
@@ -225,7 +225,7 @@ Generate the subject line and HTML body.`,
         });
 
         results.emails_sent.push({
-          lead_id: leadId,
+          lead_id: resolvedLeadId,
           email: lead.email,
           subject: aiContent.subject,
           type: 'lead_followup'
@@ -233,10 +233,10 @@ Generate the subject line and HTML body.`,
         console.log(`[postCallFollowup] Lead email sent to ${lead.email}`);
 
       } catch (emailErr) {
-        console.error(`[postCallFollowup] Email failed for lead ${leadId}:`, emailErr.message);
+        console.error(`[postCallFollowup] Email failed for lead ${resolvedLeadId}:`, emailErr.message);
         await svc.entities.OutreachLog.create({
           client_id: clientId,
-          lead_id: leadId,
+          lead_id: resolvedLeadId,
           call_log_id: callLogId,
           channel: 'email',
           recipient_email: lead.email,
@@ -246,7 +246,7 @@ Generate the subject line and HTML body.`,
           error_message: emailErr.message,
           is_retention: false
         });
-        results.errors.push({ lead_id: leadId, error: emailErr.message });
+        results.errors.push({ lead_id: resolvedLeadId, error: emailErr.message });
       }
 
       // Also send RCS if lead has phone (via Smartflo SMS/RCS API)
@@ -286,7 +286,7 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
 
             await svc.entities.OutreachLog.create({
               client_id: clientId,
-              lead_id: leadId,
+              lead_id: resolvedLeadId,
               call_log_id: callLogId,
               channel: 'rcs',
               recipient_phone: lead.phone,
@@ -300,19 +300,19 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
             });
 
             if (smsResponse.ok) {
-              results.rcs_sent.push({ lead_id: leadId, phone: lead.phone });
+              results.rcs_sent.push({ lead_id: resolvedLeadId, phone: lead.phone });
             }
           } else {
             console.log('[postCallFollowup] SMARTFLO_API_KEY not set, skipping RCS');
-            results.skipped.push({ lead_id: leadId, reason: 'no_smartflo_key_for_rcs' });
+            results.skipped.push({ lead_id: resolvedLeadId, reason: 'no_smartflo_key_for_rcs' });
           }
         } catch (rcsErr) {
           console.error(`[postCallFollowup] RCS failed for ${lead.phone}:`, rcsErr.message);
-          results.errors.push({ lead_id: leadId, channel: 'rcs', error: rcsErr.message });
+          results.errors.push({ lead_id: resolvedLeadId, channel: 'rcs', error: rcsErr.message });
         }
       }
     } else if (lead && !lead.email) {
-      results.skipped.push({ lead_id: leadId, reason: 'no_email' });
+      results.skipped.push({ lead_id: resolvedLeadId, reason: 'no_email' });
     }
 
     // ===================================================================
