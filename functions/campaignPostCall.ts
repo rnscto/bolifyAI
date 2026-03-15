@@ -62,8 +62,8 @@ Deno.serve(async (req) => {
 
     const campaignLead = campaignLeads[0];
     
-    // Idempotency: if CampaignLead is already completed/failed, just check next batch
-    if (['completed', 'failed'].includes(campaignLead.status)) {
+    // Idempotency: if CampaignLead is already completed/failed/processing, just check next batch
+    if (['completed', 'failed', 'processing'].includes(campaignLead.status)) {
       await triggerNextBatch(base44, campaignLead.campaign_id);
       return Response.json({ success: true, skipped: 'already_processed', next_batch_checked: true });
     }
@@ -72,6 +72,12 @@ Deno.serve(async (req) => {
     if (campaignLead.status === 'pending') {
       return Response.json({ success: true, skipped: 'already_pending_retry' });
     }
+
+    // ATOMIC LOCK: Immediately set status to 'processing' to prevent race conditions
+    // when multiple CallLog updates fire this automation simultaneously.
+    // If another instance already set it to 'processing', the filter above will catch it.
+    await base44.entities.CampaignLead.update(campaignLead.id, { status: 'processing' });
+    console.log(`[campaignPostCall] Locked CampaignLead ${campaignLead.id} → processing`);
 
     const callLog = data;
     const campaignId = campaignLead.campaign_id;
