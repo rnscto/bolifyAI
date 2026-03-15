@@ -199,10 +199,23 @@ Deno.serve(async (req) => {
 
                 let leadContext = '';
                 try {
-                  const ctxRes = await svc.functions.invoke('buildLeadContext', {
-                    lead_id: cl.lead_id, client_id: campaign.client_id, phone_number: cl.lead_phone
-                  });
-                  if (ctxRes?.context_text) leadContext = ctxRes.context_text;
+                  let lead = null;
+                  if (cl.lead_id) {
+                    try { lead = await svc.entities.Lead.get(cl.lead_id); } catch (_) {}
+                  }
+                  if (lead) {
+                    const ctxParts = [`CUSTOMER PROFILE:`, `- Name: ${lead.name || cl.lead_name || 'Unknown'}`];
+                    if (lead.phone) ctxParts.push(`- Phone: ${lead.phone}`);
+                    if (lead.email) ctxParts.push(`- Email: ${lead.email}`);
+                    if (lead.company) ctxParts.push(`- Company: ${lead.company}`);
+                    if (lead.status) ctxParts.push(`- Status: ${lead.status}`);
+                    ctxParts.push(`\nCRITICAL: Address the customer by name "${lead.name || cl.lead_name || 'Sir/Madam'}".`);
+                    if (lead.email) ctxParts.push(`If confirming email, use: "${lead.email}"`);
+                    if (lead.company) ctxParts.push(`Reference their company "${lead.company}" naturally.`);
+                    leadContext = ctxParts.join('\n');
+                  } else {
+                    leadContext = `CUSTOMER: ${cl.lead_name || 'Unknown'}\nCRITICAL: Address the customer by name "${cl.lead_name || 'Sir/Madam'}".`;
+                  }
                 } catch (_) {}
 
                 const personalizedPrompt = [
