@@ -188,9 +188,10 @@ RULES:
         };
         const activityType = typeMap[action.type] || 'task';
 
-        // ── DEDUP CHECK 1: Skip call/followup if lead is in active campaign ──
-        if (leadInActiveCampaign && ['call', 'followup'].includes(activityType)) {
-          console.log(`[ActionExtractor] Skipped ${activityType} "${action.title}": lead in active campaign`);
+        // ── DEDUP CHECK 1: Skip ALL activities if this is a campaign call ──
+        // campaignPostCall handles all follow-up actions for campaign calls
+        if (leadInActiveCampaign) {
+          console.log(`[ActionExtractor] Skipped ${activityType} "${action.title}": campaign call — handled by campaignPostCall`);
           results.skipped_duplicates++;
           continue;
         }
