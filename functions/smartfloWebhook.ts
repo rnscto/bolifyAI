@@ -425,7 +425,55 @@ Respond with JSON: {greeting, likely_intent, qualifying_questions, routing, is_p
 
       // NOTE: For answered+completed calls, streamAudio's saveCallRecord handles
       // transcript, summary, AI scoring, activities, and sequence enrollment.
-      // campaignPostCall entity automation triggers on CallLog update for campaign calls.
+
+      // ═══════════════════════════════════════════════════════════════════
+      // DIRECT INVOCATION: Bypass entity automations (saves Base44 credits)
+      // Previously, updating CallLog would trigger entity automations for
+      // campaignPostCall and postCallFollowup. Now we call them directly.
+      // ═══════════════════════════════════════════════════════════════════
+      
+      // Re-read fresh CallLog to pass complete data
+      const freshCallLog = await base44.entities.CallLog.get(callLog.id);
+      
+      // 1. Invoke campaignPostCall — handles campaign lead progression + next batch
+      try {
+        console.log(`[smartfloWebhook] Direct-invoking campaignPostCall for CallLog ${callLog.id}`);
+        const postCallResult = await base44.functions.invoke('campaignPostCall', {
+          event: { type: 'update', entity_name: 'CallLog', entity_id: callLog.id },
+          data: freshCallLog,
+          old_data: { ...freshCallLog, status: callLog.status } // simulate old_data with previous status
+        });
+        console.log(`[smartfloWebhook] campaignPostCall result:`, JSON.stringify(postCallResult?.data || postCallResult).substring(0, 300));
+      } catch (pcErr) {
+        console.error(`[smartfloWebhook] campaignPostCall invoke failed: ${pcErr.message}`);
+      }
+
+      // 2. Invoke postCallFollowup — handles email/RCS outreach for non-campaign calls
+      try {
+        console.log(`[smartfloWebhook] Direct-invoking postCallFollowup for CallLog ${callLog.id}`);
+        const followupResult = await base44.functions.invoke('postCallFollowup', {
+          event: { type: 'update', entity_name: 'CallLog', entity_id: callLog.id },
+          data: freshCallLog,
+          old_data: { ...freshCallLog, status: callLog.status }
+        });
+        console.log(`[smartfloWebhook] postCallFollowup result:`, JSON.stringify(followupResult?.data || followupResult).substring(0, 300));
+      } catch (pfErr) {
+        console.error(`[smartfloWebhook] postCallFollowup invoke failed: ${pfErr.message}`);
+      }
+
+      // 3. Invoke postCallActionExtractor — extracts action items from transcripts
+      if (freshCallLog.transcript && freshCallLog.transcript.length > 50) {
+        try {
+          console.log(`[smartfloWebhook] Direct-invoking postCallActionExtractor for CallLog ${callLog.id}`);
+          await base44.functions.invoke('postCallActionExtractor', {
+            event: { type: 'update', entity_name: 'CallLog', entity_id: callLog.id },
+            data: freshCallLog,
+            old_data: { ...freshCallLog, transcript: null }
+          });
+        } catch (aeErr) {
+          console.error(`[smartfloWebhook] postCallActionExtractor invoke failed: ${aeErr.message}`);
+        }
+      }
     }
 
     return Response.json({ success: true, message: 'Webhook processed' });
