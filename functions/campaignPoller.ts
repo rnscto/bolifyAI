@@ -12,12 +12,15 @@ import { createClient } from 'npm:@base44/sdk@0.8.20';
 
 Deno.serve(async (req) => {
   try {
-    // Support external cron: allow GET requests with shared secret
+    // Support external cron: allow GET requests with shared secret or CRON_API_KEY
     if (req.method === 'GET') {
       const url = new URL(req.url);
       const cronSecret = url.searchParams.get('cron_secret');
+      const cronApiKey = url.searchParams.get('api_key');
       const expectedSecret = Deno.env.get('SMARTFLO_WEBHOOK_SECRET');
-      if (!expectedSecret || cronSecret !== expectedSecret) {
+      const expectedCronKey = Deno.env.get('CRON_API_KEY');
+      const isValid = (expectedSecret && cronSecret === expectedSecret) || (expectedCronKey && cronApiKey === expectedCronKey);
+      if (!isValid) {
         return Response.json({ error: 'Forbidden' }, { status: 403 });
       }
       console.log('[campaignPoller] Triggered by external cron');
