@@ -41,6 +41,89 @@ Deno.serve(async (req) => {
     const appId = Deno.env.get('BASE44_APP_ID');
     const base44 = createClient({ appId, asServiceRole: true });
 
+    // ── CRON MODE (GET): Batch-scan leads that need enrollment ──
+    if (req.method === 'GET') {
+      console.log('[autoEnrollSequence] Triggered by cron — batch scan mode');
+      const results = { enrolled: 0, skipped: 0, errors: 0 };
+      const BATCH_LIMIT = 20;
+
+      // Find leads with a qualification tier, email, and that were recently scored
+      const tiers = ['hot', 'warm', 'nurture', 'cold'];
+      for (const tier of tiers) {
+        const leads = await base44.entities.Lead.filter({ qualification_tier: tier }, '-updated_date', 50);
+        for (const lead of leads) {
+          if (results.enrolled >= BATCH_LIMIT) break;
+          if (!lead.email || !lead.client_id) { results.skipped++; continue; }
+          if (lead.status === 'do_not_call') { results.skipped++; continue; }
+
+          // Check if already enrolled in an active sequence
+          const existing = await base44.entities.SequenceEnrollment.filter({ lead_id: lead.id, status: 'active' });
+          if (existing.length > 0) { results.skipped++; continue; }
+
+          // Check if already enrolled and completed recently (within 30 days)
+          const completed = await base44.entities.SequenceEnrollment.filter({ lead_id: lead.id, status: 'completed' });
+          const recentlyCompleted = completed.some(e => {
+            const enrolled = new Date(e.enrolled_date || e.created_date);
+            return (Date.now() - enrolled.getTime()) < 30 * 86400000;
+          });
+          if (recentlyCompleted) { results.skipped++; continue; }
+
+          // Enroll this lead
+          try {
+            const client = await base44.entities.Client.get(lead.client_id);
+            const companyName = client?.company_name || 'Our Company';
+            const industry = client?.industry || 'General';
+            const tierOutreachMap = { hot: 'lead_followup', warm: 'lead_followup', nurture: 're_engagement', cold: 're_engagement' };
+            const outreachType = tierOutreachMap[tier] || 'lead_followup';
+
+            // Find sequence
+            let sequence = null;
+            const clientSeqs = await base44.entities.EmailSequence.filter({ client_id: lead.client_id, tier_target: tier, status: 'active' });
+            if (clientSeqs.length > 0) sequence = clientSeqs[0];
+            if (!sequence) {
+              const globalSeqs = await base44.entities.EmailSequence.filter({ tier_target: tier, status: 'active' });
+              const global = globalSeqs.filter(s => !s.client_id);
+              if (global.length > 0) sequence = global[0];
+            }
+            if (!sequence) {
+              sequence = await generateTierSequence(base44, tier, outreachType, companyName, industry, lead.client_id);
+            }
+            if (!sequence || !sequence.steps || sequence.steps.length === 0) { results.skipped++; continue; }
+
+            const firstStep = sequence.steps[0];
+            const nextSend = new Date();
+            nextSend.setDate(nextSend.getDate() + (firstStep?.delay_days || 1));
+
+            await base44.entities.SequenceEnrollment.create({
+              sequence_id: sequence.id, client_id: lead.client_id, lead_id: lead.id,
+              recipient_email: lead.email, recipient_name: lead.name || '',
+              status: 'active', current_step: 0, steps_completed: 0,
+              total_steps: sequence.steps.length, next_send_date: nextSend.toISOString(),
+              enrolled_date: new Date().toISOString(), qualification_tier: tier,
+              call_outcome: '', call_summary: (lead.notes || '').substring(0, 500),
+              call_topics: lead.tags || [], objections: [],
+              intent_signals: lead.intent_signals || [], send_log: []
+            });
+
+            await base44.entities.EmailSequence.update(sequence.id, { total_enrolled: (sequence.total_enrolled || 0) + 1 });
+            const existingActions = lead.auto_actions_taken || [];
+            await base44.entities.Lead.update(lead.id, { auto_actions_taken: [...existingActions, `sequence_enrolled:${sequence.name}`] });
+
+            results.enrolled++;
+            console.log(`[autoEnrollSequence] ✅ Batch enrolled ${lead.name || lead.email} → "${sequence.name}"`);
+          } catch (e) {
+            console.error(`[autoEnrollSequence] Batch error for lead ${lead.id}: ${e.message}`);
+            results.errors++;
+          }
+        }
+        if (results.enrolled >= BATCH_LIMIT) break;
+      }
+
+      console.log(`[autoEnrollSequence] Batch done. Enrolled: ${results.enrolled}, Skipped: ${results.skipped}, Errors: ${results.errors}`);
+      return Response.json({ success: true, mode: 'batch', ...results });
+    }
+
+    // ── DIRECT MODE (POST): Single lead enrollment from campaignPostCall ──
     const {
       lead_id, client_id, qualification_tier, call_outcome,
       call_summary, call_topics, objections, intent_signals, ai_score
