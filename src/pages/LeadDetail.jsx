@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import LeadScoreBadge from '../components/leads/LeadScoreBadge';
 import LeadProfileCard from '../components/leads/LeadProfileCard';
 import LeadTimeline from '../components/leads/LeadTimeline';
+import EmailComposer from '../components/email/EmailComposer';
 
 export default function LeadDetail() {
   const [lead, setLead] = useState(null);
@@ -24,6 +25,7 @@ export default function LeadDetail() {
   const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [callingLead, setCallingLead] = useState(false);
+  const [emailComposerOpen, setEmailComposerOpen] = useState(false);
 
   const urlParams = new URLSearchParams(window.location.search);
   const leadId = urlParams.get('id');
@@ -137,6 +139,15 @@ export default function LeadDetail() {
               <Calendar className="w-4 h-4 mr-1.5" /> Callbacks
             </Link>
           </Button>
+          {lead?.email && (
+            <Button
+              size="sm" variant="outline"
+              onClick={() => setEmailComposerOpen(true)}
+              className="gap-1"
+            >
+              <Mail className="w-4 h-4" /> Email
+            </Button>
+          )}
           <Button
             size="sm"
             onClick={initiateCall}
@@ -197,6 +208,14 @@ export default function LeadDetail() {
           />
         </div>
       </div>
+
+      <EmailComposer
+        open={emailComposerOpen}
+        onOpenChange={setEmailComposerOpen}
+        lead={lead}
+        client={client}
+        onEmailSent={loadAllData}
+      />
     </div>
   );
 }
