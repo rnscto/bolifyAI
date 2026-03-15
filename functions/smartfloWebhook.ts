@@ -2,6 +2,7 @@ import { createClient } from 'npm:@base44/sdk@0.8.20';
 
 // Map Smartflo call statuses to internal statuses
 // Smartflo webhook sends statuses like "Answered", "Missed", "completed" etc.
+// v2: Force redeploy - fixed service role auth
 const STATUS_MAP = {
   'ringing': 'ringing',
   'answered': 'answered',
