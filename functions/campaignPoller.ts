@@ -112,7 +112,7 @@ Deno.serve(async (req) => {
         // === STEP 2: Check if campaign should be completed ===
         const allLeads = await svc.entities.CampaignLead.filter({ campaign_id: campaignId }, 'created_date', 1000);
         const pendingCount = allLeads.filter(l => l.status === 'pending').length;
-        const callingCount = allLeads.filter(l => l.status === 'calling').length;
+        const callingCount = allLeads.filter(l => ['calling', 'processing'].includes(l.status)).length;
         const completedCount = allLeads.filter(l => l.status === 'completed').length;
         const failedCount = allLeads.filter(l => l.status === 'failed').length;
 
