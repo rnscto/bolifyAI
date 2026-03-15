@@ -465,12 +465,19 @@ Respond with JSON: {greeting, likely_intent, qualifying_questions, routing, is_p
             // Lock it
             await base44.entities.CampaignLead.update(campaignLead.id, { status: 'processing' });
             
+            // Wait briefly for streamAudio to finish saving transcript
+            // (streamAudio may still be writing when Smartflo fires the webhook)
+            await new Promise(r => setTimeout(r, 2000));
+            
+            // Re-read CallLog to get latest data (streamAudio may have updated it)
+            const latestCallLog = await base44.entities.CallLog.get(callLog.id);
+            
             // Determine basic outcome (fast, no LLM)
             let outcome = 'neutral';
             let clCallStatus = 'answered';
-            let clSummary = freshCallLog.conversation_summary || '';
+            let clSummary = latestCallLog.conversation_summary || '';
             
-            if (freshCallLog.status === 'no_answer') {
+            if (latestCallLog.status === 'no_answer' || freshCallLog.status === 'no_answer') {
               outcome = 'not_answered'; clCallStatus = 'not_answered';
               clSummary = clSummary || 'Call was not answered.';
             } else if (freshCallLog.status === 'failed') {
