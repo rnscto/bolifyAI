@@ -4,9 +4,10 @@ import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
 const emailClient = new EmailClient(connStr);
 
-async function sendACSEmail({ to, fromAddress, subject, html }) {
+async function sendACSEmail({ to, subject, html, displayName }) {
   const message = {
-    senderAddress: fromAddress || 'DoNotReply@vaaniai.io',
+    senderAddress: 'DoNotReply@vaaniai.io',
+    displayName: displayName || 'VaaniAI',
     content: { subject, html },
     recipients: { to: [{ address: to }] }
   };
@@ -170,7 +171,8 @@ RULES:
       await sendACSEmail({
         to: to_email,
         subject,
-        html: wrappedHtml
+        html: wrappedHtml,
+        displayName: companyName
       });
 
       // Log the outreach
