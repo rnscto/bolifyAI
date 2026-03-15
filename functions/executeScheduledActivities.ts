@@ -1,9 +1,8 @@
 import { createClient } from 'npm:@base44/sdk@0.8.20';
 import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
-const emailClient = new EmailClient(Deno.env.get('AZURE_COMM_ENDPOINT'), {
-  key: Deno.env.get('AZURE_COMM_KEY')
-});
+const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
+const emailClient = new EmailClient(connStr);
 
 // ─── Send email via Azure Communication Services ───
 async function sendEmailViaACS({ to, fromName, subject, html }) {
