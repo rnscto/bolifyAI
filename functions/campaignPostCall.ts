@@ -65,10 +65,30 @@ Deno.serve(async (req) => {
 
     const campaignLead = campaignLeads[0];
     
-    // Idempotency: if CampaignLead is already completed/failed/processing, just check next batch
+    // Idempotency: if CampaignLead is already completed/failed/processing, skip
+    // (smartfloWebhook already triggered the next call inline)
     if (['completed', 'failed', 'processing'].includes(campaignLead.status)) {
-      await triggerNextBatch(base44, campaignLead.campaign_id);
-      return Response.json({ success: true, skipped: 'already_processed', next_batch_checked: true });
+      console.log(`[campaignPostCall] CampaignLead ${campaignLead.id} already ${campaignLead.status} — running AI analysis only`);
+      
+      // Still run AI analysis/emails if we have a transcript but skip next-batch trigger
+      const callLog = data;
+      if (callLog.transcript && callLog.transcript.length > 50 && campaignLead.status === 'completed') {
+        const alreadyAnalyzed = callLog.lead_status_updated && callLog.transcript;
+        if (alreadyAnalyzed) {
+          const statusToOutcome = {
+            'interested': 'interested', 'not_interested': 'not_interested', 'callback': 'callback',
+            'no_answer': 'not_answered', 'converted': 'converted', 'contacted': 'neutral', 'do_not_call': 'do_not_call'
+          };
+          const outcome = statusToOutcome[callLog.lead_status_updated] || campaignLead.outcome || 'neutral';
+          const summary = callLog.conversation_summary || campaignLead.conversation_summary || '';
+          await doFollowUpActions(base44, callLog, campaignLead, campaignLead.campaign_id, outcome, summary);
+        } else if (callLog.transcript || callLog.conversation_summary) {
+          await doAIAnalysis(base44, callLog, campaignLead, campaignLead.campaign_id, campaignLead.outcome || 'neutral', campaignLead.conversation_summary || '');
+        }
+        await updateCampaignStats(base44, campaignLead.campaign_id);
+      }
+      
+      return Response.json({ success: true, skipped: 'already_processed_by_webhook', ai_ran: true });
     }
     
     // Idempotency: if CampaignLead is still pending (retry queued), skip
