@@ -42,15 +42,19 @@ export default function ClientAutomationEngine() {
   });
 
   const { data: leads = [] } = useQuery({
-    queryKey: ['automation-leads', client?.id],
+    queryKey: ['automation-leads', client?.id, activities],
     queryFn: async () => {
-      if (!client) return [];
-      if (client.id === 'admin') {
-        return base44.entities.Lead.list('-updated_date', 200);
-      }
-      return base44.entities.Lead.filter({ client_id: client.id }, '-updated_date', 200);
+      if (!client || activities.length === 0) return [];
+      // Collect all unique lead_ids from activities
+      const leadIds = [...new Set(activities.map(a => a.lead_id).filter(Boolean))];
+      if (leadIds.length === 0) return [];
+      // Fetch each lead individually to ensure none are missed
+      const results = await Promise.all(
+        leadIds.map(id => base44.entities.Lead.get(id).catch(() => null))
+      );
+      return results.filter(Boolean);
     },
-    enabled: !!client,
+    enabled: !!client && activities.length > 0,
     refetchInterval: 30000,
   });
 
