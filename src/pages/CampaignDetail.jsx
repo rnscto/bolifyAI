@@ -116,6 +116,11 @@ export default function CampaignDetail() {
   const completedLeads = campaignLeads.filter(cl => cl.status === 'completed').length;
   const failedLeads = campaignLeads.filter(cl => cl.status === 'failed').length;
   const callingLeads = campaignLeads.filter(cl => cl.status === 'calling').length;
+  const pendingLeads = campaignLeads.filter(cl => cl.status === 'pending').length;
+  const pendingReadyNow = campaignLeads.filter(cl => 
+    cl.status === 'pending' && (!cl.followup_call_date || new Date(cl.followup_call_date) <= new Date())
+  ).length;
+  const pendingWaitingRetry = pendingLeads - pendingReadyNow;
   const processedLeads = completedLeads + failedLeads + callingLeads;
   const totalLeads = campaignLeads.length || campaign.total_leads || 0;
 
