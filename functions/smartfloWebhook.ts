@@ -583,3 +583,159 @@ Respond with JSON: {greeting, likely_intent, qualifying_questions, routing, is_p
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
+
+
+// ═══════════════════════════════════════════════════════════════════
+// INLINE: Trigger next campaign call immediately after current completes.
+// This avoids the delay of waiting for campaignPoller cron.
+// ═══════════════════════════════════════════════════════════════════
+async function triggerNextCampaignCall(base44, campaignId) {
+  try {
+    const campaign = await base44.entities.Campaign.get(campaignId);
+    if (!campaign || campaign.status !== 'running') {
+      console.log(`[smartfloWebhook] Campaign ${campaignId} not running (${campaign?.status})`);
+      return;
+    }
+
+    const now = new Date();
+    const allLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId }, 'created_date', 1000);
+    const callingLeads = allLeads.filter(l => l.status === 'calling');
+    const pendingLeads = allLeads.filter(l => l.status === 'pending');
+    const processingLeads = allLeads.filter(l => l.status === 'processing');
+    const maxConcurrent = campaign.max_concurrent_calls || 5;
+
+    const readyPending = pendingLeads.filter(l => !l.followup_call_date || new Date(l.followup_call_date) <= now);
+    const retryLaterPending = pendingLeads.filter(l => l.followup_call_date && new Date(l.followup_call_date) > now);
+
+    // Check if campaign should complete
+    if (readyPending.length === 0 && callingLeads.length === 0 && retryLaterPending.length === 0 && processingLeads.length === 0) {
+      const completedCount = allLeads.filter(l => l.status === 'completed').length;
+      const failedCount = allLeads.filter(l => l.status === 'failed').length;
+      await base44.entities.Campaign.update(campaignId, {
+        status: 'completed', completed_at: now.toISOString(),
+        calls_completed: completedCount, calls_failed: failedCount
+      });
+      console.log(`[smartfloWebhook] Campaign "${campaign.name}" completed`);
+      return;
+    }
+
+    const slotsAvailable = Math.max(0, maxConcurrent - callingLeads.length);
+    if (slotsAvailable === 0 || readyPending.length === 0) {
+      console.log(`[smartfloWebhook] No slots (${callingLeads.length}/${maxConcurrent}) or no ready leads (${readyPending.length})`);
+      return;
+    }
+
+    // Get agent + DIDs
+    const agent = await base44.entities.Agent.get(campaign.agent_id);
+    const agentDIDs = (agent?.assigned_dids?.length > 0)
+      ? agent.assigned_dids : (agent?.assigned_did ? [agent.assigned_did] : []);
+    if (!agent || agentDIDs.length === 0) {
+      console.log(`[smartfloWebhook] No agent/DIDs for campaign`);
+      return;
+    }
+
+    // Knowledge base
+    let kbContent = '';
+    if (agent.knowledge_base_ids?.length > 0) {
+      for (const kbId of agent.knowledge_base_ids) {
+        try {
+          const doc = await base44.entities.KnowledgeBase.get(kbId);
+          if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
+        } catch (_) {}
+      }
+    }
+
+    // Pick the next lead
+    const cl = readyPending[0];
+    const freshCL = await base44.entities.CampaignLead.get(cl.id);
+    if (freshCL.status !== 'pending') {
+      console.log(`[smartfloWebhook] Lead ${cl.lead_name} already ${freshCL.status} — race avoided`);
+      return;
+    }
+
+    const selectedDID = agentDIDs[0];
+    await base44.entities.CampaignLead.update(cl.id, {
+      status: 'calling', attempt_count: (cl.attempt_count || 0) + 1
+    });
+
+    const cleanPhone = (cl.lead_phone || '').replace(/[^0-9]/g, '');
+    const callSid = `camp_${campaignId.slice(-8)}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+    // Build lead context
+    let leadContext = `CUSTOMER: ${cl.lead_name || 'Unknown'}\nCRITICAL: Address the customer by name "${cl.lead_name || 'Sir/Madam'}".`;
+    try {
+      if (cl.lead_id) {
+        const lead = await base44.entities.Lead.get(cl.lead_id);
+        if (lead) {
+          const ctxParts = [`CUSTOMER PROFILE:`, `- Name: ${lead.name || cl.lead_name || 'Unknown'}`];
+          if (lead.phone) ctxParts.push(`- Phone: ${lead.phone}`);
+          if (lead.email) ctxParts.push(`- Email: ${lead.email}`);
+          if (lead.company) ctxParts.push(`- Company: ${lead.company}`);
+          if (lead.status) ctxParts.push(`- Status: ${lead.status}`);
+          ctxParts.push(`\nCRITICAL: Address the customer by name "${lead.name || cl.lead_name || 'Sir/Madam'}".`);
+          if (lead.email) ctxParts.push(`If confirming email, use: "${lead.email}"`);
+          if (lead.company) ctxParts.push(`Reference their company "${lead.company}" naturally.`);
+          leadContext = ctxParts.join('\n');
+        }
+      }
+    } catch (_) {}
+
+    const personalizedPrompt = [
+      agent.system_prompt || '',
+      campaign.call_script?.opening ? `\nCALL SCRIPT - Opening: ${campaign.call_script.opening}` : '',
+      campaign.call_script?.pitch ? `\nCALL SCRIPT - Pitch: ${campaign.call_script.pitch}` : '',
+      campaign.call_script?.objection_handling ? `\nCALL SCRIPT - Objections: ${campaign.call_script.objection_handling}` : '',
+      campaign.call_script?.closing ? `\nCALL SCRIPT - Closing: ${campaign.call_script.closing}` : '',
+      `\n\n--- LEAD CONTEXT ---\n${leadContext}`
+    ].filter(Boolean).join('\n');
+
+    const newCallLog = await base44.entities.CallLog.create({
+      client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
+      call_sid: callSid, caller_id: selectedDID, callee_number: cl.lead_phone,
+      direction: 'outbound', status: 'initiated', call_start_time: now.toISOString(),
+      agent_config_cache: {
+        agent_name: agent.name, system_prompt: personalizedPrompt,
+        persona: agent.persona || {}, knowledge_base_content: kbContent,
+        lead_context: leadContext, greeting_message: agent.greeting_message || ''
+      }
+    });
+
+    await base44.entities.CampaignLead.update(cl.id, { call_log_id: newCallLog.id });
+
+    // Smartflo API call
+    let smartfloApiKey = agent.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY');
+    try {
+      const clientData = await base44.entities.Client.get(campaign.client_id);
+      if (clientData && (clientData.account_status === 'trial' || clientData.account_status === 'onboarding')) {
+        smartfloApiKey = Deno.env.get('SMARTFLO_API_KEY');
+      }
+    } catch (_) {}
+
+    const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: smartfloApiKey,
+        customer_number: cleanPhone,
+        caller_id: selectedDID.replace(/^\+/, ''),
+        async: 1
+      })
+    });
+
+    const smartfloData = await smartfloResp.json();
+    if (smartfloResp.ok && smartfloData.success !== false) {
+      const newCallSid = smartfloData.call_id || smartfloData.call_sid || smartfloData.ref_id || callSid;
+      await base44.entities.CallLog.update(newCallLog.id, { call_sid: newCallSid, status: 'ringing' });
+      console.log(`[smartfloWebhook] ✅ Next call initiated: ${cl.lead_name} → ${cleanPhone}`);
+    } else {
+      await base44.entities.CallLog.update(newCallLog.id, { status: 'failed' });
+      await base44.entities.CampaignLead.update(cl.id, {
+        status: 'completed', outcome: 'not_answered', call_status: 'not_answered',
+        conversation_summary: `Smartflo error: ${smartfloData.message || 'Unknown'}`
+      });
+      console.error(`[smartfloWebhook] Next call failed: ${smartfloData.message}`);
+    }
+  } catch (err) {
+    console.error(`[smartfloWebhook] triggerNextCampaignCall error: ${err.message}`);
+  }
+}
