@@ -58,21 +58,21 @@ Deno.serve(async (req) => {
 
       // On the renewal day: Mark subscription as pending renewal
       if (daysUntilRenewal <= 0) {
-        const clients = await base44.asServiceRole.entities.Client.filter({ id: sub.client_id });
-        const client = clients.length > 0 ? clients[0] : null;
+        const clients2 = await base44.entities.Client.filter({ id: sub.client_id });
+        const client = clients2.length > 0 ? clients2[0] : null;
         if (!client) continue;
 
         // Update subscription status to pending
-        await base44.asServiceRole.entities.Subscription.update(sub.id, {
+        await base44.entities.Subscription.update(sub.id, {
           status: 'pending',
           payment_status: 'pending',
         });
 
         // Send renewal payment email
-        await base44.asServiceRole.integrations.Core.SendEmail({
+        await sendEmail({
           to: client.email,
           subject: 'Your VaaniAI subscription is due for renewal',
-          body: `
+          html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
                 <h1 style="color: white; margin: 0;">VaaniAI</h1>
