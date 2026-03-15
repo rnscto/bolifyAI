@@ -38,6 +38,8 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
   return JSON.parse(data.choices[0].message.content);
 }
 
+// NOTE: This function is an ENTITY AUTOMATION triggered by CallLog updates.
+// There is NO user session — we MUST use service role directly.
 Deno.serve(async (req) => {
   try {
     const appId = Deno.env.get('BASE44_APP_ID');
