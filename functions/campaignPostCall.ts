@@ -623,10 +623,13 @@ async function updateCampaignStats(base44, campaignId) {
     const outcomes = countOutcomes(allLeads);
     const completedCount = allLeads.filter(l => l.status === 'completed').length;
     const failedCount = allLeads.filter(l => l.status === 'failed').length;
-    const pending = allLeads.filter(l => ['pending', 'calling'].includes(l.status)).length;
+    const pendingCount = allLeads.filter(l => l.status === 'pending').length;
+    const callingCount = allLeads.filter(l => l.status === 'calling').length;
 
     const update = { outcomes_summary: outcomes, calls_completed: completedCount, calls_failed: failedCount };
-    if (pending === 0) {
+    // Only mark completed if NO pending AND NO calling leads
+    // "calling" leads may just be waiting for Smartflo webhook — let poller handle timeouts
+    if (pendingCount === 0 && callingCount === 0) {
       update.status = 'completed';
       update.completed_at = new Date().toISOString();
     }
