@@ -1354,8 +1354,13 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
         if (cache.persona.voice_engine) session.voiceEngine = cache.persona.voice_engine;
         if (cache.persona.voice_type) {
           if (session.voiceEngine === 'realtime') {
-            const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'fable', 'marin', 'cedar', 'nova', 'onyx', 'sage', 'shimmer', 'verse'];
-            const voice = cache.persona.voice_type.toLowerCase();
+            const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
+            const deprecatedMap = { 'nova': 'shimmer', 'onyx': 'ash', 'fable': 'ballad' };
+            let voice = cache.persona.voice_type.toLowerCase();
+            if (deprecatedMap[voice]) {
+              console.log(`[${reqId}] ⚠️ Voice "${voice}" deprecated, using "${deprecatedMap[voice]}" instead`);
+              voice = deprecatedMap[voice];
+            }
             if (validVoices.includes(voice)) session.voiceType = voice;
           } else {
             session.voiceType = cache.persona.voice_type;
