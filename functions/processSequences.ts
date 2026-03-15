@@ -38,11 +38,21 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
   return JSON.parse(data.choices[0].message.content);
 }
 
-// Scheduled automation — runs every 30 min, no user session.
-// Uses service role directly (only platform scheduler invokes this).
+// Runs every 30 min. Supports external cron: GET ?cron_secret=<SMARTFLO_WEBHOOK_SECRET>
 
 Deno.serve(async (req) => {
   try {
+    // Support external cron
+    if (req.method === 'GET') {
+      const url = new URL(req.url);
+      const cronSecret = url.searchParams.get('cron_secret');
+      const expectedSecret = Deno.env.get('SMARTFLO_WEBHOOK_SECRET');
+      if (!expectedSecret || cronSecret !== expectedSecret) {
+        return Response.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      console.log('[processSequences] Triggered by external cron');
+    }
+
     const appId = Deno.env.get('BASE44_APP_ID');
     const base44 = createClient({ appId, asServiceRole: true });
 
