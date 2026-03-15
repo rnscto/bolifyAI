@@ -18,6 +18,20 @@ async function sendEmail({ to, subject, html }) {
 
 Deno.serve(async (req) => {
   try {
+    // Support external cron: allow GET requests with shared secret or CRON_API_KEY
+    if (req.method === 'GET') {
+      const url = new URL(req.url);
+      const cronSecret = url.searchParams.get('cron_secret');
+      const cronApiKey = url.searchParams.get('api_key');
+      const expectedSecret = Deno.env.get('SMARTFLO_WEBHOOK_SECRET');
+      const expectedCronKey = Deno.env.get('CRON_API_KEY');
+      const isValid = (expectedSecret && cronSecret === expectedSecret) || (expectedCronKey && cronApiKey === expectedCronKey);
+      if (!isValid) {
+        return Response.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      console.log('[trialExpiryCheck] Triggered by external cron');
+    }
+
     const appId = Deno.env.get('BASE44_APP_ID');
     const base44 = createClient({ appId, asServiceRole: true });
 

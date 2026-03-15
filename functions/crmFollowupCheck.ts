@@ -3,6 +3,20 @@ import { createClient } from 'npm:@base44/sdk@0.8.20';
 // Scheduled function: checks for leads with no response in 48h and creates follow-up tasks
 Deno.serve(async (req) => {
   try {
+    // Support external cron: allow GET requests with shared secret or CRON_API_KEY
+    if (req.method === 'GET') {
+      const url = new URL(req.url);
+      const cronSecret = url.searchParams.get('cron_secret');
+      const cronApiKey = url.searchParams.get('api_key');
+      const expectedSecret = Deno.env.get('SMARTFLO_WEBHOOK_SECRET');
+      const expectedCronKey = Deno.env.get('CRON_API_KEY');
+      const isValid = (expectedSecret && cronSecret === expectedSecret) || (expectedCronKey && cronApiKey === expectedCronKey);
+      if (!isValid) {
+        return Response.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      console.log('[crmFollowupCheck] Triggered by external cron');
+    }
+
     // Scheduled automation — no user session, use service role directly
     const base44 = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
 

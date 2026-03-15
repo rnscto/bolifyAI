@@ -19,6 +19,20 @@ async function sendEmailViaResend({ to, fromName, subject, html }) {
 
 Deno.serve(async (req) => {
   try {
+    // Support external cron: allow GET requests with shared secret or CRON_API_KEY
+    if (req.method === 'GET') {
+      const url = new URL(req.url);
+      const cronSecret = url.searchParams.get('cron_secret');
+      const cronApiKey = url.searchParams.get('api_key');
+      const expectedSecret = Deno.env.get('SMARTFLO_WEBHOOK_SECRET');
+      const expectedCronKey = Deno.env.get('CRON_API_KEY');
+      const isValid = (expectedSecret && cronSecret === expectedSecret) || (expectedCronKey && cronApiKey === expectedCronKey);
+      if (!isValid) {
+        return Response.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      console.log('[retentionCall] Triggered by external cron');
+    }
+
     const appId = Deno.env.get('BASE44_APP_ID');
     const base44 = createClient({ appId, asServiceRole: true });
 
@@ -30,11 +44,13 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, message: 'Retention system is paused', skipped: true });
     }
 
-    // Parse request body for manual trigger flag
+    // Parse request body for manual trigger flag (only for POST requests)
     let requestBody = {};
-    try {
-      requestBody = await req.json();
-    } catch (_) {}
+    if (req.method === 'POST') {
+      try {
+        requestBody = await req.json();
+      } catch (_) {}
+    }
     const forceRun = requestBody.force === true;
 
     const callDays = config.call_days_after_expiry || [2, 5, 7, 10, 14, 21, 30];
