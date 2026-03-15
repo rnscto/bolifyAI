@@ -53,7 +53,7 @@ Deno.serve(async (req) => {
     const activities = [...followupActivities, ...callActivities];
 
     // Fetch recent completed call logs for this client (batch instead of per-lead)
-    const callLogs = await svc.entities.CallLog.filter({ client_id: cId, status: 'completed' }, '-created_date', 200);
+    const callLogs = await svc.entities.CallLog.filter({ client_id, status: 'completed' }, '-created_date', 200);
     
     // Index by lead_id (keep only the most recent per lead)
     const callLogByLead = {};
