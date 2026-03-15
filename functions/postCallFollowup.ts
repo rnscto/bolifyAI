@@ -121,8 +121,37 @@ Deno.serve(async (req) => {
     }
 
     let lead = null;
-    if (leadId && leadId !== 'unknown') {
-      try { lead = await svc.entities.Lead.get(leadId); } catch (_) {}
+    let resolvedLeadId = leadId;
+
+    // ── AUTO-RESOLVE lead_id if missing — find lead by phone number ──
+    if ((!resolvedLeadId || resolvedLeadId === 'unknown') && clientId) {
+      const phoneToSearch = callLog.callee_number || callLog.caller_id;
+      if (phoneToSearch) {
+        try {
+          const cleanPhone = phoneToSearch.replace(/\D/g, '');
+          const clientLeads = await svc.entities.Lead.filter({ client_id: clientId });
+          const matchedLead = clientLeads.find(l => {
+            const lPhone = (l.phone || '').replace(/\D/g, '');
+            return lPhone && (lPhone === cleanPhone || lPhone.endsWith(cleanPhone.slice(-10)) || cleanPhone.endsWith(lPhone.slice(-10)));
+          });
+          if (matchedLead) {
+            resolvedLeadId = matchedLead.id;
+            lead = matchedLead;
+            // Update the CallLog record so future references have the lead linked
+            const callLogUpdateId = callLog.id || event?.entity_id;
+            if (callLogUpdateId) {
+              await svc.entities.CallLog.update(callLogUpdateId, { lead_id: matchedLead.id });
+            }
+            console.log(`[postCallFollowup] Auto-linked lead ${matchedLead.name} (${matchedLead.id}) via phone match`);
+          }
+        } catch (e) {
+          console.warn(`[postCallFollowup] Lead phone lookup failed: ${e.message}`);
+        }
+      }
+    }
+
+    if (!lead && resolvedLeadId && resolvedLeadId !== 'unknown') {
+      try { lead = await svc.entities.Lead.get(resolvedLeadId); } catch (_) {}
     }
 
     // Load retention config
