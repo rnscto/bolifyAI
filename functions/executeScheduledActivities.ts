@@ -38,16 +38,24 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
   return JSON.parse(data.choices[0].message.content);
 }
 
-// Follow-up Automation Engine — runs every 15 min via scheduled automation.
-// No user session — uses service role directly.
-// Picks up scheduled activities due NOW, executes them:
-//  - call/followup → auto-initiates call via same agent from original call
-//  - email → sends AI-personalized email to lead
-//  - appointment/demo/visit/meeting → sends reminder + notifies client admin
-//  - task → notifies client admin for human action required
+// Follow-up Automation Engine — runs every 15 min.
+// Can be invoked by Base44 scheduled automation OR external cron:
+//   GET ?cron_secret=<SMARTFLO_WEBHOOK_SECRET>
+// Picks up scheduled activities due NOW, executes them.
 
 Deno.serve(async (req) => {
   try {
+    // Support external cron: allow GET requests with shared secret
+    if (req.method === 'GET') {
+      const url = new URL(req.url);
+      const cronSecret = url.searchParams.get('cron_secret');
+      const expectedSecret = Deno.env.get('SMARTFLO_WEBHOOK_SECRET');
+      if (!expectedSecret || cronSecret !== expectedSecret) {
+        return Response.json({ error: 'Forbidden' }, { status: 403 });
+      }
+      console.log('[FollowupEngine] Triggered by external cron');
+    }
+
     const appId = Deno.env.get('BASE44_APP_ID');
     const svc = createClient({ appId, asServiceRole: true });
 
