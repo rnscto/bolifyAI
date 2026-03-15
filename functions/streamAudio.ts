@@ -1378,6 +1378,11 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
     }
   }
 
+  // ─── PRE-WARM: Connect to Azure Realtime immediately (before Smartflo sends 'start') ───
+  // This saves ~2-3 seconds by establishing the Realtime WebSocket during the ring phase
+  connectRealtime();
+  console.log(`[${reqId}] 🚀 Pre-warming Azure Realtime connection...`);
+
   // ─── Smartflo WebSocket Handlers ───
 
   smartfloSocket.onopen = () => {
@@ -1405,9 +1410,8 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
         _lastUpsampleValue = 0;
         _lastDownsampleRemainder = [];
 
-        // Connect Realtime + load agent config IN PARALLEL for minimum latency
-        // Both run concurrently — whichever finishes second triggers applySessionConfig
-        connectRealtime();
+        // Azure Realtime was already pre-warmed on WebSocket upgrade.
+        // Now load agent config — when ready, apply session config + greeting.
         loadAgentConfig().then(() => {
           session._agentConfigReady = true;
           console.log(`[${reqId}] 🚀 Agent config ready: engine=${session.voiceEngine}, voice=${session.voiceType}`);
