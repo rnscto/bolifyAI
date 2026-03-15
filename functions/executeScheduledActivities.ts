@@ -1,18 +1,21 @@
 import { createClient } from 'npm:@base44/sdk@0.8.20';
-import { Resend } from 'npm:resend@4.0.0';
+import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
-const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
+const emailClient = new EmailClient(Deno.env.get('AZURE_COMM_ENDPOINT'), {
+  key: Deno.env.get('AZURE_COMM_KEY')
+});
 
-// ─── Send email via Resend (works for ANY email address) ───
-async function sendEmailViaResend({ to, fromName, subject, html }) {
-  const { data, error } = await resend.emails.send({
-    from: `${fromName} <noreply@vaaniai.io>`,
-    to,
-    subject,
-    html
-  });
-  if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
-  return data;
+// ─── Send email via Azure Communication Services ───
+async function sendEmailViaACS({ to, fromName, subject, html }) {
+  const message = {
+    senderAddress: 'DoNotReply@vaaniai.io',
+    content: { subject, html },
+    recipients: { to: [{ address: to }] }
+  };
+  const poller = await emailClient.beginSend(message);
+  const result = await poller.pollUntilDone();
+  if (result.status !== 'Succeeded') throw new Error(`ACS Email error: ${result.error?.message || result.status}`);
+  return result;
 }
 
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
@@ -410,7 +413,7 @@ Deno.serve(async (req) => {
                 'You are an email copywriter. Always respond in valid JSON.',
                 { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } } }
               );
-              await sendEmailViaResend({
+              await sendEmailViaACS({
                 to: lead.email,
                 fromName: client?.company_name || 'VaaniAI',
                 subject: reminderContent.subject,
@@ -487,7 +490,7 @@ Deno.serve(async (req) => {
 
 
 // ============================================================
-// ADMIN EMAIL ALERT — Uses Resend (works for ANY email)
+// ADMIN EMAIL ALERT — Uses Azure Communication Services
 // ============================================================
 async function sendAdminAlert(svc, client, activity, lead, alertType, reason) {
   if (!client?.email) {
@@ -550,7 +553,7 @@ async function sendAdminAlert(svc, client, activity, lead, alertType, reason) {
       </div>
     </div>`;
 
-  await sendEmailViaResend({
+  await sendEmailViaACS({
     to: client.email,
     fromName: 'VaaniAI Automation',
     subject: `[${label}] ${activity.title || activity.type} — ${leadName}`,

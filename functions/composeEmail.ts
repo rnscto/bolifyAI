@@ -1,7 +1,21 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
-import { Resend } from 'npm:resend@4.0.0';
+import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
-const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
+const emailClient = new EmailClient(Deno.env.get('AZURE_COMM_ENDPOINT'), {
+  key: Deno.env.get('AZURE_COMM_KEY')
+});
+
+async function sendACSEmail({ to, fromAddress, subject, html }) {
+  const message = {
+    senderAddress: fromAddress || 'DoNotReply@vaaniai.io',
+    content: { subject, html },
+    recipients: { to: [{ address: to }] }
+  };
+  const poller = await emailClient.beginSend(message);
+  const result = await poller.pollUntilDone();
+  if (result.status !== 'Succeeded') throw new Error(`ACS Email error: ${result.error?.message || result.status}`);
+  return result;
+}
 
 // Azure OpenAI helper
 async function azureLLM(prompt, systemPrompt, jsonSchema) {
@@ -125,7 +139,7 @@ RULES:
     }
 
     // ── ACTION: send_email ──
-    // Sends the composed email via Resend
+    // Sends the composed email via Azure Communication Services
     if (action === 'send_email') {
       const { to_email, from_name, subject, body_html, lead_id, client_id, activity_id, outreach_type } = payload;
 
@@ -154,16 +168,11 @@ RULES:
 </body>
 </html>`;
 
-      const { data, error } = await resend.emails.send({
-        from: `${companyName} <noreply@vaaniai.io>`,
+      await sendACSEmail({
         to: to_email,
         subject,
         html: wrappedHtml
       });
-
-      if (error) {
-        return Response.json({ error: `Resend error: ${JSON.stringify(error)}` }, { status: 500 });
-      }
 
       // Log the outreach
       if (lead_id && client_id) {

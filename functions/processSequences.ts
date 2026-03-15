@@ -1,18 +1,21 @@
-import { createClient } from 'npm:@base44/sdk@0.8.18';
-import { Resend } from 'npm:resend@4.0.0';
+import { createClient } from 'npm:@base44/sdk@0.8.20';
+import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
-const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
+const emailClient = new EmailClient(Deno.env.get('AZURE_COMM_ENDPOINT'), {
+  key: Deno.env.get('AZURE_COMM_KEY')
+});
 
-// ─── Send lead email via Resend (zero Base44 credits) ───
+// ─── Send lead email via Azure Communication Services ───
 async function sendLeadEmail({ to, fromName, subject, html }) {
-  const { data, error } = await resend.emails.send({
-    from: `${fromName} <noreply@vaaniai.io>`,
-    to,
-    subject,
-    html
-  });
-  if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
-  return data;
+  const message = {
+    senderAddress: 'DoNotReply@vaaniai.io',
+    content: { subject, html },
+    recipients: { to: [{ address: to }] }
+  };
+  const poller = await emailClient.beginSend(message);
+  const result = await poller.pollUntilDone();
+  if (result.status !== 'Succeeded') throw new Error(`ACS Email error: ${result.error?.message || result.status}`);
+  return result;
 }
 
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
@@ -61,7 +64,7 @@ Deno.serve(async (req) => {
 
     const results = { sent: 0, skipped: 0, completed: 0, errors: 0, adapted: 0, total_active: 0 };
     const BATCH_LIMIT = 15; // Max emails per run to avoid timeout
-    const SEND_DELAY_MS = 1200; // 1.2s between sends to respect Resend 2/sec rate limit
+    const SEND_DELAY_MS = 1200; // 1.2s between sends to respect rate limits
 
     // Get all active sequences
     const sequences = await base44.entities.EmailSequence.filter({ status: 'active' });
@@ -219,7 +222,7 @@ Return the adapted subject and body_html.`,
         } catch (_) {}
       }
 
-      // Send the email via Resend
+      // Send the email via Azure Communication Services
       try {
         await sendLeadEmail({
           to: enrollment.recipient_email,
@@ -274,7 +277,7 @@ Return the adapted subject and body_html.`,
         results.sent++;
         console.log(`[processSequences] Sent step ${stepIndex + 1}/${steps.length} to ${enrollment.recipient_email} (tier: ${enrollment.qualification_tier || 'N/A'})`);
 
-        // Rate limit: wait between sends to avoid Resend 429 errors
+        // Rate limit: wait between sends to avoid throttling
         await new Promise(r => setTimeout(r, SEND_DELAY_MS));
 
       } catch (sendErr) {

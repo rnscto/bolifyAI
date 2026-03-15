@@ -1,4 +1,9 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
+
+const emailClient = new EmailClient(Deno.env.get('AZURE_COMM_ENDPOINT'), {
+  key: Deno.env.get('AZURE_COMM_KEY')
+});
 
 const TEMPLATES = {
   free_trial: {
@@ -120,28 +125,15 @@ Deno.serve(async (req) => {
       .replace(/\{\{trial_link\}\}/g, trialLink)
       .replace(/\{\{demo_link\}\}/g, demoLink);
 
-    const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY');
-    if (!RESEND_API_KEY) {
-      return Response.json({ error: 'RESEND_API_KEY not configured' }, { status: 500 });
-    }
-
-    const resendRes = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RESEND_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        from: 'VaaniAI <sales@vaaniai.io>',
-        to: email,
-        subject: template.subject,
-        html: finalBody
-      })
-    });
-
-    if (!resendRes.ok) {
-      const errData = await resendRes.text();
-      throw new Error(`Resend API error: ${resendRes.status} - ${errData}`);
+    const message = {
+      senderAddress: 'DoNotReply@vaaniai.io',
+      content: { subject: template.subject, html: finalBody },
+      recipients: { to: [{ address: email }] }
+    };
+    const poller = await emailClient.beginSend(message);
+    const result = await poller.pollUntilDone();
+    if (result.status !== 'Succeeded') {
+      throw new Error(`ACS Email error: ${result.error?.message || result.status}`);
     }
 
     console.log(`✅ Email sent: ${template_type} → ${email}`);
