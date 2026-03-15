@@ -713,8 +713,8 @@ Deno.serve(async (req) => {
         const timeInjection = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}.\n`;
         const sessionConfig = {
           input_audio_format: 'pcm16',
-          input_audio_transcription: { model: 'whisper-1' },
-          turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 600, silence_duration_ms: 800 }
+          input_audio_transcription: { model: 'gpt-4o-mini-transcribe', language: 'hi' },
+          turn_detection: { type: 'server_vad', threshold: 0.65, prefix_padding_ms: 800, silence_duration_ms: 800 }
         };
         if (isHybrid) {
           sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
