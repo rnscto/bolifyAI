@@ -142,9 +142,9 @@ Deno.serve(async (req) => {
           const activeSub = clientSubs.find(s => s.status === 'active');
           const pendingActivities = clientActivities.filter(a => a.status === 'scheduled');
 
-          // AI: classify intent + generate personalized greeting
-          const aiAnalysis = await base44.integrations.Core.InvokeLLM({
-            prompt: `You are VaaniAI's intelligent call routing assistant. An incoming call has been received from a KNOWN registered client. Analyze their context and generate an appropriate response.
+          // AI: classify intent + generate personalized greeting (Azure OpenAI — zero Base44 credits)
+          const aiAnalysis = await azureLLM(
+            `You are VaaniAI's intelligent call routing assistant. An incoming call has been received from a KNOWN registered client. Analyze their context and generate an appropriate response.
 
 CALLER CONTEXT:
 - Company: ${matchedClient.company_name}
@@ -172,34 +172,22 @@ Based on the context, determine:
 4. KEY CONTEXT the handling agent needs to know
 5. SUGGESTED TALKING POINTS based on their situation
 
+Respond with JSON: {intent, confidence, routing, greeting, agent_context, talking_points, priority, follow_up_needed, follow_up_reason}
+
 Be specific and Indian business context aware. If the account is expired, prioritize retention. If active, prioritize support/value.`,
-            response_json_schema: {
+            'You are VaaniAI call routing AI. Always respond in valid JSON.',
+            {
               type: "object",
               properties: {
-                intent: {
-                  type: "string",
-                  enum: ["sales_inquiry", "support", "billing", "retention", "feature_question", "complaint", "general"]
-                },
-                confidence: { type: "number" },
-                routing: {
-                  type: "string",
-                  enum: ["self_serve", "retention_agent", "support_team", "sales_team", "account_manager"]
-                },
-                greeting: { type: "string" },
+                intent: { type: "string" }, confidence: { type: "number" },
+                routing: { type: "string" }, greeting: { type: "string" },
                 agent_context: { type: "string" },
-                talking_points: {
-                  type: "array",
-                  items: { type: "string" }
-                },
-                priority: {
-                  type: "string",
-                  enum: ["low", "medium", "high", "urgent"]
-                },
-                follow_up_needed: { type: "boolean" },
-                follow_up_reason: { type: "string" }
+                talking_points: { type: "array", items: { type: "string" } },
+                priority: { type: "string" },
+                follow_up_needed: { type: "boolean" }, follow_up_reason: { type: "string" }
               }
             }
-          });
+          );
 
           console.log('[smartfloWebhook] AI Analysis - Intent:', aiAnalysis.intent, 'Routing:', aiAnalysis.routing, 'Priority:', aiAnalysis.priority);
 
