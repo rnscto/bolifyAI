@@ -52,12 +52,15 @@ Deno.serve(async (req) => {
     const callActivities = await svc.entities.Activity.filter({ client_id, type: 'call', status: 'scheduled' });
     const activities = [...followupActivities, ...callActivities];
 
-    // Fetch call logs for all leads to get transcripts/summaries
-    const leadIds = allCallbackLeads.map(l => l.id);
-    const callLogs = [];
-    for (const leadId of leadIds) {
-      const logs = await svc.entities.CallLog.filter({ lead_id: leadId, status: 'completed' }, '-created_date', 1);
-      if (logs.length > 0) callLogs.push(logs[0]);
+    // Fetch recent completed call logs for this client (batch instead of per-lead)
+    const callLogs = await svc.entities.CallLog.filter({ client_id: cId, status: 'completed' }, '-created_date', 200);
+    
+    // Index by lead_id (keep only the most recent per lead)
+    const callLogByLead = {};
+    for (const log of callLogs) {
+      if (log.lead_id && !callLogByLead[log.lead_id]) {
+        callLogByLead[log.lead_id] = log;
+      }
     }
 
     // Use LLM to extract callback details from transcripts
