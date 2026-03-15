@@ -366,50 +366,24 @@ Deno.serve(async (req) => {
         }
 
         // ============================================================
-        // 2. EMAIL → Send AI-personalized email
+        // 2. EMAIL → Human action required (alert admin to send specific content)
+        //    Email activities from postCallActionExtractor are requests like
+        //    "send pricing", "email brochure" — these need human crafted content,
+        //    NOT auto-generated AI emails.
         // ============================================================
         else if (activityType === 'email') {
-          if (!lead?.email) {
-            await svc.entities.Activity.update(activity.id, { reminder_sent: true });
-            results.skipped++;
-            continue;
+          try {
+            await sendAdminAlert(svc, client, activity, lead, 'human_action_required',
+              `Lead requested specific content via email. Please send the appropriate materials manually.`);
+            results.admin_alerts_sent++;
+          } catch (alertErr) {
+            console.error(`[FollowupEngine] Admin alert for email failed: ${alertErr.message}`);
           }
 
-          const emailContent = await azureLLM(
-            `Write a personalized follow-up email.
-Company: ${client?.company_name || 'Our Team'}
-Lead: ${lead.name || 'Valued Customer'}, Company: ${lead.company || 'N/A'}
-Activity: ${activity.title || 'Follow-up'}
-Context: ${activity.description || 'General follow-up'}
-${activity.notes ? 'Notes: ' + activity.notes : ''}
-${lead.notes ? 'Lead history: ' + lead.notes.substring(0, 300) : ''}
-
-Professional, concise (<150 words), HTML body only. Indian business context.`,
-            'You are an email copywriter. Always respond in valid JSON.',
-            { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } } }
-          );
-
-          await sendEmailViaResend({
-            to: lead.email,
-            fromName: client?.company_name || 'VaaniAI',
-            subject: emailContent.subject,
-            html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${emailContent.body_html}</div>`
-          });
-
-          await svc.entities.OutreachLog.create({
-            client_id: activity.client_id, lead_id: lead.id,
-            channel: 'email', recipient_email: lead.email,
-            subject: emailContent.subject, body: emailContent.body_html,
-            outreach_type: 'lead_followup', status: 'sent'
-          });
-
           await svc.entities.Activity.update(activity.id, {
-            status: 'completed', completed_date: now.toISOString(),
-            reminder_sent: true, outcome: `Email sent: ${emailContent.subject}`
+            reminder_sent: true,
+            notes: (activity.notes || '') + `\n[Engine] Admin alerted — human email required at ${now.toISOString()}`
           });
-
-          results.emails_sent++;
-          console.log(`[FollowupEngine] ✅ Email sent: ${lead.email} (activity ${activity.id})`);
         }
 
         // ============================================================
