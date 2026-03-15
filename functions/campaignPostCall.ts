@@ -642,10 +642,11 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
 
   // ============================================================
   // AUTO-ENROLL INTO AI EMAIL SEQUENCE based on tier
+  // (Direct fetch — bypasses Base44 functions.invoke to avoid integration credits)
   // ============================================================
   if (campaignLead.lead_id && qualificationTier && !['disqualified'].includes(qualificationTier) && outcome !== 'not_answered') {
     try {
-      const enrollResult = await base44.functions.invoke('autoEnrollSequence', {
+      const enrollPayload = {
         lead_id: campaignLead.lead_id,
         client_id: campaign.client_id,
         qualification_tier: qualificationTier,
@@ -655,7 +656,19 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
         objections: aiScoreBreakdown.objections || [],
         intent_signals: aiIntentSignals,
         ai_score: aiScore
+      };
+      const appId = Deno.env.get('BASE44_APP_ID');
+      const cronKey = Deno.env.get('CRON_API_KEY');
+      const enrollRes = await fetch(`https://app.base44.com/api/apps/${appId}/functions/autoEnrollSequence`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Secret': cronKey || '',
+          'Base44-App-Id': appId || ''
+        },
+        body: JSON.stringify(enrollPayload)
       });
+      const enrollResult = enrollRes.ok ? await enrollRes.json() : null;
       if (enrollResult?.enrolled) {
         console.log(`[campaignPostCall] ✉️ Auto-enrolled in sequence: ${enrollResult.sequence_name}`);
       }
@@ -770,16 +783,29 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
   });
 
   // Auto-enroll into email sequence if not already done by streamAudio
+  // (Direct fetch — bypasses Base44 functions.invoke to avoid integration credits)
   if (campaignLead.lead_id && qualificationTier && !['disqualified'].includes(qualificationTier) && outcome !== 'not_answered') {
     try {
-      const enrollResult = await base44.functions.invoke('autoEnrollSequence', {
+      const enrollPayload = {
         lead_id: campaignLead.lead_id, client_id: campaign.client_id,
         qualification_tier: qualificationTier, call_outcome: outcome,
         call_summary: summary.substring(0, 500),
         call_topics: lead?.score_breakdown?.key_topics || [],
         objections: lead?.score_breakdown?.objections || [],
         intent_signals: aiIntentSignals, ai_score: aiScore
+      };
+      const appId = Deno.env.get('BASE44_APP_ID');
+      const cronKey = Deno.env.get('CRON_API_KEY');
+      const enrollRes = await fetch(`https://app.base44.com/api/apps/${appId}/functions/autoEnrollSequence`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Internal-Secret': cronKey || '',
+          'Base44-App-Id': appId || ''
+        },
+        body: JSON.stringify(enrollPayload)
       });
+      const enrollResult = enrollRes.ok ? await enrollRes.json() : null;
       if (enrollResult?.enrolled) {
         console.log(`[campaignPostCall] ✉️ Auto-enrolled in sequence: ${enrollResult.sequence_name}`);
       }

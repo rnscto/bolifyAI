@@ -25,10 +25,19 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
 
 // Auto-enrolls a lead into the right email sequence based on their tier + outcome.
 // If no matching sequence exists, AI generates one on-the-fly.
-// Called from campaignPostCall and processTranscript.
+// Called from campaignPostCall and streamAudio via direct fetch (not functions.invoke).
 
 Deno.serve(async (req) => {
   try {
+    // ── Auth: accept either X-Internal-Secret header or CRON_API_KEY query param ──
+    const internalSecret = req.headers.get('X-Internal-Secret');
+    const url = new URL(req.url);
+    const apiKeyParam = url.searchParams.get('api_key');
+    const expectedKey = Deno.env.get('CRON_API_KEY');
+    if (expectedKey && internalSecret !== expectedKey && apiKeyParam !== expectedKey) {
+      return Response.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     const appId = Deno.env.get('BASE44_APP_ID');
     const base44 = createClient({ appId, asServiceRole: true });
 
