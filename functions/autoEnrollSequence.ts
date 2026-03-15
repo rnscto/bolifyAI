@@ -70,7 +70,13 @@ Deno.serve(async (req) => {
 
           // Enroll this lead
           try {
-            const client = await base44.entities.Client.get(lead.client_id);
+            let client = null;
+            try { client = await base44.entities.Client.get(lead.client_id); } catch (_) {}
+            if (!client) {
+              console.log(`[autoEnrollSequence] Skipped lead ${lead.id}: client ${lead.client_id} not found`);
+              results.skipped++;
+              continue;
+            }
             const companyName = client?.company_name || 'Our Company';
             const industry = client?.industry || 'General';
             const tierOutreachMap = { hot: 'lead_followup', warm: 'lead_followup', nurture: 're_engagement', cold: 're_engagement' };
