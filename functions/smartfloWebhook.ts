@@ -422,7 +422,7 @@ Respond with JSON: {greeting, likely_intent, qualifying_questions, routing, is_p
             conversation_summary: `Call ended: ${statusLabel}${hangup_cause ? ' (' + hangup_cause + ')' : ''}${customer_ring_time ? '. Customer rang for ' + customer_ring_time + 's' : ''}. No conversation captured.`,
             lead_status_updated: mappedStatus === 'no_answer' ? 'no_answer' : 'callback'
           });
-          console.log(`[smartfloWebhook] Terminal ${statusLabel} (mapped: ${mappedStatus}) — updated for campaign processing`);
+          console.log(`[smartfloWebhook] Terminal ${statusLabel} (effective: ${effectiveStatus}) — updated for campaign processing`);
         } else {
           console.log(`[smartfloWebhook] Terminal ${statusLabel} — WebSocket transcript already present, skipping summary override`);
         }
