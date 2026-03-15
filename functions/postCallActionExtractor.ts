@@ -11,8 +11,8 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
 
 Deno.serve(async (req) => {
   try {
-    // Entity automation — platform injects service-level token in the request directly
-    const svc = createClientFromRequest(req);
+    // Entity automation — use asServiceRole to ensure full entity access
+    const svc = createClientFromRequest(req).asServiceRole;
 
     // Accept either direct invocation or entity automation payload
     const body = await req.json();
