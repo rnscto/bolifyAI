@@ -206,6 +206,14 @@ Deno.serve(async (req) => {
     // ─── Fire all calls in quick succession (no 50s wait per call) ───
     for (const cl of pendingLeads) {
       try {
+        // RE-READ to prevent race condition with concurrent executeCampaign invocations
+        // or campaignPoller picking the same lead simultaneously
+        const freshLead = await svc.entities.CampaignLead.get(cl.id);
+        if (freshLead.status !== 'pending') {
+          console.log(`[campaign] Lead ${cl.lead_name} already ${freshLead.status} — skipping (race avoided)`);
+          continue;
+        }
+
         const selectedDID = agentDIDs[didIndex % agentDIDs.length];
         didIndex++;
 
