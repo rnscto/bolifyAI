@@ -474,6 +474,18 @@ Respond with JSON: {greeting, likely_intent, qualifying_questions, routing, is_p
           console.error(`[smartfloWebhook] postCallActionExtractor invoke failed: ${aeErr.message}`);
         }
       }
+
+      // 4. Invoke crmAutomation — creates follow-up tasks on call completion
+      try {
+        console.log(`[smartfloWebhook] Direct-invoking crmAutomation for CallLog ${callLog.id}`);
+        await base44.functions.invoke('crmAutomation', {
+          event: { type: 'update', entity_name: 'CallLog', entity_id: callLog.id },
+          data: freshCallLog,
+          old_data: { ...freshCallLog, status: callLog.status }
+        });
+      } catch (crmErr) {
+        console.error(`[smartfloWebhook] crmAutomation invoke failed: ${crmErr.message}`);
+      }
     }
 
     return Response.json({ success: true, message: 'Webhook processed' });
