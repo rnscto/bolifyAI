@@ -662,7 +662,7 @@ Deno.serve(async (req) => {
     const tools = buildToolDefinitions();
     const sessionConfig = {
       input_audio_format: 'pcm16',
-      input_audio_transcription: { model: 'gpt-4o-mini-transcribe' },
+      input_audio_transcription: { model: 'whisper-1' },
       turn_detection: {
         type: 'server_vad',
         threshold: 0.65,
@@ -720,7 +720,7 @@ Deno.serve(async (req) => {
         const timeInjection = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}.\n`;
         const sessionConfig = {
           input_audio_format: 'pcm16',
-          input_audio_transcription: { model: 'gpt-4o-mini-transcribe' },
+          input_audio_transcription: { model: 'whisper-1' },
           turn_detection: { type: 'server_vad', threshold: 0.65, prefix_padding_ms: 800, silence_duration_ms: 800 }
         };
         if (isHybrid) {
@@ -744,7 +744,7 @@ Deno.serve(async (req) => {
         sendToRealtime({ type: 'session.update', session: {
           input_audio_format: 'pcm16',
           output_audio_format: 'pcm16',
-          input_audio_transcription: { model: 'gpt-4o-mini-transcribe' },
+          input_audio_transcription: { model: 'whisper-1' },
           modalities: ['text', 'audio'],
           voice: 'alloy',
           instructions: 'You are a friendly AI voice assistant. Be professional and concise. Wait for the system to provide further instructions before speaking.',
@@ -804,6 +804,12 @@ Deno.serve(async (req) => {
     }
 
     // ─── Transcription of user's speech ───
+    // Log transcription failures with details
+    if (type === 'conversation.item.input_audio_transcription.failed') {
+      console.error(`[${reqId}] ❌ Input transcription FAILED:`, JSON.stringify(msg.error || msg));
+      return;
+    }
+
     if (type === 'conversation.item.input_audio_transcription.completed' && msg.transcript) {
       const text = msg.transcript.trim();
       if (text) {
@@ -875,7 +881,9 @@ Deno.serve(async (req) => {
     // Log other events at debug level
     if (!['response.created', 'response.output_item.added', 'response.content_part.added',
           'response.output_item.done', 'response.content_part.done', 'response.done',
-          'conversation.item.created', 'rate_limits.updated'].includes(type)) {
+          'conversation.item.created', 'rate_limits.updated',
+          'response.audio_transcript.delta', 'response.text.delta',
+          'input_audio_buffer.committed'].includes(type)) {
       console.log(`[${reqId}] 📩 Realtime event: ${type}`);
     }
   }
