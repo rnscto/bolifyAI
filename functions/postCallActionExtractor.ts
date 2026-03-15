@@ -43,6 +43,30 @@ Deno.serve(async (req) => {
       return Response.json({ skipped: true, reason: 'Transcript too short' });
     }
 
+    // ── AUTO-RESOLVE lead_id if missing ──
+    // For inbound calls or calls where lead wasn't linked, try to find lead by phone number
+    if (!callLog.lead_id && callLog.client_id) {
+      const phoneToSearch = callLog.callee_number || callLog.caller_id;
+      if (phoneToSearch) {
+        try {
+          const cleanPhone = phoneToSearch.replace(/\D/g, '');
+          const clientLeads = await svc.entities.Lead.filter({ client_id: callLog.client_id });
+          const matchedLead = clientLeads.find(l => {
+            const lPhone = (l.phone || '').replace(/\D/g, '');
+            return lPhone && (lPhone === cleanPhone || lPhone.endsWith(cleanPhone.slice(-10)) || cleanPhone.endsWith(lPhone.slice(-10)));
+          });
+          if (matchedLead) {
+            callLog.lead_id = matchedLead.id;
+            // Also update the CallLog record so future references have the lead linked
+            await svc.entities.CallLog.update(callLogId, { lead_id: matchedLead.id });
+            console.log(`[ActionExtractor] Auto-linked lead ${matchedLead.name} (${matchedLead.id}) to call ${callLogId} via phone match`);
+          }
+        } catch (e) {
+          console.warn(`[ActionExtractor] Lead phone lookup failed: ${e.message}`);
+        }
+      }
+    }
+
     // Get current date/time for AI context
     const now = new Date();
     const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
