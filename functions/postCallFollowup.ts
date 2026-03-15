@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
     const leadStatusAfterCall = callLog.lead_status_updated || '';
     const callerNumber = callLog.caller_id || callLog.callee_number || '';
 
-    console.log(`[postCallFollowup] Processing call ${callLogId} | Client: ${clientId} | Lead: ${leadId} | Status: ${leadStatusAfterCall}`);
+    console.log(`[postCallFollowup] Processing call ${callLogId} | Client: ${clientId} | Lead: ${resolvedLeadId} | Status: ${leadStatusAfterCall}`);
 
     // Skip system/unknown calls with no real data
     if (!clientId || clientId === 'unknown') {
@@ -319,11 +319,11 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
     // PART 1.5: CREATE CALLBACK/FOLLOWUP ACTIVITY (for manual non-campaign calls)
     // This ensures manual calls appear in Automation Engine & Callbacks page
     // ===================================================================
-    if (lead && leadId && ['callback', 'interested'].includes(leadStatusAfterCall)) {
+    if (lead && resolvedLeadId && ['callback', 'interested'].includes(leadStatusAfterCall)) {
       // Check if an activity already exists for this call to avoid duplicates
       const existingActivities = await svc.entities.Activity.filter({ 
         client_id: clientId, 
-        lead_id: leadId, 
+        lead_id: resolvedLeadId, 
         call_log_id: callLogId 
       });
 
@@ -341,7 +341,7 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
 
         await svc.entities.Activity.create({
           client_id: clientId,
-          lead_id: leadId,
+          lead_id: resolvedLeadId,
           call_log_id: callLogId,
           type: activityType,
           title: activityTitle,
@@ -355,12 +355,12 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
         });
 
         // Also update lead's next_followup_date
-        await svc.entities.Lead.update(leadId, { 
+        await svc.entities.Lead.update(resolvedLeadId, { 
           next_followup_date: followupDate.toISOString() 
         });
 
-        console.log(`[postCallFollowup] Created ${activityType} activity for lead ${leadId}, scheduled ${followupDate.toISOString()}`);
-        results.activity_created = { lead_id: leadId, type: activityType, scheduled: followupDate.toISOString() };
+        console.log(`[postCallFollowup] Created ${activityType} activity for lead ${resolvedLeadId}, scheduled ${followupDate.toISOString()}`);
+        results.activity_created = { lead_id: resolvedLeadId, type: activityType, scheduled: followupDate.toISOString() };
       } else {
         console.log(`[postCallFollowup] Activity already exists for call ${callLogId}, skipping`);
       }
