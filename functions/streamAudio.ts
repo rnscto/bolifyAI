@@ -655,11 +655,11 @@ Deno.serve(async (req) => {
     const tools = buildToolDefinitions();
     const sessionConfig = {
       input_audio_format: 'pcm16',
-      input_audio_transcription: { model: 'whisper-1' },
+      input_audio_transcription: { model: 'gpt-4o-mini-transcribe', language: 'hi' },
       turn_detection: {
         type: 'server_vad',
-        threshold: 0.5,
-        prefix_padding_ms: 600,
+        threshold: 0.65,
+        prefix_padding_ms: 800,
         silence_duration_ms: 800
       }
     };
