@@ -1,19 +1,24 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.20';
+import { Resend } from 'npm:resend@4.0.0';
+
+const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
+
+async function sendEmail({ to, subject, html }) {
+  const { data, error } = await resend.emails.send({ from: 'VaaniAI <noreply@vaaniai.io>', to, subject, html });
+  if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
+  return data;
+}
 
 Deno.serve(async (req) => {
   try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-
-    if (user?.role !== 'admin') {
-      return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
+    // Scheduled automation — no user session, use service role directly
+    const base44 = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
 
     const now = new Date();
     const results = { renewals_needed: [], emails_sent: [] };
 
     // Find active subscriptions where billing_end_date is approaching (within 3 days)
-    const activeSubscriptions = await base44.asServiceRole.entities.Subscription.filter({ status: 'active' });
+    const activeSubscriptions = await base44.entities.Subscription.filter({ status: 'active' });
 
     for (const sub of activeSubscriptions) {
       if (!sub.billing_end_date) continue;
