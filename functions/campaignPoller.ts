@@ -23,10 +23,26 @@ Deno.serve(async (req) => {
         results.campaigns_processed++;
         const campaignId = campaign.id;
 
-        // === STEP 1: Fix stuck "calling" leads ===
-        const stuckLeads = await svc.entities.CampaignLead.filter(
+        // === STEP 1: Fix stuck "calling" and "processing" leads ===
+        const stuckCalling = await svc.entities.CampaignLead.filter(
           { campaign_id: campaignId, status: 'calling' }, 'created_date', 100
         );
+        const stuckProcessing = await svc.entities.CampaignLead.filter(
+          { campaign_id: campaignId, status: 'processing' }, 'created_date', 100
+        );
+        // Processing leads stuck >5 min → force to completed (campaignPostCall died mid-execution)
+        for (const pl of stuckProcessing) {
+          const procAge = Date.now() - new Date(pl.updated_date || pl.created_date).getTime();
+          if (procAge > 5 * 60 * 1000) {
+            console.log(`[campaignPoller] Processing lead ${pl.lead_name} stuck >5min — forcing to completed`);
+            await svc.entities.CampaignLead.update(pl.id, {
+              status: 'completed', outcome: pl.outcome || 'neutral',
+              conversation_summary: (pl.conversation_summary || '') + '\n[Poller] Recovered from stuck processing state.'
+            });
+            results.stuck_fixed++;
+          }
+        }
+        const stuckLeads = stuckCalling;
 
         for (const cl of stuckLeads) {
           const leadAge = Date.now() - new Date(cl.updated_date || cl.created_date).getTime();
