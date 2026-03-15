@@ -87,6 +87,21 @@ Deno.serve(async (req) => {
 
     console.log(`[processSequences] ${activeEnrollments.length} active, ${dueEnrollments.length} due (batch limit ${BATCH_LIMIT})`);
 
+    // Pre-fetch all needed leads and clients in batch to avoid per-enrollment API calls
+    const uniqueLeadIds = [...new Set(dueEnrollments.map(e => e.lead_id).filter(Boolean))];
+    const uniqueClientIds = [...new Set(dueEnrollments.map(e => e.client_id).filter(Boolean))];
+
+    const leadMap = {};
+    const clientMap = {};
+
+    const leadResults = await Promise.all(uniqueLeadIds.map(id => base44.entities.Lead.get(id).catch(() => null)));
+    leadResults.forEach(l => { if (l) leadMap[l.id] = l; });
+
+    const clientResults = await Promise.all(uniqueClientIds.map(id => base44.entities.Client.get(id).catch(() => null)));
+    clientResults.forEach(c => { if (c) clientMap[c.id] = c; });
+
+    console.log(`[processSequences] Pre-fetched ${Object.keys(leadMap).length} leads, ${Object.keys(clientMap).length} clients`);
+
     for (const enrollment of dueEnrollments) {
 
       const sequence = sequenceMap[enrollment.sequence_id];
