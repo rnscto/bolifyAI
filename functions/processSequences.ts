@@ -294,6 +294,7 @@ Return the adapted subject and body_html.`,
       }
     }
 
+    results.skipped += activeEnrollments.length - dueEnrollments.length;
     console.log(`[processSequences] Done. Sent: ${results.sent}, Adapted: ${results.adapted}, Completed: ${results.completed}, Skipped: ${results.skipped}, Errors: ${results.errors}`);
     return Response.json({ success: true, ...results });
 
