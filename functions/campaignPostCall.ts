@@ -70,8 +70,20 @@ Deno.serve(async (req) => {
     if (['completed', 'failed', 'processing'].includes(campaignLead.status)) {
       console.log(`[campaignPostCall] CampaignLead ${campaignLead.id} already ${campaignLead.status} — running AI analysis only`);
       
-      // Still run AI analysis/emails if we have a transcript but skip next-batch trigger
-      const callLog = data;
+      // Re-read the CallLog to get the latest transcript (streamAudio may have updated it after webhook)
+      const callLog = await base44.entities.CallLog.get(callLogId);
+      
+      // ALWAYS sync transcript/summary back to CampaignLead if it was missing
+      if (callLog.transcript && !campaignLead.transcript) {
+        await base44.entities.CampaignLead.update(campaignLead.id, {
+          transcript: callLog.transcript,
+          conversation_summary: callLog.conversation_summary || campaignLead.conversation_summary || '',
+          call_duration: callLog.duration || campaignLead.call_duration || 0
+        });
+        console.log(`[campaignPostCall] Synced transcript to CampaignLead ${campaignLead.id}`);
+      }
+      
+      // Run AI analysis/emails if we have a transcript
       if (callLog.transcript && callLog.transcript.length > 50 && campaignLead.status === 'completed') {
         const alreadyAnalyzed = callLog.lead_status_updated && callLog.transcript;
         if (alreadyAnalyzed) {
@@ -81,6 +93,10 @@ Deno.serve(async (req) => {
           };
           const outcome = statusToOutcome[callLog.lead_status_updated] || campaignLead.outcome || 'neutral';
           const summary = callLog.conversation_summary || campaignLead.conversation_summary || '';
+          // Also update outcome on CampaignLead if it changed
+          if (outcome !== campaignLead.outcome) {
+            await base44.entities.CampaignLead.update(campaignLead.id, { outcome, conversation_summary: summary });
+          }
           await doFollowUpActions(base44, callLog, campaignLead, campaignLead.campaign_id, outcome, summary);
         } else if (callLog.transcript || callLog.conversation_summary) {
           await doAIAnalysis(base44, callLog, campaignLead, campaignLead.campaign_id, campaignLead.outcome || 'neutral', campaignLead.conversation_summary || '');
