@@ -236,8 +236,8 @@ async function triggerNextBatch(base44, campaignId) {
       return { completed: true };
     }
 
-    // If only retry-later leads remain and no active calls, skip (campaign continues via poller)
-    if (readyPending.length === 0 && callingLeads.length === 0 && retryLaterPending.length > 0) {
+    // If only retry-later leads remain and no active calls/processing, skip (campaign continues via poller)
+    if (readyPending.length === 0 && callingLeads.length === 0 && processingLeads.length === 0 && retryLaterPending.length > 0) {
       return { waiting: true, pending: pendingLeads.length, retry_later: retryLaterPending.length };
     }
 
