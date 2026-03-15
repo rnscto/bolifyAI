@@ -3,6 +3,7 @@ import { Resend } from 'npm:resend@4.0.0';
 
 const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
 
+// v2: Force redeploy - fixed service role auth
 // ─── Send lead email via Resend (zero Base44 credits) ───
 async function sendLeadEmail({ to, fromName, subject, html }) {
   const { data, error } = await resend.emails.send({
