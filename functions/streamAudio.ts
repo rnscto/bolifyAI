@@ -432,8 +432,13 @@ Deno.serve(async (req) => {
       return;
     }
 
-    // Convert https:// to wss:// for WebSocket and append api-key as query param
+    // Convert https:// to wss:// for WebSocket
     let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
+    // Ensure the URL includes the /openai/realtime path and required query params
+    // If the endpoint is just a base URI (no /openai/realtime), append deployment path
+    if (!wsUrl.includes('/openai/realtime')) {
+      wsUrl = wsUrl.replace(/\/+$/, '') + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-1.5';
+    }
     // Append api-key to URL since Deno WebSocket doesn't support custom headers
     const separator = wsUrl.includes('?') ? '&' : '?';
     wsUrl = `${wsUrl}${separator}api-key=${encodeURIComponent(realtimeKey)}`;
