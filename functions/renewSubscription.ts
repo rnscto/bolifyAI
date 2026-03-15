@@ -28,14 +28,14 @@ Deno.serve(async (req) => {
 
       // 3 days before renewal: Send reminder
       if (daysUntilRenewal === 3) {
-        const clients = await base44.asServiceRole.entities.Client.filter({ id: sub.client_id });
+        const clients = await base44.entities.Client.filter({ id: sub.client_id });
         const client = clients.length > 0 ? clients[0] : null;
         if (!client) continue;
 
-        await base44.asServiceRole.integrations.Core.SendEmail({
+        await sendEmail({
           to: client.email,
           subject: 'Your VaaniAI subscription renews in 3 days',
-          body: `
+          html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
                 <h1 style="color: white; margin: 0;">VaaniAI</h1>
