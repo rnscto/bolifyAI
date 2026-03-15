@@ -439,6 +439,8 @@ Deno.serve(async (req) => {
     if (!wsUrl.includes('/openai/realtime')) {
       wsUrl = wsUrl.replace(/\/+$/, '') + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-1.5';
     }
+    // Ensure api-version uses preview (required for WebSocket realtime on Azure)
+    wsUrl = wsUrl.replace('api-version=2025-04-01&', 'api-version=2025-04-01-preview&');
     // Append api-key to URL since Deno WebSocket doesn't support custom headers
     const separator = wsUrl.includes('?') ? '&' : '?';
     wsUrl = `${wsUrl}${separator}api-key=${encodeURIComponent(realtimeKey)}`;
@@ -660,7 +662,7 @@ Deno.serve(async (req) => {
     const tools = buildToolDefinitions();
     const sessionConfig = {
       input_audio_format: 'pcm16',
-      input_audio_transcription: { model: 'gpt-4o-mini-transcribe', language: 'hi' },
+      input_audio_transcription: { model: 'gpt-4o-mini-transcribe' },
       turn_detection: {
         type: 'server_vad',
         threshold: 0.65,
