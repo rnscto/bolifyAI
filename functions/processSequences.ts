@@ -224,13 +224,10 @@ Return the adapted subject and body_html.`,
       subject = subject.replace(/\{\{name\}\}/g, enrollment.recipient_name || 'there');
       bodyHtml = bodyHtml.replace(/\{\{name\}\}/g, enrollment.recipient_name || 'there');
 
-      // Determine sender
+      // Determine sender from pre-fetched cache
       let fromName = 'VaaniAI';
-      if (enrollment.client_id) {
-        try {
-          const client = await base44.entities.Client.get(enrollment.client_id);
-          if (client?.company_name) fromName = client.company_name;
-        } catch (_) {}
+      if (enrollment.client_id && clientMap[enrollment.client_id]?.company_name) {
+        fromName = clientMap[enrollment.client_id].company_name;
       }
 
       // Send the email via Azure Communication Services
