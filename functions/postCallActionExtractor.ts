@@ -126,18 +126,26 @@ RULES:
 
     const results = { lead_notes_updated: false, activities_created: 0, skipped_duplicates: 0, details: [] };
 
-    // ── DEDUP: Check if this lead is in an active campaign (pending/calling) ──
-    // If yes, skip creating call/followup activities to prevent duplicate calls
-    let leadInActiveCampaign = false;
-    if (callLog.lead_id) {
+    // ── DEDUP: Check if this call is from a campaign ──
+    // If yes, skip ALL activity creation — campaignPostCall handles everything
+    let isCampaignCall = false;
+    if (callLog.id) {
       try {
-        const campaignLeads = await svc.entities.CampaignLead.filter({ lead_id: callLog.lead_id });
-        leadInActiveCampaign = campaignLeads.some(cl => ['pending', 'calling'].includes(cl.status));
-        if (leadInActiveCampaign) {
-          console.log(`[ActionExtractor] Lead ${callLog.lead_id} is in active campaign — will skip call/followup activities`);
-        }
+        const clByCallLog = await svc.entities.CampaignLead.filter({ call_log_id: callLog.id });
+        if (clByCallLog.length > 0) isCampaignCall = true;
       } catch (_) {}
     }
+    if (!isCampaignCall && callLog.lead_id) {
+      try {
+        const campaignLeads = await svc.entities.CampaignLead.filter({ lead_id: callLog.lead_id });
+        isCampaignCall = campaignLeads.some(cl => ['pending', 'calling', 'processing', 'completed'].includes(cl.status));
+      } catch (_) {}
+    }
+    if (isCampaignCall) {
+      // Still extract lead notes (useful), but skip ALL activity creation
+      console.log(`[ActionExtractor] Campaign call detected — will extract notes only, skip all activities`);
+    }
+    const leadInActiveCampaign = isCampaignCall;
 
     // ── DEDUP: Load existing pending activities for this lead to avoid duplicates ──
     let existingActivities = [];
