@@ -156,21 +156,17 @@ Deno.serve(async (req) => {
           // Build rich context from enrollment + lead data
           let contextParts = [];
 
-          if (enrollment.lead_id) {
-            try {
-              const lead = await base44.entities.Lead.get(enrollment.lead_id);
-              contextParts.push(`Lead: ${lead.name || ''}, Company: ${lead.company || ''}, Status: ${lead.status || ''}, Score: ${lead.score || 'N/A'}/100, Tier: ${lead.qualification_tier || 'N/A'}`);
-              if (lead.notes) contextParts.push(`Recent Notes: ${lead.notes.substring(0, 300)}`);
-              if (lead.intent_signals?.length > 0) contextParts.push(`Intent Signals: ${lead.intent_signals.join(', ')}`);
-              if (lead.sentiment) contextParts.push(`Sentiment: ${lead.sentiment}`);
-            } catch (_) {}
+          if (enrollment.lead_id && leadMap[enrollment.lead_id]) {
+            const lead = leadMap[enrollment.lead_id];
+            contextParts.push(`Lead: ${lead.name || ''}, Company: ${lead.company || ''}, Status: ${lead.status || ''}, Score: ${lead.score || 'N/A'}/100, Tier: ${lead.qualification_tier || 'N/A'}`);
+            if (lead.notes) contextParts.push(`Recent Notes: ${lead.notes.substring(0, 300)}`);
+            if (lead.intent_signals?.length > 0) contextParts.push(`Intent Signals: ${lead.intent_signals.join(', ')}`);
+            if (lead.sentiment) contextParts.push(`Sentiment: ${lead.sentiment}`);
           }
 
-          if (enrollment.client_id) {
-            try {
-              const client = await base44.entities.Client.get(enrollment.client_id);
-              contextParts.push(`Company: ${client.company_name || ''}, Industry: ${client.industry || ''}`);
-            } catch (_) {}
+          if (enrollment.client_id && clientMap[enrollment.client_id]) {
+            const client = clientMap[enrollment.client_id];
+            contextParts.push(`Company: ${client.company_name || ''}, Industry: ${client.industry || ''}`);
           }
 
           // Enrollment-specific call context
