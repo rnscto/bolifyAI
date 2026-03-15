@@ -270,6 +270,13 @@ async function triggerNextBatch(base44, campaignId) {
     // CallLog update triggers this automation again → next call initiated
     const cl = readyPending[0];
     try {
+      // RE-READ to prevent race with campaignPoller picking the same lead
+      const freshCL = await base44.entities.CampaignLead.get(cl.id);
+      if (freshCL.status !== 'pending') {
+        console.log(`[campaignPostCall] Lead ${cl.lead_name} already ${freshCL.status} — skipping (race avoided)`);
+        return { skipped: true, reason: `lead_already_${freshCL.status}` };
+      }
+
       const selectedDID = agentDIDs[0];
       await base44.entities.CampaignLead.update(cl.id, {
         status: 'calling', attempt_count: (cl.attempt_count || 0) + 1
