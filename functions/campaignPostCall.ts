@@ -222,8 +222,10 @@ async function triggerNextBatch(base44, campaignId) {
     const readyPending = pendingLeads.filter(l => !l.followup_call_date || new Date(l.followup_call_date) <= now);
     const retryLaterPending = pendingLeads.filter(l => l.followup_call_date && new Date(l.followup_call_date) > now);
 
-    // Check completion — only complete if NO pending leads of any kind
-    if (readyPending.length === 0 && callingLeads.length === 0 && retryLaterPending.length === 0) {
+    const processingLeads = allLeads.filter(l => l.status === 'processing');
+
+    // Check completion — only complete if NO pending, calling, or processing leads
+    if (readyPending.length === 0 && callingLeads.length === 0 && retryLaterPending.length === 0 && processingLeads.length === 0) {
       const completedCount = allLeads.filter(l => l.status === 'completed').length;
       const failedCount = allLeads.filter(l => l.status === 'failed').length;
       const outcomes = countOutcomes(allLeads);
