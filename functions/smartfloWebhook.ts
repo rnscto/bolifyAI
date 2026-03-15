@@ -381,10 +381,19 @@ Respond with JSON: {greeting, likely_intent, qualifying_questions, routing, is_p
       }
     }
 
-    const updateData = { status: mappedStatus };
+    // CRITICAL FIX: Smartflo sometimes sends "answered" with hangup_cause + duration
+    // as the FINAL webhook (never sends a separate "completed" event).
+    // Detect this: if status is "answered" but hangup_cause is present, the call is actually done.
+    let effectiveStatus = mappedStatus;
+    if (mappedStatus === 'answered' && hangup_cause && parseInt(duration) > 0) {
+      console.log(`[smartfloWebhook] Detected "answered" with hangup_cause="${hangup_cause}" + duration=${duration} — treating as COMPLETED`);
+      effectiveStatus = 'completed';
+    }
+
+    const updateData = { status: effectiveStatus };
     if (duration) updateData.duration = parseInt(duration);
     if (recording_url) updateData.recording_url = recording_url;
-    if (status === 'completed') updateData.call_end_time = new Date().toISOString();
+    if (effectiveStatus === 'completed') updateData.call_end_time = new Date().toISOString();
 
     await base44.entities.CallLog.update(callLog.id, updateData);
 
@@ -392,8 +401,8 @@ Respond with JSON: {greeting, likely_intent, qualifying_questions, routing, is_p
     // or streamAudio.saveCallRecord (for answered calls with transcripts).
     // smartfloWebhook only updates CallLog to avoid race conditions.
 
-    // Handle terminal call statuses (use mappedStatus which normalizes Smartflo values like "Missed", "Answered")
-    if (mappedStatus === 'completed' || mappedStatus === 'no_answer' || mappedStatus === 'failed') {
+    // Handle terminal call statuses
+    if (effectiveStatus === 'completed' || effectiveStatus === 'no_answer' || effectiveStatus === 'failed') {
       // Set end time
       if (!updateData.call_end_time) {
         updateData.call_end_time = new Date().toISOString();
