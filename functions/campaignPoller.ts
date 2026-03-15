@@ -182,6 +182,13 @@ Deno.serve(async (req) => {
             for (let i = 0; i < pendingBatch.length; i++) {
               const cl = pendingBatch[i];
               try {
+                // RE-READ to prevent race with campaignPostCall.triggerNextBatch
+                const freshLead = await svc.entities.CampaignLead.get(cl.id);
+                if (freshLead.status !== 'pending') {
+                  console.log(`[campaignPoller] Lead ${cl.lead_name} status changed to ${freshLead.status} — skipping (race avoided)`);
+                  continue;
+                }
+
                 const selectedDID = agentDIDs[i % agentDIDs.length];
                 await svc.entities.CampaignLead.update(cl.id, {
                   status: 'calling', attempt_count: (cl.attempt_count || 0) + 1
