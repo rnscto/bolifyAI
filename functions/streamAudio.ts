@@ -939,9 +939,15 @@ Deno.serve(async (req) => {
     }
 
     const voiceName = session.voiceType;
-    const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='en-US'>
-      <voice name='${voiceName}'>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</voice>
+    // Auto-detect language from text content for correct SSML xml:lang
+    // Devanagari Unicode range: \u0900-\u097F
+    const hasDevanagari = /[\u0900-\u097F]/.test(text);
+    const xmlLang = hasDevanagari ? 'hi-IN' : 'en-IN';
+    const escapedText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${xmlLang}'>
+      <voice name='${voiceName}'>${escapedText}</voice>
     </speak>`;
+    console.log(`[${reqId}] 🗣️ TTS: voice=${voiceName}, lang=${xmlLang}, text="${text.substring(0, 60)}..."`);
 
     const controller = new AbortController();
     session._ttsAbort = controller;
