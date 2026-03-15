@@ -67,7 +67,7 @@ Deno.serve(async (req) => {
     const callbackItems = [];
 
     for (const lead of allCallbackLeads) {
-      const matchingLog = callLogs.find(cl => cl.lead_id === lead.id);
+      const matchingLog = callLogByLead[lead.id];
       const matchingCL = campaignLeads.find(cl => cl.lead_id === lead.id);
       const matchingActivity = activities.find(a => a.lead_id === lead.id);
 
