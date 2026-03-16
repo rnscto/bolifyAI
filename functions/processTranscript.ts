@@ -26,25 +26,29 @@ Deno.serve(async (req) => {
 
     // Download audio file
     const audioResponse = await fetch(recording_url);
-    const audioBlob = await audioResponse.blob();
+    const audioBuffer = await audioResponse.arrayBuffer();
 
-    // Azure Speech to Text
-    const sttResponse = await fetch(Deno.env.get('AZURE_SPEECH_ENDPOINT'), {
+    // Transcribe using OpenAI gpt-4o-transcribe (best Hindi/Hinglish/English accuracy)
+    const formData = new FormData();
+    formData.append('file', new Blob([audioBuffer], { type: 'audio/wav' }), 'recording.wav');
+    formData.append('model', 'gpt-4o-transcribe');
+    formData.append('language', 'hi'); // Hindi + Hinglish + English (auto-detects code-switching)
+    formData.append('response_format', 'text');
+
+    const sttResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
       method: 'POST',
       headers: {
-        'Ocp-Apim-Subscription-Key': Deno.env.get('AZURE_SPEECH_KEY'),
-        'Content-Type': 'audio/wav'
+        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`
       },
-      body: audioBlob
+      body: formData
     });
 
     if (!sttResponse.ok) {
-      console.error('STT failed:', await sttResponse.text());
+      console.error('gpt-4o-transcribe failed:', await sttResponse.text());
       return Response.json({ error: 'Speech to text failed' }, { status: 500 });
     }
 
-    const sttData = await sttResponse.json();
-    const transcript = sttData.DisplayText || sttData.NBest?.[0]?.Display || '';
+    const transcript = await sttResponse.text();
 
     // Use Azure OpenAI to analyze conversation + score lead
     const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
