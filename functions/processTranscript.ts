@@ -113,11 +113,14 @@ Respond ONLY in valid JSON with this exact structure.`
       }
     );
 
+    let analysisData = {};
     if (!analysisResponse.ok) {
-      console.error('OpenAI analysis failed:', await analysisResponse.text());
+      const errBody = await analysisResponse.text();
+      console.error('OpenAI analysis failed:', errBody);
+      analysisData = { choices: [{ message: { content: '{}' } }] };
+    } else {
+      analysisData = await analysisResponse.json();
     }
-
-    const analysisData = await analysisResponse.json();
     const rawContent = analysisData.choices?.[0]?.message?.content || '{}';
     
     let analysis;
