@@ -51,6 +51,7 @@ Deno.serve(async (req) => {
 
     const formData = new FormData();
     formData.append('file', new Blob([audioBuffer], { type: mimeType }), fileName);
+    formData.append('language', 'hi');
     formData.append('response_format', 'text');
 
     console.log(`[processTranscript] Calling Azure STT: ${sttUrl.substring(0, 80)}...`);

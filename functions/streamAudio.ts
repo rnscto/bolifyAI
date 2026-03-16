@@ -662,7 +662,7 @@ Deno.serve(async (req) => {
     const tools = buildToolDefinitions();
     const sessionConfig = {
       input_audio_format: 'pcm16',
-      input_audio_transcription: { model: 'whisper-1' },
+      input_audio_transcription: { model: 'whisper-1', language: 'hi' },
       turn_detection: {
         type: 'server_vad',
         threshold: 0.65,
