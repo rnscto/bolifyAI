@@ -107,7 +107,6 @@ Respond ONLY in valid JSON with this exact structure.`
             }
           ],
           max_completion_tokens: 800,
-          temperature: 0.2,
           response_format: { type: "json_object" }
         })
       }
