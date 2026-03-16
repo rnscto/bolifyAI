@@ -43,23 +43,29 @@ Deno.serve(async (req) => {
     else if (contentType.includes('webm')) { fileName = 'recording.webm'; mimeType = 'audio/webm'; }
     console.log(`[processTranscript] Audio content-type: ${contentType}, using: ${fileName}`);
 
-    // Transcribe using OpenAI gpt-4o-transcribe (best Hindi/Hinglish/English accuracy)
+    // Transcribe using Azure OpenAI gpt-4o-transcribe (best Hindi/Hinglish/English accuracy)
+    const azureSttEndpoint = 'https://ai-yadavnand8860531ai976911404567.cognitiveservices.azure.com';
+    const sttDeployment = 'gpt-4o-transcribe';
+    const sttApiVersion = '2025-01-01-preview';
+    const sttUrl = `${azureSttEndpoint}/openai/deployments/${sttDeployment}/audio/transcriptions?api-version=${sttApiVersion}`;
+
     const formData = new FormData();
     formData.append('file', new Blob([audioBuffer], { type: mimeType }), fileName);
-    formData.append('model', 'gpt-4o-transcribe');
     formData.append('response_format', 'text');
 
-    const sttResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    console.log(`[processTranscript] Calling Azure STT: ${sttUrl.substring(0, 80)}...`);
+
+    const sttResponse = await fetch(sttUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${Deno.env.get('OPENAI_API_KEY')}`
+        'api-key': Deno.env.get('AZURE_OPENAI_KEY')
       },
       body: formData
     });
 
     if (!sttResponse.ok) {
       const errText = await sttResponse.text();
-      console.error(`gpt-4o-transcribe failed (${sttResponse.status}):`, errText);
+      console.error(`Azure gpt-4o-transcribe failed (${sttResponse.status}):`, errText);
       return Response.json({ error: 'Speech to text failed', detail: errText }, { status: 500 });
     }
 
