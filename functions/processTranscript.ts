@@ -26,13 +26,27 @@ Deno.serve(async (req) => {
 
     // Download audio file
     const audioResponse = await fetch(recording_url);
+    if (!audioResponse.ok) {
+      console.error('Recording download failed:', audioResponse.status);
+      return Response.json({ error: 'Failed to download recording' }, { status: 500 });
+    }
     const audioBuffer = await audioResponse.arrayBuffer();
+    console.log(`[processTranscript] Downloaded recording: ${audioBuffer.byteLength} bytes`);
+
+    // Detect file extension from content-type or URL
+    const contentType = audioResponse.headers.get('content-type') || '';
+    let fileName = 'recording.mp3';
+    let mimeType = 'audio/mpeg';
+    if (contentType.includes('wav')) { fileName = 'recording.wav'; mimeType = 'audio/wav'; }
+    else if (contentType.includes('ogg')) { fileName = 'recording.ogg'; mimeType = 'audio/ogg'; }
+    else if (contentType.includes('mp4') || contentType.includes('m4a')) { fileName = 'recording.m4a'; mimeType = 'audio/mp4'; }
+    else if (contentType.includes('webm')) { fileName = 'recording.webm'; mimeType = 'audio/webm'; }
+    console.log(`[processTranscript] Audio content-type: ${contentType}, using: ${fileName}`);
 
     // Transcribe using OpenAI gpt-4o-transcribe (best Hindi/Hinglish/English accuracy)
     const formData = new FormData();
-    formData.append('file', new Blob([audioBuffer], { type: 'audio/wav' }), 'recording.wav');
+    formData.append('file', new Blob([audioBuffer], { type: mimeType }), fileName);
     formData.append('model', 'gpt-4o-transcribe');
-    formData.append('language', 'hi'); // Hindi + Hinglish + English (auto-detects code-switching)
     formData.append('response_format', 'text');
 
     const sttResponse = await fetch('https://api.openai.com/v1/audio/transcriptions', {
@@ -44,11 +58,13 @@ Deno.serve(async (req) => {
     });
 
     if (!sttResponse.ok) {
-      console.error('gpt-4o-transcribe failed:', await sttResponse.text());
-      return Response.json({ error: 'Speech to text failed' }, { status: 500 });
+      const errText = await sttResponse.text();
+      console.error(`gpt-4o-transcribe failed (${sttResponse.status}):`, errText);
+      return Response.json({ error: 'Speech to text failed', detail: errText }, { status: 500 });
     }
 
     const transcript = await sttResponse.text();
+    console.log(`[processTranscript] Transcript (${transcript.length} chars): ${transcript.substring(0, 200)}`);
 
     // Use Azure OpenAI to analyze conversation + score lead
     const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
