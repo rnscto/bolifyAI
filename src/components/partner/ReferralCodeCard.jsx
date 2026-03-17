@@ -45,6 +45,16 @@ export default function ReferralCodeCard({ partner }) {
             </Button>
           </div>
         </div>
+        <div>
+          <label className="text-xs text-gray-500 font-medium">Branded Referral Page</label>
+          <div className="flex gap-2 mt-1">
+            <Input value={`${window.location.origin}/PartnerReferral?code=${partner?.referral_code}`} readOnly className="text-sm text-blue-600" />
+            <Button variant="outline" size="icon" onClick={() => copyToClipboard(`${window.location.origin}/PartnerReferral?code=${partner?.referral_code}`, 'link')}>
+              {copiedLink ? <Check className="w-4 h-4 text-green-600" /> : <Copy className="w-4 h-4" />}
+            </Button>
+          </div>
+          <p className="text-xs text-gray-400 mt-1">Share this page — it shows your branding</p>
+        </div>
         <div className="bg-blue-50 rounded-lg p-3 text-sm text-blue-800">
           <p className="font-medium">Commission: {partner?.commission_rate || 20}% recurring revenue</p>
           <p className="text-xs text-blue-600 mt-1">You earn every month as long as your referred client stays active.</p>
