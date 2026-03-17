@@ -11,6 +11,8 @@ import PayoutHistory from '../components/partner/PayoutHistory';
 import PartnerProfileEditor from '../components/partner/PartnerProfileEditor';
 import PartnerClientsList from '../components/partner/PartnerClientsList';
 import PartnerComplianceTab from '../components/compliance/PartnerComplianceTab';
+import AgreementAcceptance from '../components/partner/AgreementAcceptance';
+import AgreementViewer from '../components/partner/AgreementViewer';
 
 export default function PartnerDashboard() {
   const [partner, setPartner] = useState(null);
@@ -18,6 +20,7 @@ export default function PartnerDashboard() {
   const [payouts, setPayouts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
+  const [pendingAgreement, setPendingAgreement] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -32,12 +35,17 @@ export default function PartnerDashboard() {
       const p = partners[0];
       setPartner(p);
 
-      const [refs, pays] = await Promise.all([
+      const [refs, pays, agreements] = await Promise.all([
         base44.entities.Referral.filter({ partner_id: p.id }, '-created_date'),
         base44.entities.PartnerPayout.filter({ partner_id: p.id }, '-created_date'),
+        base44.entities.PartnerAgreement.filter({ partner_id: p.id }, '-created_date'),
       ]);
       setReferrals(refs);
       setPayouts(pays);
+
+      // Check for pending agreement
+      const pending = agreements.find(a => a.status === 'pending_signature');
+      setPendingAgreement(pending || null);
     }
     setLoading(false);
   };
@@ -95,6 +103,19 @@ export default function PartnerDashboard() {
     );
   }
 
+  // If there's a pending agreement, show it as a blocking screen
+  if (pendingAgreement) {
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900">Welcome, {partner.name}!</h1>
+          <p className="text-gray-500 mt-1">Please review and sign your Partner Agreement to access the dashboard.</p>
+        </div>
+        <AgreementAcceptance partner={partner} agreement={pendingAgreement} onSigned={loadData} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -108,8 +129,9 @@ export default function PartnerDashboard() {
       <PartnerStats partner={partner} />
 
       <Tabs defaultValue="overview">
-        <TabsList className="mb-4">
+        <TabsList className="mb-4 flex-wrap">
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="agreement">Agreement</TabsTrigger>
           <TabsTrigger value="clients">My Clients ({referrals.filter(r => r.client_id).length})</TabsTrigger>
           <TabsTrigger value="referrals">Referrals ({referrals.length})</TabsTrigger>
           <TabsTrigger value="payouts">Payouts ({payouts.length})</TabsTrigger>
@@ -126,6 +148,10 @@ export default function PartnerDashboard() {
               <ReferralsList referrals={referrals} />
             </div>
           </div>
+        </TabsContent>
+
+        <TabsContent value="agreement">
+          <AgreementViewer partnerId={partner.id} />
         </TabsContent>
 
         <TabsContent value="clients">
