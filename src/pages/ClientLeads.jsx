@@ -44,6 +44,8 @@ export default function ClientLeads() {
   const [editingLead, setEditingLead] = useState(null);
   const [csvDialogOpen, setCsvDialogOpen] = useState(false);
   const [tierFilter, setTierFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sourceFilter, setSourceFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [callingLeadId, setCallingLeadId] = useState(null);
   const [formData, setFormData] = useState({
@@ -315,16 +317,42 @@ export default function ClientLeads() {
             <CardTitle>
               {tierFilter === 'all' ? `All Leads (${leads.length})` : `${tierFilter.charAt(0).toUpperCase() + tierFilter.slice(1)} Leads`}
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <Input
                 placeholder="Search name, phone, company..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="w-48 h-8 text-sm"
               />
-              {tierFilter !== 'all' && (
-                <Button size="sm" variant="ghost" onClick={() => setTierFilter('all')}>
-                  <Filter className="w-3 h-3 mr-1" /> Clear filter
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-40 h-8 text-sm">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="new">New</SelectItem>
+                  <SelectItem value="contacted">Contacted</SelectItem>
+                  <SelectItem value="interested">Interested</SelectItem>
+                  <SelectItem value="not_interested">Not Interested</SelectItem>
+                  <SelectItem value="callback">Callback</SelectItem>
+                  <SelectItem value="converted">Converted</SelectItem>
+                  <SelectItem value="do_not_call">Do Not Call</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                <SelectTrigger className="w-40 h-8 text-sm">
+                  <SelectValue placeholder="Source" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Sources</SelectItem>
+                  {[...new Set(leads.map(l => l.source).filter(Boolean))].map(src => (
+                    <SelectItem key={src} value={src}>{src}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(tierFilter !== 'all' || statusFilter !== 'all' || sourceFilter !== 'all') && (
+                <Button size="sm" variant="ghost" onClick={() => { setTierFilter('all'); setStatusFilter('all'); setSourceFilter('all'); }}>
+                  <Filter className="w-3 h-3 mr-1" /> Clear filters
                 </Button>
               )}
             </div>
@@ -347,6 +375,8 @@ export default function ClientLeads() {
               {(() => {
                 const filtered = leads
                   .filter(l => tierFilter === 'all' || l.qualification_tier === tierFilter)
+                  .filter(l => statusFilter === 'all' || l.status === statusFilter)
+                  .filter(l => sourceFilter === 'all' || l.source === sourceFilter)
                   .filter(l => {
                     if (!searchTerm) return true;
                     const s = searchTerm.toLowerCase();
