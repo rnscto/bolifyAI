@@ -101,6 +101,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
     { name: 'Concept Note', path: 'ConceptNote', icon: FileText },
     { name: 'Trusted Logos', path: 'AdminTrustedClients', icon: Globe },
+    { name: 'Complaints', path: 'AdminComplaints', icon: PhoneCall },
     { name: 'Partners', path: 'AdminPartners', icon: Handshake },
     ];
 

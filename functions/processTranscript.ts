@@ -178,6 +178,26 @@ Respond ONLY in valid JSON with this exact structure.`
     if (leadStatus === 'converted') { qualificationTier = 'hot'; qualificationReason = 'Lead converted'; }
     if (leadStatus === 'do_not_call') { qualificationTier = 'disqualified'; qualificationReason = 'Marked do not call'; }
 
+    // ===== AUTO-CREATE COMPLAINT ON DO_NOT_CALL =====
+    if (leadStatus === 'do_not_call' && callLog.caller_id) {
+      try {
+        await base44.entities.ComplaintLog.create({
+          did_number: callLog.caller_id,
+          client_id: callLog.client_id,
+          agent_id: callLog.agent_id,
+          complainant_number: callLog.callee_number,
+          complaint_type: 'unsolicited',
+          complaint_source: 'internal',
+          description: `Auto-detected: Lead explicitly requested "do not call" during AI conversation. Call ID: ${call_log_id}`,
+          status: 'open',
+          call_log_id: call_log_id,
+        });
+        console.log(`[processTranscript] ⚠️ Auto-complaint created for DID ${callLog.caller_id} — do_not_call detected`);
+      } catch (complaintErr) {
+        console.error('[processTranscript] Failed to create auto-complaint:', complaintErr.message);
+      }
+    }
+
     console.log(`[processTranscript] Tier: ${qualificationTier} — ${qualificationReason}`);
 
     // Update lead with status, score, sentiment, tier, and intent signals

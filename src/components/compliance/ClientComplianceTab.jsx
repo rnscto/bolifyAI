@@ -192,6 +192,59 @@ export default function ClientComplianceTab({ client }) {
         </CardContent>
       </Card>
 
+      {/* Complaints */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertTriangle className="w-5 h-5" /> Complaints Against Your DIDs
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {complaints.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">No complaints recorded — great job!</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>DID</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Source</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Auto Action</TableHead>
+                    <TableHead>Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {complaints.map(c => (
+                    <TableRow key={c.id}>
+                      <TableCell className="font-mono text-sm">{c.did_number}</TableCell>
+                      <TableCell className="capitalize text-sm">{c.complaint_type?.replace(/_/g, ' ')}</TableCell>
+                      <TableCell className="capitalize text-sm">{c.complaint_source?.replace(/_/g, ' ')}</TableCell>
+                      <TableCell>
+                        <Badge className={
+                          c.status === 'open' ? 'bg-red-100 text-red-800' :
+                          c.status === 'cooling_off' ? 'bg-orange-100 text-orange-800' :
+                          c.status === 'resolved' ? 'bg-green-100 text-green-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }>{c.status?.replace(/_/g, ' ')}</Badge>
+                      </TableCell>
+                      <TableCell className="text-xs text-gray-500">{c.auto_action_taken || '-'}</TableCell>
+                      <TableCell className="text-sm text-gray-500">{moment(c.created_date).format('DD MMM YY')}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          {complaints.some(c => c.status === 'cooling_off') && (
+            <div className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-4 text-sm text-orange-800">
+              ⚠️ One or more of your DIDs is in a <strong>Cooling Off</strong> period. No outbound calls can be made from suspended numbers. Contact the DPO for resolution.
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
       {/* DPO Info */}
       <Card>
         <CardContent className="pt-6">
