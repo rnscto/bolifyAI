@@ -21,6 +21,7 @@ import AdminPartnerEditDialog from '../components/admin/AdminPartnerEditDialog';
 import AdminPartnerDetailDialog from '../components/admin/AdminPartnerDetailDialog';
 import AdminPartnerRevenueChart from '../components/admin/AdminPartnerRevenueChart';
 import AdminPartnerExport from '../components/admin/AdminPartnerExport';
+import AgreementTemplateEditor from '../components/admin/AgreementTemplateEditor';
 
 const STATUS_COLORS = {
   pending: 'bg-yellow-100 text-yellow-800',
@@ -63,6 +64,38 @@ export default function AdminPartners() {
   const handleApprove = async (partner) => {
     await base44.entities.Partner.update(partner.id, { status: 'approved' });
     try { await base44.users.inviteUser(partner.email, 'user'); } catch (e) {}
+
+    // Auto-generate partner agreement
+    try {
+      const templates = await base44.entities.AgreementTemplate.filter({ status: 'active' });
+      if (templates.length > 0) {
+        const tmpl = templates[0];
+        const allAgreements = await base44.entities.PartnerAgreement.list();
+        const agrNum = `VAANI-AGR-${new Date().getFullYear()}-${String(allAgreements.length + 1).padStart(3, '0')}`;
+        const effectiveDate = new Date().toISOString().split('T')[0];
+        const expiryDate = new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0];
+
+        await base44.entities.PartnerAgreement.create({
+          partner_id: partner.id,
+          template_id: tmpl.id,
+          template_version: tmpl.version,
+          agreement_number: agrNum,
+          status: 'pending_signature',
+          partner_name: partner.name,
+          partner_company: partner.company_name || partner.name,
+          partner_email: partner.email,
+          partner_address: `${partner.city || ''}, ${partner.state || ''}, India`,
+          company_signatory_name: tmpl.company_signatory_name,
+          company_signatory_designation: tmpl.company_signatory_designation,
+          effective_date: effectiveDate,
+          expiry_date: expiryDate,
+        });
+        toast.success(`Agreement ${agrNum} generated for ${partner.name}`);
+      }
+    } catch (e) {
+      console.error('Agreement generation failed:', e);
+    }
+
     toast.success(`${partner.name} approved!`);
     loadData();
   };
@@ -225,6 +258,7 @@ export default function AdminPartners() {
           <TabsTrigger value="analytics"><BarChart3 className="w-4 h-4 mr-1" /> Analytics</TabsTrigger>
           <TabsTrigger value="referrals">Referrals ({referrals.length})</TabsTrigger>
           <TabsTrigger value="payouts">Payouts ({payouts.length})</TabsTrigger>
+          <TabsTrigger value="agreements"><FileText className="w-4 h-4 mr-1" /> Agreements</TabsTrigger>
         </TabsList>
 
         {/* ─── Partners Tab ─── */}
@@ -447,6 +481,10 @@ export default function AdminPartners() {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+        {/* ─── Agreements Tab ─── */}
+        <TabsContent value="agreements">
+          <AgreementTemplateEditor />
         </TabsContent>
       </Tabs>
 
