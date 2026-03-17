@@ -8,6 +8,8 @@ import PartnerStats from '../components/partner/PartnerStats';
 import ReferralCodeCard from '../components/partner/ReferralCodeCard';
 import ReferralsList from '../components/partner/ReferralsList';
 import PayoutHistory from '../components/partner/PayoutHistory';
+import PartnerProfileEditor from '../components/partner/PartnerProfileEditor';
+import PartnerClientsList from '../components/partner/PartnerClientsList';
 
 export default function PartnerDashboard() {
   const [partner, setPartner] = useState(null);
@@ -104,25 +106,42 @@ export default function PartnerDashboard() {
 
       <PartnerStats partner={partner} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-1">
-          <ReferralCodeCard partner={partner} />
-        </div>
-        <div className="lg:col-span-2">
-          <Tabs defaultValue="referrals">
-            <TabsList>
-              <TabsTrigger value="referrals">Referrals ({referrals.length})</TabsTrigger>
-              <TabsTrigger value="payouts">Payouts ({payouts.length})</TabsTrigger>
-            </TabsList>
-            <TabsContent value="referrals">
+      <Tabs defaultValue="overview">
+        <TabsList className="mb-4">
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="clients">My Clients ({referrals.filter(r => r.client_id).length})</TabsTrigger>
+          <TabsTrigger value="referrals">Referrals ({referrals.length})</TabsTrigger>
+          <TabsTrigger value="payouts">Payouts ({payouts.length})</TabsTrigger>
+          <TabsTrigger value="profile">Profile & Settings</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1">
+              <ReferralCodeCard partner={partner} />
+            </div>
+            <div className="lg:col-span-2">
               <ReferralsList referrals={referrals} />
-            </TabsContent>
-            <TabsContent value="payouts">
-              <PayoutHistory payouts={payouts} />
-            </TabsContent>
-          </Tabs>
-        </div>
-      </div>
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="clients">
+          <PartnerClientsList referrals={referrals} />
+        </TabsContent>
+
+        <TabsContent value="referrals">
+          <ReferralsList referrals={referrals} />
+        </TabsContent>
+
+        <TabsContent value="payouts">
+          <PayoutHistory payouts={payouts} />
+        </TabsContent>
+
+        <TabsContent value="profile">
+          <PartnerProfileEditor partner={partner} onSaved={loadData} />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
