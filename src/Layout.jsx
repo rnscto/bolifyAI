@@ -33,7 +33,7 @@ export default function Layout({ children, currentPageName }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
 
-  const isPublicPage = ['Home', 'PrivacyPolicy', 'TermsOfService', 'RefundPolicy', 'PartnerSignup', 'PartnerReferral'].includes(currentPageName);
+  const isPublicPage = ['Home', 'PrivacyPolicy', 'TermsOfService', 'RefundPolicy', 'PartnerSignup', 'PartnerReferral', 'CompliancePolicy'].includes(currentPageName);
   const isOnboardingPage = currentPageName === 'Onboarding';
 
   useEffect(() => {

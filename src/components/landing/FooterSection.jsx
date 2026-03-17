@@ -70,6 +70,11 @@ export default function FooterSection() {
                   Refund Policy
                 </Link>
               </li>
+              <li>
+                <Link to={createPageUrl('CompliancePolicy')} className="text-gray-500 hover:text-[#e67e22] transition-colors">
+                  Compliance Policy
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -90,6 +95,13 @@ export default function FooterSection() {
                 </a>
               </li>
             </ul>
+
+            <h4 className="text-[#1a365d] font-semibold mt-6 mb-3">Data Protection Officer</h4>
+            <div className="text-sm text-gray-500 space-y-1">
+              <p className="font-medium text-gray-700">Nand K. Yadav</p>
+              <p>nand@brainbucks.in</p>
+              <p>+91-7020609101</p>
+            </div>
           </div>
         </div>
       </div>
@@ -115,6 +127,9 @@ export default function FooterSection() {
             </Link>
             <Link to={createPageUrl('RefundPolicy')} className="text-slate-300 hover:text-[#FF9933] transition-colors">
               Refund Policy
+            </Link>
+            <Link to={createPageUrl('CompliancePolicy')} className="text-slate-300 hover:text-[#FF9933] transition-colors">
+              Compliance Policy
             </Link>
           </div>
         </div>

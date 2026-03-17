@@ -10,6 +10,7 @@ import ReferralsList from '../components/partner/ReferralsList';
 import PayoutHistory from '../components/partner/PayoutHistory';
 import PartnerProfileEditor from '../components/partner/PartnerProfileEditor';
 import PartnerClientsList from '../components/partner/PartnerClientsList';
+import PartnerComplianceTab from '../components/compliance/PartnerComplianceTab';
 
 export default function PartnerDashboard() {
   const [partner, setPartner] = useState(null);
@@ -112,6 +113,7 @@ export default function PartnerDashboard() {
           <TabsTrigger value="clients">My Clients ({referrals.filter(r => r.client_id).length})</TabsTrigger>
           <TabsTrigger value="referrals">Referrals ({referrals.length})</TabsTrigger>
           <TabsTrigger value="payouts">Payouts ({payouts.length})</TabsTrigger>
+          <TabsTrigger value="compliance">Compliance</TabsTrigger>
           <TabsTrigger value="profile">Profile & Settings</TabsTrigger>
         </TabsList>
 
@@ -136,6 +138,10 @@ export default function PartnerDashboard() {
 
         <TabsContent value="payouts">
           <PayoutHistory payouts={payouts} />
+        </TabsContent>
+
+        <TabsContent value="compliance">
+          <PartnerComplianceTab partner={partner} referrals={referrals} />
         </TabsContent>
 
         <TabsContent value="profile">

@@ -5,8 +5,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { User, Building, Phone, Mail, Save, Loader2, Shield } from 'lucide-react';
 import { toast } from 'sonner';
+import ClientComplianceTab from '../components/compliance/ClientComplianceTab';
 
 export default function ClientSettings() {
   const [user, setUser] = useState(null);
@@ -70,12 +72,20 @@ export default function ClientSettings() {
   };
 
   return (
-    <div className="space-y-6 max-w-2xl mx-auto">
+    <div className="space-y-6 max-w-3xl mx-auto">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-600 mt-1">Manage your profile and account</p>
+        <p className="text-gray-600 mt-1">Manage your profile, account, and compliance</p>
       </div>
 
+      <Tabs defaultValue="profile">
+        <TabsList className="mb-4">
+          <TabsTrigger value="profile">Profile & Account</TabsTrigger>
+          <TabsTrigger value="compliance"><Shield className="w-4 h-4 mr-1" /> Compliance</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="profile">
+        <div className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><User className="w-5 h-5" /> Profile</CardTitle>
@@ -141,6 +151,13 @@ export default function ClientSettings() {
         {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
         Save Changes
       </Button>
+      </div>
+        </TabsContent>
+
+        <TabsContent value="compliance">
+          {client && <ClientComplianceTab client={client} />}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
