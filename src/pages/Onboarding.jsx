@@ -9,9 +9,10 @@ import ProfileStep from '../components/onboarding/ProfileStep';
 import IndustryStep from '../components/onboarding/IndustryStep';
 import AgentSetupStep from '../components/onboarding/AgentSetupStep';
 import DIDSelectionStep from '../components/onboarding/DIDSelectionStep';
+import ComplianceConsentStep from '../components/onboarding/ComplianceConsentStep';
 import OnboardingComplete from '../components/onboarding/OnboardingComplete';
 
-const STEPS = ['Profile', 'Industry', 'Agent', 'Phone Number', 'Complete'];
+const STEPS = ['Profile', 'Industry', 'Agent', 'Phone Number', 'Compliance', 'Complete'];
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -35,6 +36,7 @@ export default function Onboarding() {
   const [selectedDID, setSelectedDID] = useState(null);
   const [referralCode, setReferralCode] = useState('');
   const [existingClient, setExistingClient] = useState(null);
+  const [complianceConsents, setComplianceConsents] = useState({});
 
   useEffect(() => {
     // Capture referral code from URL
@@ -163,9 +165,36 @@ export default function Onboarding() {
       } catch (e) { console.log('Referral tracking error:', e.message); }
     }
 
+    // Log DPDP consent
+    const consentTypes = ['platform_tos', 'dpdp_processing', 'ai_voice_usage', 'data_retention'];
+    for (const ct of consentTypes) {
+      if (complianceConsents[ct]) {
+        await base44.entities.ConsentLog.create({
+          client_id: client.id,
+          consent_type: ct,
+          consent_given: true,
+          consent_version: '2.1',
+          given_by_email: user.email,
+          given_by_name: user.full_name,
+        });
+      }
+    }
+    // Update client with DPDP consent flag
+    await base44.entities.Client.update(client.id, {
+      dpdp_consent_given: true,
+      dpdp_consent_date: new Date().toISOString(),
+    });
+    // Audit log
+    await base44.entities.AuditLog.create({
+      client_id: client.id,
+      action_type: 'consent_given',
+      actor_email: user.email,
+      details: `Onboarding compliance consent given: ${consentTypes.filter(c => complianceConsents[c]).join(', ')}`,
+    });
+
     toast.success('Account created successfully!');
     setSaving(false);
-    setStep(4); // Show completion screen
+    setStep(5); // Show completion screen
   };
 
   if (loading) {
@@ -179,7 +208,7 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50">
       {/* Progress header */}
-      {step < 4 && (
+      {step < 5 && (
         <div className="sticky top-0 bg-white/80 backdrop-blur-lg border-b z-10">
           <div className="max-w-3xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-3">
@@ -188,10 +217,10 @@ export default function Onboarding() {
                 alt="VaaniAI"
                 className="h-10 object-contain"
               />
-              <span className="text-sm text-gray-500">Step {step + 1} of 4</span>
+              <span className="text-sm text-gray-500">Step {step + 1} of 5</span>
             </div>
             <div className="flex gap-2">
-              {STEPS.slice(0, 4).map((s, i) => (
+              {STEPS.slice(0, 5).map((s, i) => (
                 <div
                   key={s}
                   className={`flex-1 h-1.5 rounded-full transition-all ${
@@ -245,12 +274,21 @@ export default function Onboarding() {
           <DIDSelectionStep
             selected={selectedDID}
             onSelect={setSelectedDID}
-            onNext={handleComplete}
+            onNext={() => setStep(4)}
             onBack={() => setStep(2)}
           />
         )}
 
         {step === 4 && (
+          <ComplianceConsentStep
+            consents={complianceConsents}
+            onConsentsChange={setComplianceConsents}
+            onNext={handleComplete}
+            onBack={() => setStep(3)}
+          />
+        )}
+
+        {step === 5 && (
           <OnboardingComplete
             agentName={agentData.name}
             didNumber={selectedDID ? `${selectedDID.country_code || '+91'} ${selectedDID.number}` : null}
