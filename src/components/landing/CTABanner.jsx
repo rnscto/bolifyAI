@@ -17,8 +17,8 @@ export default function CTABanner() {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true, margin: "-40px" }}
-          transition={{ duration: 0.4 }}
-        >
+          transition={{ duration: 0.4 }}>
+          
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#FF9933]/15 text-[#f39c12] text-sm font-medium mb-4">
             <Sparkles className="w-3.5 h-3.5" /> Limited Time Offer
           </div>
@@ -32,21 +32,21 @@ export default function CTABanner() {
             <Button
               size="lg"
               className="bg-gradient-to-r from-[#e67e22] to-[#f39c12] hover:from-[#d35400] hover:to-[#e67e22] text-white px-8 py-5 text-base rounded-xl shadow-lg shadow-orange-500/25 font-semibold"
-              onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
-            >
+              onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}>
+              
               Start Free Trial <ArrowRight className="w-5 h-5 ml-1" />
             </Button>
             <Button
               size="lg"
-              variant="outline"
-              className="border-white/30 text-white hover:bg-white/10 px-8 py-5 text-base rounded-xl backdrop-blur-sm"
-              onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}
-            >
+              variant="outline" className="bg-amber-500 text-white px-8 py-5 text-base font-medium rounded-xl inline-flex items-center justify-center gap-2 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border shadow-sm hover:text-accent-foreground h-10 border-white/30 hover:bg-white/10 backdrop-blur-sm"
+
+              onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}>
+              
               View Pricing
             </Button>
           </div>
         </motion.div>
       </div>
-    </section>
-  );
+    </section>);
+
 }
