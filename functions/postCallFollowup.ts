@@ -332,7 +332,8 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
         const followupDays = leadStatusAfterCall === 'callback' ? 1 : 2;
         const followupDate = new Date();
         followupDate.setDate(followupDate.getDate() + followupDays);
-        followupDate.setHours(10, 0, 0, 0); // Default to 10 AM IST
+        // 10:00 AM IST = 04:30 AM UTC
+        followupDate.setUTCHours(4, 30, 0, 0);
 
         const activityType = leadStatusAfterCall === 'callback' ? 'followup' : 'call';
         const activityTitle = leadStatusAfterCall === 'callback' 

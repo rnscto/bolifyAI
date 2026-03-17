@@ -405,11 +405,14 @@ Deno.serve(async (req) => {
         //    Send reminder to lead + alert to client admin
         // ============================================================
         else if (['appointment', 'demo', 'visit', 'meeting', 'booking'].includes(activityType)) {
-          // Send reminder to lead
+          // Send reminder to lead — format time in IST
           if (lead?.email) {
             try {
+              // Convert UTC scheduled date to IST for display in email
+              const istScheduled = new Date(scheduledDate.getTime() + (5.5 * 60 * 60 * 1000));
+              const istDateStr = istScheduled.toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
               const reminderContent = await azureLLM(
-                `Write a brief reminder email for ${lead.name || 'customer'} about their ${activityType}: "${activity.title}". Scheduled: ${scheduledDate.toLocaleString('en-IN')}. From ${client?.company_name || 'VaaniAI'}. Under 80 words, HTML body only.`,
+                `Write a brief reminder email for ${lead.name || 'customer'} about their ${activityType}: "${activity.title}". Scheduled: ${istDateStr} IST. From ${client?.company_name || 'VaaniAI'}. Under 80 words, HTML body only. IMPORTANT: Show the time as ${istDateStr} IST in the email.`,
                 'You are an email copywriter. Always respond in valid JSON.',
                 { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } } }
               );
@@ -536,7 +539,7 @@ async function sendAdminAlert(svc, client, activity, lead, alertType, reason) {
           <tr><td style="padding:8px 0;color:#64748b;">Email:</td><td style="padding:8px 0;color:#1e293b;">${leadEmail}</td></tr>
           <tr><td style="padding:8px 0;color:#64748b;">Type:</td><td style="padding:8px 0;color:#1e293b;">${activity.type?.toUpperCase()}</td></tr>
           <tr><td style="padding:8px 0;color:#64748b;">Priority:</td><td style="padding:8px 0;color:${activity.priority === 'high' ? '#dc2626' : '#1e293b'};font-weight:600;">${(activity.priority || 'medium').toUpperCase()}</td></tr>
-          <tr><td style="padding:8px 0;color:#64748b;">Scheduled:</td><td style="padding:8px 0;color:#1e293b;">${new Date(activity.scheduled_date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}</td></tr>
+          <tr><td style="padding:8px 0;color:#64748b;">Scheduled:</td><td style="padding:8px 0;color:#1e293b;">${new Date(activity.scheduled_date).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Kolkata' })} IST</td></tr>
         </table>
 
         ${activity.description ? `<div style="margin:16px 0;padding:12px;background:#f8fafc;border-radius:8px;border-left:3px solid #3b82f6;"><p style="margin:0;color:#334155;font-size:13px;">${activity.description}</p></div>` : ''}

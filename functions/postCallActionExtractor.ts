@@ -67,11 +67,12 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Get current date/time for AI context
+    // Get current date/time for AI context — IST = UTC + 5:30
     const now = new Date();
     const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
     const todayStr = istNow.toISOString().split('T')[0];
     const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][istNow.getDay()];
+    const istTimeStr = `${istNow.getUTCHours().toString().padStart(2,'0')}:${istNow.getUTCMinutes().toString().padStart(2,'0')} IST`;
 
     // Use Azure OpenAI to extract action items
     const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
@@ -87,9 +88,12 @@ Deno.serve(async (req) => {
           messages: [
             {
               role: 'system',
-              content: `You are an expert at extracting actionable items from sales call transcripts. Today is ${dayOfWeek}, ${todayStr} (IST timezone).
+              content: `You are an expert at extracting actionable items from sales call transcripts. Today is ${dayOfWeek}, ${todayStr}, current time is ${istTimeStr} (IST timezone, UTC+5:30).
 
 Extract ALL action items from the conversation. Be thorough — capture anything that needs follow-up.
+
+CRITICAL TIMEZONE RULE: All scheduled_date values MUST be in UTC (ISO 8601 format). Convert IST times to UTC by subtracting 5 hours 30 minutes.
+Examples: 10:00 AM IST = 04:30 UTC, 12:00 PM IST = 06:30 UTC, 2:00 PM IST = 08:30 UTC, 6:00 PM IST = 12:30 UTC.
 
 Return JSON with this exact structure:
 {
@@ -99,7 +103,8 @@ Return JSON with this exact structure:
       "type": "call|email|demo|appointment|visit|meeting|task",
       "title": "Brief title for the activity",
       "description": "Details about what needs to happen",
-      "scheduled_date": "ISO date-time string in IST (or null if no specific time mentioned)",
+      "scheduled_date": "ISO date-time string in UTC (converted from IST, or null if no specific time mentioned)",
+      "scheduled_date_ist": "Human-readable IST time for reference (e.g. '17 March 2026 at 12:00 PM IST')",
       "priority": "low|medium|high",
       "trigger": "Exact quote or paraphrase from transcript that triggered this action"
     }
@@ -107,12 +112,13 @@ Return JSON with this exact structure:
 }
 
 RULES:
-- If customer says "call me tomorrow/next week/Thursday" → create a "call" activity with the correct date (business hours 10:00 IST default)
+- If customer says "call me tomorrow/next week/Thursday" → create a "call" activity with the correct date at 10:00 AM IST (= 04:30 UTC)
 - If customer says "send me pricing/brochure/details/email" → create an "email" activity scheduled immediately
 - If customer says "let's schedule a demo/meeting" → create appropriate activity
+- If customer mentions a specific time like "12 PM" or "afternoon" → that's IST, convert to UTC
 - If customer mentions visiting or a site visit → create "visit" activity
 - If there's any follow-up commitment by the agent → create the corresponding activity
-- If no specific date mentioned for callback, default to 2 business days from today at 11:00 IST
+- If no specific date mentioned for callback, default to 2 business days from today at 11:00 AM IST (= 05:30 UTC)
 - For lead_notes: capture company size, budget range, pain points, competitor mentions, decision makers, timeline, product interests
 - Return empty actions array if no follow-up actions are needed (e.g., do_not_call, clear rejection)
 - ALWAYS set priority: "high" for interested/demo/appointment, "medium" for callbacks, "low" for general follow-ups`
@@ -237,17 +243,18 @@ RULES:
           continue;
         }
 
-        // Determine scheduled date
+        // Determine scheduled date (all dates should be in UTC already from LLM)
         let scheduledDate = action.scheduled_date;
         if (!scheduledDate) {
-          const defaultDate = new Date(istNow);
+          // Default: 2 business days from now at 11:00 AM IST = 05:30 UTC
+          const defaultDate = new Date();
           let daysAdded = 0;
           while (daysAdded < 2) {
             defaultDate.setDate(defaultDate.getDate() + 1);
             const day = defaultDate.getDay();
             if (day !== 0 && day !== 6) daysAdded++;
           }
-          defaultDate.setHours(11, 0, 0, 0);
+          defaultDate.setUTCHours(5, 30, 0, 0); // 11:00 AM IST = 05:30 UTC
           scheduledDate = defaultDate.toISOString();
         }
 

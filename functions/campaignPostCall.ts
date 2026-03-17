@@ -592,7 +592,8 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
     }
 
     const cbDays = rules.interested_callback_days || 2;
-    const cbDate = new Date(); cbDate.setDate(cbDate.getDate() + cbDays); cbDate.setHours(10, 0, 0, 0);
+    const cbDate = new Date(); cbDate.setDate(cbDate.getDate() + cbDays);
+    cbDate.setUTCHours(4, 30, 0, 0); // 10:00 AM IST = 04:30 UTC
     await base44.entities.Activity.create({
       client_id: campaign.client_id, lead_id: campaignLead.lead_id, type: 'followup',
       title: `Follow-up: ${lead?.name || campaignLead.lead_phone} (Interested)`,
@@ -602,16 +603,11 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
     callbackScheduled = true;
   }
 
-  // CALLBACK → NO Activity created here. The campaign's no_answer_retry mechanism
-  // OR the postCallActionExtractor will handle scheduling the callback.
-  // Creating an Activity here caused DUPLICATE calls (campaign retry + activity-based call).
   if (outcome === 'callback') {
-    callbackScheduled = true; // Flag it but don't create a duplicate Activity
+    callbackScheduled = true;
     console.log(`[campaignPostCall] Callback outcome — skipping Activity creation (campaign retry handles this)`);
   }
 
-  // Tier-based activities — only create TASK type (human notification), NOT call/followup
-  // because those would trigger executeScheduledActivities to make duplicate calls
   if (campaignLead.lead_id && qualificationTier && outcome !== 'not_answered') {
     if (qualificationTier === 'hot' && !callbackScheduled) {
       const due = new Date(); due.setHours(due.getHours() + 4);
@@ -762,7 +758,8 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
     }
 
     const cbDays = rules.interested_callback_days || 2;
-    const cbDate = new Date(); cbDate.setDate(cbDate.getDate() + cbDays); cbDate.setHours(10, 0, 0, 0);
+    const cbDate = new Date(); cbDate.setDate(cbDate.getDate() + cbDays);
+    cbDate.setUTCHours(4, 30, 0, 0); // 10:00 AM IST = 04:30 UTC
     await base44.entities.Activity.create({
       client_id: campaign.client_id, lead_id: campaignLead.lead_id, type: 'followup',
       title: `Follow-up: ${lead?.name || campaignLead.lead_phone} (Interested)`,
@@ -772,7 +769,6 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
     callbackScheduled = true;
   }
 
-  // CALLBACK → Don't create Activity here (campaign retry + postCallActionExtractor handle it)
   if (outcome === 'callback') {
     callbackScheduled = true;
     console.log(`[campaignPostCall] doFollowUpActions: callback outcome — skipping Activity (no duplicate calls)`);

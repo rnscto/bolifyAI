@@ -226,8 +226,18 @@ Respond ONLY in valid JSON with this exact structure.`
       console.log(`[processTranscript] Lead ${callLog.lead_id} updated — Score: ${leadScore}, Tier: ${qualificationTier}`);
     }
 
+    // ===== IST TIMEZONE HELPER =====
+    // Server runs in UTC. IST = UTC + 5:30. To schedule at 10:00 IST, set UTC to 04:30.
+    function setISTHours(date, hours, minutes = 0) {
+      const utcHours = hours - 5;
+      const utcMinutes = minutes - 30;
+      date.setUTCHours(utcHours, utcMinutes, 0, 0);
+      // Handle underflow (negative minutes/hours)
+      if (utcMinutes < 0) { date.setUTCHours(utcHours - 1, utcMinutes + 60, 0, 0); }
+      return date;
+    }
+
     // ===== CREATE AI-DRIVEN ACTIVITIES BASED ON TIER =====
-    // existingLead was fetched above in the lead update block
     let leadForActivities = null;
     if (callLog.lead_id) {
       try { leadForActivities = await base44.entities.Lead.get(callLog.lead_id); } catch (_) {}
@@ -254,7 +264,7 @@ Respond ONLY in valid JSON with this exact structure.`
           demoDate.setDate(demoDate.getDate() + 1);
           if (demoDate.getDay() === 0) demoDate.setDate(demoDate.getDate() + 1);
           if (demoDate.getDay() === 6) demoDate.setDate(demoDate.getDate() + 2);
-          demoDate.setHours(10, 0, 0, 0);
+          setISTHours(demoDate, 10, 0); // 10:00 AM IST
           await base44.entities.Activity.create({
             client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
             type: 'demo',
@@ -272,7 +282,7 @@ Respond ONLY in valid JSON with this exact structure.`
         followupDate.setDate(followupDate.getDate() + 1);
         if (followupDate.getDay() === 0) followupDate.setDate(followupDate.getDate() + 1);
         if (followupDate.getDay() === 6) followupDate.setDate(followupDate.getDate() + 2);
-        followupDate.setHours(11, 0, 0, 0);
+        setISTHours(followupDate, 11, 0); // 11:00 AM IST
         await base44.entities.Activity.create({
           client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
           type: 'followup',
@@ -287,6 +297,7 @@ Respond ONLY in valid JSON with this exact structure.`
       if (qualificationTier === 'nurture') {
         const reengageDate = new Date();
         reengageDate.setDate(reengageDate.getDate() + 5);
+        setISTHours(reengageDate, 11, 0); // 11:00 AM IST
         await base44.entities.Activity.create({
           client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
           type: 'followup',
@@ -298,7 +309,6 @@ Respond ONLY in valid JSON with this exact structure.`
         actionsCreated.push('nurture_followup');
       }
 
-      // Update lead next_followup_date
       if (actionsCreated.length > 0) {
         const nextFollowup = qualificationTier === 'hot' ? new Date(Date.now() + 4 * 3600000) :
           qualificationTier === 'warm' ? new Date(Date.now() + 24 * 3600000) :
