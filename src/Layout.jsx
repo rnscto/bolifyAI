@@ -135,6 +135,8 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Activities', path: 'ClientActivities', icon: Activity },
     { name: 'Automation Engine', path: 'ClientAutomationEngine', icon: Zap },
     { name: 'Social Media', path: 'ClientSocialMedia', icon: Image },
+    { name: 'Content Calendar', path: 'SocialMediaCalendar', icon: Activity },
+    { name: 'Brand Settings', path: 'ClientBrandSettings', icon: Settings },
     { name: 'CRM Integration', path: 'ClientCRM', icon: Database },
     { name: 'Integrations', path: 'ClientIntegrations', icon: Activity },
     { name: 'Subscription', path: 'ClientSubscription', icon: CreditCard },

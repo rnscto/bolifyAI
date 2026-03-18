@@ -11,6 +11,8 @@ import PartnerReferral from './pages/PartnerReferral';
 import CompliancePolicy from './pages/CompliancePolicy';
 import AdminComplaints from './pages/AdminComplaints';
 import ClientSocialMedia from './pages/ClientSocialMedia';
+import SocialMediaCalendar from './pages/SocialMediaCalendar';
+import ClientBrandSettings from './pages/ClientBrandSettings';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -80,6 +82,16 @@ const AuthenticatedApp = () => {
       <Route path="/ClientSocialMedia" element={
         <LayoutWrapper currentPageName="ClientSocialMedia">
           <ClientSocialMedia />
+        </LayoutWrapper>
+      } />
+      <Route path="/SocialMediaCalendar" element={
+        <LayoutWrapper currentPageName="SocialMediaCalendar">
+          <SocialMediaCalendar />
+        </LayoutWrapper>
+      } />
+      <Route path="/ClientBrandSettings" element={
+        <LayoutWrapper currentPageName="ClientBrandSettings">
+          <ClientBrandSettings />
         </LayoutWrapper>
       } />
       <Route path="*" element={<PageNotFound />} />

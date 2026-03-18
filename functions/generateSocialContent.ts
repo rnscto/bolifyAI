@@ -76,11 +76,22 @@ Deno.serve(async (req) => {
 
     for (const client of clientsToProcess) {
       try {
+        // Load brand settings for this client
+        let brand = {};
+        try {
+          const brandSettings = await svc.entities.BrandSettings.filter({ client_id: client.id });
+          if (brandSettings.length > 0) brand = brandSettings[0];
+        } catch (_) {}
+
+        // Determine post count based on frequency
+        const freq = brand.posting_frequency || 'daily';
+        const maxPosts = freq === 'twice_daily' ? 4 : freq === 'thrice_weekly' ? 2 : freq === 'weekly' ? 2 : 2;
+
         // Check if content already generated for today
         const existingPosts = await svc.entities.SocialMediaPost.filter({
           client_id: client.id, scheduled_date: today
         });
-        if (existingPosts.length >= 2) {
+        if (existingPosts.length >= maxPosts) {
           results.errors.push({ client_id: client.id, reason: 'Already has posts for today' });
           continue;
         }
@@ -90,29 +101,47 @@ Deno.serve(async (req) => {
         const dayOfWeek = istNow.toLocaleDateString('en-IN', { weekday: 'long' });
         const monthName = istNow.toLocaleDateString('en-IN', { month: 'long' });
 
-        const contentTypes = ['promotional', 'educational', 'tips', 'engagement', 'behind_the_scenes'];
+        const contentTypes = brand.content_themes?.length > 0
+          ? brand.content_themes
+          : ['promotional', 'educational', 'tips', 'engagement', 'behind_the_scenes'];
         const randomType = contentTypes[Math.floor(Math.random() * contentTypes.length)];
 
-        const prompt = `Generate 2 social media posts for a business with these details:
+        // Build brand context for the prompt
+        const brandContext = [];
+        if (brand.brand_voice) brandContext.push(`Brand Voice: ${brand.brand_voice}`);
+        if (brand.tone) brandContext.push(`Tone: ${brand.tone}`);
+        if (brand.target_audience) brandContext.push(`Target Audience: ${brand.target_audience}`);
+        if (brand.tagline) brandContext.push(`Brand Tagline: "${brand.tagline}"`);
+        if (brand.language_preference) brandContext.push(`Language: ${brand.language_preference === 'hinglish' ? 'Mix of Hindi and English (Hinglish)' : brand.language_preference === 'bilingual' ? 'Bilingual English + Hindi' : brand.language_preference}`);
+        if (brand.cta_style) brandContext.push(`Preferred CTA: ${brand.cta_style}`);
+        if (brand.avoid_topics) brandContext.push(`AVOID these topics: ${brand.avoid_topics}`);
+        if (brand.competitor_brands) brandContext.push(`Differentiate from competitors: ${brand.competitor_brands}`);
+        if (brand.brand_colors) brandContext.push(`Brand Colors: ${brand.brand_colors} — use in poster design`);
+
+        const postsToGenerate = Math.min(maxPosts - existingPosts.length, 2);
+
+        const prompt = `Generate ${postsToGenerate} social media posts for a business with these details:
 - Company: ${client.company_name}
 - Industry: ${client.industry || 'General Business'}
 - Today: ${dayOfWeek}, ${today} (${monthName})
+${brandContext.length > 0 ? '\nBRAND GUIDELINES:\n' + brandContext.join('\n') : ''}
 
-Create 2 DIFFERENT posts:
+Create ${postsToGenerate} DIFFERENT posts:
 1. A ${randomType} post
-2. A different type (educational, tips, engagement, promotional, or behind_the_scenes)
+2. ${postsToGenerate > 1 ? 'A different type from: ' + contentTypes.join(', ') : ''}
 
 Each post should have:
 - A catchy title (under 10 words)
-- A compelling caption (80-150 words, professional Indian business English)
+- A compelling caption (80-150 words${brand.tone ? ', ' + brand.tone + ' tone' : ', professional Indian business English'})
 - 5-8 relevant hashtags
-- A detailed image prompt for generating a poster (describe colors, layout, text overlays, style)
+- A detailed image prompt for generating a poster (describe colors, layout, text overlays, style${brand.brand_colors ? ' — use brand colors: ' + brand.brand_colors : ''})
 - The content_type
 
+${brand.tagline ? 'Naturally weave in the tagline "' + brand.tagline + '" where appropriate.' : ''}
 Make content relevant to the ${client.industry || 'business'} industry. Be creative, trendy, and engaging.`;
 
         const generated = await azureLLM(prompt, 
-          'You are an expert social media marketer for Indian businesses. Create engaging, professional content. Always respond in valid JSON.',
+          `You are an expert social media marketer for Indian businesses. ${brand.brand_voice ? 'Brand voice: ' + brand.brand_voice + '.' : ''} Create engaging${brand.tone ? ', ' + brand.tone : ''} content. Always respond in valid JSON.`,
           {
             type: "object",
             properties: {
@@ -139,7 +168,7 @@ Make content relevant to the ${client.industry || 'business'} industry. Be creat
           // Generate poster image
           let posterUrl = '';
           try {
-            const imagePrompt = `Professional social media poster for ${client.company_name} (${client.industry || 'business'}). ${post.image_prompt}. Modern, clean design with vibrant colors. No text watermarks. Square format 1080x1080.`;
+            const imagePrompt = `Professional social media poster for ${client.company_name} (${client.industry || 'business'}). ${post.image_prompt}. ${brand.brand_colors ? 'Use brand colors: ' + brand.brand_colors + '.' : ''} ${brand.logo_url ? 'Include company branding.' : ''} Modern, clean design with vibrant colors. No text watermarks. Square format 1080x1080.`;
             const imgRes = await svc.integrations.Core.GenerateImage({ prompt: imagePrompt });
             posterUrl = imgRes?.url || '';
           } catch (imgErr) {
