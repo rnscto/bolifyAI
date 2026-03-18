@@ -1,12 +1,20 @@
 import { createClient } from 'npm:@base44/sdk@0.8.20';
-import { Resend } from 'npm:resend@4.0.0';
+import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
-const resend = new Resend(Deno.env.get('RESEND_API_KEY'));
+const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
+const emailClient = new EmailClient(connStr);
 
 async function sendEmail({ to, subject, html }) {
-  const { data, error } = await resend.emails.send({ from: 'VaaniAI <noreply@vaaniai.io>', to, subject, html });
-  if (error) throw new Error(`Resend error: ${JSON.stringify(error)}`);
-  return data;
+  const message = {
+    senderAddress: 'DoNotReply@vaaniai.io',
+    displayName: 'VaaniAI',
+    content: { subject, html },
+    recipients: { to: [{ address: to }] }
+  };
+  const poller = await emailClient.beginSend(message);
+  const result = await poller.pollUntilDone();
+  if (result.status !== 'Succeeded') throw new Error(`ACS Email error: ${result.error?.message || result.status}`);
+  return result;
 }
 
 Deno.serve(async (req) => {
