@@ -10,6 +10,7 @@ import { User, Building, Phone, Mail, Save, Loader2, Shield, FileText } from 'lu
 import { toast } from 'sonner';
 import ClientComplianceTab from '../components/compliance/ClientComplianceTab';
 import ClientAgreementViewer from '../components/client/ClientAgreementViewer';
+import KYCUpload from '../components/client/KYCUpload';
 
 export default function ClientSettings() {
   const [user, setUser] = useState(null);
@@ -82,6 +83,7 @@ export default function ClientSettings() {
       <Tabs defaultValue="profile">
         <TabsList className="mb-4">
           <TabsTrigger value="profile">Profile & Account</TabsTrigger>
+          <TabsTrigger value="kyc"><Shield className="w-4 h-4 mr-1" /> KYC</TabsTrigger>
           <TabsTrigger value="agreement"><FileText className="w-4 h-4 mr-1" /> Agreement</TabsTrigger>
           <TabsTrigger value="compliance"><Shield className="w-4 h-4 mr-1" /> Compliance</TabsTrigger>
         </TabsList>
@@ -154,6 +156,10 @@ export default function ClientSettings() {
         Save Changes
       </Button>
       </div>
+        </TabsContent>
+
+        <TabsContent value="kyc">
+          {client && <KYCUpload client={client} />}
         </TabsContent>
 
         <TabsContent value="agreement">
