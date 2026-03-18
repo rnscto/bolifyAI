@@ -111,17 +111,41 @@ Return JSON with this exact structure:
   ]
 }
 
-RULES:
-- If customer says "call me tomorrow/next week/Thursday" → create a "call" activity with the correct date at 10:00 AM IST (= 04:30 UTC)
-- If customer says "send me pricing/brochure/details/email" → create an "email" activity scheduled immediately
-- If customer says "let's schedule a demo/meeting" → create appropriate activity
-- If customer mentions a specific time like "12 PM" or "afternoon" → that's IST, convert to UTC
-- If customer mentions visiting or a site visit → create "visit" activity
+RULES — BE VERY SPECIFIC AND THOROUGH:
+
+CALLBACK/RECALL SCHEDULING:
+- "call me after 1 hour / 2 hours / 30 minutes" → create "call" activity with scheduled_date = current time + that duration (converted to UTC)
+- "call me tomorrow" → create "call" at next business day 10:00 AM IST
+- "call me at 3 PM / call at 3 baje" → create "call" at 3:00 PM IST today (or tomorrow if already past)
+- "call me next week / Monday / Thursday" → create "call" at that day 10:00 AM IST
+- "baad mein call karo / abhi busy hu" → create "call" in 2 hours from now
+- "kal subah call karo" → create "call" tomorrow 10:00 AM IST
+- "shaam ko call karo" → create "call" today/tomorrow 5:00 PM IST
+- If customer seems interested but says "call later" without specific time → default 4 hours from now
+
+EMAIL/SEND DETAILS:
+- "send me details / pricing / brochure / information on email/WhatsApp" → create "email" activity scheduled IMMEDIATELY (now) with title "Send details/pricing to [name]" and high priority
+- "email bhej do / details bhejo / price list bhejo" → create "email" activity IMMEDIATELY
+- "mujhe mail karo with quotation / proposal" → create "email" with title "Send quotation/proposal"
+- If customer asks to send anything (PDF, brochure, rate card, proposal) → create "email" immediately
+
+DEMO/MEETING/VISIT:
+- "let's schedule a demo/meeting" → create "demo" or "meeting" activity
+- "I want to see a demo" → create "demo" with high priority
+- "come to office / site visit chahiye" → create "visit" activity
+
+AGREEMENT/CONVERSION:
+- Customer agrees to buy/sign up/start → create "task" with title "Process order/signup for [name]" with HIGH priority
+- "haan chalao / start karo / sign up karo" → create "task" for conversion processing
+
+OTHER:
 - If there's any follow-up commitment by the agent → create the corresponding activity
-- If no specific date mentioned for callback, default to 2 business days from today at 11:00 AM IST (= 05:30 UTC)
-- For lead_notes: capture company size, budget range, pain points, competitor mentions, decision makers, timeline, product interests
-- Return empty actions array if no follow-up actions are needed (e.g., do_not_call, clear rejection)
-- ALWAYS set priority: "high" for interested/demo/appointment, "medium" for callbacks, "low" for general follow-ups`
+- If customer mentions visiting or a site visit → create "visit" activity
+- If no specific date mentioned for callback, default to 4 hours from now
+- For lead_notes: capture company size, budget range, pain points, competitor mentions, decision makers, timeline, product interests, specific questions asked
+- Return empty actions array ONLY if customer clearly said "not interested" or "do not call"
+- ALWAYS set priority: "high" for interested/demo/appointment/send-details, "medium" for callbacks, "low" for general follow-ups
+- IMPORTANT: Extract EVERY actionable request — do NOT skip requests to send emails/details/pricing`
             },
             {
               role: 'user',
@@ -154,8 +178,8 @@ RULES:
 
     const results = { lead_notes_updated: false, activities_created: 0, skipped_duplicates: 0, details: [] };
 
-    // ── DEDUP: Check if this call is from a campaign ──
-    // If yes, skip ALL activity creation — campaignPostCall handles everything
+    // Campaign calls: still extract actions (emails, callbacks, specific requests)
+    // Only skip generic tier-based activities that campaignPostCall already creates
     let isCampaignCall = false;
     if (callLog.id) {
       try {
@@ -170,8 +194,7 @@ RULES:
       } catch (_) {}
     }
     if (isCampaignCall) {
-      // Still extract lead notes (useful), but skip ALL activity creation
-      console.log(`[ActionExtractor] Campaign call detected — will extract notes only, skip all activities`);
+      console.log(`[ActionExtractor] Campaign call detected — will extract specific actions (emails, timed callbacks) but skip generic followups`);
     }
     const leadInActiveCampaign = isCampaignCall;
 
@@ -216,10 +239,10 @@ RULES:
         };
         const activityType = typeMap[action.type] || 'task';
 
-        // ── DEDUP CHECK 1: Skip ALL activities if this is a campaign call ──
-        // campaignPostCall handles all follow-up actions for campaign calls
-        if (leadInActiveCampaign) {
-          console.log(`[ActionExtractor] Skipped ${activityType} "${action.title}": campaign call — handled by campaignPostCall`);
+        // ── For campaign calls: skip only generic "followup" activities (campaignPostCall creates those)
+        // BUT allow specific actions: email, demo, call (with specific time), task, visit, meeting
+        if (leadInActiveCampaign && activityType === 'followup') {
+          console.log(`[ActionExtractor] Skipped generic followup "${action.title}" for campaign call — handled by campaignPostCall`);
           results.skipped_duplicates++;
           continue;
         }
