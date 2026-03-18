@@ -129,23 +129,9 @@ export default function BrandVoiceTab({ form, setForm, newTheme, setNewTheme }) 
               <Button size="sm" variant="outline" onClick={addTheme}><Plus className="w-4 h-4" /></Button>
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <Label>Posting Frequency</Label>
-              <Select value={form.posting_frequency} onValueChange={v => setForm(f => ({ ...f, posting_frequency: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="daily">Daily (2 posts)</SelectItem>
-                  <SelectItem value="twice_daily">Twice Daily (4 posts)</SelectItem>
-                  <SelectItem value="thrice_weekly">3x per week</SelectItem>
-                  <SelectItem value="weekly">Weekly</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label>CTA Style</Label>
-              <Input placeholder="Visit our website, Call now, DM us" value={form.cta_style} onChange={e => setForm(f => ({ ...f, cta_style: e.target.value }))} />
-            </div>
+          <div>
+            <Label>CTA Style</Label>
+            <Input placeholder="Visit our website, Call now, DM us" value={form.cta_style} onChange={e => setForm(f => ({ ...f, cta_style: e.target.value }))} />
           </div>
           <div>
             <Label>Topics to Avoid</Label>
