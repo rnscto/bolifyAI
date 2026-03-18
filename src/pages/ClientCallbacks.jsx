@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import {
-  Phone, RefreshCw, Calendar as CalendarIcon, List, Filter,
+  Phone, RefreshCw, Calendar as CalendarIcon, List,
   AlertTriangle, Clock, CheckCircle2, ClipboardList
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
