@@ -504,8 +504,19 @@ Respond with JSON: {greeting, likely_intent, qualifying_questions, routing, is_p
             });
             console.log(`[smartfloWebhook] CampaignLead ${campaignLead.lead_name} → ${outcome}`);
             
-            // Handle no-answer retry
+            // Handle no-answer retry — do NOT change lead status/score for unanswered calls
             if (outcome === 'not_answered') {
+              // Only update engagement metadata on the lead, preserve status/score
+              if (campaignLead.lead_id) {
+                try {
+                  await base44.entities.Lead.update(campaignLead.lead_id, {
+                    last_call_date: new Date().toISOString(),
+                    last_engagement_date: new Date().toISOString()
+                  });
+                  console.log(`[smartfloWebhook] Lead ${campaignLead.lead_id} — not_answered, preserved existing status/score`);
+                } catch (_) {}
+              }
+              
               const campaign = await base44.entities.Campaign.get(campaignLead.campaign_id);
               const rules = campaign?.followup_rules || {};
               if (rules.no_answer_retry !== false) {
