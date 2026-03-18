@@ -75,7 +75,8 @@ export default function Onboarding() {
     setLoading(false);
   };
 
-  const handleComplete = async () => {
+  const handleComplete = async (agrDataParam) => {
+    const agrData = agrDataParam || agreementData;
     setSaving(true);
     
     const now = new Date();
@@ -195,33 +196,33 @@ export default function Onboarding() {
     });
 
     // Save client agreement if signed
-    if (agreementData) {
+    if (agrData) {
       try {
         await base44.entities.ClientAgreement.create({
           client_id: client.id,
-          template_id: agreementData.template_id,
-          template_version: agreementData.template_version,
-          agreement_number: agreementData.agreement_number,
+          template_id: agrData.template_id,
+          template_version: agrData.template_version,
+          agreement_number: agrData.agreement_number,
           status: 'signed',
           client_name: profileData.company_name,
-          signatory_name: agreementData.signature_name,
+          signatory_name: agrData.signature_name,
           signatory_email: user.email,
           signatory_designation: 'Authorized Signatory',
-          signature_name: agreementData.signature_name,
-          signature_image_url: agreementData.signature_image_url,
-          signed_date: agreementData.signed_date,
-          effective_date: agreementData.effective_date,
-          expiry_date: agreementData.expiry_date,
-          rendered_html: agreementData.rendered_html,
-          company_signatory_name: agreementData.company_signatory_name,
-          company_signatory_designation: agreementData.company_signatory_designation,
+          signature_name: agrData.signature_name,
+          signature_image_url: agrData.signature_image_url,
+          signed_date: agrData.signed_date,
+          effective_date: agrData.effective_date,
+          expiry_date: agrData.expiry_date,
+          rendered_html: agrData.rendered_html,
+          company_signatory_name: agrData.company_signatory_name,
+          company_signatory_designation: agrData.company_signatory_designation,
         });
         // Notify admin
         try {
           await base44.integrations.Core.SendEmail({
             to: 'yadav.nandkishor73@gmail.com',
-            subject: `[Client Agreement Signed] ${profileData.company_name} — ${agreementData.agreement_number}`,
-            body: `<p>Client <strong>${profileData.company_name}</strong> (${user.email}) signed service agreement <strong>${agreementData.agreement_number}</strong>.</p>`
+            subject: `[Client Agreement Signed] ${profileData.company_name} — ${agrData.agreement_number}`,
+            body: `<p>Client <strong>${profileData.company_name}</strong> (${user.email}) signed service agreement <strong>${agrData.agreement_number}</strong>.</p>`
           });
         } catch (e) { console.log('Admin email failed:', e); }
       } catch (e) { console.error('Agreement save failed:', e); }
@@ -327,7 +328,7 @@ export default function Onboarding() {
           <AgreementSignStep
             onNext={(agrData) => {
               setAgreementData(agrData);
-              handleComplete();
+              handleComplete(agrData);
             }}
             onBack={() => setStep(4)}
             profileData={profileData}
