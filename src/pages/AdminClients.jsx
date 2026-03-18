@@ -27,8 +27,10 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, Edit, Trash2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import ClientAgreementTemplateEditor from '../components/admin/ClientAgreementTemplateEditor';
 
 export default function AdminClients() {
   const [clients, setClients] = useState([]);
@@ -142,6 +144,16 @@ export default function AdminClients() {
           <h1 className="text-3xl font-bold text-gray-900">Clients</h1>
           <p className="text-gray-600 mt-1">Manage your client accounts</p>
         </div>
+      </div>
+
+      <Tabs defaultValue="clients">
+        <TabsList>
+          <TabsTrigger value="clients">Clients ({clients.length})</TabsTrigger>
+          <TabsTrigger value="agreements"><FileText className="w-4 h-4 mr-1" /> Client Agreements</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="clients">
+      <div className="flex items-center justify-end">
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -308,6 +320,12 @@ export default function AdminClients() {
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="agreements">
+          <ClientAgreementTemplateEditor />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
