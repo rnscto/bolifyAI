@@ -24,7 +24,8 @@ import {
   Globe,
   Handshake,
   Zap,
-  PhoneForwarded
+  PhoneForwarded,
+  Image
 } from 'lucide-react';
 import AgreementGate from './components/client/AgreementGate';
 
@@ -133,6 +134,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Knowledge Base', path: 'ClientKnowledgeBase', icon: BookOpen },
     { name: 'Activities', path: 'ClientActivities', icon: Activity },
     { name: 'Automation Engine', path: 'ClientAutomationEngine', icon: Zap },
+    { name: 'Social Media', path: 'ClientSocialMedia', icon: Image },
     { name: 'CRM Integration', path: 'ClientCRM', icon: Database },
     { name: 'Integrations', path: 'ClientIntegrations', icon: Activity },
     { name: 'Subscription', path: 'ClientSubscription', icon: CreditCard },

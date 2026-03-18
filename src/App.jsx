@@ -10,6 +10,7 @@ import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import PartnerReferral from './pages/PartnerReferral';
 import CompliancePolicy from './pages/CompliancePolicy';
 import AdminComplaints from './pages/AdminComplaints';
+import ClientSocialMedia from './pages/ClientSocialMedia';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -74,6 +75,11 @@ const AuthenticatedApp = () => {
       <Route path="/AdminComplaints" element={
         <LayoutWrapper currentPageName="AdminComplaints">
           <AdminComplaints />
+        </LayoutWrapper>
+      } />
+      <Route path="/ClientSocialMedia" element={
+        <LayoutWrapper currentPageName="ClientSocialMedia">
+          <ClientSocialMedia />
         </LayoutWrapper>
       } />
       <Route path="*" element={<PageNotFound />} />
