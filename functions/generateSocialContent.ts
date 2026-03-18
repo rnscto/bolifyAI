@@ -130,9 +130,11 @@ Deno.serve(async (req) => {
           if (brandSettings.length > 0) brand = brandSettings[0];
         } catch (_) {}
 
-        // Check for today's occasion
+        // Check for today's occasion (built-in + custom)
         const enabledOccasions = brand.enabled_occasions || [];
-        const todayOccasions = OCCASIONS.filter(o => o.date === todayMMDD && enabledOccasions.includes(o.id));
+        const customOccasions = (brand.custom_occasions || []);
+        const allOccasionsList = [...OCCASIONS, ...customOccasions];
+        const todayOccasions = allOccasionsList.filter(o => o.date === todayMMDD && enabledOccasions.includes(o.id));
 
         const freq = brand.posting_frequency || 'daily';
         const maxPosts = freq === 'twice_daily' ? 4 : freq === 'thrice_weekly' ? 2 : freq === 'weekly' ? 2 : 2;
