@@ -1,5 +1,6 @@
 import React from 'react';
 import { Badge } from "@/components/ui/badge";
+import { getOccasionsForDate, OCCASION_TYPES } from '@/lib/marketingCalendar';
 
 const statusDot = {
   pending_approval: 'bg-yellow-400',
@@ -11,6 +12,7 @@ const statusDot = {
 function DayCell({ date, posts, isToday, isCurrentMonth, onDrop, onPostClick }) {
   const dateStr = date.toISOString().split('T')[0];
   const dayPosts = posts.filter(p => p.scheduled_date === dateStr);
+  const occasions = getOccasionsForDate(dateStr);
 
   const handleDragOver = (e) => { e.preventDefault(); e.currentTarget.classList.add('bg-blue-50'); };
   const handleDragLeave = (e) => { e.currentTarget.classList.remove('bg-blue-50'); };
@@ -31,6 +33,11 @@ function DayCell({ date, posts, isToday, isCurrentMonth, onDrop, onPostClick }) 
       <div className={`text-xs font-medium mb-1 ${isToday ? 'text-blue-700 font-bold' : 'text-gray-500'}`}>
         {date.getDate()}
       </div>
+      {occasions.map(o => (
+        <div key={o.id} className="text-xs truncate px-1 py-0.5 rounded bg-orange-50 text-orange-700 mb-1" title={o.name}>
+          {o.emoji} {o.name}
+        </div>
+      ))}
       <div className="space-y-1">
         {dayPosts.slice(0, 3).map(post => (
           <div
