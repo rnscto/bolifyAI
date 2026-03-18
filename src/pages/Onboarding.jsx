@@ -10,9 +10,10 @@ import IndustryStep from '../components/onboarding/IndustryStep';
 import AgentSetupStep from '../components/onboarding/AgentSetupStep';
 import DIDSelectionStep from '../components/onboarding/DIDSelectionStep';
 import ComplianceConsentStep from '../components/onboarding/ComplianceConsentStep';
+import AgreementSignStep from '../components/onboarding/AgreementSignStep';
 import OnboardingComplete from '../components/onboarding/OnboardingComplete';
 
-const STEPS = ['Profile', 'Industry', 'Agent', 'Phone Number', 'Compliance', 'Complete'];
+const STEPS = ['Profile', 'Industry', 'Agent', 'Phone Number', 'Compliance', 'Agreement', 'Complete'];
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -37,6 +38,7 @@ export default function Onboarding() {
   const [referralCode, setReferralCode] = useState('');
   const [existingClient, setExistingClient] = useState(null);
   const [complianceConsents, setComplianceConsents] = useState({});
+  const [agreementData, setAgreementData] = useState(null);
 
   useEffect(() => {
     // Capture referral code from URL
@@ -192,9 +194,42 @@ export default function Onboarding() {
       details: `Onboarding compliance consent given: ${consentTypes.filter(c => complianceConsents[c]).join(', ')}`,
     });
 
+    // Save client agreement if signed
+    if (agreementData) {
+      try {
+        await base44.entities.ClientAgreement.create({
+          client_id: client.id,
+          template_id: agreementData.template_id,
+          template_version: agreementData.template_version,
+          agreement_number: agreementData.agreement_number,
+          status: 'signed',
+          client_name: profileData.company_name,
+          signatory_name: agreementData.signature_name,
+          signatory_email: user.email,
+          signatory_designation: 'Authorized Signatory',
+          signature_name: agreementData.signature_name,
+          signature_image_url: agreementData.signature_image_url,
+          signed_date: agreementData.signed_date,
+          effective_date: agreementData.effective_date,
+          expiry_date: agreementData.expiry_date,
+          rendered_html: agreementData.rendered_html,
+          company_signatory_name: agreementData.company_signatory_name,
+          company_signatory_designation: agreementData.company_signatory_designation,
+        });
+        // Notify admin
+        try {
+          await base44.integrations.Core.SendEmail({
+            to: 'yadav.nandkishor73@gmail.com',
+            subject: `[Client Agreement Signed] ${profileData.company_name} — ${agreementData.agreement_number}`,
+            body: `<p>Client <strong>${profileData.company_name}</strong> (${user.email}) signed service agreement <strong>${agreementData.agreement_number}</strong>.</p>`
+          });
+        } catch (e) { console.log('Admin email failed:', e); }
+      } catch (e) { console.error('Agreement save failed:', e); }
+    }
+
     toast.success('Account created successfully!');
     setSaving(false);
-    setStep(5); // Show completion screen
+    setStep(6); // Show completion screen
   };
 
   if (loading) {
@@ -208,7 +243,7 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50">
       {/* Progress header */}
-      {step < 5 && (
+      {step < 6 && (
         <div className="sticky top-0 bg-white/80 backdrop-blur-lg border-b z-10">
           <div className="max-w-3xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-3">
@@ -217,10 +252,10 @@ export default function Onboarding() {
                 alt="VaaniAI"
                 className="h-10 object-contain"
               />
-              <span className="text-sm text-gray-500">Step {step + 1} of 5</span>
+              <span className="text-sm text-gray-500">Step {step + 1} of 6</span>
             </div>
             <div className="flex gap-2">
-              {STEPS.slice(0, 5).map((s, i) => (
+              {STEPS.slice(0, 6).map((s, i) => (
                 <div
                   key={s}
                   className={`flex-1 h-1.5 rounded-full transition-all ${
@@ -283,12 +318,24 @@ export default function Onboarding() {
           <ComplianceConsentStep
             consents={complianceConsents}
             onConsentsChange={setComplianceConsents}
-            onNext={handleComplete}
+            onNext={() => setStep(5)}
             onBack={() => setStep(3)}
           />
         )}
 
         {step === 5 && (
+          <AgreementSignStep
+            onNext={(agrData) => {
+              setAgreementData(agrData);
+              handleComplete();
+            }}
+            onBack={() => setStep(4)}
+            profileData={profileData}
+            user={user}
+          />
+        )}
+
+        {step === 6 && (
           <OnboardingComplete
             agentName={agentData.name}
             didNumber={selectedDID ? `${selectedDID.country_code || '+91'} ${selectedDID.number}` : null}
