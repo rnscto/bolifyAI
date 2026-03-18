@@ -31,6 +31,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, Edit, Trash2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import ClientAgreementTemplateEditor from '../components/admin/ClientAgreementTemplateEditor';
+import AdminSignedAgreements from '../components/admin/AdminSignedAgreements';
 
 export default function AdminClients() {
   const [clients, setClients] = useState([]);
@@ -149,7 +150,8 @@ export default function AdminClients() {
       <Tabs defaultValue="clients">
         <TabsList>
           <TabsTrigger value="clients">Clients ({clients.length})</TabsTrigger>
-          <TabsTrigger value="agreements"><FileText className="w-4 h-4 mr-1" /> Client Agreements</TabsTrigger>
+          <TabsTrigger value="signed"><FileText className="w-4 h-4 mr-1" /> Signed Agreements</TabsTrigger>
+          <TabsTrigger value="agreements">Agreement Templates</TabsTrigger>
         </TabsList>
 
         <TabsContent value="clients">
@@ -320,6 +322,10 @@ export default function AdminClients() {
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="signed">
+          <AdminSignedAgreements />
         </TabsContent>
 
         <TabsContent value="agreements">
