@@ -26,12 +26,14 @@ import {
   Zap,
   PhoneForwarded
 } from 'lucide-react';
+import AgreementGate from './components/client/AgreementGate';
 
 export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
   const [client, setClient] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
+  const [needsAgreement, setNeedsAgreement] = useState(false);
 
   const isPublicPage = ['Home', 'PrivacyPolicy', 'TermsOfService', 'RefundPolicy', 'PartnerSignup', 'PartnerReferral', 'CompliancePolicy'].includes(currentPageName);
   const isOnboardingPage = currentPageName === 'Onboarding';
@@ -64,6 +66,20 @@ export default function Layout({ children, currentPageName }) {
                 clients[0].account_status = 'expired';
               }
             }
+        // Check if client has signed agreement
+          if (clients[0].onboarding_completed) {
+            const signedAgreements = await base44.entities.ClientAgreement.filter({
+              client_id: clients[0].id,
+              status: 'signed'
+            });
+            if (signedAgreements.length === 0) {
+              // Check if there's an active template requiring signing
+              const activeTemplates = await base44.entities.ClientAgreementTemplate.filter({ status: 'active' });
+              if (activeTemplates.length > 0) {
+                setNeedsAgreement(true);
+              }
+            }
+          }
         } else {
           // No client record - redirect to onboarding
           window.location.href = createPageUrl('Onboarding');
@@ -151,6 +167,17 @@ export default function Layout({ children, currentPageName }) {
           Log In
         </button>
       </div>
+    );
+  }
+
+  // Block clients who haven't signed the agreement
+  if (needsAgreement && !isAdmin) {
+    return (
+      <AgreementGate
+        client={client}
+        user={user}
+        onSigned={() => setNeedsAgreement(false)}
+      />
     );
   }
 
