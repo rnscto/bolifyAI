@@ -93,11 +93,20 @@ Deno.serve(async (req) => {
 
         const hoursPast = (now - scheduledDate) / (1000 * 60 * 60);
 
-        // Mark as overdue if >24h past
-        if (hoursPast > 24) {
+        // Only mark as overdue if >24h past AND it's a human-action type.
+        // AI-handled types (call, followup) should NOT be overdue — they auto-execute.
+        const humanActionTypes = ['email', 'task', 'demo', 'visit', 'meeting', 'appointment', 'booking'];
+        if (hoursPast > 24 && humanActionTypes.includes(activityType)) {
           await svc.entities.Activity.update(activity.id, { status: 'overdue' });
           results.marked_overdue++;
-          console.log(`[FollowupEngine] Marked overdue: ${activity.id} (${activity.title})`);
+          console.log(`[FollowupEngine] Marked overdue: ${activity.id} (${activity.title}) — requires human attention`);
+          continue;
+        }
+        // For AI-handled types that are very old (>48h), mark them as overdue too (safety net)
+        if (hoursPast > 48 && !humanActionTypes.includes(activityType)) {
+          await svc.entities.Activity.update(activity.id, { status: 'overdue' });
+          results.marked_overdue++;
+          console.log(`[FollowupEngine] Marked overdue (safety net): ${activity.id} (${activity.title}) — 48h+ past`);
           continue;
         }
 
