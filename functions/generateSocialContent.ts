@@ -136,14 +136,13 @@ Deno.serve(async (req) => {
         const allOccasionsList = [...OCCASIONS, ...customOccasions];
         const todayOccasions = allOccasionsList.filter(o => o.date === todayMMDD && enabledOccasions.includes(o.id));
 
-        const freq = brand.posting_frequency || 'daily';
-        const maxPosts = freq === 'twice_daily' ? 4 : freq === 'thrice_weekly' ? 2 : freq === 'weekly' ? 2 : 2;
+        const MAX_DAILY_POSTS = 2;
 
         const existingPosts = await svc.entities.SocialMediaPost.filter({
           client_id: client.id, scheduled_date: today
         });
-        if (existingPosts.length >= maxPosts) {
-          results.errors.push({ client_id: client.id, reason: 'Already has posts for today' });
+        if (existingPosts.length >= MAX_DAILY_POSTS) {
+          results.errors.push({ client_id: client.id, reason: 'Daily limit of 2 posts reached' });
           continue;
         }
 
@@ -213,7 +212,7 @@ Deno.serve(async (req) => {
         if (brand.competitor_brands) ctx.push(`Differentiate from competitors: ${brand.competitor_brands}`);
         if (brand.brand_colors) ctx.push(`Brand Colors: ${brand.brand_colors}`);
 
-        const postsToGenerate = Math.min(maxPosts - existingPosts.length, 2);
+        const postsToGenerate = MAX_DAILY_POSTS - existingPosts.length;
 
         // Build occasion context
         let occasionInstruction = '';
