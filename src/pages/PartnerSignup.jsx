@@ -19,7 +19,7 @@ const BENEFITS = [
 
 export default function PartnerSignup() {
   const [form, setForm] = useState({
-    name: '', email: '', phone: '', company_name: '', city: '', state: '', gst_number: '', pan_number: ''
+    name: '', email: '', phone: '', company_name: '', city: '', state: '', gst_number: '', pan_number: '', registered_address: ''
   });
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -27,8 +27,8 @@ export default function PartnerSignup() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name || !form.email || !form.phone) {
-      setError('Please fill in name, email, and phone.');
+    if (!form.name || !form.email || !form.phone || !form.registered_address?.trim()) {
+      setError('Please fill in name, email, phone, and registered address.');
       return;
     }
     setSubmitting(true);
@@ -135,6 +135,17 @@ export default function PartnerSignup() {
                   <Label>PAN Number</Label>
                   <Input value={form.pan_number} onChange={e => setForm({...form, pan_number: e.target.value})} placeholder="Optional" />
                 </div>
+              </div>
+
+              <div>
+                <Label>Registered Address *</Label>
+                <textarea
+                  value={form.registered_address}
+                  onChange={e => setForm({...form, registered_address: e.target.value})}
+                  placeholder="Full registered business address including city, state, and PIN code"
+                  required
+                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[70px] mt-1"
+                />
               </div>
 
               {error && <p className="text-sm text-red-600">{error}</p>}
