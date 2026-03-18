@@ -32,6 +32,7 @@ import { Plus, Edit, Trash2, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import ClientAgreementTemplateEditor from '../components/admin/ClientAgreementTemplateEditor';
 import AdminSignedAgreements from '../components/admin/AdminSignedAgreements';
+import AdminKYCManagement from '../components/admin/AdminKYCManagement';
 
 export default function AdminClients() {
   const [clients, setClients] = useState([]);
@@ -150,6 +151,7 @@ export default function AdminClients() {
       <Tabs defaultValue="clients">
         <TabsList>
           <TabsTrigger value="clients">Clients ({clients.length})</TabsTrigger>
+          <TabsTrigger value="kyc">KYC Verification</TabsTrigger>
           <TabsTrigger value="signed"><FileText className="w-4 h-4 mr-1" /> Signed Agreements</TabsTrigger>
           <TabsTrigger value="agreements">Agreement Templates</TabsTrigger>
         </TabsList>
@@ -258,6 +260,7 @@ export default function AdminClients() {
                 <TableHead>Phone</TableHead>
                 <TableHead>Channels</TableHead>
                 <TableHead>Account</TableHead>
+                <TableHead>KYC</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Next Billing</TableHead>
                 <TableHead>Actions</TableHead>
@@ -266,7 +269,7 @@ export default function AdminClients() {
             <TableBody>
               {clients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-gray-500">
+                  <TableCell colSpan={9} className="text-center text-gray-500">
                     No clients found. Add your first client to get started.
                   </TableCell>
                 </TableRow>
@@ -286,6 +289,17 @@ export default function AdminClients() {
                         suspended: 'bg-gray-100 text-gray-800',
                       }[client.account_status] || 'bg-gray-100 text-gray-800'}>
                         {client.account_status || 'unknown'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={{
+                        pending: 'bg-yellow-100 text-yellow-800',
+                        under_review: 'bg-blue-100 text-blue-800',
+                        approved: 'bg-green-100 text-green-800',
+                        rejected: 'bg-red-100 text-red-800',
+                        not_required: 'bg-gray-100 text-gray-800',
+                      }[client.kyc_status] || 'bg-yellow-100 text-yellow-800'}>
+                        {(client.kyc_status || 'pending').replace('_', ' ')}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -322,6 +336,10 @@ export default function AdminClients() {
           </Table>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        <TabsContent value="kyc">
+          <AdminKYCManagement />
         </TabsContent>
 
         <TabsContent value="signed">
