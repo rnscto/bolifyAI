@@ -85,17 +85,25 @@ export default function Onboarding() {
 
     // 1. Create or update Client record
     let client;
+    const kycDeadline = new Date(now);
+    kycDeadline.setDate(kycDeadline.getDate() + 30);
+    const kycDeadlineStr = kycDeadline.toISOString().split('T')[0];
+
     if (existingClient) {
       await base44.entities.Client.update(existingClient.id, {
         company_name: profileData.company_name,
         email: profileData.email,
         phone: profileData.phone,
+        registered_address: profileData.registered_address || '',
+        company_type: profileData.company_type || '',
         industry: industry,
         status: 'active',
         account_status: existingClient.account_status || 'trial',
         trial_start_date: existingClient.trial_start_date || now.toISOString(),
         trial_end_date: existingClient.trial_end_date || trialEnd.toISOString(),
         onboarding_completed: true,
+        kyc_status: existingClient.kyc_status || 'pending',
+        kyc_deadline: existingClient.kyc_deadline || kycDeadlineStr,
       });
       client = { ...existingClient, id: existingClient.id };
     } else {
@@ -103,6 +111,8 @@ export default function Onboarding() {
         company_name: profileData.company_name,
         email: profileData.email,
         phone: profileData.phone,
+        registered_address: profileData.registered_address || '',
+        company_type: profileData.company_type || '',
         user_id: user.id,
         industry: industry,
         status: 'active',
@@ -111,6 +121,8 @@ export default function Onboarding() {
         trial_end_date: trialEnd.toISOString(),
         onboarding_completed: true,
         total_channels: 1,
+        kyc_status: 'pending',
+        kyc_deadline: kycDeadlineStr,
       });
     }
 
