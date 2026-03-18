@@ -215,15 +215,24 @@ Deno.serve(async (req) => {
     } else if (outcome !== 'not_answered' && (callLog.transcript || callLog.conversation_summary)) {
       aiResult = await doAIAnalysis(base44, callLog, campaignLead, campaignId, outcome, summary);
     } else if (campaignLead.lead_id) {
-      const outcomeToLeadStatus = {
-        interested: 'interested', not_interested: 'not_interested', callback: 'callback',
-        not_answered: 'callback', neutral: 'contacted', converted: 'converted', do_not_call: 'do_not_call'
-      };
-      await base44.entities.Lead.update(campaignLead.lead_id, {
-        status: outcomeToLeadStatus[outcome] || 'contacted',
-        last_call_date: new Date().toISOString(),
-        last_engagement_date: new Date().toISOString()
-      });
+      // For unanswered/no-transcript calls: only update engagement metadata, NOT status/score
+      if (outcome === 'not_answered') {
+        await base44.entities.Lead.update(campaignLead.lead_id, {
+          last_call_date: new Date().toISOString(),
+          last_engagement_date: new Date().toISOString()
+        });
+        console.log(`[campaignPostCall] Lead ${campaignLead.lead_id} — not_answered, preserved existing status/score`);
+      } else {
+        const outcomeToLeadStatus = {
+          interested: 'interested', not_interested: 'not_interested', callback: 'callback',
+          neutral: 'contacted', converted: 'converted', do_not_call: 'do_not_call'
+        };
+        await base44.entities.Lead.update(campaignLead.lead_id, {
+          status: outcomeToLeadStatus[outcome] || 'contacted',
+          last_call_date: new Date().toISOString(),
+          last_engagement_date: new Date().toISOString()
+        });
+      }
     }
 
     // Update campaign stats

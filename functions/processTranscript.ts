@@ -201,6 +201,8 @@ Respond ONLY in valid JSON with this exact structure.`
     console.log(`[processTranscript] Tier: ${qualificationTier} — ${qualificationReason}`);
 
     // Update lead with status, score, sentiment, tier, and intent signals
+    // CRITICAL: Only update score/status if this call had a real conversation.
+    // If call was not answered or had no meaningful transcript, preserve existing lead score & status.
     if (callLog.lead_id) {
       let existingLead = {};
       try { existingLead = await base44.entities.Lead.get(callLog.lead_id); } catch (_) {}
@@ -209,21 +211,75 @@ Respond ONLY in valid JSON with this exact structure.`
       const existingTags = existingLead.tags || [];
       const mergedTags = [...new Set([...existingTags, ...keyKeywords.slice(0, 10)])];
 
-      await base44.entities.Lead.update(callLog.lead_id, {
-        status: leadStatus,
-        score: leadScore,
-        sentiment: sentiment,
-        intent_signals: intentSignals,
-        score_breakdown: scoreBreakdown,
-        qualification_tier: qualificationTier,
-        qualification_reason: qualificationReason,
-        tags: mergedTags,
-        last_call_date: new Date().toISOString(),
-        last_engagement_date: new Date().toISOString(),
-        engagement_count: updatedEngagement,
-        notes: `[Score: ${leadScore}/100 | ${sentiment} | ${qualificationTier}] ${summary.substring(0, 300)}`
-      });
-      console.log(`[processTranscript] Lead ${callLog.lead_id} updated — Score: ${leadScore}, Tier: ${qualificationTier}`);
+      // Determine if this was a real conversation or a non-answer
+      const isNonAnswer = !transcript || transcript.length < 50 || 
+        ['no_answer', 'failed'].includes(callLog.status) ||
+        leadStatus === 'no_answer';
+      
+      // For non-answer calls: only update engagement metadata, NEVER overwrite score/status/tier
+      if (isNonAnswer) {
+        const nonAnswerUpdate = {
+          last_call_date: new Date().toISOString(),
+          last_engagement_date: new Date().toISOString(),
+          engagement_count: updatedEngagement,
+          tags: mergedTags,
+        };
+        await base44.entities.Lead.update(callLog.lead_id, nonAnswerUpdate);
+        console.log(`[processTranscript] Lead ${callLog.lead_id} — non-answer call, preserved existing score (${existingLead.score}) & status (${existingLead.status})`);
+      } else {
+        // Real conversation: only upgrade score, never downgrade from a higher previous score
+        // unless the lead explicitly said "not interested" or "do not call"
+        const existingScore = existingLead.score || 0;
+        const existingStatus = existingLead.status || 'new';
+        
+        // Determine if we should downgrade
+        const positiveStatuses = ['interested', 'converted', 'callback'];
+        const negativeStatuses = ['not_interested', 'do_not_call'];
+        const wasPositive = positiveStatuses.includes(existingStatus);
+        const isNowNegative = negativeStatuses.includes(leadStatus);
+        const isNowNeutral = ['contacted', 'new'].includes(leadStatus);
+        
+        // Only allow downgrade if lead explicitly expressed negativity
+        let finalScore = leadScore;
+        let finalStatus = leadStatus;
+        let finalTier = qualificationTier;
+        let finalReason = qualificationReason;
+        let finalSentiment = sentiment;
+        let finalIntents = intentSignals;
+        let finalBreakdown = scoreBreakdown;
+        
+        if (wasPositive && isNowNeutral && existingScore > leadScore) {
+          // Lead was "interested" before, new call is just "contacted" with lower score
+          // → Preserve the higher previous state
+          finalScore = existingScore;
+          finalStatus = existingStatus;
+          finalTier = existingLead.qualification_tier || qualificationTier;
+          finalReason = existingLead.qualification_reason || qualificationReason;
+          finalSentiment = existingLead.sentiment || sentiment;
+          finalIntents = existingLead.intent_signals || intentSignals;
+          finalBreakdown = existingLead.score_breakdown || scoreBreakdown;
+          console.log(`[processTranscript] Lead ${callLog.lead_id} — preserving higher previous score ${existingScore} (was ${existingStatus}), new call scored ${leadScore} (${leadStatus})`);
+        } else if (wasPositive && isNowNegative) {
+          // Lead explicitly said "not interested" or "do not call" — allow downgrade
+          console.log(`[processTranscript] Lead ${callLog.lead_id} — downgrading: was ${existingStatus}(${existingScore}), now ${leadStatus}(${leadScore}) — explicit negative response`);
+        }
+
+        await base44.entities.Lead.update(callLog.lead_id, {
+          status: finalStatus,
+          score: finalScore,
+          sentiment: finalSentiment,
+          intent_signals: finalIntents,
+          score_breakdown: finalBreakdown,
+          qualification_tier: finalTier,
+          qualification_reason: finalReason,
+          tags: mergedTags,
+          last_call_date: new Date().toISOString(),
+          last_engagement_date: new Date().toISOString(),
+          engagement_count: updatedEngagement,
+          notes: `[Score: ${finalScore}/100 | ${finalSentiment} | ${finalTier}] ${summary.substring(0, 300)}`
+        });
+        console.log(`[processTranscript] Lead ${callLog.lead_id} updated — Score: ${finalScore}, Tier: ${finalTier}, Status: ${finalStatus}`);
+      }
     }
 
     // ===== IST TIMEZONE HELPER =====
