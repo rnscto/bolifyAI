@@ -550,18 +550,37 @@ SCORING (total 100):
       console.error(`[campaignPostCall] AI scoring failed: ${e.message}`);
     }
 
-    // Update lead
+    // Update lead — protect existing higher scores from downgrade on neutral outcomes
+    const existingLead = lead || {};
+    const existingScore = existingLead.score || 0;
+    const existingStatus = existingLead.status || 'new';
+    const positiveStatuses = ['interested', 'converted', 'callback'];
+    const negativeStatuses = ['not_interested', 'do_not_call'];
+    const wasPositive = positiveStatuses.includes(existingStatus);
+    const isNowNeutral = ['contacted', 'neutral'].includes(outcome);
+    const isNowNegative = negativeStatuses.includes(outcome);
+    const newLeadStatus = { interested: 'interested', not_interested: 'not_interested', callback: 'callback',
+      not_answered: existingStatus, neutral: 'contacted', converted: 'converted', do_not_call: 'do_not_call' }[outcome] || 'contacted';
+
+    // Don't downgrade a positive lead to neutral unless explicitly negative
+    let finalScore = aiScore;
+    let finalStatus = newLeadStatus;
+    if (wasPositive && isNowNeutral && existingScore > aiScore) {
+      finalScore = existingScore;
+      finalStatus = existingStatus;
+      console.log(`[campaignPostCall] Lead ${campaignLead.lead_id} — preserving higher score ${existingScore}/${existingStatus} over ${aiScore}/${outcome}`);
+    }
+
     const leadUpdate = {
-      status: { interested: 'interested', not_interested: 'not_interested', callback: 'callback',
-        not_answered: 'callback', neutral: 'contacted', converted: 'converted', do_not_call: 'do_not_call' }[outcome] || 'contacted',
+      status: finalStatus,
       last_call_date: new Date().toISOString(), last_engagement_date: new Date().toISOString()
     };
     if (aiScore > 0) {
       Object.assign(leadUpdate, {
-        score: aiScore, sentiment: aiSentiment, intent_signals: aiIntentSignals,
-        score_breakdown: aiScoreBreakdown, qualification_tier: qualificationTier,
-        qualification_reason: qualificationReason,
-        notes: `[Score: ${aiScore}/100 | ${aiSentiment} | ${qualificationTier}] ${summary.substring(0, 300)}`
+        score: finalScore, sentiment: aiSentiment, intent_signals: aiIntentSignals,
+        score_breakdown: aiScoreBreakdown, qualification_tier: wasPositive && isNowNeutral ? (existingLead.qualification_tier || qualificationTier) : qualificationTier,
+        qualification_reason: wasPositive && isNowNeutral ? (existingLead.qualification_reason || qualificationReason) : qualificationReason,
+        notes: `[Score: ${finalScore}/100 | ${aiSentiment} | ${qualificationTier}] ${summary.substring(0, 300)}`
       });
     }
     await base44.entities.Lead.update(campaignLead.lead_id, leadUpdate);
