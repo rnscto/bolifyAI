@@ -418,9 +418,11 @@ Respond with JSON: {greeting, likely_intent, qualifying_questions, routing, is_p
         // Only update summary if streamAudio hasn't already saved one
         const freshLog = await base44.entities.CallLog.get(callLog.id);
         if (!freshLog.transcript) {
+          // For no-answer: set lead_status_updated to 'no_answer' — processTranscript/campaignPostCall
+          // will preserve the lead's existing score and status when they see this
           await base44.entities.CallLog.update(callLog.id, {
             conversation_summary: `Call ended: ${statusLabel}${hangup_cause ? ' (' + hangup_cause + ')' : ''}${customer_ring_time ? '. Customer rang for ' + customer_ring_time + 's' : ''}. No conversation captured.`,
-            lead_status_updated: effectiveStatus === 'no_answer' ? 'no_answer' : 'callback'
+            lead_status_updated: 'no_answer'
           });
           console.log(`[smartfloWebhook] Terminal ${statusLabel} (effective: ${effectiveStatus}) — updated for campaign processing`);
         } else {
