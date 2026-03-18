@@ -22,6 +22,7 @@ export default function ClientSettings() {
     company_name: '',
     email: '',
     phone: '',
+    registered_address: '',
   });
 
   useEffect(() => { loadData(); }, []);
@@ -40,6 +41,7 @@ export default function ClientSettings() {
         company_name: c.company_name || '',
         email: c.email || '',
         phone: c.phone || '',
+        registered_address: c.registered_address || '',
       });
     }
     setLoading(false);
@@ -52,6 +54,7 @@ export default function ClientSettings() {
       await base44.entities.Client.update(client.id, {
         company_name: formData.company_name,
         phone: formData.phone,
+        registered_address: formData.registered_address,
       });
     }
     toast.success('Settings saved');
@@ -119,6 +122,16 @@ export default function ClientSettings() {
           <div>
             <Label htmlFor="phone">Phone</Label>
             <Input id="phone" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} />
+          </div>
+          <div>
+            <Label htmlFor="registered_address">Registered Address</Label>
+            <textarea
+              id="registered_address"
+              value={formData.registered_address}
+              onChange={(e) => setFormData({ ...formData, registered_address: e.target.value })}
+              placeholder="Registered business address"
+              className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[70px]"
+            />
           </div>
         </CardContent>
       </Card>
