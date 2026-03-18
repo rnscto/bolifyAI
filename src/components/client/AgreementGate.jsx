@@ -106,12 +106,11 @@ export default function AgreementGate({ client, user, onSigned }) {
       company_signatory_designation: template.company_signatory_designation,
     });
 
-    // Notify admin
+    // Notify admin via ACS
     try {
-      await base44.integrations.Core.SendEmail({
-        to: 'yadav.nandkishor73@gmail.com',
-        subject: `[Client Agreement Signed] ${client.company_name} — ${agrNum}`,
-        body: `<p>Existing client <strong>${client.company_name}</strong> (${user.email}) signed service agreement <strong>${agrNum}</strong>.</p>`
+      await base44.functions.invoke('sendAgreementEmail', {
+        type: 'client_gate_admin_notify',
+        data: { company_name: client.company_name, email: user.email, agreement_number: agrNum }
       });
     } catch (e) { console.log('Admin email failed:', e); }
 

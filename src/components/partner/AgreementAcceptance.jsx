@@ -106,35 +106,21 @@ export default function AgreementAcceptance({ partner, agreement, onSigned }) {
       rendered_html: finalHtml
     });
 
-    // Send email notification
+    // Send email notification via ACS
     try {
-      await base44.integrations.Core.SendEmail({
-        to: partner.email,
-        subject: `Partner Agreement Signed — ${agreement.agreement_number}`,
-        body: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
-          <div style="background:linear-gradient(135deg,#1a365d,#2563eb);padding:24px;border-radius:12px 12px 0 0;text-align:center;">
-            <h2 style="color:white;margin:0;">Agreement Signed Successfully</h2>
-          </div>
-          <div style="padding:24px;background:white;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;">
-            <p>Dear ${partner.name},</p>
-            <p>Your <strong>Master Channel Partner Agreement</strong> (${agreement.agreement_number}) has been digitally signed on <strong>${signedTimestamp}</strong>.</p>
-            <p>You can view and download your signed agreement anytime from your Partner Dashboard.</p>
-            <p style="color:#666;font-size:13px;margin-top:20px;">This is a legally binding digital agreement under the Information Technology Act, 2000.</p>
-            <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />
-            <p style="color:#999;font-size:12px;">TECH BRAINBUCKS INFOSOFT PVT LTD | VaaniAI.io</p>
-          </div>
-        </div>`
+      await base44.functions.invoke('sendAgreementEmail', {
+        type: 'partner_signed',
+        data: { partner_name: partner.name, partner_email: partner.email, agreement_number: agreement.agreement_number, signed_timestamp: signedTimestamp }
       });
     } catch (e) {
       console.error('Email notification failed:', e);
     }
 
-    // Send copy to admin
+    // Send copy to admin via ACS
     try {
-      await base44.integrations.Core.SendEmail({
-        to: 'yadav.nandkishor73@gmail.com',
-        subject: `[Partner Agreement Signed] ${partner.name} — ${agreement.agreement_number}`,
-        body: `<p>Partner <strong>${partner.name}</strong> (${partner.email}) has signed agreement <strong>${agreement.agreement_number}</strong> on ${signedTimestamp}.</p><p>Company: ${partner.company_name || 'N/A'}</p>`
+      await base44.functions.invoke('sendAgreementEmail', {
+        type: 'partner_admin_notify',
+        data: { partner_name: partner.name, partner_email: partner.email, partner_company: partner.company_name || 'N/A', agreement_number: agreement.agreement_number, signed_timestamp: signedTimestamp }
       });
     } catch (e) {
       console.error('Admin email failed:', e);

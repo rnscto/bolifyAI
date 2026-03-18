@@ -231,10 +231,9 @@ export default function Onboarding() {
         });
         // Notify admin
         try {
-          await base44.integrations.Core.SendEmail({
-            to: 'yadav.nandkishor73@gmail.com',
-            subject: `[Client Agreement Signed] ${profileData.company_name} — ${agrData.agreement_number}`,
-            body: `<p>Client <strong>${profileData.company_name}</strong> (${user.email}) signed service agreement <strong>${agrData.agreement_number}</strong>.</p>`
+          await base44.functions.invoke('sendAgreementEmail', {
+            type: 'client_admin_notify',
+            data: { company_name: profileData.company_name, email: user.email, agreement_number: agrData.agreement_number }
           });
         } catch (e) { console.log('Admin email failed:', e); }
       } catch (e) { console.error('Agreement save failed:', e); }
