@@ -106,6 +106,9 @@ Deno.serve(async (req) => {
     const leadStatusAfterCall = callLog.lead_status_updated || '';
     const callerNumber = callLog.caller_id || callLog.callee_number || '';
 
+    let lead = null;
+    let resolvedLeadId = leadId;
+
     console.log(`[postCallFollowup] Processing call ${callLogId} | Client: ${clientId} | Lead: ${resolvedLeadId} | Status: ${leadStatusAfterCall}`);
 
     // Skip system/unknown calls with no real data
@@ -119,9 +122,6 @@ Deno.serve(async (req) => {
     if (!client) {
       return Response.json({ success: true, skipped: 'client_not_found' });
     }
-
-    let lead = null;
-    let resolvedLeadId = leadId;
 
     // ── AUTO-RESOLVE lead_id if missing — find lead by phone number ──
     if ((!resolvedLeadId || resolvedLeadId === 'unknown') && clientId) {
