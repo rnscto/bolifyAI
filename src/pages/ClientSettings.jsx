@@ -6,9 +6,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Building, Phone, Mail, Save, Loader2, Shield } from 'lucide-react';
+import { User, Building, Phone, Mail, Save, Loader2, Shield, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import ClientComplianceTab from '../components/compliance/ClientComplianceTab';
+import ClientAgreementViewer from '../components/client/ClientAgreementViewer';
 
 export default function ClientSettings() {
   const [user, setUser] = useState(null);
@@ -81,6 +82,7 @@ export default function ClientSettings() {
       <Tabs defaultValue="profile">
         <TabsList className="mb-4">
           <TabsTrigger value="profile">Profile & Account</TabsTrigger>
+          <TabsTrigger value="agreement"><FileText className="w-4 h-4 mr-1" /> Agreement</TabsTrigger>
           <TabsTrigger value="compliance"><Shield className="w-4 h-4 mr-1" /> Compliance</TabsTrigger>
         </TabsList>
 
@@ -152,6 +154,10 @@ export default function ClientSettings() {
         Save Changes
       </Button>
       </div>
+        </TabsContent>
+
+        <TabsContent value="agreement">
+          {client && <ClientAgreementViewer clientId={client.id} />}
         </TabsContent>
 
         <TabsContent value="compliance">
