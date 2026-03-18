@@ -92,6 +92,7 @@ Deno.serve(async (req) => {
         }
 
         const hoursPast = (now - scheduledDate) / (1000 * 60 * 60);
+        const activityType = activity.type;
 
         // Only mark as overdue if >24h past AND it's a human-action type.
         // AI-handled types (call, followup) should NOT be overdue — they auto-execute.
@@ -140,7 +141,6 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const activityType = activity.type;
         console.log(`[FollowupEngine] Processing: ${activity.id} | type=${activityType} | title="${activity.title}" | lead=${lead?.name || 'N/A'}`);
 
         // ============================================================
