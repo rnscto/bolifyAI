@@ -93,10 +93,11 @@ export function getOccasionsForMonth(month) {
   return OCCASIONS.filter(o => o.date.startsWith(mm + '-'));
 }
 
-export function getOccasionsForDate(dateStr) {
+export function getOccasionsForDate(dateStr, customOccasions = []) {
   // dateStr like "2026-03-08" → match "03-08"
   const mmdd = dateStr.substring(5);
-  return OCCASIONS.filter(o => o.date === mmdd);
+  const all = [...OCCASIONS, ...customOccasions];
+  return all.filter(o => o.date === mmdd);
 }
 
 export function getUpcomingOccasions(count = 10) {

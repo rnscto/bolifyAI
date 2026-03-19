@@ -16,7 +16,7 @@ const DEFAULT_FORM = {
   products: [], services: [], usps: [], features: [], pricing_info: '', current_offers: [],
   addresses: [], contact_phone: '', contact_email: '', contact_whatsapp: '', website_url: '',
   social_instagram: '', social_facebook: '', social_linkedin: '', social_twitter: '',
-  social_youtube: '', google_maps_link: '', enabled_occasions: [],
+  social_youtube: '', google_maps_link: '', enabled_occasions: [], custom_occasions: [],
 };
 
 export default function ClientBrandSettings() {
