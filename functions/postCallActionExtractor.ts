@@ -38,9 +38,14 @@ Deno.serve(async (req) => {
       return Response.json({ skipped: true, reason: 'No transcript available' });
     }
 
-    // Skip very short transcripts (likely failed/dropped calls)
-    if (callLog.transcript.length < 50) {
-      return Response.json({ skipped: true, reason: 'Transcript too short' });
+    // Skip very short transcripts (likely failed/dropped calls or voicemail)
+    if (callLog.transcript.length < 100) {
+      return Response.json({ skipped: true, reason: 'Transcript too short (likely voicemail/no-answer)' });
+    }
+
+    // Skip non-answer/voicemail calls based on call status
+    if (['no_answer', 'failed'].includes(callLog.status)) {
+      return Response.json({ skipped: true, reason: `Call status: ${callLog.status} — no real conversation` });
     }
 
     // ── AUTO-RESOLVE lead_id if missing ──
