@@ -300,12 +300,13 @@ Respond ONLY in valid JSON with this exact structure.`
     }
 
     // ===== CREATE AI-DRIVEN ACTIVITIES BASED ON TIER =====
+    // SKIP entirely for non-answer/voicemail calls
     let leadForActivities = null;
-    if (callLog.lead_id) {
+    if (callLog.lead_id && !isNonAnswer) {
       try { leadForActivities = await base44.entities.Lead.get(callLog.lead_id); } catch (_) {}
     }
 
-    if (callLog.lead_id && qualificationTier && leadStatus !== 'do_not_call') {
+    if (callLog.lead_id && qualificationTier && leadStatus !== 'do_not_call' && !isNonAnswer) {
       const actionsCreated = [];
 
       if (qualificationTier === 'hot') {
@@ -383,7 +384,8 @@ Respond ONLY in valid JSON with this exact structure.`
     }
 
     // Auto-enroll into AI email sequence based on tier
-    if (callLog.lead_id && qualificationTier && !['disqualified'].includes(qualificationTier)) {
+    // SKIP for non-answer/voicemail calls
+    if (callLog.lead_id && qualificationTier && !['disqualified'].includes(qualificationTier) && !isNonAnswer) {
       try {
         const enrollResult = await base44.functions.invoke('autoEnrollSequence', {
           lead_id: callLog.lead_id,
@@ -404,24 +406,26 @@ Respond ONLY in valid JSON with this exact structure.`
       }
     }
 
-    // Trigger post-call follow-up emails & RCS
-    try {
-      await base44.functions.invoke('postCallFollowup', {
-        call_log_id: call_log_id
-      });
-      console.log('[processTranscript] Post-call follow-up triggered');
-    } catch (followupErr) {
-      console.error('[processTranscript] Post-call follow-up error:', followupErr.message);
-    }
+    // Trigger post-call follow-up emails & RCS — SKIP for non-answer/voicemail
+    if (!isNonAnswer) {
+      try {
+        await base44.functions.invoke('postCallFollowup', {
+          call_log_id: call_log_id
+        });
+        console.log('[processTranscript] Post-call follow-up triggered');
+      } catch (followupErr) {
+        console.error('[processTranscript] Post-call follow-up error:', followupErr.message);
+      }
 
-    // Trigger post-call action extraction (notes, scheduled activities, emails)
-    try {
-      await base44.functions.invoke('postCallActionExtractor', {
-        call_log_id: call_log_id
-      });
-      console.log('[processTranscript] Post-call action extraction triggered');
-    } catch (actionErr) {
-      console.error('[processTranscript] Post-call action extraction error:', actionErr.message);
+      // Trigger post-call action extraction (notes, scheduled activities, emails)
+      try {
+        await base44.functions.invoke('postCallActionExtractor', {
+          call_log_id: call_log_id
+        });
+        console.log('[processTranscript] Post-call action extraction triggered');
+      } catch (actionErr) {
+        console.error('[processTranscript] Post-call action extraction error:', actionErr.message);
+      }
     }
 
     return Response.json({ 
