@@ -12,13 +12,20 @@ export default function SocialMediaCalendar() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [view, setView] = useState('month');
   const [selectedPost, setSelectedPost] = useState(null);
+  const [customOccasions, setCustomOccasions] = useState([]);
 
   useEffect(() => {
     const load = async () => {
       const user = await base44.auth.me();
       if (user.role === 'admin') return;
       const clients = await base44.entities.Client.filter({ user_id: user.id });
-      if (clients.length > 0) setClient(clients[0]);
+      if (clients.length > 0) {
+        setClient(clients[0]);
+        const brandSettings = await base44.entities.BrandSettings.filter({ client_id: clients[0].id });
+        if (brandSettings.length > 0) {
+          setCustomOccasions(brandSettings[0].custom_occasions || []);
+        }
+      }
     };
     load();
   }, []);
@@ -73,6 +80,7 @@ export default function SocialMediaCalendar() {
         currentDate={currentDate}
         view={view}
         posts={posts}
+        customOccasions={customOccasions}
         onDrop={handleDrop}
         onPostClick={setSelectedPost}
       />

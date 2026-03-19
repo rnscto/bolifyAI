@@ -9,10 +9,10 @@ const statusDot = {
   rejected: 'bg-red-400',
 };
 
-function DayCell({ date, posts, isToday, isCurrentMonth, onDrop, onPostClick }) {
+function DayCell({ date, posts, customOccasions, isToday, isCurrentMonth, onDrop, onPostClick }) {
   const dateStr = date.toISOString().split('T')[0];
   const dayPosts = posts.filter(p => p.scheduled_date === dateStr);
-  const occasions = getOccasionsForDate(dateStr);
+  const occasions = getOccasionsForDate(dateStr, customOccasions);
 
   const handleDragOver = (e) => { e.preventDefault(); e.currentTarget.classList.add('bg-blue-50'); };
   const handleDragLeave = (e) => { e.currentTarget.classList.remove('bg-blue-50'); };
@@ -59,7 +59,7 @@ function DayCell({ date, posts, isToday, isCurrentMonth, onDrop, onPostClick }) 
   );
 }
 
-export default function CalendarGrid({ currentDate, view, posts, onDrop, onPostClick }) {
+export default function CalendarGrid({ currentDate, view, posts, customOccasions = [], onDrop, onPostClick }) {
   const days = [];
   const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const today = new Date().toISOString().split('T')[0];
@@ -102,6 +102,7 @@ export default function CalendarGrid({ currentDate, view, posts, onDrop, onPostC
             key={i}
             date={date}
             posts={posts}
+            customOccasions={customOccasions}
             isToday={date.toISOString().split('T')[0] === today}
             isCurrentMonth={date.getMonth() === currentDate.getMonth()}
             onDrop={onDrop}
