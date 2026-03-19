@@ -89,7 +89,7 @@ export default function BrandVoiceTab({ form, setForm, newTheme, setNewTheme }) 
             <Label>Brand Logo</Label>
             <div className="flex items-center gap-4 mt-1">
               {form.logo_url ? (
-                <div className="relative w-20 h-20 border rounded-lg overflow-hidden">
+                <div className="relative w-20 h-20 border rounded-lg overflow-hidden bg-gray-100">
                   <img src={form.logo_url} alt="Logo" className="w-full h-full object-contain" />
                   <button onClick={() => setForm(f => ({ ...f, logo_url: '' }))} className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-0.5"><X className="w-3 h-3" /></button>
                 </div>
