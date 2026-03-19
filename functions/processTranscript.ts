@@ -200,6 +200,17 @@ Respond ONLY in valid JSON with this exact structure.`
 
     console.log(`[processTranscript] Tier: ${qualificationTier} — ${qualificationReason}`);
 
+    // ===== DETECT NON-ANSWER / VOICEMAIL CALLS (wide scope) =====
+    // Voicemail greetings get transcribed but are NOT real conversations.
+    // We must skip all activity creation, sequence enrollment, and action extraction for these.
+    const isNonAnswer = !transcript || transcript.length < 100 || 
+      ['no_answer', 'failed'].includes(callLog.status) ||
+      leadStatus === 'no_answer';
+    
+    if (isNonAnswer) {
+      console.log(`[processTranscript] ⚠️ NON-ANSWER/VOICEMAIL detected (transcript: ${(transcript || '').length} chars, status: ${callLog.status}, leadStatus: ${leadStatus}) — skipping all activity creation & post-call triggers`);
+    }
+
     // Update lead with status, score, sentiment, tier, and intent signals
     // CRITICAL: Only update score/status if this call had a real conversation.
     // If call was not answered or had no meaningful transcript, preserve existing lead score & status.
@@ -210,11 +221,6 @@ Respond ONLY in valid JSON with this exact structure.`
       const updatedEngagement = (existingLead.engagement_count || 0) + 1;
       const existingTags = existingLead.tags || [];
       const mergedTags = [...new Set([...existingTags, ...keyKeywords.slice(0, 10)])];
-
-      // Determine if this was a real conversation or a non-answer
-      const isNonAnswer = !transcript || transcript.length < 50 || 
-        ['no_answer', 'failed'].includes(callLog.status) ||
-        leadStatus === 'no_answer';
       
       // For non-answer calls: only update engagement metadata, NEVER overwrite score/status/tier
       if (isNonAnswer) {
