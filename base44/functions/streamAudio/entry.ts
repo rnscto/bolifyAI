@@ -555,10 +555,33 @@ Deno.serve(async (req) => {
         const reason = args.reason || 'customer requested';
         console.log(`[${reqId}] 📞 TRANSFER TO HUMAN: reason="${reason}", intercom=${session.humanTransferNumber}, call_sid=${session.callSid}`);
 
-        const smartfloToken = Deno.env.get('SMARTFLO_AUTH_TOKEN');
-        if (!smartfloToken) {
-          result = { error: 'Transfer not available — SMARTFLO_AUTH_TOKEN not configured' };
+        // Dynamically get Smartflo JWT via login
+        const sfEmail = Deno.env.get('SMARTFLO_EMAIL');
+        const sfPassword = Deno.env.get('SMARTFLO_PASSWORD');
+        if (!sfEmail || !sfPassword) {
+          result = { error: 'Transfer not available — SMARTFLO_EMAIL/PASSWORD not configured' };
         } else {
+          let smartfloToken;
+          try {
+            const loginResp = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+              body: JSON.stringify({ email: sfEmail, password: sfPassword })
+            });
+            const loginData = await loginResp.json();
+            if (!loginResp.ok || !loginData.token) throw new Error(loginData.message || 'Login failed');
+            smartfloToken = loginData.token;
+            console.log(`[${reqId}] 📞 Smartflo login OK for transfer`);
+          } catch (loginErr) {
+            result = { error: `Smartflo login failed: ${loginErr.message}` };
+            // Send result and return early
+            sendToRealtime({
+              type: 'conversation.item.create',
+              item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) }
+            });
+            sendToRealtime({ type: 'response.create' });
+            return;
+          }
           const transferResp = await fetch('https://api-smartflo.tatateleservices.com/v1/call/options', {
             method: 'POST',
             headers: {
