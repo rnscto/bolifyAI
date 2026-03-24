@@ -255,13 +255,27 @@ If the transcript shows ONLY the AI agent speaking with NO customer responses:
     // 2. Create Activity records for each extracted action
     if (extracted.actions && Array.isArray(extracted.actions)) {
       for (const action of extracted.actions) {
+        const isConfirmed = action.confirmed === true;
+
         // Map action type to Activity type enum
-        const typeMap = {
-          'call': 'call', 'followup': 'followup', 'email': 'email',
-          'demo': 'demo', 'appointment': 'appointment', 'visit': 'visit',
-          'meeting': 'meeting', 'task': 'task', 'booking': 'booking'
-        };
-        const activityType = typeMap[action.type] || 'task';
+        // For UNCONFIRMED actions: force type to "task" or "followup" — never create
+        // demo/appointment/meeting/visit for unconfirmed proposals
+        let activityType;
+        if (isConfirmed) {
+          const typeMap = {
+            'call': 'call', 'followup': 'followup', 'email': 'email',
+            'demo': 'demo', 'appointment': 'appointment', 'visit': 'visit',
+            'meeting': 'meeting', 'task': 'task', 'booking': 'booking'
+          };
+          activityType = typeMap[action.type] || 'task';
+        } else {
+          // Unconfirmed — downgrade to task/followup
+          const softTypes = { 'call': 'followup', 'email': 'task', 'followup': 'followup' };
+          activityType = softTypes[action.type] || 'task';
+          // Also override priority for unconfirmed
+          action.priority = 'medium';
+          console.log(`[ActionExtractor] Unconfirmed action "${action.title}" → downgraded to ${activityType}`);
+        }
 
         // ── For campaign calls: skip only generic "followup" activities (campaignPostCall creates those)
         // BUT allow specific actions: email, demo, call (with specific time), task, visit, meeting
