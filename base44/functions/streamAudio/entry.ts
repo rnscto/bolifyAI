@@ -1419,7 +1419,7 @@ Deno.serve(async (req) => {
                 lead_id: session._inboundLeadId || null,
                 call_sid: session.callSid || `inbound_${Date.now()}`,
                 stream_sid: session.streamSid || null,
-                caller_id: session.callerNumber || incomingNumber || '',
+                caller_id: session.callerNumber || '',
                 callee_number: session.calleeNumber,
                 direction: 'inbound',
                 status: 'answered',
