@@ -493,6 +493,27 @@ Deno.serve(async (req) => {
   // ─── Build marketplace tool definitions ───
   function buildToolDefinitions() {
     const tools = [];
+
+    // Transfer to human agent tool — always available if transfer number is configured
+    if (session.humanTransferNumber) {
+      tools.push({
+        type: 'function',
+        name: 'transfer_to_human',
+        description: 'Transfer the call to a human agent. Use this when: (1) Customer explicitly asks to speak to a real person/human/manager, (2) Customer is very frustrated and you cannot resolve their issue, (3) The query is beyond your knowledge and requires human expertise. IMPORTANT: Before transferring, always confirm with the customer: "Let me transfer you to a human agent. Please hold." Never transfer without informing the customer.',
+        parameters: {
+          type: 'object',
+          properties: {
+            reason: {
+              type: 'string',
+              description: 'Brief reason for the transfer (e.g. "customer requested human agent", "complex billing issue", "frustrated customer")'
+            }
+          },
+          required: ['reason']
+        }
+      });
+      console.log(`[${reqId}] 📞 Transfer-to-human tool registered (intercom: ${session.humanTransferNumber})`);
+    }
+
     if (session.hasShopify) {
       tools.push({
         type: 'function',
