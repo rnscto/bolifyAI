@@ -1556,10 +1556,55 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
         const startData = msg.start || {};
         session.streamSid = startData.streamSid;
         session.callSid = startData.callSid;
-        // Extract callee number and caller number from Smartflo start data
-        session.calleeNumber = startData.customParameters?.customer_number || startData.to || startData.callee || '';
-        session.callerNumber = startData.from || startData.caller || startData.customParameters?.caller_number || '';
-        console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}, call=${session.callSid}, callee=${session.calleeNumber}`);
+
+        // Log ALL fields from start event for debugging inbound call routing
+        console.log(`[${reqId}] 📞 START EVENT FULL DATA: ${JSON.stringify({
+          streamSid: startData.streamSid,
+          callSid: startData.callSid,
+          to: startData.to,
+          from: startData.from,
+          callee: startData.callee,
+          caller: startData.caller,
+          direction: startData.direction,
+          customParameters: startData.customParameters,
+          accountSid: startData.accountSid,
+          mediaFormat: startData.mediaFormat
+        })}`);
+
+        // Extract callee number (the DID that was called) — try ALL possible fields
+        session.calleeNumber = startData.customParameters?.customer_number
+          || startData.customParameters?.called_number
+          || startData.customParameters?.to
+          || startData.to
+          || startData.callee
+          || startData.customParameters?.did
+          || '';
+
+        // Extract caller number (who is calling) — try ALL possible fields
+        session.callerNumber = startData.from
+          || startData.caller
+          || startData.customParameters?.caller_number
+          || startData.customParameters?.from
+          || startData.customParameters?.caller_id
+          || '';
+
+        // For inbound calls, Smartflo may swap to/from — detect this:
+        // If 'to' matches one of our DID patterns and 'from' is a mobile number, it's inbound
+        // The 'to' field is the DID being called, 'from' is the caller
+        const toNum = (startData.to || '').replace(/\D/g, '');
+        const fromNum = (startData.from || '').replace(/\D/g, '');
+        
+        // For outbound (click-to-call): customer_number = the lead being called (callee)
+        // For inbound: 'to' = the DID, 'from' = the external caller
+        // Detect: if customParameters.customer_number is empty but 'to' and 'from' exist,
+        // this is likely an inbound call where 'to' is the DID
+        if (!startData.customParameters?.customer_number && toNum && fromNum) {
+          console.log(`[${reqId}] 📞 No customer_number param — likely INBOUND. to=${toNum}, from=${fromNum}`);
+          session.calleeNumber = startData.to || '';  // DID that was called
+          session.callerNumber = startData.from || ''; // External caller
+        }
+
+        console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}, call=${session.callSid}, calleeNumber=${session.calleeNumber}, callerNumber=${session.callerNumber}`);
 
         // Reset audio conversion state for new call (prevents cross-call artifacts)
         _lastUpsampleValue = 0;
