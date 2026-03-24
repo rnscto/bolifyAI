@@ -18,11 +18,12 @@ async function getSmartfloToken() {
   });
 
   const loginData = await loginResp.json();
-  if (!loginResp.ok || !loginData.token) {
+  const token = loginData.access_token || loginData.token;
+  if (!loginResp.ok || !token) {
     throw new Error(`Smartflo login failed: ${loginData.message || loginResp.status}`);
   }
   console.log('[callTransfer] Smartflo login successful');
-  return loginData.token;
+  return token;
 }
 
 Deno.serve(async (req) => {
