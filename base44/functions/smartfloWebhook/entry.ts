@@ -125,12 +125,12 @@ Deno.serve(async (req) => {
             return dNum === cleanDID;
           });
 
-          if (resolvedDID && resolvedDID.assigned_agent_id) {
+          if (resolvedDID && resolvedDID.agent_id) {
             try {
-              resolvedAgent = await base44.entities.Agent.get(resolvedDID.assigned_agent_id);
+              resolvedAgent = await base44.entities.Agent.get(resolvedDID.agent_id);
               console.log(`[smartfloWebhook] DID ${calledDID} → Agent "${resolvedAgent.name}" (${resolvedAgent.id})`);
             } catch (e) {
-              console.warn(`[smartfloWebhook] Agent ${resolvedDID.assigned_agent_id} not found: ${e.message}`);
+              console.warn(`[smartfloWebhook] Agent ${resolvedDID.agent_id} not found: ${e.message}`);
             }
           }
 
