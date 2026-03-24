@@ -569,8 +569,9 @@ Deno.serve(async (req) => {
               body: JSON.stringify({ email: sfEmail, password: sfPassword })
             });
             const loginData = await loginResp.json();
-            if (!loginResp.ok || !loginData.token) throw new Error(loginData.message || 'Login failed');
-            smartfloToken = loginData.token;
+            const loginToken = loginData.access_token || loginData.token;
+            if (!loginResp.ok || !loginToken) throw new Error(loginData.message || 'Login failed');
+            smartfloToken = loginToken;
             console.log(`[${reqId}] 📞 Smartflo login OK for transfer`);
           } catch (loginErr) {
             result = { error: `Smartflo login failed: ${loginErr.message}` };
