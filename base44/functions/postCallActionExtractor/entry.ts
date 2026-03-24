@@ -320,19 +320,20 @@ If the transcript shows ONLY the AI agent speaking with NO customer responses:
         }
 
         try {
+          const confirmTag = isConfirmed ? '✅ CONFIRMED by customer' : '⏳ UNCONFIRMED — needs customer confirmation';
           const newActivity = await svc.entities.Activity.create({
             client_id: callLog.client_id,
             lead_id: callLog.lead_id || null,
             call_log_id: callLogId,
             type: activityType,
             title: action.title || `${activityType} follow-up`,
-            description: `${action.description || ''}\n\n[Trigger: "${action.trigger || 'Extracted from call'}"]`,
+            description: `${confirmTag}\n\n${action.description || ''}\n\n[Trigger: "${action.trigger || 'Extracted from call'}"]`,
             scheduled_date: scheduledDate,
             status: 'scheduled',
             priority: action.priority || 'medium',
             auto_created: true,
             assigned_to: callLog.agent_id || '',
-            notes: `[Auto-extracted from call ${callLogId}]`
+            notes: `[Auto-extracted from call ${callLogId}] [${isConfirmed ? 'confirmed' : 'unconfirmed'}]`
           });
 
           // Add to existing list so next iteration can dedup against it
