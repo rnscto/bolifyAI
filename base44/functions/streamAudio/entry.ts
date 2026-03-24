@@ -548,6 +548,67 @@ Deno.serve(async (req) => {
     console.log(`[${reqId}] 🔧 Tool call: ${functionName}(${argsStr.substring(0, 200)})`);
     let result = { error: `Unknown tool: ${functionName}` };
 
+    // ─── Transfer to human agent ───
+    if (functionName === 'transfer_to_human' && session.humanTransferNumber) {
+      try {
+        const args = JSON.parse(argsStr);
+        const reason = args.reason || 'customer requested';
+        console.log(`[${reqId}] 📞 TRANSFER TO HUMAN: reason="${reason}", intercom=${session.humanTransferNumber}, call_sid=${session.callSid}`);
+
+        const smartfloToken = Deno.env.get('SMARTFLO_AUTH_TOKEN');
+        if (!smartfloToken) {
+          result = { error: 'Transfer not available — SMARTFLO_AUTH_TOKEN not configured' };
+        } else {
+          const transferResp = await fetch('https://api-smartflo.tatateleservices.com/v1/call/options', {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'Content-Type': 'application/json',
+              'Authorization': smartfloToken
+            },
+            body: JSON.stringify({
+              type: 4,
+              call_id: session.callSid,
+              intercom: String(session.humanTransferNumber)
+            })
+          });
+
+          const transferData = await transferResp.json();
+          console.log(`[${reqId}] 📞 Transfer API response: ${transferResp.status}`, JSON.stringify(transferData));
+
+          if (transferResp.ok) {
+            result = { success: true, message: 'Call is being transferred to a human agent. The customer will be connected shortly.' };
+
+            // Update CallLog with transfer info (fire-and-forget)
+            if (session.callLogId) {
+              const { createClient } = await import('npm:@base44/sdk@0.8.20');
+              const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+              svc.entities.CallLog.update(session.callLogId, {
+                transferred_to: `Human agent (intercom: ${session.humanTransferNumber}, reason: ${reason})`
+              }).catch(() => {});
+            }
+
+            // Add to transcript
+            session.transcript.push({ speaker: 'System', text: `[Call transferred to human agent. Reason: ${reason}]` });
+          } else {
+            result = { error: `Transfer failed: ${transferData.message || transferResp.status}` };
+            console.error(`[${reqId}] ❌ Transfer failed:`, transferData);
+          }
+        }
+      } catch (err) {
+        console.error(`[${reqId}] ❌ Transfer error: ${err.message}`);
+        result = { error: `Transfer failed: ${err.message}` };
+      }
+
+      // Send result back to Realtime API
+      sendToRealtime({
+        type: 'conversation.item.create',
+        item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) }
+      });
+      sendToRealtime({ type: 'response.create' });
+      return;
+    }
+
     if (functionName === 'shopify_lookup' && session.clientId) {
       try {
         const args = JSON.parse(argsStr);
