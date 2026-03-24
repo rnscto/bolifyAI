@@ -95,62 +95,81 @@ Deno.serve(async (req) => {
               role: 'system',
               content: `You are an expert at extracting actionable items from sales call transcripts. Today is ${dayOfWeek}, ${todayStr}, current time is ${istTimeStr} (IST timezone, UTC+5:30).
 
-Extract ALL action items from the conversation. Be thorough — capture anything that needs follow-up.
+Extract action items from the conversation. Be thorough but ACCURATE — only create actions that are grounded in the actual conversation.
 
 CRITICAL TIMEZONE RULE: All scheduled_date values MUST be in UTC (ISO 8601 format). Convert IST times to UTC by subtracting 5 hours 30 minutes.
 Examples: 10:00 AM IST = 04:30 UTC, 12:00 PM IST = 06:30 UTC, 2:00 PM IST = 08:30 UTC, 6:00 PM IST = 12:30 UTC.
+
+DATE CONTEXT RULE: The transcript may have happened TODAY or on a PREVIOUS day. When the transcript references "kal" (tomorrow), "aaj" (today), "next Monday" etc., compute dates RELATIVE TO THE CALL DATE, not relative to today. If the call summary mentions a date like [2026-03-22], use THAT as the base date for relative calculations.
 
 Return JSON with this exact structure:
 {
   "lead_notes": "string — Key information about the lead: concerns, preferences, requirements, budget, timeline, decision criteria, personal details mentioned. Be detailed. Empty string if nothing notable.",
   "actions": [
     {
-      "type": "call|email|demo|appointment|visit|meeting|task",
+      "type": "call|email|demo|appointment|visit|meeting|task|followup",
       "title": "Brief title for the activity",
       "description": "Details about what needs to happen",
       "scheduled_date": "ISO date-time string in UTC (converted from IST, or null if no specific time mentioned)",
       "scheduled_date_ist": "Human-readable IST time for reference (e.g. '17 March 2026 at 12:00 PM IST')",
       "priority": "low|medium|high",
+      "confirmed": true/false,
       "trigger": "Exact quote or paraphrase from transcript that triggered this action"
     }
   ]
 }
 
-RULES — BE VERY SPECIFIC AND THOROUGH:
+═══ CRITICAL: CONFIRMED vs UNCONFIRMED ACTIONS ═══
 
-CALLBACK/RECALL SCHEDULING:
-- "call me after 1 hour / 2 hours / 30 minutes" → create "call" activity with scheduled_date = current time + that duration (converted to UTC)
-- "call me tomorrow" → create "call" at next business day 10:00 AM IST
-- "call me at 3 PM / call at 3 baje" → create "call" at 3:00 PM IST today (or tomorrow if already past)
-- "call me next week / Monday / Thursday" → create "call" at that day 10:00 AM IST
-- "baad mein call karo / abhi busy hu" → create "call" in 2 hours from now
-- "kal subah call karo" → create "call" tomorrow 10:00 AM IST
-- "shaam ko call karo" → create "call" today/tomorrow 5:00 PM IST
-- If customer seems interested but says "call later" without specific time → default 4 hours from now
+You MUST set "confirmed": true or false for EVERY action:
 
-EMAIL/SEND DETAILS:
-- "send me details / pricing / brochure / information on email/WhatsApp" → create "email" activity scheduled IMMEDIATELY (now) with title "Send details/pricing to [name]" and high priority
-- "email bhej do / details bhejo / price list bhejo" → create "email" activity IMMEDIATELY
-- "mujhe mail karo with quotation / proposal" → create "email" with title "Send quotation/proposal"
-- If customer asks to send anything (PDF, brochure, rate card, proposal) → create "email" immediately
+CONFIRMED (confirmed: true) — The CUSTOMER explicitly agreed, requested, or confirmed:
+- Customer says "yes, schedule the demo" / "haan, demo kar do" / "ok, call me at 3"
+- Customer asks for something: "send me details" / "mujhe email karo"
+- Customer agrees to a proposed time: "haan, 11 baje theek hai"
 
-DEMO/MEETING/VISIT:
-- "let's schedule a demo/meeting" → create "demo" or "meeting" activity
-- "I want to see a demo" → create "demo" with high priority
-- "come to office / site visit chahiye" → create "visit" activity
+UNCONFIRMED (confirmed: false) — The AI AGENT proposed something but the customer did NOT confirm:
+- Agent says "shall we schedule a demo?" but customer didn't respond or gave a vague answer
+- Agent proposes "kal 11 baje ya 4 baje?" but customer says nothing / gives no clear yes
+- Agent leaves a voicemail with proposed times — customer hasn't responded at all
+- Agent suggests sending details but customer didn't acknowledge
+- One-sided calls where only the agent spoke (voicemail, no pickup, etc.)
 
-AGREEMENT/CONVERSION:
-- Customer agrees to buy/sign up/start → create "task" with title "Process order/signup for [name]" with HIGH priority
-- "haan chalao / start karo / sign up karo" → create "task" for conversion processing
+ACTION TYPE RULES FOR UNCONFIRMED:
+- If unconfirmed, ALWAYS use type "task" or "followup" — NEVER "demo", "appointment", "meeting", or "visit"
+- Title should reflect the unconfirmed nature: "Follow up to confirm demo time with [name]" NOT "Schedule demo"
+- Priority should be "medium" for unconfirmed (not "high")
+- Description should say what was proposed and that confirmation is needed
 
-OTHER:
-- If there's any follow-up commitment by the agent → create the corresponding activity
-- If customer mentions visiting or a site visit → create "visit" activity
-- If no specific date mentioned for callback, default to 4 hours from now
-- For lead_notes: capture company size, budget range, pain points, competitor mentions, decision makers, timeline, product interests, specific questions asked
+═══ ONE-SIDED CALLS / VOICEMAIL ═══
+If the transcript shows ONLY the AI agent speaking with NO customer responses:
+- This is a voicemail or dropped call
+- Do NOT create demo/appointment/meeting activities
+- Create a "followup" or "task" to re-contact the lead
+- Title: "Follow up after voicemail to [name]" or "Re-attempt call to [name]"
+- Priority: "medium"
+
+═══ CALLBACK/RECALL SCHEDULING ═══
+- "call me after 1 hour / 2 hours / 30 minutes" → create "call" activity (confirmed: true)
+- "call me tomorrow" → create "call" at next business day 10:00 AM IST (confirmed: true)
+- "call me at 3 PM / call at 3 baje" → create "call" at 3:00 PM IST (confirmed: true)
+- "baad mein call karo / abhi busy hu" → create "call" in 2 hours from now (confirmed: true)
+- Agent proposes callback time but customer doesn't confirm → create "task" to confirm callback (confirmed: false)
+
+═══ EMAIL/SEND DETAILS ═══
+- Customer explicitly asks: "send me details / pricing" → create "email" IMMEDIATELY, high priority (confirmed: true)
+- Agent offers to send but customer doesn't acknowledge → create "task" to follow up (confirmed: false)
+
+═══ DEMO/MEETING/VISIT ═══
+- Customer confirms: "haan, demo schedule karo" → create "demo" (confirmed: true)
+- Agent proposes demo, customer is vague or silent → create "task": "Follow up to confirm demo with [name]" (confirmed: false)
+
+═══ OTHER RULES ═══
+- For lead_notes: capture company size, budget range, pain points, competitor mentions, decision makers, timeline
 - Return empty actions array ONLY if customer clearly said "not interested" or "do not call"
-- ALWAYS set priority: "high" for interested/demo/appointment/send-details, "medium" for callbacks, "low" for general follow-ups
-- IMPORTANT: Extract EVERY actionable request — do NOT skip requests to send emails/details/pricing`
+- For confirmed actions: "high" priority for demos/appointments/send-details, "medium" for callbacks
+- For unconfirmed actions: always "medium" priority
+- IMPORTANT: Extract EVERY actionable request — do NOT skip email/detail requests`
             },
             {
               role: 'user',
