@@ -107,7 +107,12 @@ export default function ClientAgents() {
                     <Bot className="w-6 h-6 text-blue-600" />
                   </div>
                   <div>
-                    <CardTitle className="text-xl">{agent.name}</CardTitle>
+                    <CardTitle className="text-xl flex items-center gap-2">
+                      {agent.name}
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setEditOpen(true)}>
+                        <Pencil className="w-4 h-4 text-gray-500" />
+                      </Button>
+                    </CardTitle>
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       <Badge className={agent.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
                         {agent.status}
