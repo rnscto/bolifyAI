@@ -1556,7 +1556,9 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
                   persona: didAgent.persona || {},
                   knowledge_base_content: kbContent,
                   lead_context: callerContext,
-                  greeting_message: didAgent.greeting_message || ''
+                  greeting_message: didAgent.greeting_message || '',
+                  human_transfer_number: didAgent.human_transfer_number || '',
+                  enable_auto_transfer: didAgent.enable_auto_transfer !== false
                 }
               });
               session.callLogId = newInboundLog.id;
