@@ -1480,6 +1480,8 @@ Deno.serve(async (req) => {
             session.systemPrompt = (didAgent.system_prompt || 'You are a helpful AI voice assistant.') + callerContext;
             if (kbContent) session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${kbContent}`;
             if (didAgent.greeting_message) session.greetingMessage = didAgent.greeting_message;
+            if (didAgent.human_transfer_number) session.humanTransferNumber = didAgent.human_transfer_number;
+            if (didAgent.enable_auto_transfer === false) session.enableAutoTransfer = false;
             if (didAgent.persona) {
               if (didAgent.persona.voice_engine) session.voiceEngine = didAgent.persona.voice_engine;
               if (didAgent.persona.voice_type) {
