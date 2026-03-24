@@ -759,15 +759,31 @@ Deno.serve(async (req) => {
     const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
     const timeInjection = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}. Use this to compute relative times (e.g. "30 minutes later", "tomorrow 10 AM"). Always state callback times in IST.\n`;
 
+    // Build transfer instructions if enabled
+    let transferInstructions = '';
+    if (session.humanTransferNumber && session.enableAutoTransfer) {
+      transferInstructions = `\n\n--- HUMAN AGENT TRANSFER (AVAILABLE) ---
+You can transfer this call to a human agent using the transfer_to_human tool.
+WHEN TO TRANSFER:
+- Customer EXPLICITLY asks to speak to a human/real person/manager ("mujhe kisi insaan se baat karni hai", "connect me to your manager", "I want to talk to a real person")
+- Customer is clearly very frustrated and you cannot resolve their issue after 2+ attempts
+- The query requires actions you cannot perform (account changes, payments, etc.)
+WHEN NOT TO TRANSFER:
+- Customer is just asking questions you can answer
+- Customer is mildly confused — try to help first
+- Never transfer without telling the customer first
+BEFORE TRANSFERRING: Always say something like "Let me connect you to a human agent who can help you better. Please hold for a moment."`;
+    }
+
     if (isHybrid) {
       sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
       sessionConfig.modalities = ['text'];
       sessionConfig.voice = 'alloy';
-      session.chatHistory = [{ role: 'system', content: timeInjection + session.systemPrompt }];
+      session.chatHistory = [{ role: 'system', content: timeInjection + session.systemPrompt + transferInstructions }];
       console.log(`[${reqId}] 🔀 Hybrid mode: Realtime STT → LLM → Azure Speech TTS (${session.voiceType})`);
     } else {
       sessionConfig.modalities = ['text', 'audio'];
-      sessionConfig.instructions = timeInjection + session.systemPrompt;
+      sessionConfig.instructions = timeInjection + session.systemPrompt + transferInstructions;
       sessionConfig.voice = session.voiceType;
       sessionConfig.output_audio_format = 'pcm16';
     }
