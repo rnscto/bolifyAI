@@ -3,11 +3,12 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Bot, Phone as PhoneIcon } from 'lucide-react';
+import { Bot, Phone as PhoneIcon, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import FeatureGate from '../components/FeatureGate';
 import DIDManager from '../components/agents/DIDManager';
 import AgentSettingsCard from '../components/agents/AgentSettingsCard';
+import AgentEditDialog from '../components/agents/AgentEditDialog';
 
 export default function ClientAgents() {
   const [agent, setAgent] = useState(null);
