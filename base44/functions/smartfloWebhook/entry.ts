@@ -102,19 +102,82 @@ Deno.serve(async (req) => {
     // ===== INCOMING CALL IDENTIFICATION & AI ROUTING =====
     if (direction === 'inbound' || payload.type === 'inbound') {
       const incomingNumber = caller_number || payload.from || payload.caller_id;
-      console.log('[smartfloWebhook] Incoming call from:', incomingNumber);
+      const calledDID = called_number || payload.to || payload.called_number || '';
+      console.log(`[smartfloWebhook] Incoming call from: ${incomingNumber}, to DID: ${calledDID}`);
 
       if (incomingNumber) {
         const cleanNumber = incomingNumber.replace(/\D/g, '');
         const last10 = cleanNumber.slice(-10);
+        const cleanDID = calledDID.replace(/\D/g, '').slice(-10);
 
-        // Match caller to registered client by phone number
-        // Filter by status to avoid loading cancelled clients, then match by last 10 digits
+        // ═══ STEP 1: Resolve DID → Agent → Client ═══
+        // This is the PRIMARY resolution path for inbound calls.
+        // When a customer calls back on a DID, we find which agent owns it.
+        let resolvedAgent = null;
+        let resolvedClient = null;
+        let resolvedDID = null;
+
+        if (cleanDID) {
+          // Find the DID entity
+          const allDIDs = await base44.entities.DID.list('-created_date', 200);
+          resolvedDID = allDIDs.find(d => {
+            const dNum = (d.number || '').replace(/\D/g, '').slice(-10);
+            return dNum === cleanDID;
+          });
+
+          if (resolvedDID && resolvedDID.assigned_agent_id) {
+            try {
+              resolvedAgent = await base44.entities.Agent.get(resolvedDID.assigned_agent_id);
+              console.log(`[smartfloWebhook] DID ${calledDID} → Agent "${resolvedAgent.name}" (${resolvedAgent.id})`);
+            } catch (e) {
+              console.warn(`[smartfloWebhook] Agent ${resolvedDID.assigned_agent_id} not found: ${e.message}`);
+            }
+          }
+
+          if (resolvedDID && resolvedDID.client_id) {
+            try {
+              resolvedClient = await base44.entities.Client.get(resolvedDID.client_id);
+              console.log(`[smartfloWebhook] DID ${calledDID} → Client "${resolvedClient.company_name}" (${resolvedClient.id})`);
+            } catch (e) {
+              console.warn(`[smartfloWebhook] Client ${resolvedDID.client_id} not found: ${e.message}`);
+            }
+          }
+        }
+
+        // Fallback: if DID not found, try agent's assigned_dids array
+        if (!resolvedAgent && cleanDID) {
+          const allAgents = await base44.entities.Agent.list('-created_date', 100);
+          resolvedAgent = allAgents.find(a => {
+            const dids = a.assigned_dids || (a.assigned_did ? [a.assigned_did] : []);
+            return dids.some(d => (d || '').replace(/\D/g, '').slice(-10) === cleanDID);
+          });
+          if (resolvedAgent) {
+            console.log(`[smartfloWebhook] Fallback: DID ${calledDID} → Agent "${resolvedAgent.name}" via assigned_dids`);
+            if (!resolvedClient && resolvedAgent.client_id) {
+              try { resolvedClient = await base44.entities.Client.get(resolvedAgent.client_id); } catch (_) {}
+            }
+          }
+        }
+
+        // ═══ STEP 2: Identify the CALLER as a Lead (callback scenario) ═══
+        let matchedLead = null;
+        if (resolvedClient) {
+          const clientLeads = await base44.entities.Lead.filter({ client_id: resolvedClient.id });
+          matchedLead = clientLeads.find(l => {
+            if (!l.phone) return false;
+            return l.phone.replace(/\D/g, '').slice(-10) === last10;
+          });
+          if (matchedLead) {
+            console.log(`[smartfloWebhook] Caller identified as Lead: "${matchedLead.name}" (${matchedLead.id}), status=${matchedLead.status}, score=${matchedLead.score}`);
+          }
+        }
+
+        // ═══ STEP 3: Also check if caller is a platform client (owner calling support) ═══
         const activeClients = await base44.entities.Client.filter({ status: 'active' });
         const trialClients = await base44.entities.Client.filter({ account_status: 'trial' });
         const expiredClients = await base44.entities.Client.filter({ account_status: 'expired' });
         const allClients = [...activeClients, ...trialClients, ...expiredClients];
-        const matchedClient = allClients.find(c => {
+        const matchedPlatformClient = allClients.find(c => {
           if (!c.phone) return false;
           return c.phone.replace(/\D/g, '').slice(-10) === last10;
         });
@@ -123,17 +186,157 @@ Deno.serve(async (req) => {
         const configs = await base44.entities.RetentionConfig.list('-created_date', 1);
         const retentionConfig = configs[0] || {};
 
-        // ----- KNOWN CLIENT -----
-        if (matchedClient) {
-          console.log('[smartfloWebhook] Identified client:', matchedClient.company_name, matchedClient.account_status);
+        // ═══════════════════════════════════════════════════════════════
+        // PATH A: Lead calling back on a client's DID (most common inbound)
+        // The AI agent assigned to this DID handles the call with lead context.
+        // ═══════════════════════════════════════════════════════════════
+        if (resolvedClient && resolvedAgent && matchedLead) {
+          console.log(`[smartfloWebhook] LEAD CALLBACK: ${matchedLead.name} → DID ${calledDID} → Agent "${resolvedAgent.name}" → Client "${resolvedClient.company_name}"`);
 
-          // Gather full client context in parallel
+          // Get last call history for this lead
+          const leadCallLogs = await base44.entities.CallLog.filter({ lead_id: matchedLead.id });
+          const recentLeadCalls = leadCallLogs
+            .sort((a, b) => new Date(b.call_start_time || b.created_date) - new Date(a.call_start_time || a.created_date))
+            .slice(0, 3);
+
+          // Build lead context for AI agent
+          const leadContext = [
+            `RETURNING CALLER - LEAD CONTEXT:`,
+            `- Name: ${matchedLead.name || 'Unknown'}`,
+            `- Phone: ${matchedLead.phone}`,
+            matchedLead.email ? `- Email: ${matchedLead.email}` : null,
+            matchedLead.company ? `- Company: ${matchedLead.company}` : null,
+            `- Status: ${matchedLead.status || 'new'}`,
+            `- Score: ${matchedLead.score || 0}/100`,
+            matchedLead.qualification_tier ? `- Tier: ${matchedLead.qualification_tier}` : null,
+            matchedLead.sentiment ? `- Last Sentiment: ${matchedLead.sentiment}` : null,
+            matchedLead.intent_signals?.length ? `- Intent Signals: ${matchedLead.intent_signals.join(', ')}` : null,
+            matchedLead.notes ? `- Notes: ${matchedLead.notes.substring(0, 300)}` : null,
+            ``,
+            `CRITICAL: This is an INBOUND callback. The customer is calling YOU back. Address them by name "${matchedLead.name || 'Sir/Madam'}". Be warm and acknowledge they are returning.`,
+            recentLeadCalls.length > 0 ? `\nLAST CALL HISTORY:` : null,
+            ...recentLeadCalls.map(c => `- ${c.direction} | ${c.status} | ${new Date(c.call_start_time || c.created_date).toLocaleDateString('en-IN')} | ${(c.conversation_summary || 'No summary').substring(0, 150)}`)
+          ].filter(Boolean).join('\n');
+
+          // Build personalized system prompt with lead context
+          let personalizedPrompt = resolvedAgent.system_prompt || 'You are a helpful AI voice assistant.';
+          personalizedPrompt += `\n\n--- INBOUND CALL - LEAD CONTEXT ---\n${leadContext}`;
+
+          // Load knowledge base
+          let kbContent = '';
+          if (resolvedAgent.knowledge_base_ids?.length > 0) {
+            for (const kbId of resolvedAgent.knowledge_base_ids) {
+              try {
+                const doc = await base44.entities.KnowledgeBase.get(kbId);
+                if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
+              } catch (_) {}
+            }
+          }
+
+          // Create CallLog with agent_config_cache so streamAudio picks up the right agent
+          const inboundLog = await base44.entities.CallLog.create({
+            client_id: resolvedClient.id,
+            agent_id: resolvedAgent.id,
+            lead_id: matchedLead.id,
+            call_sid: call_id,
+            caller_id: incomingNumber,
+            callee_number: calledDID,
+            direction: 'inbound',
+            status: 'ringing',
+            call_start_time: new Date().toISOString(),
+            agent_config_cache: {
+              agent_name: resolvedAgent.name,
+              system_prompt: personalizedPrompt,
+              persona: resolvedAgent.persona || {},
+              knowledge_base_content: kbContent,
+              lead_context: leadContext,
+              greeting_message: resolvedAgent.greeting_message || ''
+            }
+          });
+
+          // Update lead engagement
+          await base44.entities.Lead.update(matchedLead.id, {
+            last_call_date: new Date().toISOString(),
+            last_engagement_date: new Date().toISOString(),
+            engagement_count: (matchedLead.engagement_count || 0) + 1
+          });
+
+          console.log(`[smartfloWebhook] ✅ Inbound CallLog ${inboundLog.id} created with Agent "${resolvedAgent.name}" config cached for streamAudio`);
+
+          return Response.json({
+            success: true,
+            identified: true,
+            type: 'lead_callback',
+            call_log_id: inboundLog.id,
+            agent_name: resolvedAgent.name,
+            lead_name: matchedLead.name,
+            client_name: resolvedClient.company_name,
+          });
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // PATH B: Unknown caller on a client's DID (new lead or wrong number)
+        // Still route to the DID's assigned agent for the client's business context.
+        // ═══════════════════════════════════════════════════════════════
+        if (resolvedClient && resolvedAgent && !matchedLead) {
+          console.log(`[smartfloWebhook] NEW CALLER on client DID: ${incomingNumber} → Agent "${resolvedAgent.name}" → Client "${resolvedClient.company_name}"`);
+
+          let personalizedPrompt = resolvedAgent.system_prompt || 'You are a helpful AI voice assistant.';
+          personalizedPrompt += `\n\n--- INBOUND CALL - NEW CALLER ---\nThis is an INBOUND call from a NEW number (${incomingNumber}). This person is NOT in the lead database yet.\nIMPORTANT: Greet them professionally, identify their needs, and collect their name and contact details if possible.\nThis is the client's inbound line, so handle them as a potential customer for "${resolvedClient.company_name}".`;
+
+          let kbContent = '';
+          if (resolvedAgent.knowledge_base_ids?.length > 0) {
+            for (const kbId of resolvedAgent.knowledge_base_ids) {
+              try {
+                const doc = await base44.entities.KnowledgeBase.get(kbId);
+                if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
+              } catch (_) {}
+            }
+          }
+
+          const inboundLog = await base44.entities.CallLog.create({
+            client_id: resolvedClient.id,
+            agent_id: resolvedAgent.id,
+            call_sid: call_id,
+            caller_id: incomingNumber,
+            callee_number: calledDID,
+            direction: 'inbound',
+            status: 'ringing',
+            call_start_time: new Date().toISOString(),
+            agent_config_cache: {
+              agent_name: resolvedAgent.name,
+              system_prompt: personalizedPrompt,
+              persona: resolvedAgent.persona || {},
+              knowledge_base_content: kbContent,
+              greeting_message: resolvedAgent.greeting_message || ''
+            }
+          });
+
+          console.log(`[smartfloWebhook] ✅ Inbound CallLog ${inboundLog.id} created for new caller with Agent "${resolvedAgent.name}"`);
+
+          return Response.json({
+            success: true,
+            identified: false,
+            type: 'new_caller_on_client_did',
+            call_log_id: inboundLog.id,
+            agent_name: resolvedAgent.name,
+            client_name: resolvedClient.company_name,
+          });
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // PATH C: Platform client calling VaaniAI's own DID (support/billing)
+        // Original logic for identified platform clients.
+        // ═══════════════════════════════════════════════════════════════
+        if (matchedPlatformClient) {
+          console.log('[smartfloWebhook] PLATFORM CLIENT call:', matchedPlatformClient.company_name, matchedPlatformClient.account_status);
+
           const [clientAgents, clientLeads, clientSubs, clientCallHistory, clientActivities] = await Promise.all([
-            base44.entities.Agent.filter({ client_id: matchedClient.id }),
-            base44.entities.Lead.filter({ client_id: matchedClient.id }),
-            base44.entities.Subscription.filter({ client_id: matchedClient.id }),
-            base44.entities.CallLog.filter({ client_id: matchedClient.id }),
-            base44.entities.Activity.filter({ client_id: matchedClient.id }),
+            base44.entities.Agent.filter({ client_id: matchedPlatformClient.id }),
+            base44.entities.Lead.filter({ client_id: matchedPlatformClient.id }),
+            base44.entities.Subscription.filter({ client_id: matchedPlatformClient.id }),
+            base44.entities.CallLog.filter({ client_id: matchedPlatformClient.id }),
+            base44.entities.Activity.filter({ client_id: matchedPlatformClient.id }),
           ]);
 
           const recentCalls = clientCallHistory
@@ -142,39 +345,29 @@ Deno.serve(async (req) => {
           const activeSub = clientSubs.find(s => s.status === 'active');
           const pendingActivities = clientActivities.filter(a => a.status === 'scheduled');
 
-          // AI: classify intent + generate personalized greeting (Azure OpenAI — zero Base44 credits)
           const aiAnalysis = await azureLLM(
-            `You are VaaniAI's intelligent call routing assistant. An incoming call has been received from a KNOWN registered client. Analyze their context and generate an appropriate response.
+            `You are VaaniAI's intelligent call routing assistant. An incoming call has been received from a KNOWN registered client on VaaniAI's platform DID.
 
 CALLER CONTEXT:
-- Company: ${matchedClient.company_name}
-- Industry: ${matchedClient.industry || 'General'}
-- Account Status: ${matchedClient.account_status}
+- Company: ${matchedPlatformClient.company_name}
+- Industry: ${matchedPlatformClient.industry || 'General'}
+- Account Status: ${matchedPlatformClient.account_status}
 - Has Active Subscription: ${activeSub ? 'Yes (₹' + activeSub.total_amount + ')' : 'No'}
 - Total Agents: ${clientAgents.length} (Active: ${clientAgents.filter(a => a.status === 'active').length})
 - Total Leads: ${clientLeads.length}
 - Recent Call Count: ${recentCalls.length}
 - Pending Activities: ${pendingActivities.length}
-- Has CRM: ${matchedClient.has_custom_crm ? 'Yes' : 'No'}
-- Trial End Date: ${matchedClient.trial_end_date || 'N/A'}
+- Has CRM: ${matchedPlatformClient.has_custom_crm ? 'Yes' : 'No'}
+- Trial End Date: ${matchedPlatformClient.trial_end_date || 'N/A'}
 
 RECENT CALL SUMMARIES:
 ${recentCalls.map(c => `- ${c.direction} | ${c.status} | ${c.conversation_summary || 'No summary'}`).join('\n') || 'No recent calls'}
 
 ${retentionConfig.active_offer ? `ACTIVE OFFER: ${retentionConfig.active_offer}${retentionConfig.offer_code ? ' (Code: ' + retentionConfig.offer_code + ')' : ''}` : ''}
-
 ${retentionConfig.custom_instructions ? `CUSTOM INSTRUCTIONS: ${retentionConfig.custom_instructions}` : ''}
 
-Based on the context, determine:
-1. The most likely INTENT of the call (sales_inquiry, support, billing, retention, feature_question, complaint, general)
-2. The best ROUTING action (self_serve, retention_agent, support_team, sales_team, account_manager)
-3. A warm, personalized GREETING acknowledging who they are
-4. KEY CONTEXT the handling agent needs to know
-5. SUGGESTED TALKING POINTS based on their situation
-
-Respond with JSON: {intent, confidence, routing, greeting, agent_context, talking_points, priority, follow_up_needed, follow_up_reason}
-
-Be specific and Indian business context aware. If the account is expired, prioritize retention. If active, prioritize support/value.`,
+Determine: intent, routing, greeting, agent_context, talking_points, priority, follow_up_needed, follow_up_reason.
+Respond with JSON.`,
             'You are VaaniAI call routing AI. Always respond in valid JSON.',
             {
               type: "object",
@@ -189,42 +382,39 @@ Be specific and Indian business context aware. If the account is expired, priori
             }
           );
 
-          console.log('[smartfloWebhook] AI Analysis - Intent:', aiAnalysis.intent, 'Routing:', aiAnalysis.routing, 'Priority:', aiAnalysis.priority);
+          console.log('[smartfloWebhook] Platform client AI - Intent:', aiAnalysis.intent, 'Routing:', aiAnalysis.routing);
 
-          // Create detailed call log
           const inboundLog = await base44.entities.CallLog.create({
-            client_id: matchedClient.id,
+            client_id: matchedPlatformClient.id,
             agent_id: 'system_inbound',
             call_sid: call_id,
             caller_id: incomingNumber,
-            callee_number: called_number || payload.to || '',
+            callee_number: calledDID,
             direction: 'inbound',
             status: 'answered',
             call_start_time: new Date().toISOString(),
-            conversation_summary: `[INBOUND - IDENTIFIED] ${matchedClient.company_name} | Intent: ${aiAnalysis.intent} | Routed to: ${aiAnalysis.routing} | Priority: ${aiAnalysis.priority}\n\nGreeting: ${aiAnalysis.greeting}\n\nAgent Context: ${aiAnalysis.agent_context}\n\nTalking Points:\n${(aiAnalysis.talking_points || []).map(tp => '• ' + tp).join('\n')}`,
+            conversation_summary: `[INBOUND - PLATFORM CLIENT] ${matchedPlatformClient.company_name} | Intent: ${aiAnalysis.intent} | Routed to: ${aiAnalysis.routing} | Priority: ${aiAnalysis.priority}\n\nGreeting: ${aiAnalysis.greeting}\n\nAgent Context: ${aiAnalysis.agent_context}`,
           });
 
-          // Create activity with routing info
           await base44.entities.Activity.create({
-            client_id: matchedClient.id,
+            client_id: matchedPlatformClient.id,
             type: 'call',
-            title: `Inbound: ${aiAnalysis.intent.replace('_', ' ')} — ${matchedClient.company_name}`,
-            description: `Routed to: ${aiAnalysis.routing.replace('_', ' ')}. ${aiAnalysis.agent_context || ''}\n${aiAnalysis.follow_up_needed ? 'FOLLOW-UP NEEDED: ' + aiAnalysis.follow_up_reason : ''}`,
+            title: `Inbound: ${aiAnalysis.intent.replace('_', ' ')} — ${matchedPlatformClient.company_name}`,
+            description: `Routed to: ${aiAnalysis.routing.replace('_', ' ')}. ${aiAnalysis.agent_context || ''}`,
             scheduled_date: new Date().toISOString(),
             status: aiAnalysis.follow_up_needed ? 'scheduled' : 'completed',
             priority: aiAnalysis.priority === 'urgent' ? 'high' : aiAnalysis.priority || 'medium',
             auto_created: true,
           });
 
-          // If follow-up needed, create a separate follow-up activity
           if (aiAnalysis.follow_up_needed) {
             const followUpDate = new Date();
             followUpDate.setDate(followUpDate.getDate() + 1);
             await base44.entities.Activity.create({
-              client_id: matchedClient.id,
+              client_id: matchedPlatformClient.id,
               type: 'followup',
               title: `Follow-up: ${aiAnalysis.follow_up_reason || aiAnalysis.intent}`,
-              description: `Auto-created after inbound call. Original intent: ${aiAnalysis.intent}. Client: ${matchedClient.company_name}`,
+              description: `Auto-created after inbound platform call.`,
               scheduled_date: followUpDate.toISOString(),
               status: 'scheduled',
               priority: 'high',
@@ -235,84 +425,68 @@ Be specific and Indian business context aware. If the account is expired, priori
           return Response.json({
             success: true,
             identified: true,
+            type: 'platform_client',
             call_log_id: inboundLog.id,
             greeting: aiAnalysis.greeting,
             routing: aiAnalysis.routing,
           });
+        }
 
-        // ----- UNKNOWN CALLER -----
-        } else {
-          console.log('[smartfloWebhook] Unknown caller:', incomingNumber);
+        // ═══════════════════════════════════════════════════════════════
+        // PATH D: Completely unknown caller on unknown/platform DID
+        // ═══════════════════════════════════════════════════════════════
+        console.log('[smartfloWebhook] UNKNOWN caller on DID:', calledDID);
 
-          // AI: handle unknown caller (Azure OpenAI — zero Base44 credits)
-          const unknownAnalysis = await azureLLM(
-            `You are VaaniAI's intelligent call routing assistant. An incoming call has been received from an UNKNOWN number (not a registered client).
-
-Caller Number: ${incomingNumber}
+        const unknownAnalysis = await azureLLM(
+          `You are VaaniAI's call routing assistant. Unknown caller on number ${incomingNumber}.
 ${retentionConfig.active_offer ? `Active Offer: ${retentionConfig.active_offer}` : ''}
-
-Generate:
-1. A professional greeting for an unknown caller to VaaniAI
-2. The most likely intent (new_lead, wrong_number, partner_inquiry, media, general)
-3. Key qualifying questions to ask
-4. Routing recommendation
-5. Whether this should be flagged as a potential new lead
-
-VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at ₹6,500/month per channel.
-Respond with JSON: {greeting, likely_intent, qualifying_questions, routing, is_potential_lead, suggested_response}`,
-            'You are VaaniAI call routing AI. Always respond in valid JSON.',
-            {
-              type: "object",
-              properties: {
-                greeting: { type: "string" },
-                likely_intent: { type: "string" },
-                qualifying_questions: { type: "array", items: { type: "string" } },
-                routing: { type: "string" },
-                is_potential_lead: { type: "boolean" },
-                suggested_response: { type: "string" }
-              }
+VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at ₹6,500/month.
+Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_lead, suggested_response.`,
+          'You are VaaniAI call routing AI. Always respond in valid JSON.',
+          {
+            type: "object",
+            properties: {
+              greeting: { type: "string" }, likely_intent: { type: "string" },
+              qualifying_questions: { type: "array", items: { type: "string" } },
+              routing: { type: "string" }, is_potential_lead: { type: "boolean" },
+              suggested_response: { type: "string" }
             }
-          );
-
-          console.log('[smartfloWebhook] Unknown caller AI - Intent:', unknownAnalysis.likely_intent, 'Potential lead:', unknownAnalysis.is_potential_lead);
-
-          // Log the unknown call
-          const unknownLog = await base44.entities.CallLog.create({
-            client_id: 'unknown',
-            agent_id: 'system_inbound',
-            call_sid: call_id,
-            caller_id: incomingNumber,
-            callee_number: called_number || '',
-            direction: 'inbound',
-            status: 'answered',
-            call_start_time: new Date().toISOString(),
-            conversation_summary: `[INBOUND - UNIDENTIFIED] Number: ${incomingNumber} | Likely intent: ${unknownAnalysis.likely_intent} | Potential lead: ${unknownAnalysis.is_potential_lead ? 'YES' : 'No'} | Routed to: ${unknownAnalysis.routing}\n\nGreeting: ${unknownAnalysis.greeting}\n\nQualifying Questions:\n${(unknownAnalysis.qualifying_questions || []).map(q => '• ' + q).join('\n')}`,
-          });
-
-          // If potential lead, create a system-level activity for admin follow-up
-          if (unknownAnalysis.is_potential_lead) {
-            // Find any admin client record to attach the activity, or use first client
-            const adminActivity = {
-              client_id: allClients[0]?.id || 'system',
-              type: 'call',
-              title: `New inbound lead: ${incomingNumber}`,
-              description: `Unknown caller identified as potential lead. Intent: ${unknownAnalysis.likely_intent}. Routed to: ${unknownAnalysis.routing}.\n\nSuggested response: ${unknownAnalysis.suggested_response || 'Standard sales pitch'}`,
-              scheduled_date: new Date().toISOString(),
-              status: 'scheduled',
-              priority: 'high',
-              auto_created: true,
-            };
-            await base44.entities.Activity.create(adminActivity);
           }
+        );
 
-          return Response.json({
-            success: true,
-            identified: false,
-            call_log_id: unknownLog.id,
-            greeting: unknownAnalysis.greeting,
-            routing: unknownAnalysis.routing,
+        const unknownLog = await base44.entities.CallLog.create({
+          client_id: 'unknown',
+          agent_id: 'system_inbound',
+          call_sid: call_id,
+          caller_id: incomingNumber,
+          callee_number: calledDID,
+          direction: 'inbound',
+          status: 'answered',
+          call_start_time: new Date().toISOString(),
+          conversation_summary: `[INBOUND - UNKNOWN] Number: ${incomingNumber} | Intent: ${unknownAnalysis.likely_intent} | Potential lead: ${unknownAnalysis.is_potential_lead ? 'YES' : 'No'}`,
+        });
+
+        if (unknownAnalysis.is_potential_lead) {
+          await base44.entities.Activity.create({
+            client_id: allClients[0]?.id || 'system',
+            type: 'call',
+            title: `New inbound lead: ${incomingNumber}`,
+            description: `Unknown caller. Intent: ${unknownAnalysis.likely_intent}. ${unknownAnalysis.suggested_response || ''}`,
+            scheduled_date: new Date().toISOString(),
+            status: 'scheduled',
+            priority: 'high',
+            auto_created: true,
           });
         }
+
+        return Response.json({
+          success: true,
+          identified: false,
+          type: 'unknown_caller',
+          call_log_id: unknownLog.id,
+          greeting: unknownAnalysis.greeting,
+          routing: unknownAnalysis.routing,
+        });
       }
     }
 
