@@ -82,11 +82,8 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Monitor/Whisper/Barge requires a Smartflo agent_id. Configure smartflo_agent_id on the agent or pass agent_id parameter.' }, { status: 400 });
     }
 
-    // Build Smartflo API request
-    const smartfloToken = Deno.env.get('SMARTFLO_AUTH_TOKEN');
-    if (!smartfloToken) {
-      return Response.json({ error: 'SMARTFLO_AUTH_TOKEN not configured' }, { status: 500 });
-    }
+    // Get Smartflo JWT token dynamically via login
+    const smartfloToken = await getSmartfloToken();
 
     const body = {
       type: type,
