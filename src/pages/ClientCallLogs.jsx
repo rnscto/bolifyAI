@@ -210,13 +210,16 @@ export default function ClientCallLogs() {
                         new Date(call.call_start_time).toLocaleString() : '-'}
                     </TableCell>
                     <TableCell>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setSelectedCall(call)}
-                      >
-                        <Eye className="w-4 h-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <LiveCallActions call={call} onActionComplete={loadData} />
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => setSelectedCall(call)}
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
