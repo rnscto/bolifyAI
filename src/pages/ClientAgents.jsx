@@ -16,6 +16,7 @@ export default function ClientAgents() {
   const [knowledgeBases, setKnowledgeBases] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedKnowledgeBases, setSelectedKnowledgeBases] = useState([]);
+  const [editOpen, setEditOpen] = useState(false);
 
   useEffect(() => {
     loadData();
