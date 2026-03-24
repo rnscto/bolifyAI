@@ -3,6 +3,28 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 // Call Transfer / Monitor / Whisper / Barge-in via Smartflo API
 // Types: 1=Monitor, 2=Whisper, 3=Barge, 4=Transfer
 
+// Dynamically get Smartflo JWT token via login API
+async function getSmartfloToken() {
+  const email = Deno.env.get('SMARTFLO_EMAIL');
+  const password = Deno.env.get('SMARTFLO_PASSWORD');
+  if (!email || !password) {
+    throw new Error('SMARTFLO_EMAIL or SMARTFLO_PASSWORD not configured');
+  }
+
+  const loginResp = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+
+  const loginData = await loginResp.json();
+  if (!loginResp.ok || !loginData.token) {
+    throw new Error(`Smartflo login failed: ${loginData.message || loginResp.status}`);
+  }
+  console.log('[callTransfer] Smartflo login successful');
+  return loginData.token;
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
