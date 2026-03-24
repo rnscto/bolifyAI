@@ -149,6 +149,8 @@ export default function ClientAgents() {
             </CardContent>
           </Card>
 
+          <AgentSettingsCard agent={agent} onUpdate={loadData} />
+
           <DIDManager agent={agent} client={client} onUpdate={loadData} />
 
           <Card>
