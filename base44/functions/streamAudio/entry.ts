@@ -1296,8 +1296,157 @@ Deno.serve(async (req) => {
         }
       }
 
+      // ── Strategy 4: INBOUND CALL — DID → Agent direct resolution ──
+      // For inbound calls, the WebSocket connects BEFORE smartfloWebhook creates a CallLog.
+      // Resolve the agent directly from the DID that was called.
+      if (!callLog && session.calleeNumber) {
+        console.log(`[${reqId}] 🔍 No CallLog found. Trying inbound DID→Agent resolution for: ${session.calleeNumber}`);
+        const cleanCalleeDID = session.calleeNumber.replace(/[^0-9]/g, '').slice(-10);
+
+        if (cleanCalleeDID) {
+          // Try DID entity first
+          const allDIDs = await svc.entities.DID.list('-created_date', 200);
+          const matchedDID = allDIDs.find(d => (d.number || '').replace(/\D/g, '').slice(-10) === cleanCalleeDID);
+
+          let didAgent = null;
+          let didClient = null;
+
+          if (matchedDID?.agent_id) {
+            try { didAgent = await svc.entities.Agent.get(matchedDID.agent_id); } catch (_) {}
+          }
+          if (matchedDID?.client_id) {
+            try { didClient = await svc.entities.Client.get(matchedDID.client_id); } catch (_) {}
+          }
+
+          // Fallback: search agents' assigned_dids arrays
+          if (!didAgent) {
+            const allAgents = await svc.entities.Agent.list('-created_date', 100);
+            didAgent = allAgents.find(a => {
+              const dids = a.assigned_dids || (a.assigned_did ? [a.assigned_did] : []);
+              return dids.some(d => (d || '').replace(/\D/g, '').slice(-10) === cleanCalleeDID);
+            });
+            if (didAgent && !didClient && didAgent.client_id) {
+              try { didClient = await svc.entities.Client.get(didAgent.client_id); } catch (_) {}
+            }
+          }
+
+          if (didAgent) {
+            console.log(`[${reqId}] ✅ INBOUND: DID ${session.calleeNumber} → Agent "${didAgent.name}" (${didAgent.id}), Client: ${didClient?.company_name || 'unknown'}`);
+
+            // Build agent config directly (no CallLog yet — will be created by webhook later)
+            session.clientId = didClient?.id || didAgent.client_id;
+
+            let kbContent = '';
+            if (didAgent.knowledge_base_ids?.length > 0) {
+              for (const kbId of didAgent.knowledge_base_ids) {
+                try {
+                  const doc = await svc.entities.KnowledgeBase.get(kbId);
+                  if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
+                } catch (_) {}
+              }
+            }
+
+            // Check for caller identity (lead matching) using session.callerNumber if available
+            let callerContext = '';
+            if (session.callerNumber && didClient) {
+              const cleanCaller = session.callerNumber.replace(/\D/g, '').slice(-10);
+              if (cleanCaller) {
+                try {
+                  const clientLeads = await svc.entities.Lead.filter({ client_id: didClient.id });
+                  const matchedLead = clientLeads.find(l => l.phone && l.phone.replace(/\D/g, '').slice(-10) === cleanCaller);
+                  if (matchedLead) {
+                    console.log(`[${reqId}] 🎯 Caller identified as Lead: "${matchedLead.name}" (score: ${matchedLead.score})`);
+                    callerContext = [
+                      `\n\n--- INBOUND CALL - RETURNING LEAD ---`,
+                      `- Name: ${matchedLead.name || 'Unknown'}`,
+                      `- Phone: ${matchedLead.phone}`,
+                      matchedLead.email ? `- Email: ${matchedLead.email}` : null,
+                      matchedLead.company ? `- Company: ${matchedLead.company}` : null,
+                      `- Status: ${matchedLead.status || 'new'}`,
+                      `- Score: ${matchedLead.score || 0}/100`,
+                      matchedLead.qualification_tier ? `- Tier: ${matchedLead.qualification_tier}` : null,
+                      matchedLead.notes ? `- Notes: ${matchedLead.notes.substring(0, 300)}` : null,
+                      ``,
+                      `CRITICAL: This is an INBOUND callback. Address them by name "${matchedLead.name || 'Sir/Madam'}".`,
+                    ].filter(Boolean).join('\n');
+
+                    // Also get recent call history for this lead
+                    try {
+                      const leadCalls = await svc.entities.CallLog.filter({ lead_id: matchedLead.id });
+                      const recentCalls = leadCalls
+                        .sort((a, b) => new Date(b.call_start_time || b.created_date) - new Date(a.call_start_time || a.created_date))
+                        .slice(0, 3);
+                      if (recentCalls.length > 0) {
+                        callerContext += '\n\nLAST CALL HISTORY:';
+                        recentCalls.forEach(c => {
+                          callerContext += `\n- ${c.direction} | ${c.status} | ${(c.conversation_summary || 'No summary').substring(0, 150)}`;
+                        });
+                      }
+                    } catch (_) {}
+
+                    // Store lead_id for later CallLog association
+                    session._inboundLeadId = matchedLead.id;
+                  }
+                } catch (e) {
+                  console.log(`[${reqId}] ⚠️ Lead matching failed: ${e.message}`);
+                }
+              }
+            }
+
+            session.systemPrompt = (didAgent.system_prompt || 'You are a helpful AI voice assistant.') + callerContext;
+            if (kbContent) session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${kbContent}`;
+            if (didAgent.greeting_message) session.greetingMessage = didAgent.greeting_message;
+            if (didAgent.persona) {
+              if (didAgent.persona.voice_engine) session.voiceEngine = didAgent.persona.voice_engine;
+              if (didAgent.persona.voice_type) {
+                if (session.voiceEngine === 'realtime') {
+                  const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
+                  const deprecatedMap = { 'nova': 'shimmer', 'onyx': 'ash', 'fable': 'ballad' };
+                  let voice = didAgent.persona.voice_type.toLowerCase();
+                  if (deprecatedMap[voice]) voice = deprecatedMap[voice];
+                  if (validVoices.includes(voice)) session.voiceType = voice;
+                } else {
+                  session.voiceType = didAgent.persona.voice_type;
+                }
+              }
+            }
+
+            // Create an inbound CallLog so saveCallRecord can persist transcript later
+            try {
+              const newInboundLog = await svc.entities.CallLog.create({
+                client_id: session.clientId,
+                agent_id: didAgent.id,
+                lead_id: session._inboundLeadId || null,
+                call_sid: session.callSid || `inbound_${Date.now()}`,
+                stream_sid: session.streamSid || null,
+                caller_id: session.callerNumber || incomingNumber || '',
+                callee_number: session.calleeNumber,
+                direction: 'inbound',
+                status: 'answered',
+                call_start_time: new Date().toISOString(),
+                agent_config_cache: {
+                  agent_name: didAgent.name,
+                  system_prompt: session.systemPrompt,
+                  persona: didAgent.persona || {},
+                  knowledge_base_content: kbContent,
+                  lead_context: callerContext,
+                  greeting_message: didAgent.greeting_message || ''
+                }
+              });
+              session.callLogId = newInboundLog.id;
+              console.log(`[${reqId}] ✅ Inbound CallLog created: ${newInboundLog.id} (Agent: ${didAgent.name})`);
+            } catch (clErr) {
+              console.error(`[${reqId}] ⚠️ Failed to create inbound CallLog: ${clErr.message}`);
+            }
+
+            console.log(`[${reqId}] ✅ INBOUND agent config loaded: engine=${session.voiceEngine}, voice=${session.voiceType}, prompt=${session.systemPrompt.length} chars`);
+            return; // Config loaded successfully via DID→Agent
+          }
+        }
+      }
+
       if (!callLog) {
-        console.log(`[${reqId}] ⚠️ No call log found after all strategies. callSid=${session.callSid}, streamSid=${session.streamSid}`);
+        console.log(`[${reqId}] ⚠️ No call log found after all strategies. callSid=${session.callSid}, streamSid=${session.streamSid}, calleeNumber=${session.calleeNumber}`);
         console.log(`[${reqId}] ⚠️ Agent will use DEFAULT generic prompt — this call will NOT be personalized.`);
         return;
       }
