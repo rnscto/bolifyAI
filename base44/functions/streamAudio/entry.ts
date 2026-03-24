@@ -1556,8 +1556,9 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
         const startData = msg.start || {};
         session.streamSid = startData.streamSid;
         session.callSid = startData.callSid;
-        // Extract callee number from Smartflo start data if available (for better matching)
+        // Extract callee number and caller number from Smartflo start data
         session.calleeNumber = startData.customParameters?.customer_number || startData.to || startData.callee || '';
+        session.callerNumber = startData.from || startData.caller || startData.customParameters?.caller_number || '';
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}, call=${session.callSid}, callee=${session.calleeNumber}`);
 
         // Reset audio conversion state for new call (prevents cross-call artifacts)
