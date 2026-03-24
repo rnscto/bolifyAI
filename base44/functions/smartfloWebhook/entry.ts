@@ -310,7 +310,9 @@ Deno.serve(async (req) => {
               system_prompt: personalizedPrompt,
               persona: resolvedAgent.persona || {},
               knowledge_base_content: kbContent,
-              greeting_message: resolvedAgent.greeting_message || ''
+              greeting_message: resolvedAgent.greeting_message || '',
+              human_transfer_number: resolvedAgent.human_transfer_number || '',
+              enable_auto_transfer: resolvedAgent.enable_auto_transfer !== false
             }
           });
 
