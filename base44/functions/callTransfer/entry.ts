@@ -107,7 +107,7 @@ Deno.serve(async (req) => {
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
-        'Authorization': smartfloToken
+        'Authorization': `Bearer ${smartfloToken}`
       },
       body: JSON.stringify(body)
     });
