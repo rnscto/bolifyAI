@@ -7,6 +7,7 @@ import { Bot, Phone as PhoneIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import FeatureGate from '../components/FeatureGate';
 import DIDManager from '../components/agents/DIDManager';
+import AgentSettingsCard from '../components/agents/AgentSettingsCard';
 
 export default function ClientAgents() {
   const [agent, setAgent] = useState(null);
