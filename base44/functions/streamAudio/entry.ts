@@ -1564,6 +1564,8 @@ Deno.serve(async (req) => {
         if (cache.knowledge_base_content) {
           session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
         }
+        if (cache.human_transfer_number) session.humanTransferNumber = cache.human_transfer_number;
+        if (cache.enable_auto_transfer === false) session.enableAutoTransfer = false;
         // Inject Shopify tool instructions if integration is active
         if (session.hasShopify && !session.systemPrompt.includes('SHOPIFY STORE INTEGRATION')) {
           session.systemPrompt += `\n\n--- SHOPIFY STORE INTEGRATION (ACTIVE) ---
