@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
 // ─── Audio Conversion Helpers ───
 
@@ -138,7 +138,7 @@ async function saveCallRecord(session, reqId, duration) {
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    const { createClient } = await import('npm:@base44/sdk@0.8.20');
+    const { createClient } = await import('npm:@base44/sdk@0.8.23');
     const appId = Deno.env.get('BASE44_APP_ID');
     const serviceClient = createClient({ appId, asServiceRole: true });
 
@@ -652,7 +652,7 @@ Deno.serve(async (req) => {
 
             // Update CallLog with transfer info (fire-and-forget)
             if (session.callLogId) {
-              const { createClient } = await import('npm:@base44/sdk@0.8.20');
+              const { createClient } = await import('npm:@base44/sdk@0.8.23');
               const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
               svc.entities.CallLog.update(session.callLogId, {
                 transferred_to: `Human agent (intercom: ${session.humanTransferNumber}, reason: ${reason})`
@@ -683,7 +683,7 @@ Deno.serve(async (req) => {
     if (functionName === 'shopify_lookup' && session.clientId) {
       try {
         const args = JSON.parse(argsStr);
-        const { createClient } = await import('npm:@base44/sdk@0.8.20');
+        const { createClient } = await import('npm:@base44/sdk@0.8.23');
         const appId = Deno.env.get('BASE44_APP_ID');
         const svc = createClient({ appId, asServiceRole: true });
 
@@ -1007,7 +1007,7 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
     const tgT = Deno.env.get('TELEGRAM_BOT_TOKEN');
     if (!tgT || !session.callLogId) return;
     try {
-      const { createClient: cc } = await import('npm:@base44/sdk@0.8.20');
+      const { createClient: cc } = await import('npm:@base44/sdk@0.8.23');
       const svc = cc({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
       const cl = await svc.entities.Client.get(session._personalClientId);
       if (!cl?.telegram_connected || !cl?.telegram_chat_id || cl.dnd_enabled || cl.owner_notification_channel !== 'telegram') return;
@@ -1311,7 +1311,7 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
   // Finds the matching CallLog for this WebSocket stream, extracts the cached agent config
   async function loadAgentConfig() {
     try {
-      const { createClient } = await import('npm:@base44/sdk@0.8.20');
+      const { createClient } = await import('npm:@base44/sdk@0.8.23');
       const appId = Deno.env.get('BASE44_APP_ID');
       const svc = createClient({ appId, asServiceRole: true });
 

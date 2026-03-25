@@ -1,4 +1,3 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 import { createClient } from 'npm:@base44/sdk@0.8.23';
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -105,15 +104,15 @@ Deno.serve(async (req) => {
         return Response.json({ ok: true });
       }
 
-      const base44 = createClientFromRequest(req);
+      const svcStart = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
       try {
-        const client = await base44.asServiceRole.entities.Client.get(clientId);
+        const client = await svcStart.entities.Client.get(clientId);
         if (!client) {
           await sendTelegramMessage(chatId, '❌ Invalid link. Please try again from your VaaniAI dashboard.');
           return Response.json({ ok: true });
         }
 
-        await base44.asServiceRole.entities.Client.update(clientId, {
+        await svcStart.entities.Client.update(clientId, {
           telegram_chat_id: chatId,
           telegram_connected: true,
           telegram_username: username,
@@ -133,11 +132,11 @@ Deno.serve(async (req) => {
 
     // Handle /disconnect command
     if (text === '/disconnect') {
-      const base44 = createClientFromRequest(req);
+      const svcDisc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
       try {
-        const clients = await base44.asServiceRole.entities.Client.filter({ telegram_chat_id: chatId });
+        const clients = await svcDisc.entities.Client.filter({ telegram_chat_id: chatId });
         if (clients.length > 0) {
-          await base44.asServiceRole.entities.Client.update(clients[0].id, {
+          await svcDisc.entities.Client.update(clients[0].id, {
             telegram_chat_id: '',
             telegram_connected: false,
             telegram_username: '',
