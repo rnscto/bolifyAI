@@ -130,6 +130,7 @@ export default function Layout({ children, currentPageName }) {
 
     const personalNav = [
     { name: 'Dashboard', path: 'PersonalDashboard', icon: ShieldCheck },
+    { name: 'AI Assistant', path: 'PersonalAIAssistant', icon: Cpu },
     { name: 'Call Logs', path: 'ClientCallLogs', icon: PhoneCall },
     { name: 'Subscription', path: 'ClientSubscription', icon: CreditCard },
     { name: 'Settings', path: 'ClientSettings', icon: UserCog },
