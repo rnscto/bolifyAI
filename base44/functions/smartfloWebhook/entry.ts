@@ -297,6 +297,17 @@ Deno.serve(async (req) => {
 
           console.log(`[smartfloWebhook] ✅ Inbound CallLog ${inboundLog.id} created with Agent "${resolvedAgent.name}" config cached for streamAudio`);
 
+          // Send Telegram notification for personal accounts (non-blocking)
+          if (resolvedClient.account_type === 'personal' && resolvedClient.owner_notification_channel === 'telegram' && !resolvedClient.dnd_enabled) {
+            base44.functions.invoke('sendTelegramNotification', {
+              client_id: resolvedClient.id,
+              caller_number: incomingNumber,
+              caller_name: matchedLead.name || '',
+              category: 'business',
+              summary: `Returning lead "${matchedLead.name || 'Unknown'}" is calling back. Status: ${matchedLead.status || 'new'}, Score: ${matchedLead.score || 0}/100`
+            }).catch(e => console.error(`[smartfloWebhook] Telegram notify failed: ${e.message}`));
+          }
+
           return Response.json({
             success: true,
             identified: true,
@@ -350,6 +361,16 @@ Deno.serve(async (req) => {
           });
 
           console.log(`[smartfloWebhook] ✅ Inbound CallLog ${inboundLog.id} created for new caller with Agent "${resolvedAgent.name}"`);
+
+          // Send Telegram notification for personal accounts (non-blocking)
+          if (resolvedClient.account_type === 'personal' && resolvedClient.owner_notification_channel === 'telegram' && !resolvedClient.dnd_enabled) {
+            base44.functions.invoke('sendTelegramNotification', {
+              client_id: resolvedClient.id,
+              caller_number: incomingNumber,
+              caller_name: '',
+              summary: `New unknown caller from ${incomingNumber}. AI is screening the call.`
+            }).catch(e => console.error(`[smartfloWebhook] Telegram notify failed: ${e.message}`));
+          }
 
           return Response.json({
             success: true,
@@ -815,6 +836,19 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
                 is_read: false
               });
               console.log(`[smartfloWebhook] 📨 VoicemailMessage saved for personal account: ${category}/${urgency}`);
+
+              // Send post-call Telegram summary (non-blocking)
+              if (callClient.owner_notification_channel === 'telegram' && !callClient.dnd_enabled) {
+                base44.functions.invoke('sendTelegramNotification', {
+                  client_id: freshCallLog.client_id,
+                  caller_number: freshCallLog.caller_id || '',
+                  caller_name: '',
+                  category,
+                  urgency,
+                  type: 'summary',
+                  summary: freshCallLog.conversation_summary || 'Call ended — no summary available.'
+                }).catch(e => console.error(`[smartfloWebhook] Telegram post-call notify failed: ${e.message}`));
+              }
             }
           }
         } catch (vmErr) {
