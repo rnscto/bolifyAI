@@ -4,6 +4,48 @@ import { createClient } from 'npm:@base44/sdk@0.8.20';
 // This eliminates dependency on Base44 entity automations (which consume credits).
 // Also replaced InvokeLLM with Azure OpenAI for inbound call analysis.
 
+const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
+
+// ─── Send Telegram notification directly (no function invoke) ───
+async function sendTelegramDirect(client, { caller_number, caller_name, category, urgency, summary, type }) {
+  if (!client || !client.telegram_connected || !client.telegram_chat_id || !TELEGRAM_BOT_TOKEN) return;
+  if (client.owner_notification_channel !== 'telegram' || client.dnd_enabled) return;
+
+  try {
+    let emoji = '📞';
+    if (category === 'spam') emoji = '🚫';
+    else if (category === 'family') emoji = '👨‍👩‍👧';
+    else if (category === 'business') emoji = '💼';
+    else if (category === 'promotional') emoji = '📢';
+    else if (urgency === 'urgent') emoji = '🚨';
+
+    const notifType = type || 'call';
+    let message = notifType === 'summary' 
+      ? `📋 <b>Call Summary</b>\n\n` 
+      : `${emoji} <b>Incoming Call</b>\n\n`;
+    message += `📱 From: <b>${caller_name || caller_number || 'Unknown'}</b>\n`;
+    if (caller_name && caller_number) message += `📞 Number: ${caller_number}\n`;
+    if (category) message += `🏷️ Category: ${category}\n`;
+    if (urgency && urgency !== 'medium') message += `⚡ Urgency: ${urgency.toUpperCase()}\n`;
+    if (summary) message += `\n💬 ${summary}`;
+
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: client.telegram_chat_id,
+        text: message,
+        parse_mode: 'HTML'
+      })
+    });
+    const result = await res.json();
+    console.log(`[smartfloWebhook] Telegram sent to ${client.company_name}: ok=${result.ok}`);
+  } catch (e) {
+    console.error(`[smartfloWebhook] Telegram send failed: ${e.message}`);
+  }
+}
+
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
 async function azureLLM(prompt, systemPrompt, jsonSchema) {
   const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
@@ -297,16 +339,13 @@ Deno.serve(async (req) => {
 
           console.log(`[smartfloWebhook] ✅ Inbound CallLog ${inboundLog.id} created with Agent "${resolvedAgent.name}" config cached for streamAudio`);
 
-          // Send Telegram notification for personal accounts (non-blocking)
-          if (resolvedClient.account_type === 'personal' && resolvedClient.owner_notification_channel === 'telegram' && !resolvedClient.dnd_enabled) {
-            base44.functions.invoke('sendTelegramNotification', {
-              client_id: resolvedClient.id,
-              caller_number: incomingNumber,
-              caller_name: matchedLead.name || '',
-              category: 'business',
-              summary: `Returning lead "${matchedLead.name || 'Unknown'}" is calling back. Status: ${matchedLead.status || 'new'}, Score: ${matchedLead.score || 0}/100`
-            }).catch(e => console.error(`[smartfloWebhook] Telegram notify failed: ${e.message}`));
-          }
+          // Send Telegram notification for personal accounts (non-blocking, direct)
+          sendTelegramDirect(resolvedClient, {
+            caller_number: incomingNumber,
+            caller_name: matchedLead.name || '',
+            category: 'business',
+            summary: `Returning lead "${matchedLead.name || 'Unknown'}" is calling back. Status: ${matchedLead.status || 'new'}, Score: ${matchedLead.score || 0}/100`
+          });
 
           return Response.json({
             success: true,
@@ -362,15 +401,12 @@ Deno.serve(async (req) => {
 
           console.log(`[smartfloWebhook] ✅ Inbound CallLog ${inboundLog.id} created for new caller with Agent "${resolvedAgent.name}"`);
 
-          // Send Telegram notification for personal accounts (non-blocking)
-          if (resolvedClient.account_type === 'personal' && resolvedClient.owner_notification_channel === 'telegram' && !resolvedClient.dnd_enabled) {
-            base44.functions.invoke('sendTelegramNotification', {
-              client_id: resolvedClient.id,
-              caller_number: incomingNumber,
-              caller_name: '',
-              summary: `New unknown caller from ${incomingNumber}. AI is screening the call.`
-            }).catch(e => console.error(`[smartfloWebhook] Telegram notify failed: ${e.message}`));
-          }
+          // Send Telegram notification for personal accounts (non-blocking, direct)
+          sendTelegramDirect(resolvedClient, {
+            caller_number: incomingNumber,
+            caller_name: '',
+            summary: `New unknown caller from ${incomingNumber}. AI is screening the call.`
+          });
 
           return Response.json({
             success: true,
@@ -837,18 +873,15 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
               });
               console.log(`[smartfloWebhook] 📨 VoicemailMessage saved for personal account: ${category}/${urgency}`);
 
-              // Send post-call Telegram summary (non-blocking)
-              if (callClient.owner_notification_channel === 'telegram' && !callClient.dnd_enabled) {
-                base44.functions.invoke('sendTelegramNotification', {
-                  client_id: freshCallLog.client_id,
-                  caller_number: freshCallLog.caller_id || '',
-                  caller_name: '',
-                  category,
-                  urgency,
-                  type: 'summary',
-                  summary: freshCallLog.conversation_summary || 'Call ended — no summary available.'
-                }).catch(e => console.error(`[smartfloWebhook] Telegram post-call notify failed: ${e.message}`));
-              }
+              // Send post-call Telegram summary (non-blocking, direct)
+              sendTelegramDirect(callClient, {
+                caller_number: freshCallLog.caller_id || '',
+                caller_name: '',
+                category,
+                urgency,
+                type: 'summary',
+                summary: freshCallLog.conversation_summary || 'Call ended — no summary available.'
+              });
             }
           }
         } catch (vmErr) {
