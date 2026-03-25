@@ -7,7 +7,8 @@ import QuickActionsPanel from '../components/personal/QuickActionsPanel';
 import TrustedContactsList from '../components/personal/TrustedContactsList';
 import VoicemailInbox from '../components/personal/VoicemailInbox';
 import PersonalAnalytics from '../components/personal/PersonalAnalytics';
-import TelegramConnect from '../components/personal/TelegramConnect';
+import NotificationSettings from '../components/personal/NotificationSettings';
+import CallForwardingGuide from '../components/personal/CallForwardingGuide';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function PersonalDashboard() {
@@ -84,6 +85,7 @@ export default function PersonalDashboard() {
           </TabsTrigger>
           <TabsTrigger value="contacts">Contacts</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          <TabsTrigger value="setup">Setup</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -91,9 +93,8 @@ export default function PersonalDashboard() {
             <div className="lg:col-span-2">
               <RecentCallList calls={calls} />
             </div>
-            <div className="space-y-6">
+            <div>
               <QuickActionsPanel client={client} onUpdate={setClient} />
-              <TelegramConnect client={client} onUpdate={setClient} />
             </div>
           </div>
         </TabsContent>
@@ -112,6 +113,13 @@ export default function PersonalDashboard() {
 
         <TabsContent value="analytics">
           <PersonalAnalytics calls={calls} />
+        </TabsContent>
+
+        <TabsContent value="setup">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <CallForwardingGuide client={client} />
+            <NotificationSettings client={client} onUpdate={setClient} />
+          </div>
         </TabsContent>
       </Tabs>
     </div>

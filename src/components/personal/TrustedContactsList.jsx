@@ -9,6 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { base44 } from '@/api/base44Client';
 import { UserPlus, Trash2, Users, Phone } from 'lucide-react';
 import { toast } from 'sonner';
+import ContactImporter from './ContactImporter';
 
 const relationshipColors = {
   family: 'bg-green-100 text-green-800',
@@ -53,12 +54,14 @@ export default function TrustedContactsList({ contacts, clientId, onRefresh }) {
           <Users className="w-5 h-5" />
           Trusted Contacts
         </CardTitle>
-        <Dialog open={showAdd} onOpenChange={setShowAdd}>
-          <DialogTrigger asChild>
-            <Button size="sm" className="gap-1">
-              <UserPlus className="w-4 h-4" /> Add
-            </Button>
-          </DialogTrigger>
+        <div className="flex gap-2">
+          <ContactImporter clientId={clientId} onImported={onRefresh} />
+          <Dialog open={showAdd} onOpenChange={setShowAdd}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="gap-1">
+                <UserPlus className="w-4 h-4" /> Add
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Add Trusted Contact</DialogTitle>
@@ -103,7 +106,8 @@ export default function TrustedContactsList({ contacts, clientId, onRefresh }) {
               </Button>
             </div>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </CardHeader>
       <CardContent>
         {contacts.length === 0 ? (
