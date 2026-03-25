@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Bot, Phone as PhoneIcon, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import AgentEditDialog from '../components/agents/AgentEditDialog';
+import AgentSettingsCard from '../components/agents/AgentSettingsCard';
 
 export default function PersonalAIAssistant() {
   const [agent, setAgent] = useState(null);
@@ -131,6 +132,9 @@ export default function PersonalAIAssistant() {
           )}
         </CardContent>
       </Card>
+
+      {/* Call Settings */}
+      <AgentSettingsCard agent={agent} onUpdate={loadData} />
 
       <AgentEditDialog agent={agent} open={editOpen} onOpenChange={setEditOpen} onSaved={loadData} />
     </div>
