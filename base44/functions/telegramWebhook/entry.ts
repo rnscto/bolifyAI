@@ -77,15 +77,15 @@ Deno.serve(async (req) => {
             custom_message: '__AWAITING_TIME__'
           });
           // Update the original message to show selection
-          await editMessageButtons(chatId, cq.message.message_id, `⏰ You chose: <b>Call Back</b> — reply with timing...`);
+          await editMessageButtons(chatId, cq.message.message_id, `⏰ <b>Call Back selected</b>\n\nReply mein time bataiye jaise:\n• 5 minutes\n• 1 hour\n• kal subah`);
           return Response.json({ ok: true });
         }
 
         // For transfer, take_message, block — create decision immediately
-        const decisionLabels = {
-          transfer: '📞 Transfer to You',
-          take_message: '📝 Take Message',
-          block: '🚫 Block/End Call'
+        const decisionConfirms = {
+          transfer: { label: '📞 Transfer to You', detail: 'AI caller ko bol rahi hai ki aapka call transfer ho raha hai...' },
+          take_message: { label: '📝 Take Message', detail: 'AI caller se message le rahi hai aapke liye...' },
+          block: { label: '🚫 Block/End Call', detail: 'AI call politely end kar rahi hai...' }
         };
 
         try {
@@ -97,8 +97,8 @@ Deno.serve(async (req) => {
           });
           console.log(`[telegramWebhook] ✅ Decision created: id=${created.id}, action=${action}, callLog=${callLogId}`);
 
-          const label = decisionLabels[action] || action;
-          await editMessageButtons(chatId, cq.message.message_id, `✅ Decision: <b>${label}</b>\n\nAI agent will execute this now.`);
+          const conf = decisionConfirms[action] || { label: action, detail: 'AI is executing...' };
+          await editMessageButtons(chatId, cq.message.message_id, `✅ <b>${conf.label}</b>\n\n${conf.detail}`);
         } catch (createErr) {
           console.error(`[telegramWebhook] ❌ Decision creation failed:`, createErr.message);
           await sendTelegramMessage(chatId, `❌ Failed to submit decision. Error: ${createErr.message}`);

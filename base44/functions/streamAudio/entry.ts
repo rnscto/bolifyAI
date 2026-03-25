@@ -468,7 +468,8 @@ Deno.serve(async (req) => {
     _realtimeReconnectAttempts: 0,
     _callEnded: false,
     _awaitingOwnerDecision: false,  // Waiting for owner's Telegram button press
-    _ownerDecisionExecuted: false   // Owner decision already applied
+    _ownerDecisionExecuted: false,  // Owner decision already applied
+    _ownerName: ''                  // Owner's display name for AI instructions
   };
 
   // ─── Connect to Azure Realtime API ───
@@ -1079,23 +1080,24 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
 
   // ─── Execute owner's Telegram decision on the live call ───
   function executeOwnerDecision(dec) {
+    const ownerName = session._ownerName || 'Sir';
     let inst = '';
     if (dec.decision === 'transfer') {
       inst = session.humanTransferNumber
-        ? '[OWNER INSTRUCTION] Owner wants to speak to this caller. Transfer NOW using transfer_to_human. Say: "The owner is available, let me connect you. Please hold."'
-        : '[OWNER INSTRUCTION] Owner wants to connect. Tell caller: "The owner will call you back very shortly on this number."';
+        ? `[OWNER INSTRUCTION — EXECUTE IMMEDIATELY] ${ownerName} ji ne aapka call transfer karne ke liye bola hai. Caller ko HINDI mein boliye: "Sir, ${ownerName} ji ne aapka call apne paas transfer karne ke liye bola hai, aap kuch second hold kariye main aapka call transfer kar rahi hu." Phir TURANT transfer_to_human tool use karke call transfer karo.`
+        : `[OWNER INSTRUCTION — EXECUTE IMMEDIATELY] ${ownerName} ji aapko jald call back karenge. Caller ko HINDI mein boliye: "Sir, ${ownerName} ji abhi aapka call le rahe hain, wo aapko turant is number par call back karenge."`;
     } else if (dec.decision === 'callback') {
-      const t = dec.callback_time || dec.custom_message || 'shortly';
-      inst = `[OWNER INSTRUCTION] Tell the caller: "The owner will call you back in ${t}. Can I note anything else for them?"`;
+      const t = dec.callback_time || dec.custom_message || 'kuch der mein';
+      inst = `[OWNER INSTRUCTION — EXECUTE IMMEDIATELY] ${ownerName} ji ne kaha hai ki wo caller ko call back karenge. Caller ko HINDI mein boliye: "Sir, maine ${ownerName} ji ko aapke call ke baare mein bata diya hai aur unhone kaha hai ki wo aapko ${t} mein call back kar rahe hain. Kya aap kuch aur message dena chahenge unke liye?"`;
     } else if (dec.decision === 'take_message') {
-      inst = '[OWNER INSTRUCTION] Take a detailed message. Ask: name, purpose, and any details to pass along to the owner.';
+      inst = `[OWNER INSTRUCTION — EXECUTE IMMEDIATELY] ${ownerName} ji abhi busy hain aur unhone message lene ke liye bola hai. Caller ko HINDI mein boliye: "Sir, ${ownerName} ji abhi busy hain, unhone mujhe aapka message lene ke liye bola hai. Aap bataiye aapka kya kaam tha, main unhe convey kar dungi." Phir caller ka naam, purpose aur poora message note karo.`;
     } else if (dec.decision === 'block') {
-      inst = '[OWNER INSTRUCTION] End this call politely. Say: "The owner is unavailable. Thank you for calling. Goodbye."';
+      inst = `[OWNER INSTRUCTION — EXECUTE IMMEDIATELY] ${ownerName} ji ne call end karne ke liye bola hai. Caller ko HINDI mein politely boliye: "Sir, ${ownerName} ji abhi available nahi hain. Aapka call ke liye dhanyavaad. Namaste." Phir call khatam karo.`;
     } else if (dec.custom_message) {
-      inst = `[OWNER INSTRUCTION] Owner says: "${dec.custom_message}". Relay this to the caller naturally.`;
+      inst = `[OWNER INSTRUCTION — EXECUTE IMMEDIATELY] ${ownerName} ji ne yeh message bheja hai: "${dec.custom_message}". Isko caller ko HINDI mein naturally relay karo.`;
     }
     if (!inst) return;
-    console.log(`[${reqId}] 🎯 Executing: ${dec.decision}`);
+    console.log(`[${reqId}] 🎯 Executing: ${dec.decision} (owner: ${ownerName})`);
     if (session.voiceEngine === 'azure_speech') { generateGpt5NanoResponse(inst); }
     else { sendToRealtime({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: inst }] } }); sendToRealtime({ type: 'response.create' }); }
   }
@@ -1630,7 +1632,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
               session._isTrustedCaller = isTrusted;
               session._trustedContactName = trustedName;
               session._personalClientId = didClient.id;
-              console.log(`[${reqId}] 🛡️ Personal inbound: mode=${aiMode}, dnd=${dndEnabled}, trusted=${isTrusted}${trustedName ? ', name=' + trustedName : ''}`);
+              session._ownerName = didClient.company_name || '';
+              console.log(`[${reqId}] 🛡️ Personal inbound: mode=${aiMode}, dnd=${dndEnabled}, trusted=${isTrusted}${trustedName ? ', name=' + trustedName : ''}, owner=${session._ownerName}`);
 
               // Send live Telegram notification for personal inbound calls (non-blocking)
               if (didClient.telegram_connected && didClient.telegram_chat_id && !dndEnabled && didClient.owner_notification_channel === 'telegram') {
@@ -1763,7 +1766,8 @@ ${isTrusted ? `NOTE: This is "${trustedName}", a known contact. Be warm and take
               session._isTrustedCaller = isTrusted;
               session._trustedContactName = trustedName;
               session._personalClientId = callLog.client_id;
-              console.log(`[${reqId}] 🛡️ Personal mode: ${aiMode}, DND=${dndEnabled}, trusted=${isTrusted}${trustedName ? ', name=' + trustedName : ''}`);
+              session._ownerName = ownerClient.company_name || '';
+              console.log(`[${reqId}] 🛡️ Personal mode: ${aiMode}, DND=${dndEnabled}, trusted=${isTrusted}${trustedName ? ', name=' + trustedName : ''}, owner=${session._ownerName}`);
               if (ownerClient.telegram_connected && ownerClient.telegram_chat_id && !dndEnabled && ownerClient.owner_notification_channel === 'telegram') {
                 const tgT = Deno.env.get('TELEGRAM_BOT_TOKEN');
                 if (tgT) {
