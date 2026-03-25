@@ -7,6 +7,7 @@ import QuickActionsPanel from '../components/personal/QuickActionsPanel';
 import TrustedContactsList from '../components/personal/TrustedContactsList';
 import VoicemailInbox from '../components/personal/VoicemailInbox';
 import PersonalAnalytics from '../components/personal/PersonalAnalytics';
+import TelegramConnect from '../components/personal/TelegramConnect';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
 export default function PersonalDashboard() {
@@ -90,8 +91,9 @@ export default function PersonalDashboard() {
             <div className="lg:col-span-2">
               <RecentCallList calls={calls} />
             </div>
-            <div>
+            <div className="space-y-6">
               <QuickActionsPanel client={client} onUpdate={setClient} />
+              <TelegramConnect client={client} onUpdate={setClient} />
             </div>
           </div>
         </TabsContent>

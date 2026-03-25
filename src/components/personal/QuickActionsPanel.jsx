@@ -94,7 +94,9 @@ export default function QuickActionsPanel({ client, onUpdate }) {
         {/* Notification channel info */}
         <div className="text-xs text-gray-400 pt-2 border-t">
           Notifications via: <span className="font-medium capitalize">{client?.owner_notification_channel || 'WhatsApp'}</span>
-          {client?.owner_whatsapp_number && ` (${client.owner_whatsapp_number})`}
+          {client?.owner_notification_channel === 'telegram' && client?.telegram_username
+            ? ` (@${client.telegram_username})`
+            : client?.owner_whatsapp_number ? ` (${client.owner_whatsapp_number})` : ''}
         </div>
       </CardContent>
     </Card>
