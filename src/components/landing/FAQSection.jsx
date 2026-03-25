@@ -10,44 +10,44 @@ import {
 
 const faqs = [
   {
-    q: "What is VaaniAI and how does AI calling work?",
-    a: "VaaniAI is India's leading AI voice agent platform that automates outbound sales calls using artificial intelligence. The AI calling software qualifies leads, books meetings, and manages your sales pipeline 24/7 in Hindi and English — with a built-in industry-specific CRM."
+    q: "What is VaaniAI?",
+    a: "VaaniAI is India's AI voice platform with two products: (1) Business AI Agent — automates outbound sales calls, qualifies leads, and manages your CRM 24/7; (2) Personal AI Assistant — answers your incoming calls, screens spam, takes messages, and keeps you in control via WhatsApp. Both work in Hindi and English."
   },
   {
-    q: "Which languages does the AI voice bot support?",
-    a: "VaaniAI's AI voice bot supports English, Hindi, and bilingual (mixed) conversations. The voice AI agents automatically adapt to the language preferred by the person on the call, making it ideal for Indian businesses."
+    q: "How does the Personal AI Call Assistant work?",
+    a: "Simply forward your calls to your VaaniAI number. The AI answers on your behalf, identifies who's calling and why, classifies calls (Family/Business/Promotional/Spam), and sends you real-time WhatsApp alerts. You can reply with instructions like 'tell them I'm busy' or 'transfer to me' — all while staying private."
   },
   {
-    q: "How much does AI calling software cost in India?",
-    a: "VaaniAI's AI calling software starts at just ₹6,500 per month per channel — one of the most affordable AI voice agent solutions in India. You get a 7-day free trial with full access to AI calling, CRM, and analytics. No credit card required."
+    q: "Can I control what my AI assistant says during a live call?",
+    a: "Yes! VaaniAI's owner-in-the-loop feature sends you real-time updates during calls via WhatsApp. You can instruct the AI mid-call — 'tell them to call back at 5 PM', 'schedule a meeting for tomorrow', or 'transfer the call to me'. The AI follows your instructions instantly."
   },
   {
-    q: "Which industries can use VaaniAI's AI voice agents?",
-    a: "VaaniAI supports 23+ industries including Real Estate, Healthcare, Education, Gym & Fitness, Insurance, SaaS, Automobile, Hospitality, Legal Services, E-Commerce, Banking, and more. Each industry gets pre-built CRM templates, sales workflows, and AI-trained voice agents."
+    q: "How much does the Personal AI Assistant cost?",
+    a: "The Personal AI Assistant starts at just ₹499/month with a 7-day free trial. The Business AI Agent starts at ₹6,500/month per channel. No credit card required for the free trial."
   },
   {
-    q: "Can VaaniAI integrate with Salesforce, HubSpot, or Zoho CRM?",
-    a: "Yes, VaaniAI integrates seamlessly with Salesforce, HubSpot, Zoho, and other popular CRM platforms via webhooks and REST APIs. You can also use VaaniAI's built-in industry-specific sales CRM."
+    q: "Which languages does VaaniAI support?",
+    a: "VaaniAI supports English, Hindi, and bilingual (Hinglish) conversations. The AI automatically adapts to the language preferred by the caller."
   },
   {
-    q: "How does VaaniAI's AI voice agent qualify leads?",
-    a: "VaaniAI's AI voice agent uses natural language processing (NLP) and real-time speech recognition to call leads, have natural human-like conversations, ask qualifying questions, detect buyer intent, score leads, and automatically update your CRM — all without human intervention."
+    q: "Does the AI disclose that it's not a real person?",
+    a: "Yes, VaaniAI complies with TRAI and DPDP regulations. The AI identifies itself appropriately as an AI assistant at the start of conversations. For personal accounts, it introduces itself as your personal assistant without revealing your personal details."
   },
   {
-    q: "Is there a free trial for the AI calling platform?",
-    a: "Yes, VaaniAI offers a 7-day free trial with full access to all features — AI voice agents, automated outbound calling, lead management, call transcription, and CRM. No credit card required. Deploy your first AI calling campaign within minutes."
+    q: "Which industries does the Business AI Agent support?",
+    a: "VaaniAI supports 23+ industries including Real Estate, Healthcare, Education, Insurance, SaaS, Automobile, E-Commerce, and more. Each gets pre-built CRM templates and AI-trained voice agents."
   },
   {
-    q: "Can AI voice agents be used for government e-Governance services?",
-    a: "Yes, VaaniAI provides a dedicated AI voice agent solution for e-Governance. Government departments can use it for citizen helplines, scheme information, grievance registration, appointment booking, and service status tracking — available in Hindi, English, and regional Indian languages."
+    q: "Can VaaniAI schedule meetings from my calls?",
+    a: "Yes! Both the Personal and Business products can detect meeting requests during calls and schedule them. The Personal AI Assistant will confirm with you via WhatsApp before scheduling."
   },
   {
-    q: "How is VaaniAI different from other AI calling services in India?",
-    a: "VaaniAI stands out with its combination of AI voice calling + built-in CRM + industry-specific templates. Unlike competitors, VaaniAI offers unlimited outbound calls, real-time AI transcript analysis, automatic lead scoring, pipeline automation, and multilingual support — all starting at ₹6,500/month."
+    q: "Is there a free trial?",
+    a: "Yes, VaaniAI offers a 7-day free trial for both Personal and Business plans with full access to all features. No credit card required."
   },
   {
-    q: "Can VaaniAI replace my call center team?",
-    a: "VaaniAI's AI voice agents can handle the entire outbound calling process — lead qualification, follow-ups, appointment booking, and CRM updates. While it can replace repetitive calling tasks, it also works alongside your sales team by routing hot leads to human agents for complex conversations."
+    q: "How is my privacy protected with the Personal AI Assistant?",
+    a: "Your AI assistant never reveals your personal phone number, location, or schedule to callers. All call data is encrypted and only accessible to you. You control exactly what information the AI can share."
   }
 ];
 

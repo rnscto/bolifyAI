@@ -4,9 +4,9 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Mail, Phone, User, ArrowRight, MapPin } from 'lucide-react';
+import { Building2, Mail, Phone, User, ArrowRight, ArrowLeft, MapPin } from 'lucide-react';
 
-export default function ProfileStep({ data, onChange, onNext, user }) {
+export default function ProfileStep({ data, onChange, onNext, onBack, user }) {
   const handleSubmit = (e) => {
     e.preventDefault();
     onNext();
@@ -102,13 +102,20 @@ export default function ProfileStep({ data, onChange, onNext, user }) {
           </Select>
         </div>
 
-        <Button
-          type="submit"
-          disabled={!data.registered_address?.trim() || !data.company_type}
-          className="w-full bg-blue-600 hover:bg-blue-700 h-12 text-base"
-        >
-          Continue <ArrowRight className="w-4 h-4 ml-2" />
-        </Button>
+        <div className="flex gap-3">
+          {onBack && (
+            <Button type="button" variant="outline" onClick={onBack} className="flex-1 h-12">
+              <ArrowLeft className="w-4 h-4 mr-2" /> Back
+            </Button>
+          )}
+          <Button
+            type="submit"
+            disabled={!data.registered_address?.trim() || !data.company_type}
+            className="flex-1 bg-blue-600 hover:bg-blue-700 h-12 text-base"
+          >
+            Continue <ArrowRight className="w-4 h-4 ml-2" />
+          </Button>
+        </div>
       </form>
     </div>
   );

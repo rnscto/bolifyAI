@@ -12,6 +12,7 @@ import SEOHead from '../components/landing/SEOHead.jsx';
 import TrustStrip from '../components/landing/TrustStrip.jsx';
 import CTABanner from '../components/landing/CTABanner.jsx';
 import TrustedBySection from '../components/landing/TrustedBySection.jsx';
+import PersonalAssistantSection from '../components/landing/PersonalAssistantSection.jsx';
 
 export default function Home() {
   useEffect(() => {
@@ -38,6 +39,7 @@ export default function Home() {
         <HowItWorksSection />
       </div>
       <FeaturesSection />
+      <PersonalAssistantSection />
       <div id="industries">
         <IndustriesSection />
       </div>

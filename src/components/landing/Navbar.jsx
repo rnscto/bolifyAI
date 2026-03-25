@@ -32,12 +32,11 @@ export default function Navbar() {
   }, []);
 
   const navLinks = [
-    { label: 'Features', href: '#features' },
-    { label: 'How It Works', href: '#how-it-works' },
-    { label: 'Industries', href: '#industries' },
+    { label: 'For Business', href: '#features' },
+    { label: 'Personal AI', href: '#personal-assistant' },
     { label: 'Pricing', href: '#pricing' },
     { label: 'FAQ', href: '#faq' },
-    { label: 'Partner Program', href: createPageUrl('PartnerSignup'), isPage: true },
+    { label: 'Partners', href: createPageUrl('PartnerSignup'), isPage: true },
   ];
 
   return (

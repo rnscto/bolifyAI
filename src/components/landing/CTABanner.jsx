@@ -23,10 +23,10 @@ export default function CTABanner() {
             <Sparkles className="w-3.5 h-3.5" /> Limited Time Offer
           </div>
           <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-3">
-            Get 20% Off Your First Quarter
+            AI For Your Business. AI For You.
           </h2>
           <p className="text-slate-300 mb-6 max-w-lg mx-auto">
-            Use code <span className="text-[#FF9933] font-bold">VAANI20</span> and start automating your sales calls today. No credit card required for the 7-day free trial.
+            Use code <span className="text-[#FF9933] font-bold">VAANI20</span> for 20% off. Start your 7-day free trial — no credit card required.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button
@@ -34,15 +34,14 @@ export default function CTABanner() {
               className="bg-gradient-to-r from-[#e67e22] to-[#f39c12] hover:from-[#d35400] hover:to-[#e67e22] text-white px-8 py-5 text-base rounded-xl shadow-lg shadow-orange-500/25 font-semibold"
               onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}>
               
-              Start Free Trial <ArrowRight className="w-5 h-5 ml-1" />
+              Business AI Agent <ArrowRight className="w-5 h-5 ml-1" />
             </Button>
             <Button
               size="lg"
-              variant="outline" className="bg-amber-500 text-white px-8 py-5 text-base font-medium rounded-xl inline-flex items-center justify-center gap-2 whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 border shadow-sm hover:text-accent-foreground h-10 border-white/30 hover:bg-white/10 backdrop-blur-sm"
-
-              onClick={() => document.getElementById('pricing')?.scrollIntoView({ behavior: 'smooth' })}>
+              className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-8 py-5 text-base rounded-xl shadow-lg shadow-purple-500/25 font-semibold"
+              onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding') + '?type=personal')}>
               
-              View Pricing
+              Personal AI Assistant <ArrowRight className="w-5 h-5 ml-1" />
             </Button>
           </div>
         </motion.div>

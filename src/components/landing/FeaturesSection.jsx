@@ -87,7 +87,7 @@ export default function FeaturesSection() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1a365d]/5 text-[#1a365d] text-sm font-semibold mb-4">
             <Zap className="w-3.5 h-3.5" /> Features
           </div>
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">AI Sales Automation Features to Close More Deals</h2>
+          <h2 className="text-4xl font-bold text-gray-900 mb-4">Business AI Features to Close More Deals</h2>
           <h3 className="text-lg text-gray-500 max-w-2xl mx-auto font-normal">
             From AI voice calling to CRM pipeline automation — VaaniAI is the all-in-one AI calling software for Indian businesses.
           </h3>

@@ -6,6 +6,8 @@ import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import ProfileStep from '../components/onboarding/ProfileStep';
+import PersonalProfileStep from '../components/onboarding/PersonalProfileStep';
+import AccountTypeStep from '../components/onboarding/AccountTypeStep';
 import IndustryStep from '../components/onboarding/IndustryStep';
 import AgentSetupStep from '../components/onboarding/AgentSetupStep';
 import DIDSelectionStep from '../components/onboarding/DIDSelectionStep';
@@ -13,7 +15,8 @@ import ComplianceConsentStep from '../components/onboarding/ComplianceConsentSte
 import AgreementSignStep from '../components/onboarding/AgreementSignStep';
 import OnboardingComplete from '../components/onboarding/OnboardingComplete';
 
-const STEPS = ['Profile', 'Industry', 'Agent', 'Phone Number', 'Compliance', 'Agreement', 'Complete'];
+const BUSINESS_STEPS = ['Account Type', 'Profile', 'Industry', 'Agent', 'Phone Number', 'Compliance', 'Agreement', 'Complete'];
+const PERSONAL_STEPS = ['Account Type', 'Profile', 'Agent', 'Phone Number', 'Compliance', 'Agreement', 'Complete'];
 
 export default function Onboarding() {
   const navigate = useNavigate();
@@ -22,10 +25,12 @@ export default function Onboarding() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [accountType, setAccountType] = useState('');
   const [profileData, setProfileData] = useState({
     company_name: '',
     email: '',
     phone: '',
+    owner_whatsapp_number: '',
   });
   const [industry, setIndustry] = useState('');
   const [agentData, setAgentData] = useState({
@@ -41,10 +46,15 @@ export default function Onboarding() {
   const [agreementData, setAgreementData] = useState(null);
 
   useEffect(() => {
-    // Capture referral code from URL
+    // Capture referral code and account type from URL
     const urlParams = new URLSearchParams(window.location.search);
     const ref = urlParams.get('ref') || '';
     if (ref) setReferralCode(ref);
+    const type = urlParams.get('type') || '';
+    if (type === 'personal') {
+      setAccountType('personal');
+      setStep(1); // Skip account type chooser
+    }
     loadUser();
   }, []);
 
@@ -79,6 +89,7 @@ export default function Onboarding() {
     const agrData = agrDataParam || agreementData;
     setSaving(true);
     
+    const isPersonal = accountType === 'personal';
     const now = new Date();
     const trialEnd = new Date(now);
     trialEnd.setDate(trialEnd.getDate() + 7);
@@ -89,54 +100,54 @@ export default function Onboarding() {
     kycDeadline.setDate(kycDeadline.getDate() + 30);
     const kycDeadlineStr = kycDeadline.toISOString().split('T')[0];
 
+    const clientPayload = {
+      company_name: isPersonal ? (user?.full_name || profileData.company_name) : profileData.company_name,
+      email: profileData.email,
+      phone: profileData.phone,
+      registered_address: profileData.registered_address || '',
+      company_type: isPersonal ? 'individual' : (profileData.company_type || ''),
+      account_type: accountType || 'business',
+      industry: isPersonal ? 'Personal Assistant' : industry,
+      status: 'active',
+      account_status: 'trial',
+      trial_start_date: now.toISOString(),
+      trial_end_date: trialEnd.toISOString(),
+      onboarding_completed: true,
+      total_channels: 1,
+      kyc_status: isPersonal ? 'not_required' : 'pending',
+      kyc_deadline: isPersonal ? undefined : kycDeadlineStr,
+      owner_whatsapp_number: profileData.owner_whatsapp_number || '',
+      owner_notification_channel: 'whatsapp',
+    };
+
     if (existingClient) {
       await base44.entities.Client.update(existingClient.id, {
-        company_name: profileData.company_name,
-        email: profileData.email,
-        phone: profileData.phone,
-        registered_address: profileData.registered_address || '',
-        company_type: profileData.company_type || '',
-        industry: industry,
-        status: 'active',
+        ...clientPayload,
         account_status: existingClient.account_status || 'trial',
         trial_start_date: existingClient.trial_start_date || now.toISOString(),
         trial_end_date: existingClient.trial_end_date || trialEnd.toISOString(),
-        onboarding_completed: true,
-        kyc_status: existingClient.kyc_status || 'pending',
+        kyc_status: existingClient.kyc_status || clientPayload.kyc_status,
         kyc_deadline: existingClient.kyc_deadline || kycDeadlineStr,
       });
       client = { ...existingClient, id: existingClient.id };
     } else {
-      client = await base44.entities.Client.create({
-        company_name: profileData.company_name,
-        email: profileData.email,
-        phone: profileData.phone,
-        registered_address: profileData.registered_address || '',
-        company_type: profileData.company_type || '',
-        user_id: user.id,
-        industry: industry,
-        status: 'active',
-        account_status: 'trial',
-        trial_start_date: now.toISOString(),
-        trial_end_date: trialEnd.toISOString(),
-        onboarding_completed: true,
-        total_channels: 1,
-        kyc_status: 'pending',
-        kyc_deadline: kycDeadlineStr,
-      });
+      clientPayload.user_id = user.id;
+      client = await base44.entities.Client.create(clientPayload);
     }
 
     // 2. Create Agent
     const agentPayload = {
       name: agentData.name,
       client_id: client.id,
-      industry: industry,
+      industry: isPersonal ? 'Personal Assistant' : industry,
       persona: {
         voice_type: 'Surbhi-English-India',
         tone: agentData.tone,
         language: agentData.language,
       },
-      system_prompt: agentData.system_prompt,
+      system_prompt: isPersonal 
+        ? (agentData.system_prompt || `You are a personal AI call assistant for ${user?.full_name || 'the owner'}. Your job is to answer incoming calls professionally, understand who is calling and why, classify the call (family, business, promotional, spam), and take messages. If the caller needs to speak to the owner urgently, offer to transfer the call. Always be polite and professional. Never reveal personal details about the owner.`)
+        : agentData.system_prompt,
       status: 'active',
     };
 
@@ -241,8 +252,12 @@ export default function Onboarding() {
 
     toast.success('Account created successfully!');
     setSaving(false);
-    setStep(6); // Show completion screen
+    setStep(isPersonal ? 6 : 7); // Show completion screen
   };
+
+  const isPersonal = accountType === 'personal';
+  const currentSteps = isPersonal ? PERSONAL_STEPS : BUSINESS_STEPS;
+  const totalSteps = currentSteps.length - 1; // exclude "Complete" from count
 
   if (loading) {
     return (
@@ -255,7 +270,7 @@ export default function Onboarding() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-orange-50">
       {/* Progress header */}
-      {step < 6 && (
+      {step < totalSteps && (
         <div className="sticky top-0 bg-white/80 backdrop-blur-lg border-b z-10">
           <div className="max-w-3xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-3">
@@ -264,14 +279,14 @@ export default function Onboarding() {
                 alt="VaaniAI"
                 className="h-10 object-contain"
               />
-              <span className="text-sm text-gray-500">Step {step + 1} of 6</span>
+              <span className="text-sm text-gray-500">Step {step + 1} of {totalSteps}</span>
             </div>
             <div className="flex gap-2">
-              {STEPS.slice(0, 6).map((s, i) => (
+              {currentSteps.slice(0, totalSteps).map((s, i) => (
                 <div
                   key={s}
                   className={`flex-1 h-1.5 rounded-full transition-all ${
-                    i <= step ? 'bg-blue-600' : 'bg-gray-200'
+                    i <= step ? (isPersonal ? 'bg-purple-600' : 'bg-blue-600') : 'bg-gray-200'
                   }`}
                 />
               ))}
@@ -284,70 +299,139 @@ export default function Onboarding() {
         {saving && (
           <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex flex-col items-center justify-center">
             <Loader2 className="w-12 h-12 animate-spin text-blue-600 mb-4" />
-            <p className="text-lg font-medium text-gray-900">Setting up your account...</p>
+            <p className="text-lg font-medium text-gray-900">Setting up your {isPersonal ? 'AI assistant' : 'account'}...</p>
             <p className="text-sm text-gray-500 mt-1">This will just take a moment</p>
           </div>
         )}
 
+        {/* Step 0: Choose Account Type */}
         {step === 0 && (
-          <ProfileStep
-            data={profileData}
-            onChange={setProfileData}
+          <AccountTypeStep
+            selected={accountType}
+            onSelect={setAccountType}
             onNext={() => setStep(1)}
-            user={user}
           />
         )}
 
+        {/* Step 1: Profile (different for personal vs business) */}
         {step === 1 && (
-          <IndustryStep
-            selected={industry}
-            onSelect={setIndustry}
-            onNext={() => setStep(2)}
-            onBack={() => setStep(0)}
-          />
+          isPersonal ? (
+            <PersonalProfileStep
+              data={profileData}
+              onChange={setProfileData}
+              onNext={() => setStep(2)}
+              onBack={() => setStep(0)}
+              user={user}
+            />
+          ) : (
+            <ProfileStep
+              data={profileData}
+              onChange={setProfileData}
+              onNext={() => setStep(2)}
+              onBack={() => setStep(0)}
+              user={user}
+            />
+          )
         )}
 
+        {/* Step 2: Industry (business) or Agent Setup (personal) */}
         {step === 2 && (
-          <AgentSetupStep
-            data={agentData}
-            onChange={setAgentData}
-            onNext={() => setStep(3)}
-            onBack={() => setStep(1)}
-            industry={industry}
-          />
+          isPersonal ? (
+            <AgentSetupStep
+              data={agentData}
+              onChange={setAgentData}
+              onNext={() => setStep(3)}
+              onBack={() => setStep(1)}
+              industry="Personal Assistant"
+            />
+          ) : (
+            <IndustryStep
+              selected={industry}
+              onSelect={setIndustry}
+              onNext={() => setStep(3)}
+              onBack={() => setStep(1)}
+            />
+          )
         )}
 
+        {/* Step 3: Agent Setup (business) or DID Selection (personal) */}
         {step === 3 && (
-          <DIDSelectionStep
-            selected={selectedDID}
-            onSelect={setSelectedDID}
-            onNext={() => setStep(4)}
-            onBack={() => setStep(2)}
-          />
+          isPersonal ? (
+            <DIDSelectionStep
+              selected={selectedDID}
+              onSelect={setSelectedDID}
+              onNext={() => setStep(4)}
+              onBack={() => setStep(2)}
+            />
+          ) : (
+            <AgentSetupStep
+              data={agentData}
+              onChange={setAgentData}
+              onNext={() => setStep(4)}
+              onBack={() => setStep(2)}
+              industry={industry}
+            />
+          )
         )}
 
+        {/* Step 4: DID Selection (business) or Compliance (personal) */}
         {step === 4 && (
-          <ComplianceConsentStep
-            consents={complianceConsents}
-            onConsentsChange={setComplianceConsents}
-            onNext={() => setStep(5)}
-            onBack={() => setStep(3)}
-          />
+          isPersonal ? (
+            <ComplianceConsentStep
+              consents={complianceConsents}
+              onConsentsChange={setComplianceConsents}
+              onNext={() => setStep(5)}
+              onBack={() => setStep(3)}
+            />
+          ) : (
+            <DIDSelectionStep
+              selected={selectedDID}
+              onSelect={setSelectedDID}
+              onNext={() => setStep(5)}
+              onBack={() => setStep(3)}
+            />
+          )
         )}
 
+        {/* Step 5: Compliance (business) or Agreement (personal) */}
         {step === 5 && (
-          <AgreementSignStep
-            onNext={(agrData) => {
-              setAgreementData(agrData);
-              handleComplete(agrData);
-            }}
-            onBack={() => setStep(4)}
-            profileData={profileData}
-            user={user}
-          />
+          isPersonal ? (
+            <AgreementSignStep
+              onNext={(agrData) => { setAgreementData(agrData); handleComplete(agrData); }}
+              onBack={() => setStep(4)}
+              profileData={{ ...profileData, company_name: user?.full_name || profileData.company_name }}
+              user={user}
+            />
+          ) : (
+            <ComplianceConsentStep
+              consents={complianceConsents}
+              onConsentsChange={setComplianceConsents}
+              onNext={() => setStep(6)}
+              onBack={() => setStep(4)}
+            />
+          )
         )}
 
+        {/* Step 6: Agreement (business) or Complete (personal) */}
         {step === 6 && (
+          isPersonal ? (
+            <OnboardingComplete
+              agentName={agentData.name}
+              didNumber={selectedDID ? `${selectedDID.country_code || '+91'} ${selectedDID.number}` : null}
+              isPersonal={true}
+            />
+          ) : (
+            <AgreementSignStep
+              onNext={(agrData) => { setAgreementData(agrData); handleComplete(agrData); }}
+              onBack={() => setStep(5)}
+              profileData={profileData}
+              user={user}
+            />
+          )
+        )}
+
+        {/* Step 7: Complete (business only) */}
+        {step === 7 && !isPersonal && (
           <OnboardingComplete
             agentName={agentData.name}
             didNumber={selectedDID ? `${selectedDID.country_code || '+91'} ${selectedDID.number}` : null}

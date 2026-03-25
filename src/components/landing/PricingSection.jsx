@@ -9,11 +9,31 @@ import { createPageUrl } from '../../utils';
 
 const plans = [
   {
-    name: 'Voice AI Agent',
+    name: 'Personal AI Assistant',
+    price: '₹499',
+    period: '/month',
+    billing: '7-day free trial',
+    description: 'AI handles your personal calls — screens spam, takes messages, transfers to you',
+    features: [
+      'AI answers all your calls 24/7',
+      'Spam & telemarketing screening',
+      'Real-time WhatsApp call alerts',
+      'Smart call classification (Family/Business/Spam)',
+      'Owner-in-the-loop: instruct AI mid-call',
+      'Call transfer to you on demand',
+      'Conversation summaries & notes',
+      'Meeting scheduling on your behalf',
+    ],
+    cta: 'Get Your AI Assistant',
+    popular: false,
+    isPersonal: true,
+  },
+  {
+    name: 'Business Voice AI',
     price: '₹6,500',
     period: '/channel/month',
     billing: 'Billed quarterly',
-    description: 'AI-powered outbound sales calling software',
+    description: 'AI-powered outbound sales calling software with CRM',
     features: [
       'AI Voice Agent (Hindi + English)',
       'Dedicated DID Number (+91)',
@@ -24,29 +44,26 @@ const plans = [
       'Custom knowledge base upload',
       'Call logs, recordings & analytics',
     ],
-    cta: 'Get Started',
-    popular: false,
+    cta: 'Start Free Trial',
+    popular: true,
   },
   {
-    name: 'Custom Sales CRM',
-    price: '₹1,999',
-    period: '/month',
+    name: 'Business + CRM',
+    price: '₹8,499',
+    period: '/channel/month',
     billing: '7-day free trial',
-    description: 'AI-powered CRM with sales pipeline automation',
+    description: 'Everything in Business + industry-specific sales CRM',
     features: [
-      'Everything in Voice AI Agent',
+      'Everything in Business Voice AI',
       'Industry-specific CRM software',
       'Deal pipeline (Kanban + Table view)',
-      'Contact & company management',
       'AI sales reports & forecasting',
-      'Automatic lead scoring',
       'Pipeline automation rules',
       '48h follow-up auto-detection',
-      'Proposal tracking & management',
       'Custom fields per industry',
     ],
     cta: 'Start Free Trial',
-    popular: true,
+    popular: false,
   }
 ];
 
@@ -62,7 +79,7 @@ export default function PricingSection() {
           <p className="text-lg text-gray-500">Transparent pricing for AI voice agents in India. No hidden fees. Start with a free trial.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 max-w-5xl mx-auto">
           {plans.map((plan, i) => (
             <motion.div
               key={plan.name}
@@ -75,7 +92,9 @@ export default function PricingSection() {
               <Card className={`relative h-full transition-shadow ${
                 plan.popular
                   ? 'border-[#e67e22] shadow-lg shadow-orange-100'
-                  : 'border-gray-200 hover:shadow-md'
+                  : plan.isPersonal
+                    ? 'border-purple-200 hover:border-purple-400 hover:shadow-md'
+                    : 'border-gray-200 hover:shadow-md'
               }`}>
                 {plan.popular && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
@@ -104,10 +123,12 @@ export default function PricingSection() {
                     className={`w-full font-semibold ${
                       plan.popular
                         ? 'bg-gradient-to-r from-[#e67e22] to-[#f39c12] hover:from-[#d35400] hover:to-[#e67e22] text-white shadow-md shadow-orange-200'
-                        : 'bg-[#1a365d] hover:bg-[#0f1f3d] text-white'
+                        : plan.isPersonal
+                          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-200'
+                          : 'bg-[#1a365d] hover:bg-[#0f1f3d] text-white'
                     }`}
                     size="lg"
-                    onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
+                    onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding') + (plan.isPersonal ? '?type=personal' : ''))}
                   >
                     {plan.cta} <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>

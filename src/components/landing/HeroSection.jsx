@@ -42,17 +42,19 @@ export default function HeroSection() {
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
-              AI Calling Software
+              AI Voice Agent
               <span className="block mt-2">
-                That{' '}
+                For{' '}
                 <span className="bg-gradient-to-r from-[#FF9933] via-[#e67e22] to-[#f39c12] bg-clip-text text-transparent">
-                  Sells 24/7
+                  Business & You
                 </span>
               </span>
             </h1>
 
             <h2 className="text-lg text-slate-300 max-w-xl mb-8 leading-relaxed font-normal">
-              VaaniAI is India's leading AI voice agent for sales automation — qualifying leads, making outbound calls, and closing deals round-the-clock in Hindi & English with a built-in CRM.
+              <strong className="text-white">For Business:</strong> AI sales agent that qualifies leads, makes calls & closes deals 24/7.
+              <br />
+              <strong className="text-white">For You:</strong> Personal AI assistant that screens your calls, blocks spam & keeps you in control.
             </h2>
 
             {/* CTAs */}
@@ -62,23 +64,23 @@ export default function HeroSection() {
                 className="bg-gradient-to-r from-[#e67e22] to-[#f39c12] hover:from-[#d35400] hover:to-[#e67e22] text-white px-8 py-6 text-lg rounded-xl shadow-lg shadow-orange-500/25 font-semibold"
                 onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
               >
-                Start Free Trial <ArrowRight className="w-5 h-5 ml-2" />
+                For Business <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
               <Button
                 size="lg"
-                className="bg-white/10 border border-white/30 text-white hover:bg-white/20 px-8 py-6 text-lg rounded-xl backdrop-blur-sm"
-                onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}
+                className="bg-gradient-to-r from-purple-600 to-indigo-500 hover:from-purple-700 hover:to-indigo-600 text-white px-8 py-6 text-lg rounded-xl shadow-lg shadow-purple-500/25 font-semibold border-0"
+                onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding') + '?type=personal')}
               >
-                <Play className="w-5 h-5 mr-2" /> See How It Works
+                Personal AI Assistant <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
             </div>
 
             {/* Stats */}
             <div className="grid grid-cols-3 gap-6 mt-12 pt-8 border-t border-white/10">
               {[
-                { icon: PhoneCall, value: '24/7', label: 'AI Voice Calling' },
+                { icon: PhoneCall, value: '24/7', label: 'AI Calling & Screening' },
                 { value: '23+', label: 'Industry CRMs' },
-                { icon: TrendingUp, value: '3x', label: 'Lead Conversions' },
+                { icon: TrendingUp, value: '100%', label: 'Privacy Protected' },
               ].map((stat) => (
                 <div key={stat.label}>
                   <p className="text-2xl sm:text-3xl font-bold text-white">{stat.value}</p>
