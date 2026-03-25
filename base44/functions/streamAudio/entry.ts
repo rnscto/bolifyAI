@@ -361,17 +361,16 @@ async function saveCallRecord(session, reqId, duration) {
 
         const messageText = customerLines.join(' ').substring(0, 1000) || summary || 'No message content captured';
 
-        await serviceClient.entities.VoicemailMessage.create({
-          client_id: session._personalClientId,
-          call_log_id: session.callLogId,
-          caller_number: currentLog.caller_id || currentLog.callee_number || '',
-          caller_name: callerName,
-          message: summary || messageText,
-          urgency,
-          category,
-          is_read: false
-        });
+        await serviceClient.entities.VoicemailMessage.create({ client_id: session._personalClientId, call_log_id: session.callLogId, caller_number: currentLog.caller_id || currentLog.callee_number || '', caller_name: callerName, message: summary || messageText, urgency, category, is_read: false });
         console.log(`[${reqId}] 📨 VoicemailMessage saved: category=${category}, urgency=${urgency}`);
+        // Send post-call Telegram summary directly
+        const tgTk = Deno.env.get('TELEGRAM_BOT_TOKEN');
+        if (tgTk) { try { const pCl = await serviceClient.entities.Client.get(session._personalClientId);
+          if (pCl?.telegram_connected && pCl?.telegram_chat_id && !pCl.dnd_enabled && pCl.owner_notification_channel === 'telegram') {
+            const emj = category === 'spam' ? '🚫' : category === 'family' ? '👨‍👩‍👧' : category === 'business' ? '💼' : '📋';
+            const tgS = `${emj} <b>Call Summary</b>\n\n📱 From: <b>${callerName || currentLog.caller_id || 'Unknown'}</b>\n🏷️ ${category}${urgency !== 'medium' ? ' | ⚡ ' + urgency.toUpperCase() : ''}\n\n💬 ${(summary || messageText).substring(0, 500)}`;
+            fetch(`https://api.telegram.org/bot${tgTk}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: pCl.telegram_chat_id, text: tgS, parse_mode: 'HTML' }) }).then(r => r.json()).then(r => console.log(`[${reqId}] 📱 TG summary: ok=${r.ok}`)).catch(() => {});
+          } } catch (_) {} }
       } catch (vmErr) {
         console.error(`[${reqId}] ⚠️ VoicemailMessage save failed: ${vmErr.message}`);
       }
@@ -1566,7 +1565,9 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
             session.systemPrompt = (didAgent.system_prompt || 'You are a helpful AI voice assistant.') + callerContext;
             if (kbContent) session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${kbContent}`;
             if (didAgent.greeting_message) session.greetingMessage = didAgent.greeting_message;
-            if (didAgent.human_transfer_number) session.humanTransferNumber = didAgent.human_transfer_number;
+            // For personal accounts, fall back to owner's phone number for transfers
+            if (didAgent.human_transfer_number) { session.humanTransferNumber = didAgent.human_transfer_number; }
+            else if (didClient?.account_type === 'personal' && didClient?.phone) { session.humanTransferNumber = didClient.phone; console.log(`[${reqId}] 📞 Personal transfer fallback to owner phone: ${didClient.phone}`); }
             if (didAgent.enable_auto_transfer === false) session.enableAutoTransfer = false;
             if (didAgent.persona) {
               if (didAgent.persona.voice_engine) session.voiceEngine = didAgent.persona.voice_engine;
@@ -1791,7 +1792,7 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
         if (cache.greeting_message) {
           session.greetingMessage = cache.greeting_message;
         }
-        console.log(`[${reqId}] ✅ Agent config loaded from CallLog ${callLog.id} (${session.systemPrompt.length} chars, agent=${cache.agent_name || 'unknown'}, greeting=${session.greetingMessage ? 'custom' : 'auto'})`);
+        console.log(`[${reqId}] ✅ Agent config from CallLog ${callLog.id} (${session.systemPrompt.length}ch, transfer=${session.humanTransferNumber || 'none'})`);
       } else {
         console.log(`[${reqId}] ⚠️ CallLog ${callLog.id} found but has NO agent_config_cache — using default prompt`);
       }
