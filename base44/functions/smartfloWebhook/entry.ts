@@ -575,6 +575,15 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
 
     await base44.entities.CallLog.update(callLog.id, updateData);
 
+    // If this webhook delivers a recording_url for an already-completed transferred call,
+    // trigger the full recording analysis now (the terminal-status block below may have already fired)
+    if (recording_url && callLog.transferred_to && terminalStatuses.includes(callLog.status)) {
+      console.log(`[smartfloWebhook] Recording URL arrived for already-completed transferred call ${callLog.id} — triggering analysis`);
+      base44.functions.invoke('processTransferRecording', { call_log_id: callLog.id })
+        .then(() => console.log(`[smartfloWebhook] processTransferRecording triggered (late recording)`))
+        .catch(e => console.error(`[smartfloWebhook] processTransferRecording (late) failed: ${e.message}`));
+    }
+
     // NOTE: Lead status updates are handled EXCLUSIVELY by campaignPostCall (for campaign calls)
     // or streamAudio.saveCallRecord (for answered calls with transcripts).
     // smartfloWebhook only updates CallLog to avoid race conditions.
@@ -780,6 +789,27 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
         });
       } catch (crmErr) {
         console.error(`[smartfloWebhook] crmAutomation invoke failed: ${crmErr.message}`);
+      }
+
+      // 5. For TRANSFERRED calls: fetch full Smartflo recording and re-analyze
+      // Smartflo records the entire call (AI + human portions).
+      // The WebSocket only captured the pre-transfer AI transcript.
+      // This re-analyzes with the full recording to get the real outcome.
+      if (freshCallLog.transferred_to && freshCallLog.recording_url) {
+        console.log(`[smartfloWebhook] Transferred call detected with recording — triggering full recording analysis`);
+        // Delay 10s to ensure Smartflo recording is fully processed/available
+        setTimeout(async () => {
+          try {
+            await base44.functions.invoke('processTransferRecording', {
+              call_log_id: callLog.id
+            });
+            console.log(`[smartfloWebhook] processTransferRecording triggered for ${callLog.id}`);
+          } catch (trErr) {
+            console.error(`[smartfloWebhook] processTransferRecording failed: ${trErr.message}`);
+          }
+        }, 10000);
+      } else if (freshCallLog.transferred_to && !freshCallLog.recording_url) {
+        console.log(`[smartfloWebhook] Transferred call but no recording_url yet — recording may arrive in a later webhook`);
       }
     }
 
