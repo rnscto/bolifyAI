@@ -1,10 +1,18 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.23';
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
 
 Deno.serve(async (req) => {
   try {
-    const base44 = createClientFromRequest(req);
+    // Use service role directly — this function is always called internally
+    // from smartfloWebhook (service-role) or other backend functions
+    let base44;
+    try {
+      base44 = createClientFromRequest(req);
+    } catch (_) {
+      base44 = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+    }
+
     const { client_id, caller_number, caller_name, category, urgency, summary, type } = await req.json();
 
     if (!client_id) {
