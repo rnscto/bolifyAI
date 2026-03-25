@@ -1,6 +1,11 @@
 import { createClient } from 'npm:@base44/sdk@0.8.23';
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
+const APP_ID = Deno.env.get('BASE44_APP_ID');
+
+function getServiceClient() {
+  return createClient({ appId: APP_ID, asServiceRole: true });
+}
 
 Deno.serve(async (req) => {
   try {
@@ -30,16 +35,33 @@ Deno.serve(async (req) => {
         const parts = data.split(':');
         const callLogId = parts[1];
         const action = parts[2]; // transfer, callback, take_message, block
+        console.log(`[telegramWebhook] Processing decision: action=${action}, callLogId=${callLogId}, chatId=${chatId}`);
 
-        const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+        let svc;
+        try {
+          svc = getServiceClient();
+        } catch (initErr) {
+          console.error(`[telegramWebhook] ❌ Service client init failed:`, initErr.message);
+          await sendTelegramMessage(chatId, '❌ Internal error. Please try again.');
+          return Response.json({ ok: true });
+        }
 
         // Find client by telegram_chat_id
-        const clients = await svc.entities.Client.filter({ telegram_chat_id: chatId });
+        let clients;
+        try {
+          clients = await svc.entities.Client.filter({ telegram_chat_id: chatId });
+          console.log(`[telegramWebhook] Found ${clients.length} clients for chatId=${chatId}`);
+        } catch (filterErr) {
+          console.error(`[telegramWebhook] ❌ Client filter failed:`, filterErr.message);
+          await sendTelegramMessage(chatId, '❌ Could not find your account. Please reconnect from dashboard.');
+          return Response.json({ ok: true });
+        }
         if (clients.length === 0) {
           await sendTelegramMessage(chatId, '❌ No linked account found.');
           return Response.json({ ok: true });
         }
         const client = clients[0];
+        console.log(`[telegramWebhook] Client found: ${client.id} (${client.company_name})`);
 
         if (action === 'callback') {
           // Ask for callback time
@@ -66,16 +88,21 @@ Deno.serve(async (req) => {
           block: '🚫 Block/End Call'
         };
 
-        await svc.entities.CallDecision.create({
-          call_log_id: callLogId,
-          client_id: client.id,
-          decision: action,
-          status: 'pending'
-        });
+        try {
+          const created = await svc.entities.CallDecision.create({
+            call_log_id: callLogId,
+            client_id: client.id,
+            decision: action,
+            status: 'pending'
+          });
+          console.log(`[telegramWebhook] ✅ Decision created: id=${created.id}, action=${action}, callLog=${callLogId}`);
 
-        const label = decisionLabels[action] || action;
-        await editMessageButtons(chatId, cq.message.message_id, `✅ Decision: <b>${label}</b>\n\nAI agent will execute this now.`);
-        console.log(`[telegramWebhook] ✅ Decision created: ${action} for CallLog ${callLogId}`);
+          const label = decisionLabels[action] || action;
+          await editMessageButtons(chatId, cq.message.message_id, `✅ Decision: <b>${label}</b>\n\nAI agent will execute this now.`);
+        } catch (createErr) {
+          console.error(`[telegramWebhook] ❌ Decision creation failed:`, createErr.message);
+          await sendTelegramMessage(chatId, `❌ Failed to submit decision. Error: ${createErr.message}`);
+        }
       }
 
       return Response.json({ ok: true });
@@ -104,7 +131,7 @@ Deno.serve(async (req) => {
         return Response.json({ ok: true });
       }
 
-      const svcStart = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+      const svcStart = getServiceClient();
       try {
         const client = await svcStart.entities.Client.get(clientId);
         if (!client) {
@@ -132,7 +159,7 @@ Deno.serve(async (req) => {
 
     // Handle /disconnect command
     if (text === '/disconnect') {
-      const svcDisc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+      const svcDisc = getServiceClient();
       try {
         const clients = await svcDisc.entities.Client.filter({ telegram_chat_id: chatId });
         if (clients.length > 0) {
@@ -154,13 +181,13 @@ Deno.serve(async (req) => {
 
     // ═══ CHECK IF THIS IS A REPLY TO A PENDING CALLBACK DECISION ═══
     // If the user sends a text message and there's a pending callback decision awaiting time
-    const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+    const svcPending = getServiceClient();
     try {
-      const clients = await svc.entities.Client.filter({ telegram_chat_id: chatId });
+      const clients = await svcPending.entities.Client.filter({ telegram_chat_id: chatId });
       if (clients.length > 0) {
         const client = clients[0];
         // Find pending callback decisions awaiting time
-        const pendingDecisions = await svc.entities.CallDecision.filter({
+        const pendingDecisions = await svcPending.entities.CallDecision.filter({
           client_id: client.id,
           decision: 'callback',
           status: 'pending'
@@ -169,7 +196,7 @@ Deno.serve(async (req) => {
 
         if (awaitingTime) {
           // This text message is the callback time/custom message
-          await svc.entities.CallDecision.update(awaitingTime.id, {
+          await svcPending.entities.CallDecision.update(awaitingTime.id, {
             custom_message: text,
             callback_time: text
           });
@@ -183,7 +210,7 @@ Deno.serve(async (req) => {
         // Check if there's ANY pending decision (user sending custom instruction)
         const anyPending = pendingDecisions.find(d => d.decision === 'custom' && d.custom_message === '__AWAITING_MESSAGE__');
         if (anyPending) {
-          await svc.entities.CallDecision.update(anyPending.id, {
+          await svcPending.entities.CallDecision.update(anyPending.id, {
             custom_message: text
           });
           await sendTelegramMessage(chatId, `✅ AI will relay your message to the caller.`);

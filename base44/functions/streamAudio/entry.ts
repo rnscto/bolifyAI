@@ -967,10 +967,11 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
         console.log(`[${reqId}] 🗣️ Customer: "${text.substring(0, 100)}"`);
         session.transcript.push({ speaker: 'Customer', text });
         if (session.voiceEngine === 'azure_speech') { generateGpt5NanoResponse(text); }
-        // Mid-call: after 2nd customer message, classify reason & send Telegram update
+        // Mid-call: after 4th customer message, classify reason & send Telegram update
+        // Wait for enough conversation to know caller name + reason before showing buttons
         if (session._personalMode && session._personalClientId && !session._midCallTgSent) {
           const custCount = session.transcript.filter(t => t.speaker === 'Customer').length;
-          if (custCount >= 2) { session._midCallTgSent = true; sendMidCallTelegramUpdate(); }
+          if (custCount >= 4) { session._midCallTgSent = true; sendMidCallTelegramUpdate(); }
         }
       }
       return;
@@ -1025,9 +1026,19 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
       session._midCallReason = r.reason || 'Unknown';
       session._midCallCallerName = r.caller_name || '';
       const ue = r.urgency === 'urgent' ? ' 🚨' : r.urgency === 'high' ? ' ⚡' : '';
-      const callerLabel = r.caller_name || session.callerNumber || 'Unknown';
+      // Use trusted contact name if available, then AI-detected name, then number
+      let midCallName = '';
+      let midCallType = '';
+      if (session._isTrustedCaller && session._trustedContactName) {
+        midCallName = session._trustedContactName;
+        midCallType = '👤 Saved Contact';
+      } else if (r.caller_name) {
+        midCallName = r.caller_name;
+      }
+      const callerLabel = midCallName || session.callerNumber || 'Unknown';
       const clId = session.callLogId;
-      const m = `${r.emoji || '📞'} <b>Live Call — What should I do?</b>${ue}\n\n📱 From: <b>${callerLabel}</b>${r.caller_name && session.callerNumber ? '\n📞 ' + session.callerNumber : ''}\n🏷️ <b>${r.reason || 'Unknown'}</b>${r.detail ? '\n💬 ' + r.detail : ''}\n\n👇 <b>Choose action (AI is holding the caller):</b>`;
+      const typeLine = midCallType ? `\n🏷️ ${midCallType}` : '';
+      const m = `${r.emoji || '📞'} <b>Live Call — What should I do?</b>${ue}\n\n📱 From: <b>${callerLabel}</b>${midCallName && session.callerNumber ? '\n📞 ' + session.callerNumber : ''}${typeLine}\n📋 <b>${r.reason || 'Unknown'}</b>${r.detail ? '\n💬 ' + r.detail : ''}\n\n👇 <b>Choose action (AI is holding the caller):</b>`;
       const kb = { inline_keyboard: [
         [{ text: '📞 Transfer to Me', callback_data: `decision:${clId}:transfer` }, { text: '⏰ Call Back', callback_data: `decision:${clId}:callback` }],
         [{ text: '📝 Take Message', callback_data: `decision:${clId}:take_message` }, { text: '🚫 Block/End', callback_data: `decision:${clId}:block` }]
@@ -1617,19 +1628,35 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
               session.systemPrompt += personalInstructions;
               session._personalMode = aiMode;
               session._isTrustedCaller = isTrusted;
+              session._trustedContactName = trustedName;
               session._personalClientId = didClient.id;
-              console.log(`[${reqId}] 🛡️ Personal inbound: mode=${aiMode}, dnd=${dndEnabled}, trusted=${isTrusted}`);
+              console.log(`[${reqId}] 🛡️ Personal inbound: mode=${aiMode}, dnd=${dndEnabled}, trusted=${isTrusted}${trustedName ? ', name=' + trustedName : ''}`);
 
               // Send live Telegram notification for personal inbound calls (non-blocking)
               if (didClient.telegram_connected && didClient.telegram_chat_id && !dndEnabled && didClient.owner_notification_channel === 'telegram') {
                 const tgToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
                 if (tgToken) {
-                  const leadName = session._inboundLeadId ? (callerContext.match(/Name: ([^\n]+)/) || [])[1] || '' : '';
-                  const tgMsg = `📞 <b>Incoming Call</b>\n\n📱 From: <b>${leadName || session.callerNumber || 'Unknown'}</b>\n${leadName && session.callerNumber ? `📞 Number: ${session.callerNumber}\n` : ''}\n💬 AI is screening this call now...`;
+                  // Identify caller: check trusted contacts first, then leads
+                  let callerDisplayName = '';
+                  let callerType = '';
+                  if (isTrusted && trustedName) {
+                    callerDisplayName = trustedName;
+                    callerType = '👤 Saved Contact';
+                  } else {
+                    const leadName = session._inboundLeadId ? (callerContext.match(/Name: ([^\n]+)/) || [])[1] || '' : '';
+                    if (leadName) {
+                      callerDisplayName = leadName;
+                      callerType = '📋 Known Lead';
+                    }
+                  }
+                  const nameDisplay = callerDisplayName || session.callerNumber || 'Unknown';
+                  const typeLine = callerType ? `\n🏷️ ${callerType}` : '\n🏷️ Unknown Caller';
+                  const numberLine = callerDisplayName && session.callerNumber ? `\n📞 ${session.callerNumber}` : '';
+                  const tgMsg = `📞 <b>Incoming Call</b>\n\n📱 From: <b>${nameDisplay}</b>${numberLine}${typeLine}\n\n💬 AI is screening this call now...`;
                   fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
                     method: 'POST', headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ chat_id: didClient.telegram_chat_id, text: tgMsg, parse_mode: 'HTML' })
-                  }).then(r => r.json()).then(r => console.log(`[${reqId}] 📱 Telegram live notification: ok=${r.ok}`))
+                  }).then(r => r.json()).then(r => console.log(`[${reqId}] 📱 Telegram live notification: ok=${r.ok}, caller=${nameDisplay}`))
                     .catch(e => console.error(`[${reqId}] 📱 Telegram failed: ${e.message}`));
                 }
               }
@@ -1734,11 +1761,20 @@ ${isTrusted ? `NOTE: This is "${trustedName}", a known contact. Be warm and take
               session.systemPrompt += personalInstructions;
               session._personalMode = aiMode;
               session._isTrustedCaller = isTrusted;
+              session._trustedContactName = trustedName;
               session._personalClientId = callLog.client_id;
-              console.log(`[${reqId}] 🛡️ Personal mode: ${aiMode}, DND=${dndEnabled}, trusted=${isTrusted}`);
+              console.log(`[${reqId}] 🛡️ Personal mode: ${aiMode}, DND=${dndEnabled}, trusted=${isTrusted}${trustedName ? ', name=' + trustedName : ''}`);
               if (ownerClient.telegram_connected && ownerClient.telegram_chat_id && !dndEnabled && ownerClient.owner_notification_channel === 'telegram') {
                 const tgT = Deno.env.get('TELEGRAM_BOT_TOKEN');
-                if (tgT) fetch(`https://api.telegram.org/bot${tgT}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: ownerClient.telegram_chat_id, text: `📞 <b>Incoming Call</b>\n\n📱 From: <b>${callLog.caller_id || session.callerNumber || 'Unknown'}</b>\n\n💬 AI is screening this call...`, parse_mode: 'HTML' }) }).then(r => r.json()).then(r => console.log(`[${reqId}] 📱 Telegram: ok=${r.ok}`)).catch(() => {});
+                if (tgT) {
+                  let cDisplayName = '';
+                  let cType = '';
+                  if (isTrusted && trustedName) { cDisplayName = trustedName; cType = '👤 Saved Contact'; }
+                  const cName = cDisplayName || callLog.caller_id || session.callerNumber || 'Unknown';
+                  const cTypeLine = cType ? `\n🏷️ ${cType}` : '\n🏷️ Unknown Caller';
+                  const cNumLine = cDisplayName && (callLog.caller_id || session.callerNumber) ? `\n📞 ${callLog.caller_id || session.callerNumber}` : '';
+                  fetch(`https://api.telegram.org/bot${tgT}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: ownerClient.telegram_chat_id, text: `📞 <b>Incoming Call</b>\n\n📱 From: <b>${cName}</b>${cNumLine}${cTypeLine}\n\n💬 AI is screening this call...`, parse_mode: 'HTML' }) }).then(r => r.json()).then(r => console.log(`[${reqId}] 📱 Telegram: ok=${r.ok}, caller=${cName}`)).catch(() => {});
+                }
               }
             }
           } catch (pErr) {
