@@ -25,7 +25,8 @@ import {
   Handshake,
   Zap,
   PhoneForwarded,
-  Image
+  Image,
+  ShieldCheck
 } from 'lucide-react';
 import AgreementGate from './components/client/AgreementGate';
 
@@ -56,9 +57,14 @@ export default function Layout({ children, currentPageName }) {
           setClient(clients[0]);
           // If onboarding not completed, redirect
           if (!clients[0].onboarding_completed) {
-              window.location.href = createPageUrl('Onboarding');
-              return;
-            }
+            window.location.href = createPageUrl('Onboarding');
+            return;
+          }
+          // Redirect personal users from business dashboard to personal dashboard
+          if (clients[0].account_type === 'personal' && currentPageName === 'ClientDashboard') {
+            window.location.href = createPageUrl('PersonalDashboard');
+            return;
+          }
             // Check if trial expired and not subscribed
             if (clients[0].account_status === 'trial' && clients[0].trial_end_date) {
               const trialEnd = new Date(clients[0].trial_end_date);
@@ -122,7 +128,14 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Partners', path: 'AdminPartners', icon: Handshake },
     ];
 
-    const clientNav = [
+    const personalNav = [
+    { name: 'Dashboard', path: 'PersonalDashboard', icon: ShieldCheck },
+    { name: 'Call Logs', path: 'ClientCallLogs', icon: PhoneCall },
+    { name: 'Subscription', path: 'ClientSubscription', icon: CreditCard },
+    { name: 'Settings', path: 'ClientSettings', icon: UserCog },
+    ];
+
+    const businessNav = [
     { name: 'Dashboard', path: 'ClientDashboard', icon: LayoutDashboard },
     { name: 'Agent Performance', path: 'AgentDashboard', icon: BarChart3 },
     { name: 'Agents', path: 'ClientAgents', icon: Cpu },
@@ -144,6 +157,8 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Partner Dashboard', path: 'PartnerDashboard', icon: Handshake },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
     ];
+
+    const clientNav = client?.account_type === 'personal' ? personalNav : businessNav;
 
   // CRM sub-navigation (shown when CRM is active)
   const crmNav = client?.has_custom_crm ? [

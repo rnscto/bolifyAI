@@ -13,6 +13,7 @@ import AdminComplaints from './pages/AdminComplaints';
 import ClientSocialMedia from './pages/ClientSocialMedia';
 import SocialMediaCalendar from './pages/SocialMediaCalendar';
 import ClientBrandSettings from './pages/ClientBrandSettings';
+import PersonalDashboard from './pages/PersonalDashboard';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -92,6 +93,11 @@ const AuthenticatedApp = () => {
       <Route path="/ClientBrandSettings" element={
         <LayoutWrapper currentPageName="ClientBrandSettings">
           <ClientBrandSettings />
+        </LayoutWrapper>
+      } />
+      <Route path="/PersonalDashboard" element={
+        <LayoutWrapper currentPageName="PersonalDashboard">
+          <PersonalDashboard />
         </LayoutWrapper>
       } />
       <Route path="*" element={<PageNotFound />} />
