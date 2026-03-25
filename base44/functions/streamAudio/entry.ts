@@ -331,6 +331,52 @@ async function saveCallRecord(session, reqId, duration) {
       }
     }
 
+    // ===== STEP 4.5: Save VoicemailMessage for personal accounts =====
+    if (session._personalMode && session._personalClientId) {
+      try {
+        // Extract caller name and message from transcript
+        const customerLines = session.transcript.filter(t => t.speaker === 'Customer').map(t => t.text);
+        const callerName = (() => {
+          // Try to find name from transcript — look for common patterns
+          for (const line of customerLines) {
+            const nameMatch = line.match(/(?:my name is|this is|I am|main|mera naam)\s+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)/i);
+            if (nameMatch) return nameMatch[1];
+          }
+          return '';
+        })();
+
+        // Determine category from summary
+        const summaryLower = (summary || '').toLowerCase();
+        let category = 'unknown';
+        if (summaryLower.includes('spam') || summaryLower.includes('telemarketing')) category = 'spam';
+        else if (summaryLower.includes('promotional') || summaryLower.includes('offer')) category = 'promotional';
+        else if (summaryLower.includes('family') || summaryLower.includes('friend')) category = 'family';
+        else if (summaryLower.includes('business') || summaryLower.includes('meeting') || summaryLower.includes('work')) category = 'business';
+
+        // Determine urgency from sentiment + keywords
+        let urgency = 'medium';
+        if (summaryLower.includes('urgent') || summaryLower.includes('emergency') || summaryLower.includes('important')) urgency = 'urgent';
+        else if (sentiment === 'very_positive' || summaryLower.includes('asap')) urgency = 'high';
+        else if (category === 'spam' || category === 'promotional') urgency = 'low';
+
+        const messageText = customerLines.join(' ').substring(0, 1000) || summary || 'No message content captured';
+
+        await serviceClient.entities.VoicemailMessage.create({
+          client_id: session._personalClientId,
+          call_log_id: session.callLogId,
+          caller_number: currentLog.caller_id || currentLog.callee_number || '',
+          caller_name: callerName,
+          message: summary || messageText,
+          urgency,
+          category,
+          is_read: false
+        });
+        console.log(`[${reqId}] 📨 VoicemailMessage saved: category=${category}, urgency=${urgency}`);
+      } catch (vmErr) {
+        console.error(`[${reqId}] ⚠️ VoicemailMessage save failed: ${vmErr.message}`);
+      }
+    }
+
     // NOTE: Auto-enroll in email sequence is handled EXCLUSIVELY by campaignPostCall.
     // streamAudio only owns: CallLog (transcript/summary/AI) + Lead (scoring/status).
 
@@ -1567,6 +1613,44 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
               console.error(`[${reqId}] ⚠️ Failed to create inbound CallLog: ${clErr.message}`);
             }
 
+            // ═══ Check personal account mode for DID→Agent inbound path ═══
+            if (didClient && didClient.account_type === 'personal') {
+              const aiMode = didClient.ai_response_mode || 'screen_all';
+              const dndEnabled = didClient.dnd_enabled || false;
+              const callerClean = (session.callerNumber || '').replace(/\D/g, '').slice(-10);
+
+              let isTrusted = false;
+              let trustedName = '';
+              if (callerClean) {
+                try {
+                  const trustedContacts = await svc.entities.TrustedContact.filter({ client_id: didClient.id });
+                  const match = trustedContacts.find(tc => tc.phone && tc.phone.replace(/\D/g, '').slice(-10) === callerClean);
+                  if (match) { isTrusted = true; trustedName = match.name || ''; }
+                } catch (_) {}
+              }
+
+              let personalInstructions = '\n\n--- PERSONAL AI ASSISTANT MODE ---';
+              if (aiMode === 'block_all') {
+                personalInstructions += '\nMODE: BLOCK ALL. Politely tell the caller the owner is unavailable. Do NOT take messages. End quickly.';
+              } else if (aiMode === 'take_messages') {
+                personalInstructions += `\nMODE: TAKE MESSAGES. Take a message from every caller. Ask who is calling, their purpose, and collect their message.`;
+              } else if (aiMode === 'allow_contacts' && isTrusted) {
+                personalInstructions += `\nMODE: ALLOW CONTACTS. Caller "${trustedName}" is TRUSTED. Be warm and transfer if possible.`;
+              } else if (aiMode === 'allow_contacts' && !isTrusted) {
+                personalInstructions += '\nMODE: ALLOW CONTACTS (unknown). Screen this unknown caller. Take a message if legitimate.';
+              } else {
+                personalInstructions += `\nMODE: SCREEN ALL. Screen every call. Classify as family/business/promotional/spam. Take messages for legitimate callers.`;
+              }
+              if (dndEnabled) personalInstructions += '\nDND IS ON: Handle everything silently. Do not mention transferring.';
+              personalInstructions += '\nAFTER EVERY CALL: Classify as family/business/promotional/spam/unknown in your summary.';
+
+              session.systemPrompt += personalInstructions;
+              session._personalMode = aiMode;
+              session._isTrustedCaller = isTrusted;
+              session._personalClientId = didClient.id;
+              console.log(`[${reqId}] 🛡️ Personal inbound: mode=${aiMode}, dnd=${dndEnabled}, trusted=${isTrusted}`);
+            }
+
             console.log(`[${reqId}] ✅ INBOUND agent config loaded: engine=${session.voiceEngine}, voice=${session.voiceType}, prompt=${session.systemPrompt.length} chars`);
             return; // Config loaded successfully via DID→Agent
           }
@@ -1608,6 +1692,71 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
         }
         if (cache.human_transfer_number) session.humanTransferNumber = cache.human_transfer_number;
         if (cache.enable_auto_transfer === false) session.enableAutoTransfer = false;
+
+        // ═══ PERSONAL AI ASSISTANT: Inject screening mode instructions ═══
+        if (callLog.client_id) {
+          try {
+            const ownerClient = await svc.entities.Client.get(callLog.client_id);
+            if (ownerClient && ownerClient.account_type === 'personal') {
+              const aiMode = ownerClient.ai_response_mode || 'screen_all';
+              const dndEnabled = ownerClient.dnd_enabled || false;
+              const callerNum = callLog.caller_id || session.callerNumber || '';
+              const cleanCaller = callerNum.replace(/\D/g, '').slice(-10);
+
+              // Check if caller is a trusted contact
+              let isTrusted = false;
+              let trustedName = '';
+              if (cleanCaller) {
+                const trustedContacts = await svc.entities.TrustedContact.filter({ client_id: callLog.client_id });
+                const match = trustedContacts.find(tc => tc.phone && tc.phone.replace(/\D/g, '').slice(-10) === cleanCaller);
+                if (match) {
+                  isTrusted = true;
+                  trustedName = match.name || '';
+                  console.log(`[${reqId}] 👤 Caller is TRUSTED CONTACT: "${trustedName}" (${callerNum})`);
+                }
+              }
+
+              let personalInstructions = '\n\n--- PERSONAL AI ASSISTANT MODE ---';
+              
+              if (aiMode === 'block_all') {
+                personalInstructions += '\nMODE: BLOCK ALL. Politely tell the caller that the owner is unavailable and cannot receive calls at this time. Do NOT take messages. End the call quickly.';
+              } else if (aiMode === 'take_messages') {
+                personalInstructions += `\nMODE: TAKE MESSAGES. The owner wants you to take a message from every caller.
+Steps: 1) Greet warmly, 2) Ask who is calling and purpose, 3) Collect their message, 4) Confirm you will pass it along, 5) Thank them.
+${isTrusted ? `NOTE: This is "${trustedName}", a known contact. Be extra warm but still take their message.` : ''}`;
+              } else if (aiMode === 'allow_contacts' && isTrusted) {
+                personalInstructions += `\nMODE: ALLOW CONTACTS. This caller "${trustedName}" is a TRUSTED CONTACT. 
+${ownerClient.human_transfer_number ? 'Transfer them to the owner immediately using the transfer function.' : 'Tell them the owner will be connected shortly. Meanwhile, be friendly and make small talk.'}`;
+                if (ownerClient.human_transfer_number) {
+                  session.humanTransferNumber = ownerClient.human_transfer_number;
+                  session.enableAutoTransfer = true;
+                }
+              } else if (aiMode === 'allow_contacts' && !isTrusted) {
+                personalInstructions += `\nMODE: ALLOW CONTACTS (unknown caller). This is an UNKNOWN number — screen this call.
+Steps: 1) Greet professionally, 2) Ask who is calling and their purpose, 3) If they seem legitimate, take a message. If spam/telemarketing, politely end the call.`;
+              } else {
+                // screen_all (default)
+                personalInstructions += `\nMODE: SCREEN ALL. Screen every incoming call.
+Steps: 1) Greet warmly, 2) Ask who is calling and their purpose, 3) Classify the call (family/business/promotional/spam), 4) If legitimate, take a detailed message. If spam, politely end the call.
+${isTrusted ? `NOTE: This is "${trustedName}", a known contact. Be warm and take their message promptly.` : ''}`;
+              }
+
+              if (dndEnabled) {
+                personalInstructions += '\nDND IS ON: Do NOT mention transferring to the owner. Handle everything yourself quietly.';
+              }
+
+              personalInstructions += `\nAFTER EVERY CALL: Classify the call as one of: family, business, promotional, spam, unknown. Include this in your summary.`;
+
+              session.systemPrompt += personalInstructions;
+              session._personalMode = aiMode;
+              session._isTrustedCaller = isTrusted;
+              session._personalClientId = callLog.client_id;
+              console.log(`[${reqId}] 🛡️ Personal mode: ${aiMode}, DND=${dndEnabled}, trusted=${isTrusted}`);
+            }
+          } catch (pErr) {
+            console.log(`[${reqId}] ⚠️ Personal mode check failed: ${pErr.message}`);
+          }
+        }
         // Inject Shopify tool instructions if integration is active
         if (session.hasShopify && !session.systemPrompt.includes('SHOPIFY STORE INTEGRATION')) {
           session.systemPrompt += `\n\n--- SHOPIFY STORE INTEGRATION (ACTIVE) ---

@@ -186,6 +186,37 @@ Deno.serve(async (req) => {
         const configs = await base44.entities.RetentionConfig.list('-created_date', 1);
         const retentionConfig = configs[0] || {};
 
+        // ═══ PERSONAL ACCOUNT: Build screening instructions ═══
+        let personalScreeningInstructions = '';
+        if (resolvedClient && resolvedClient.account_type === 'personal') {
+          const aiMode = resolvedClient.ai_response_mode || 'screen_all';
+          const dndEnabled = resolvedClient.dnd_enabled || false;
+          let isTrusted = false;
+          let trustedName = '';
+          try {
+            const trustedContacts = await base44.entities.TrustedContact.filter({ client_id: resolvedClient.id });
+            const match = trustedContacts.find(tc => tc.phone && tc.phone.replace(/\D/g, '').slice(-10) === last10);
+            if (match) { isTrusted = true; trustedName = match.name || ''; }
+          } catch (_) {}
+
+          personalScreeningInstructions = '\n\n--- PERSONAL AI ASSISTANT MODE ---';
+          if (aiMode === 'block_all') {
+            personalScreeningInstructions += '\nMODE: BLOCK ALL. Politely tell the caller the owner is unavailable. End quickly.';
+          } else if (aiMode === 'take_messages') {
+            personalScreeningInstructions += '\nMODE: TAKE MESSAGES. Take a message from every caller.';
+          } else if (aiMode === 'allow_contacts' && isTrusted) {
+            personalScreeningInstructions += `\nMODE: ALLOW CONTACTS. Caller "${trustedName}" is TRUSTED. Be warm and helpful.`;
+          } else if (aiMode === 'allow_contacts' && !isTrusted) {
+            personalScreeningInstructions += '\nMODE: ALLOW CONTACTS (unknown). Screen this unknown caller carefully.';
+          } else {
+            personalScreeningInstructions += '\nMODE: SCREEN ALL. Screen this call. Classify as family/business/promotional/spam.';
+            if (isTrusted) personalScreeningInstructions += ` NOTE: Known contact "${trustedName}".`;
+          }
+          if (dndEnabled) personalScreeningInstructions += '\nDND ON: Handle everything silently.';
+          personalScreeningInstructions += '\nClassify call in your summary as family/business/promotional/spam/unknown.';
+          console.log(`[smartfloWebhook] Personal mode: ${aiMode}, dnd=${dndEnabled}, trusted=${isTrusted}`);
+        }
+
         // ═══════════════════════════════════════════════════════════════
         // PATH A: Lead calling back on a client's DID (most common inbound)
         // The AI agent assigned to this DID handles the call with lead context.
@@ -221,6 +252,7 @@ Deno.serve(async (req) => {
           // Build personalized system prompt with lead context
           let personalizedPrompt = resolvedAgent.system_prompt || 'You are a helpful AI voice assistant.';
           personalizedPrompt += `\n\n--- INBOUND CALL - LEAD CONTEXT ---\n${leadContext}`;
+          if (personalScreeningInstructions) personalizedPrompt += personalScreeningInstructions;
 
           // Load knowledge base
           let kbContent = '';
@@ -285,6 +317,7 @@ Deno.serve(async (req) => {
 
           let personalizedPrompt = resolvedAgent.system_prompt || 'You are a helpful AI voice assistant.';
           personalizedPrompt += `\n\n--- INBOUND CALL - NEW CALLER ---\nThis is an INBOUND call from a NEW number (${incomingNumber}). This person is NOT in the lead database yet.\nIMPORTANT: Greet them professionally, identify their needs, and collect their name and contact details if possible.\nThis is the client's inbound line, so handle them as a potential customer for "${resolvedClient.company_name}".`;
+          if (personalScreeningInstructions) personalizedPrompt += personalScreeningInstructions;
 
           let kbContent = '';
           if (resolvedAgent.knowledge_base_ids?.length > 0) {
@@ -750,6 +783,43 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
         
       } catch (pcErr) {
         console.error(`[smartfloWebhook] Campaign processing failed: ${pcErr.message}`);
+      }
+
+      // 1.5 Save VoicemailMessage for personal accounts (from webhook data)
+      if (freshCallLog.direction === 'inbound' && freshCallLog.client_id && freshCallLog.client_id !== 'unknown') {
+        try {
+          const callClient = await base44.entities.Client.get(freshCallLog.client_id);
+          if (callClient && callClient.account_type === 'personal' && freshCallLog.conversation_summary) {
+            const summaryLower = (freshCallLog.conversation_summary || '').toLowerCase();
+            let category = 'unknown';
+            if (summaryLower.includes('spam') || summaryLower.includes('telemarketing')) category = 'spam';
+            else if (summaryLower.includes('promotional') || summaryLower.includes('offer')) category = 'promotional';
+            else if (summaryLower.includes('family') || summaryLower.includes('friend')) category = 'family';
+            else if (summaryLower.includes('business') || summaryLower.includes('meeting') || summaryLower.includes('work')) category = 'business';
+            
+            let urgency = 'medium';
+            if (summaryLower.includes('urgent') || summaryLower.includes('emergency')) urgency = 'urgent';
+            else if (category === 'spam' || category === 'promotional') urgency = 'low';
+
+            // Check if voicemail already exists for this call
+            const existingVMs = await base44.entities.VoicemailMessage.filter({ call_log_id: freshCallLog.id });
+            if (existingVMs.length === 0) {
+              await base44.entities.VoicemailMessage.create({
+                client_id: freshCallLog.client_id,
+                call_log_id: freshCallLog.id,
+                caller_number: freshCallLog.caller_id || '',
+                caller_name: '',
+                message: freshCallLog.conversation_summary || 'No message captured',
+                urgency,
+                category,
+                is_read: false
+              });
+              console.log(`[smartfloWebhook] 📨 VoicemailMessage saved for personal account: ${category}/${urgency}`);
+            }
+          }
+        } catch (vmErr) {
+          console.log(`[smartfloWebhook] VoicemailMessage save skipped: ${vmErr.message}`);
+        }
       }
 
       // 2. Invoke postCallFollowup — handles email/RCS outreach for non-campaign calls
