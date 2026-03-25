@@ -1649,6 +1649,20 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
               session._isTrustedCaller = isTrusted;
               session._personalClientId = didClient.id;
               console.log(`[${reqId}] 🛡️ Personal inbound: mode=${aiMode}, dnd=${dndEnabled}, trusted=${isTrusted}`);
+
+              // Send live Telegram notification for personal inbound calls (non-blocking)
+              if (didClient.telegram_connected && didClient.telegram_chat_id && !dndEnabled && didClient.owner_notification_channel === 'telegram') {
+                const tgToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
+                if (tgToken) {
+                  const leadName = session._inboundLeadId ? (callerContext.match(/Name: ([^\n]+)/) || [])[1] || '' : '';
+                  const tgMsg = `📞 <b>Incoming Call</b>\n\n📱 From: <b>${leadName || session.callerNumber || 'Unknown'}</b>\n${leadName && session.callerNumber ? `📞 Number: ${session.callerNumber}\n` : ''}\n💬 AI is screening this call now...`;
+                  fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: didClient.telegram_chat_id, text: tgMsg, parse_mode: 'HTML' })
+                  }).then(r => r.json()).then(r => console.log(`[${reqId}] 📱 Telegram live notification: ok=${r.ok}`))
+                    .catch(e => console.error(`[${reqId}] 📱 Telegram failed: ${e.message}`));
+                }
+              }
             }
 
             console.log(`[${reqId}] ✅ INBOUND agent config loaded: engine=${session.voiceEngine}, voice=${session.voiceType}, prompt=${session.systemPrompt.length} chars`);
@@ -1752,6 +1766,10 @@ ${isTrusted ? `NOTE: This is "${trustedName}", a known contact. Be warm and take
               session._isTrustedCaller = isTrusted;
               session._personalClientId = callLog.client_id;
               console.log(`[${reqId}] 🛡️ Personal mode: ${aiMode}, DND=${dndEnabled}, trusted=${isTrusted}`);
+              if (ownerClient.telegram_connected && ownerClient.telegram_chat_id && !dndEnabled && ownerClient.owner_notification_channel === 'telegram') {
+                const tgT = Deno.env.get('TELEGRAM_BOT_TOKEN');
+                if (tgT) fetch(`https://api.telegram.org/bot${tgT}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: ownerClient.telegram_chat_id, text: `📞 <b>Incoming Call</b>\n\n📱 From: <b>${callLog.caller_id || session.callerNumber || 'Unknown'}</b>\n\n💬 AI is screening this call...`, parse_mode: 'HTML' }) }).then(r => r.json()).then(r => console.log(`[${reqId}] 📱 Telegram: ok=${r.ok}`)).catch(() => {});
+              }
             }
           } catch (pErr) {
             console.log(`[${reqId}] ⚠️ Personal mode check failed: ${pErr.message}`);
