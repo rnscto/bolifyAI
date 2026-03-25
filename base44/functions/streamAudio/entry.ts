@@ -465,8 +465,10 @@ Deno.serve(async (req) => {
     hasShopify: false,        // Whether Shopify marketplace is connected
     humanTransferNumber: '',  // Intercom/extension for human transfer
     enableAutoTransfer: true, // Whether AI can auto-offer transfers
-    _realtimeReconnectAttempts: 0, // Track reconnection attempts
-    _callEnded: false         // Whether the call has ended (prevent reconnect after hangup)
+    _realtimeReconnectAttempts: 0,
+    _callEnded: false,
+    _awaitingOwnerDecision: false,  // Waiting for owner's Telegram button press
+    _ownerDecisionExecuted: false   // Owner decision already applied
   };
 
   // ─── Connect to Azure Realtime API ───
@@ -1000,35 +1002,91 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
     if (type === 'error') { console.error(`[${reqId}] ❌ Realtime error:`, JSON.stringify(msg.error || msg)); return; }
   }
 
-  // ─── Mid-call Telegram: classify caller's reason from live transcript ───
+  // ─── Mid-call Telegram: classify caller + send interactive action buttons ───
   async function sendMidCallTelegramUpdate() {
     const tgT = Deno.env.get('TELEGRAM_BOT_TOKEN');
-    if (!tgT) return;
+    if (!tgT || !session.callLogId) return;
     try {
       const { createClient: cc } = await import('npm:@base44/sdk@0.8.20');
       const svc = cc({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
       const cl = await svc.entities.Client.get(session._personalClientId);
       if (!cl?.telegram_connected || !cl?.telegram_chat_id || cl.dnd_enabled || cl.owner_notification_channel !== 'telegram') return;
       const convo = session.transcript.map(t => `${t.speaker}: ${t.text}`).join('\n');
-      const bUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
-      const dep = Deno.env.get('AZURE_OPENAI_DEPLOYMENT'), ak = Deno.env.get('AZURE_OPENAI_KEY');
+      const bUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, ''), dep = Deno.env.get('AZURE_OPENAI_DEPLOYMENT'), ak = Deno.env.get('AZURE_OPENAI_KEY');
       const res = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2024-08-01-preview`, {
         method: 'POST', headers: { 'api-key': ak, 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [
-          { role: 'system', content: 'Classify this live phone call reason from the partial transcript. Return JSON: {"reason":"short label","emoji":"1 emoji","detail":"1 sentence about what caller wants","urgency":"low|medium|high|urgent","caller_name":"name if mentioned"}\nReason labels: Family Call, Emergency, Friend Call, Business Enquiry, Job Opening Inquiry, Delivery/Courier, Promotional/Marketing, Spam/Telemarketing, Loan/Insurance Offer, Government/Official, Medical/Health, Bill Payment, Wrong Number, Personal Request, Complaint, Service Inquiry, Unknown' },
+          { role: 'system', content: 'Classify this live call. Return JSON: {"reason":"label","emoji":"1 emoji","detail":"1 sentence","urgency":"low|medium|high|urgent","caller_name":"name if said"}\nLabels: Family Call, Emergency, Friend, Business Enquiry, Job Opening, Delivery, Promotional, Spam, Loan/Insurance, Government, Medical, Wrong Number, Personal Request, Unknown' },
           { role: 'user', content: convo }
-        ], max_completion_tokens: 120, response_format: { type: "json_object" } })
+        ], max_completion_tokens: 100, response_format: { type: "json_object" } })
       });
       if (!res.ok) return;
-      const d = await res.json();
-      const r = JSON.parse(d.choices?.[0]?.message?.content || '{}');
+      const d = await res.json(), r = JSON.parse(d.choices?.[0]?.message?.content || '{}');
+      session._midCallReason = r.reason || 'Unknown';
+      session._midCallCallerName = r.caller_name || '';
       const ue = r.urgency === 'urgent' ? ' 🚨' : r.urgency === 'high' ? ' ⚡' : '';
       const callerLabel = r.caller_name || session.callerNumber || 'Unknown';
-      const m = `${r.emoji || '📞'} <b>Live Call Update</b>${ue}\n\n📱 From: <b>${callerLabel}</b>${r.caller_name && session.callerNumber ? '\n📞 ' + session.callerNumber : ''}\n🏷️ Reason: <b>${r.reason || 'Unknown'}</b>${r.detail ? '\n💬 ' + r.detail : ''}${r.urgency && r.urgency !== 'medium' ? '\n⚡ Priority: ' + r.urgency.toUpperCase() : ''}\n\n🤖 AI is still handling the call...`;
+      const clId = session.callLogId;
+      const m = `${r.emoji || '📞'} <b>Live Call — What should I do?</b>${ue}\n\n📱 From: <b>${callerLabel}</b>${r.caller_name && session.callerNumber ? '\n📞 ' + session.callerNumber : ''}\n🏷️ <b>${r.reason || 'Unknown'}</b>${r.detail ? '\n💬 ' + r.detail : ''}\n\n👇 <b>Choose action (AI is holding the caller):</b>`;
+      const kb = { inline_keyboard: [
+        [{ text: '📞 Transfer to Me', callback_data: `decision:${clId}:transfer` }, { text: '⏰ Call Back', callback_data: `decision:${clId}:callback` }],
+        [{ text: '📝 Take Message', callback_data: `decision:${clId}:take_message` }, { text: '🚫 Block/End', callback_data: `decision:${clId}:block` }]
+      ]};
       fetch(`https://api.telegram.org/bot${tgT}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: cl.telegram_chat_id, text: m, parse_mode: 'HTML' })
-      }).then(x => x.json()).then(x => console.log(`[${reqId}] 📱 Mid-call TG: reason=${r.reason}, urgency=${r.urgency}, ok=${x.ok}`)).catch(() => {});
+        body: JSON.stringify({ chat_id: cl.telegram_chat_id, text: m, parse_mode: 'HTML', reply_markup: kb })
+      }).then(x => x.json()).then(x => {
+        console.log(`[${reqId}] 📱 Mid-call TG buttons: ${r.reason}, ok=${x.ok}`);
+        if (x.ok) { session._awaitingOwnerDecision = true; pollOwnerDecision(svc); }
+      }).catch(() => {});
     } catch (e) { console.error(`[${reqId}] ⚠️ Mid-call TG: ${e.message}`); }
+  }
+
+  // ─── Poll CallDecision entity for owner's Telegram button press ───
+  async function pollOwnerDecision(svc) {
+    if (!session.callLogId || !session._personalClientId) return;
+    let polls = 0;
+    const iv = setInterval(async () => {
+      polls++;
+      if (polls > 30 || session._callEnded || session._ownerDecisionExecuted) {
+        clearInterval(iv);
+        if (polls > 30) { session._awaitingOwnerDecision = false; console.log(`[${reqId}] ⏰ Owner decision timeout`); }
+        return;
+      }
+      try {
+        const decs = await svc.entities.CallDecision.filter({ call_log_id: session.callLogId, status: 'pending' });
+        const dec = decs.find(d => d.custom_message !== '__AWAITING_TIME__' && d.custom_message !== '__AWAITING_MESSAGE__');
+        if (!dec) return;
+        clearInterval(iv);
+        session._awaitingOwnerDecision = false;
+        session._ownerDecisionExecuted = true;
+        await svc.entities.CallDecision.update(dec.id, { status: 'delivered' });
+        console.log(`[${reqId}] ✅ Owner decision: ${dec.decision}${dec.custom_message ? ' — ' + dec.custom_message : ''}`);
+        executeOwnerDecision(dec);
+      } catch (e) { console.error(`[${reqId}] ⚠️ Poll: ${e.message}`); }
+    }, 2000);
+  }
+
+  // ─── Execute owner's Telegram decision on the live call ───
+  function executeOwnerDecision(dec) {
+    let inst = '';
+    if (dec.decision === 'transfer') {
+      inst = session.humanTransferNumber
+        ? '[OWNER INSTRUCTION] Owner wants to speak to this caller. Transfer NOW using transfer_to_human. Say: "The owner is available, let me connect you. Please hold."'
+        : '[OWNER INSTRUCTION] Owner wants to connect. Tell caller: "The owner will call you back very shortly on this number."';
+    } else if (dec.decision === 'callback') {
+      const t = dec.callback_time || dec.custom_message || 'shortly';
+      inst = `[OWNER INSTRUCTION] Tell the caller: "The owner will call you back in ${t}. Can I note anything else for them?"`;
+    } else if (dec.decision === 'take_message') {
+      inst = '[OWNER INSTRUCTION] Take a detailed message. Ask: name, purpose, and any details to pass along to the owner.';
+    } else if (dec.decision === 'block') {
+      inst = '[OWNER INSTRUCTION] End this call politely. Say: "The owner is unavailable. Thank you for calling. Goodbye."';
+    } else if (dec.custom_message) {
+      inst = `[OWNER INSTRUCTION] Owner says: "${dec.custom_message}". Relay this to the caller naturally.`;
+    }
+    if (!inst) return;
+    console.log(`[${reqId}] 🎯 Executing: ${dec.decision}`);
+    if (session.voiceEngine === 'azure_speech') { generateGpt5NanoResponse(inst); }
+    else { sendToRealtime({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: inst }] } }); sendToRealtime({ type: 'response.create' }); }
   }
 
   // ─── Trigger initial greeting so the AI speaks first ───
@@ -1121,116 +1179,33 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
     }
   }
 
-  // ─── Azure Speech TTS (hybrid mode) ───
   async function synthesizeWithAzureSpeech(text) {
-    const speechKey = Deno.env.get('AZURE_SPEECH_KEY');
-    const speechRegion = Deno.env.get('AZURE_SPEECH_REGION');
-
-    if (!speechKey || !speechRegion) {
-      console.error(`[${reqId}] ❌ Missing AZURE_SPEECH_KEY or AZURE_SPEECH_REGION for TTS`);
-      return;
-    }
-
-    const voiceName = session.voiceType;
-    // Auto-detect language from text content for correct SSML xml:lang
-    // Devanagari Unicode range: \u0900-\u097F
-    const hasDevanagari = /[\u0900-\u097F]/.test(text);
-    const xmlLang = hasDevanagari ? 'hi-IN' : 'en-IN';
-    const escapedText = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-    const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${xmlLang}'>
-      <voice name='${voiceName}'>${escapedText}</voice>
-    </speak>`;
-    console.log(`[${reqId}] 🗣️ TTS: voice=${voiceName}, lang=${xmlLang}, text="${text.substring(0, 60)}..."`);
-
-    const controller = new AbortController();
-    session._ttsAbort = controller;
-    session.isSpeaking = true;
-
+    const speechKey = Deno.env.get('AZURE_SPEECH_KEY'), speechRegion = Deno.env.get('AZURE_SPEECH_REGION');
+    if (!speechKey || !speechRegion) { console.error(`[${reqId}] ❌ Missing TTS keys`); return; }
+    const xmlLang = /[\u0900-\u097F]/.test(text) ? 'hi-IN' : 'en-IN';
+    const escaped = text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    const ssml = `<speak version='1.0' xmlns='http://www.w3.org/2001/10/synthesis' xml:lang='${xmlLang}'><voice name='${session.voiceType}'>${escaped}</voice></speak>`;
+    const controller = new AbortController(); session._ttsAbort = controller; session.isSpeaking = true;
     try {
-      const ttsUrl = `https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/v1`;
-      const response = await fetch(ttsUrl, {
-        method: 'POST',
-        headers: {
-          'Ocp-Apim-Subscription-Key': speechKey,
-          'Content-Type': 'application/ssml+xml',
-          'X-Microsoft-OutputFormat': 'raw-8khz-8bit-mono-mulaw',
-        },
-        body: ssml,
-        signal: controller.signal
+      const response = await fetch(`https://${speechRegion}.tts.speech.microsoft.com/cognitiveservices/v1`, {
+        method: 'POST', headers: { 'Ocp-Apim-Subscription-Key': speechKey, 'Content-Type': 'application/ssml+xml', 'X-Microsoft-OutputFormat': 'raw-8khz-8bit-mono-mulaw' }, body: ssml, signal: controller.signal
       });
-
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error(`[${reqId}] ❌ Azure Speech TTS error: ${response.status} ${errText}`);
-        session.isSpeaking = false;
-        return;
-      }
-
-      // Stream the mu-law 8kHz audio directly to Smartflo (no conversion needed)
+      if (!response.ok) { console.error(`[${reqId}] ❌ TTS error: ${response.status}`); session.isSpeaking = false; return; }
       const audioBuffer = new Uint8Array(await response.arrayBuffer());
-      console.log(`[${reqId}] 🔊 Azure Speech TTS: ${audioBuffer.length} bytes of mu-law audio`);
-
       if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
-        // Send in smaller chunks to allow barge-in checking
-        const CHUNK_SIZE = 1600;
-        for (let i = 0; i < audioBuffer.length; i += CHUNK_SIZE) {
-          if (controller.signal.aborted) {
-            console.log(`[${reqId}] 🛑 TTS playback aborted (barge-in)`);
-            break;
-          }
-          const end = Math.min(i + CHUNK_SIZE, audioBuffer.length);
-          let chunk = audioBuffer.slice(i, end);
-
-          if (chunk.length % 160 !== 0) {
-            const paddedLen = Math.ceil(chunk.length / 160) * 160;
-            const padded = new Uint8Array(paddedLen);
-            padded.set(chunk);
-            padded.fill(0xFF, chunk.length);
-            chunk = padded;
-          }
-
-          const payload = uint8ToBase64(chunk);
-          smartfloSocket.send(JSON.stringify({
-            event: 'media',
-            streamSid: session.streamSid,
-            media: { payload }
-          }));
+        for (let i = 0; i < audioBuffer.length; i += 1600) {
+          if (controller.signal.aborted) break;
+          let chunk = audioBuffer.slice(i, Math.min(i + 1600, audioBuffer.length));
+          if (chunk.length % 160 !== 0) { const p = new Uint8Array(Math.ceil(chunk.length/160)*160); p.set(chunk); p.fill(0xFF,chunk.length); chunk = p; }
+          smartfloSocket.send(JSON.stringify({ event: 'media', streamSid: session.streamSid, media: { payload: uint8ToBase64(chunk) } }));
         }
       }
-    } catch (err) {
-      if (err.name === 'AbortError') {
-        console.log(`[${reqId}] 🛑 TTS aborted`);
-      } else {
-        console.error(`[${reqId}] ❌ Azure Speech TTS failed: ${err.message}`);
-      }
-    } finally {
-      session.isSpeaking = false;
-      session._ttsAbort = null;
-    }
+    } catch (err) { if (err.name !== 'AbortError') console.error(`[${reqId}] ❌ TTS failed: ${err.message}`); }
+    finally { session.isSpeaking = false; session._ttsAbort = null; }
   }
 
-  // ─── Clean text for TTS (remove markdown, emojis, special chars) ───
   function cleanTextForTTS(text) {
-    return text
-      .replace(/\*\*([^*]+)\*\*/g, '$1')  // **bold** → bold
-      .replace(/\*([^*]+)\*/g, '$1')       // *italic* → italic
-      .replace(/__([^_]+)__/g, '$1')       // __underline__ → underline
-      .replace(/_([^_]+)_/g, '$1')         // _italic_ → italic
-      .replace(/#{1,6}\s*/g, '')           // # headers
-      .replace(/```[\s\S]*?```/g, '')      // code blocks
-      .replace(/`([^`]+)`/g, '$1')         // inline code
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // [link](url) → link
-      .replace(/[😊🙏👋✅❌🎯📋🕐⚠️💡🔊🎙️]/gu, '') // common emojis
-      .replace(/[\u{1F600}-\u{1F64F}]/gu, '') // emoticons
-      .replace(/[\u{1F300}-\u{1F5FF}]/gu, '') // misc symbols
-      .replace(/[\u{1F680}-\u{1F6FF}]/gu, '') // transport
-      .replace(/[\u{1F1E0}-\u{1F1FF}]/gu, '') // flags
-      .replace(/[\u{2600}-\u{26FF}]/gu, '')   // misc symbols
-      .replace(/[\u{2700}-\u{27BF}]/gu, '')   // dingbats
-      .replace(/\n{2,}/g, '. ')            // multiple newlines → pause
-      .replace(/\n/g, ' ')                 // single newline → space
-      .replace(/\s{2,}/g, ' ')            // multiple spaces
-      .trim();
+    return text.replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'$1').replace(/__([^_]+)__/g,'$1').replace(/_([^_]+)_/g,'$1').replace(/#{1,6}\s*/g,'').replace(/```[\s\S]*?```/g,'').replace(/`([^`]+)`/g,'$1').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,'').replace(/[😊🙏👋✅❌🎯📋🕐⚠️💡🔊🎙️]/gu,'').replace(/\n{2,}/g,'. ').replace(/\n/g,' ').replace(/\s{2,}/g,' ').trim();
   }
 
   // ─── LLM text generation with streaming (hybrid mode) ───
