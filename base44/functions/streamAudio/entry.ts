@@ -964,10 +964,11 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
       if (text) {
         console.log(`[${reqId}] 🗣️ Customer: "${text.substring(0, 100)}"`);
         session.transcript.push({ speaker: 'Customer', text });
-
-        // In hybrid mode, send transcribed text to GPT-5-nano for response
-        if (session.voiceEngine === 'azure_speech') {
-          generateGpt5NanoResponse(text);
+        if (session.voiceEngine === 'azure_speech') { generateGpt5NanoResponse(text); }
+        // Mid-call: after 2nd customer message, classify reason & send Telegram update
+        if (session._personalMode && session._personalClientId && !session._midCallTgSent) {
+          const custCount = session.transcript.filter(t => t.speaker === 'Customer').length;
+          if (custCount >= 2) { session._midCallTgSent = true; sendMidCallTelegramUpdate(); }
         }
       }
       return;
@@ -989,52 +990,45 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
       return;
     }
 
-    // ─── Barge-in: user started speaking while model is responding ───
     if (type === 'input_audio_buffer.speech_started') {
-      console.log(`[${reqId}] 🛑 Barge-in: user speaking, clearing Smartflo buffer`);
-      if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
-        smartfloSocket.send(JSON.stringify({
-          event: 'clear',
-          streamSid: session.streamSid
-        }));
-      }
-      // Cancel any ongoing Azure Speech TTS
-      if (session._ttsAbort) {
-        session._ttsAbort.abort();
-        session._ttsAbort = null;
-      }
-      session.isSpeaking = false;
-      return;
+      if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) { smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: session.streamSid })); }
+      if (session._ttsAbort) { session._ttsAbort.abort(); session._ttsAbort = null; }
+      session.isSpeaking = false; return;
     }
+    if (type === 'input_audio_buffer.speech_stopped') return;
+    if (type === 'response.function_call_arguments.done') { executeToolCall(msg.call_id, msg.name, msg.arguments || '{}'); return; }
+    if (type === 'error') { console.error(`[${reqId}] ❌ Realtime error:`, JSON.stringify(msg.error || msg)); return; }
+  }
 
-    if (type === 'input_audio_buffer.speech_stopped') {
-      console.log(`[${reqId}] 🔇 User speech ended`);
-      return;
-    }
-
-    // ─── Tool/function call from Realtime API ───
-    if (type === 'response.function_call_arguments.done') {
-      const callId = msg.call_id;
-      const fnName = msg.name;
-      const fnArgs = msg.arguments || '{}';
-      console.log(`[${reqId}] 🔧 Function call received: ${fnName} (call_id=${callId})`);
-      executeToolCall(callId, fnName, fnArgs);
-      return;
-    }
-
-    if (type === 'error') {
-      console.error(`[${reqId}] ❌ Realtime API error:`, JSON.stringify(msg.error || msg));
-      return;
-    }
-
-    // Log other events at debug level
-    if (!['response.created', 'response.output_item.added', 'response.content_part.added',
-          'response.output_item.done', 'response.content_part.done', 'response.done',
-          'conversation.item.created', 'rate_limits.updated',
-          'response.audio_transcript.delta', 'response.text.delta',
-          'input_audio_buffer.committed'].includes(type)) {
-      console.log(`[${reqId}] 📩 Realtime event: ${type}`);
-    }
+  // ─── Mid-call Telegram: classify caller's reason from live transcript ───
+  async function sendMidCallTelegramUpdate() {
+    const tgT = Deno.env.get('TELEGRAM_BOT_TOKEN');
+    if (!tgT) return;
+    try {
+      const { createClient: cc } = await import('npm:@base44/sdk@0.8.20');
+      const svc = cc({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+      const cl = await svc.entities.Client.get(session._personalClientId);
+      if (!cl?.telegram_connected || !cl?.telegram_chat_id || cl.dnd_enabled || cl.owner_notification_channel !== 'telegram') return;
+      const convo = session.transcript.map(t => `${t.speaker}: ${t.text}`).join('\n');
+      const bUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+      const dep = Deno.env.get('AZURE_OPENAI_DEPLOYMENT'), ak = Deno.env.get('AZURE_OPENAI_KEY');
+      const res = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2024-08-01-preview`, {
+        method: 'POST', headers: { 'api-key': ak, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [
+          { role: 'system', content: 'Classify this live phone call reason from the partial transcript. Return JSON: {"reason":"short label","emoji":"1 emoji","detail":"1 sentence about what caller wants","urgency":"low|medium|high|urgent","caller_name":"name if mentioned"}\nReason labels: Family Call, Emergency, Friend Call, Business Enquiry, Job Opening Inquiry, Delivery/Courier, Promotional/Marketing, Spam/Telemarketing, Loan/Insurance Offer, Government/Official, Medical/Health, Bill Payment, Wrong Number, Personal Request, Complaint, Service Inquiry, Unknown' },
+          { role: 'user', content: convo }
+        ], max_completion_tokens: 120, response_format: { type: "json_object" } })
+      });
+      if (!res.ok) return;
+      const d = await res.json();
+      const r = JSON.parse(d.choices?.[0]?.message?.content || '{}');
+      const ue = r.urgency === 'urgent' ? ' 🚨' : r.urgency === 'high' ? ' ⚡' : '';
+      const callerLabel = r.caller_name || session.callerNumber || 'Unknown';
+      const m = `${r.emoji || '📞'} <b>Live Call Update</b>${ue}\n\n📱 From: <b>${callerLabel}</b>${r.caller_name && session.callerNumber ? '\n📞 ' + session.callerNumber : ''}\n🏷️ Reason: <b>${r.reason || 'Unknown'}</b>${r.detail ? '\n💬 ' + r.detail : ''}${r.urgency && r.urgency !== 'medium' ? '\n⚡ Priority: ' + r.urgency.toUpperCase() : ''}\n\n🤖 AI is still handling the call...`;
+      fetch(`https://api.telegram.org/bot${tgT}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: cl.telegram_chat_id, text: m, parse_mode: 'HTML' })
+      }).then(x => x.json()).then(x => console.log(`[${reqId}] 📱 Mid-call TG: reason=${r.reason}, urgency=${r.urgency}, ok=${x.ok}`)).catch(() => {});
+    } catch (e) { console.error(`[${reqId}] ⚠️ Mid-call TG: ${e.message}`); }
   }
 
   // ─── Trigger initial greeting so the AI speaks first ───
@@ -1855,21 +1849,8 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
         session.streamSid = startData.streamSid;
         session.callSid = startData.callSid;
 
-        // Log ALL fields from start event for debugging inbound call routing
-        console.log(`[${reqId}] 📞 START EVENT FULL DATA: ${JSON.stringify({
-          streamSid: startData.streamSid,
-          callSid: startData.callSid,
-          to: startData.to,
-          from: startData.from,
-          callee: startData.callee,
-          caller: startData.caller,
-          direction: startData.direction,
-          customParameters: startData.customParameters,
-          accountSid: startData.accountSid,
-          mediaFormat: startData.mediaFormat
-        })}`);
-
-        // Extract callee number (the DID that was called) — try ALL possible fields
+        console.log(`[${reqId}] 📞 START: to=${startData.to}, from=${startData.from}, params=${JSON.stringify(startData.customParameters || {})}`);
+        // Extract callee number (the DID that was called)
         session.calleeNumber = startData.customParameters?.customer_number
           || startData.customParameters?.called_number
           || startData.customParameters?.to
