@@ -22,7 +22,7 @@ Deno.serve(async (req) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         url: webhook_url,
-        allowed_updates: ['message']
+        allowed_updates: ['message', 'callback_query']
       })
     });
 
