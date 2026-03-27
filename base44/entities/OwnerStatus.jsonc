@@ -1,0 +1,50 @@
+{
+  "name": "OwnerStatus",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "title": {
+      "type": "string",
+      "description": "Short status title (e.g., In Meeting, Driving, Prayers)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Detailed description of the status"
+    },
+    "caller_message_hindi": {
+      "type": "string",
+      "description": "What AI should tell the caller in Hindi (e.g., 'Sir abhi meeting mein hain, 3 baje tak busy hain')"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this status is currently active"
+    },
+    "start_time": {
+      "type": "string",
+      "description": "When this status starts (e.g., '1:00 PM' or ISO datetime)"
+    },
+    "end_time": {
+      "type": "string",
+      "description": "When this status ends (e.g., '3:00 PM' or ISO datetime)"
+    },
+    "is_preset": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this is a saved preset that can be quickly activated"
+    },
+    "icon": {
+      "type": "string",
+      "default": "\ud83d\udccb",
+      "description": "Emoji icon for this status"
+    }
+  },
+  "required": [
+    "client_id",
+    "title",
+    "caller_message_hindi"
+  ]
+}

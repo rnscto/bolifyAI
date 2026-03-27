@@ -968,11 +968,11 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
         console.log(`[${reqId}] 🗣️ Customer: "${text.substring(0, 100)}"`);
         session.transcript.push({ speaker: 'Customer', text });
         if (session.voiceEngine === 'azure_speech') { generateGpt5NanoResponse(text); }
-        // Mid-call: after 4th customer message, classify reason & send Telegram update
-        // Wait for enough conversation to know caller name + reason before showing buttons
+        // Mid-call: after 2nd customer message, classify reason & send Telegram buttons
+        // Send earlier so owner has more time to respond while call is active
         if (session._personalMode && session._personalClientId && !session._midCallTgSent) {
           const custCount = session.transcript.filter(t => t.speaker === 'Customer').length;
-          if (custCount >= 4) { session._midCallTgSent = true; sendMidCallTelegramUpdate(); }
+          if (custCount >= 2) { session._midCallTgSent = true; sendMidCallTelegramUpdate(); }
         }
       }
       return;
@@ -1059,9 +1059,9 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
     let polls = 0;
     const iv = setInterval(async () => {
       polls++;
-      if (polls > 30 || session._callEnded || session._ownerDecisionExecuted) {
+      if (polls > 60 || session._callEnded || session._ownerDecisionExecuted) {
         clearInterval(iv);
-        if (polls > 30) { session._awaitingOwnerDecision = false; console.log(`[${reqId}] ⏰ Owner decision timeout`); }
+        if (polls > 60) { session._awaitingOwnerDecision = false; console.log(`[${reqId}] ⏰ Owner decision timeout`); }
         return;
       }
       try {
@@ -1626,6 +1626,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
               }
               if (dndEnabled) personalInstructions += '\nDND IS ON: Handle everything silently. Do not mention transferring.';
               personalInstructions += '\nAFTER EVERY CALL: Classify as family/business/promotional/spam/unknown in your summary.';
+              // Fetch active OwnerStatus for dynamic prompt injection
+              try { const _as = await svc.entities.OwnerStatus.filter({ client_id: didClient.id, is_active: true }); if (_as.length > 0) { const _s = _as[0]; personalInstructions += `\n\n--- OWNER STATUS: ${_s.icon} ${_s.title}${_s.start_time ? ' (' + _s.start_time + (_s.end_time ? ' to ' + _s.end_time : '') + ')' : ''} ---\nCRITICAL: Tell callers in Hindi: "${_s.caller_message_hindi}"`; console.log(`[${reqId}] 🎯 OwnerStatus: ${_s.title}`); } } catch (_) {}
 
               session.systemPrompt += personalInstructions;
               session._personalMode = aiMode;
@@ -1758,8 +1760,9 @@ ${isTrusted ? `NOTE: This is "${trustedName}", a known contact. Be warm and take
               if (dndEnabled) {
                 personalInstructions += '\nDND IS ON: Do NOT mention transferring to the owner. Handle everything yourself quietly.';
               }
-
               personalInstructions += `\nAFTER EVERY CALL: Classify the call as one of: family, business, promotional, spam, unknown. Include this in your summary.`;
+              // Fetch active OwnerStatus for dynamic prompt injection
+              try { const _as2 = await svc.entities.OwnerStatus.filter({ client_id: callLog.client_id, is_active: true }); if (_as2.length > 0) { const _s2 = _as2[0]; personalInstructions += `\n\n--- OWNER STATUS: ${_s2.icon} ${_s2.title}${_s2.start_time ? ' (' + _s2.start_time + (_s2.end_time ? ' to ' + _s2.end_time : '') + ')' : ''} ---\nCRITICAL: Tell callers in Hindi: "${_s2.caller_message_hindi}"`; console.log(`[${reqId}] 🎯 OwnerStatus: ${_s2.title}`); } } catch (_) {}
 
               session.systemPrompt += personalInstructions;
               session._personalMode = aiMode;

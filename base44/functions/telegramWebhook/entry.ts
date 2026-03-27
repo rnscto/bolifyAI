@@ -7,6 +7,18 @@ function getServiceClient() {
   return createClient({ appId: APP_ID, asServiceRole: true });
 }
 
+// Default status presets created on first use
+const DEFAULT_PRESETS = [
+  { title: 'In Meeting', icon: '🏢', caller_message_hindi: 'Sir abhi ek important meeting mein hain, meeting khatam hone ke baad aapko call back karenge. Kya aap koi message dena chahenge?' },
+  { title: 'Driving', icon: '🚗', caller_message_hindi: 'Sir abhi driving kar rahe hain, drive khatam hone ke baad aapko call back karenge. Kya aap koi urgent message dena chahenge?' },
+  { title: 'In Prayers', icon: '🙏', caller_message_hindi: 'Sir abhi pooja mein hain, pooja khatam hone ke baad aapko call karenge. Kya aap koi message dena chahenge?' },
+  { title: 'At Home - Rituals', icon: '🪔', caller_message_hindi: 'Sir abhi ghar par kuch religious rituals mein busy hain, thodi der baad aapko call karenge. Kya aapka koi urgent kaam hai?' },
+  { title: 'Sleeping / Rest', icon: '😴', caller_message_hindi: 'Sir abhi rest kar rahe hain. Kal subah aapko call karenge. Agar urgent hai to mujhe bata dijiye main unhe turant inform kar dungi.' },
+  { title: 'Out of Station', icon: '✈️', caller_message_hindi: 'Sir abhi station se bahar hain, wapas aane par aapko call karenge. Kya aap koi message chhodna chahenge?' },
+  { title: 'On Another Call', icon: '📞', caller_message_hindi: 'Sir abhi ek aur call par busy hain, call khatam hote hi aapko call back karenge. Kya aap koi message dena chahenge?' },
+  { title: 'Lunch / Dinner', icon: '🍽️', caller_message_hindi: 'Sir abhi khana kha rahe hain, thodi der mein free honge. Kya aap koi message dena chahenge ya baad mein call karenge?' }
+];
+
 Deno.serve(async (req) => {
   try {
     if (req.method !== 'POST') {
@@ -105,6 +117,47 @@ Deno.serve(async (req) => {
         }
       }
 
+      // ═══ HANDLE STATUS BUTTON CALLBACKS ═══
+      if (data.startsWith('status:')) {
+        const parts = data.split(':');
+        const statusId = parts[1];
+        const action = parts[2]; // activate, clear, create
+
+        let svc;
+        try { svc = getServiceClient(); } catch (_) { return Response.json({ ok: true }); }
+
+        const clients = await svc.entities.Client.filter({ telegram_chat_id: chatId });
+        if (clients.length === 0) { await sendTelegramMessage(chatId, '❌ No linked account.'); return Response.json({ ok: true }); }
+        const client = clients[0];
+
+        if (action === 'clear') {
+          // Deactivate all statuses
+          const activeStatuses = await svc.entities.OwnerStatus.filter({ client_id: client.id, is_active: true });
+          for (const as of activeStatuses) {
+            await svc.entities.OwnerStatus.update(as.id, { is_active: false });
+          }
+          await editMessageButtons(chatId, cq.message.message_id, '✅ Status cleared! You are now <b>Available</b>.\n\nAI will handle calls normally.');
+        } else if (action === 'create') {
+          await editMessageButtons(chatId, cq.message.message_id,
+            `✏️ <b>Create Custom Status</b>\n\nSend a message in this format:\n<code>/customstatus Title | Time | Hindi Message</code>\n\nExample:\n<code>/customstatus Bank Meeting | 1 PM to 3 PM | Sir bank meeting mein hain 3 baje tak busy hain</code>`
+          );
+        } else if (action === 'activate') {
+          // Deactivate all, then activate selected
+          const activeStatuses = await svc.entities.OwnerStatus.filter({ client_id: client.id, is_active: true });
+          for (const as of activeStatuses) {
+            await svc.entities.OwnerStatus.update(as.id, { is_active: false });
+          }
+          const status = await svc.entities.OwnerStatus.get(statusId);
+          await svc.entities.OwnerStatus.update(statusId, { is_active: true });
+          await editMessageButtons(chatId, cq.message.message_id,
+            `${status.icon} <b>Status: ${status.title}</b>\n\n💬 AI will tell callers:\n<i>"${status.caller_message_hindi}"</i>\n\nUse /status to change or /clearstatus to clear.`
+          );
+          console.log(`[telegramWebhook] ✅ Status activated: ${status.title} for client ${client.id}`);
+        }
+
+        return Response.json({ ok: true });
+      }
+
       return Response.json({ ok: true });
     }
 
@@ -179,6 +232,118 @@ Deno.serve(async (req) => {
       return Response.json({ ok: true });
     }
 
+    // ═══ HANDLE /status COMMAND — Show status menu ═══
+    if (text === '/status' || text === '/setstatus') {
+      const svcStatus = getServiceClient();
+      try {
+        const clients = await svcStatus.entities.Client.filter({ telegram_chat_id: chatId });
+        if (clients.length === 0) { await sendTelegramMessage(chatId, '❌ No linked account.'); return Response.json({ ok: true }); }
+        const client = clients[0];
+
+        // Ensure presets exist
+        await ensurePresetsExist(svcStatus, client.id);
+
+        // Get all presets + active status
+        const statuses = await svcStatus.entities.OwnerStatus.filter({ client_id: client.id, is_preset: true });
+        const activeStatus = statuses.find(s => s.is_active);
+
+        let msg = '🎯 <b>Set Your Status</b>\n\n';
+        if (activeStatus) {
+          msg += `Current: ${activeStatus.icon} <b>${activeStatus.title}</b>\n${activeStatus.caller_message_hindi}\n\n`;
+        } else {
+          msg += 'Current: ✅ <b>Available</b> (no status set)\n\n';
+        }
+        msg += '👇 Tap a status or use /customstatus';
+
+        const buttons = [];
+        // Show presets in 2-column rows
+        for (let i = 0; i < statuses.length; i += 2) {
+          const row = [{ text: `${statuses[i].icon} ${statuses[i].title}`, callback_data: `status:${statuses[i].id}:activate` }];
+          if (statuses[i + 1]) row.push({ text: `${statuses[i + 1].icon} ${statuses[i + 1].title}`, callback_data: `status:${statuses[i + 1].id}:activate` });
+          buttons.push(row);
+        }
+        // Add clear status + custom status buttons
+        buttons.push([
+          { text: '✅ Clear Status (Available)', callback_data: 'status:clear:clear' },
+          { text: '✏️ Custom Status', callback_data: 'status:custom:create' }
+        ]);
+
+        await sendTelegramMessage(chatId, msg, { inline_keyboard: buttons });
+      } catch (err) {
+        console.error('[telegramWebhook] Status error:', err.message);
+        await sendTelegramMessage(chatId, '❌ Error loading statuses.');
+      }
+      return Response.json({ ok: true });
+    }
+
+    // ═══ HANDLE /customstatus COMMAND — Create custom status ═══
+    if (text.startsWith('/customstatus')) {
+      const svcCS = getServiceClient();
+      try {
+        const clients = await svcCS.entities.Client.filter({ telegram_chat_id: chatId });
+        if (clients.length === 0) { await sendTelegramMessage(chatId, '❌ No linked account.'); return Response.json({ ok: true }); }
+        const client = clients[0];
+
+        // Parse: /customstatus Meeting with Bank | 1:00 PM to 3:00 PM | Sir bank meeting mein hain 3 baje tak
+        const parts = text.replace('/customstatus', '').trim();
+        if (!parts) {
+          await sendTelegramMessage(chatId,
+            `✏️ <b>Create Custom Status</b>\n\nFormat:\n<code>/customstatus Title | Time | Hindi Message</code>\n\nExamples:\n<code>/customstatus Bank Meeting | 1 PM to 3 PM | Sir bank meeting mein hain 3 baje tak busy hain</code>\n\n<code>/customstatus Hospital Visit | 2 hours | Sir hospital gaye hain 2 ghante mein wapas aayenge</code>\n\n<code>/customstatus Family Function | Full day | Sir aaj family function mein hain kal call karenge</code>`
+          );
+          return Response.json({ ok: true });
+        }
+
+        const segments = parts.split('|').map(s => s.trim());
+        const title = segments[0] || 'Busy';
+        const timeRange = segments[1] || '';
+        const callerMsg = segments[2] || `Sir abhi ${title.toLowerCase()} mein busy hain. Baad mein call karenge. Kya aap koi message dena chahenge?`;
+
+        // Deactivate any current active status
+        const activeStatuses = await svcCS.entities.OwnerStatus.filter({ client_id: client.id, is_active: true });
+        for (const as of activeStatuses) {
+          await svcCS.entities.OwnerStatus.update(as.id, { is_active: false });
+        }
+
+        // Create and activate new custom status
+        await svcCS.entities.OwnerStatus.create({
+          client_id: client.id,
+          title: title,
+          caller_message_hindi: callerMsg,
+          is_active: true,
+          is_preset: false,
+          icon: '📋',
+          start_time: timeRange ? timeRange.split('to')[0]?.trim() : '',
+          end_time: timeRange ? (timeRange.split('to')[1]?.trim() || '') : ''
+        });
+
+        const timeInfo = timeRange ? `\n⏰ Time: ${timeRange}` : '';
+        await sendTelegramMessage(chatId,
+          `✅ <b>Status Set!</b>\n\n📋 <b>${title}</b>${timeInfo}\n💬 AI will tell callers:\n<i>"${callerMsg}"</i>\n\nUse /status to change or clear.`
+        );
+      } catch (err) {
+        console.error('[telegramWebhook] Custom status error:', err.message);
+        await sendTelegramMessage(chatId, '❌ Error creating status.');
+      }
+      return Response.json({ ok: true });
+    }
+
+    // ═══ HANDLE /clearstatus COMMAND ═══
+    if (text === '/clearstatus' || text === '/available') {
+      const svcClear = getServiceClient();
+      try {
+        const clients = await svcClear.entities.Client.filter({ telegram_chat_id: chatId });
+        if (clients.length === 0) { await sendTelegramMessage(chatId, '❌ No linked account.'); return Response.json({ ok: true }); }
+        const activeStatuses = await svcClear.entities.OwnerStatus.filter({ client_id: clients[0].id, is_active: true });
+        for (const as of activeStatuses) {
+          await svcClear.entities.OwnerStatus.update(as.id, { is_active: false });
+        }
+        await sendTelegramMessage(chatId, '✅ Status cleared! You are now <b>Available</b>. AI will handle calls normally.');
+      } catch (err) {
+        await sendTelegramMessage(chatId, '❌ Error clearing status.');
+      }
+      return Response.json({ ok: true });
+    }
+
     // ═══ CHECK IF THIS IS A REPLY TO A PENDING CALLBACK DECISION ═══
     // If the user sends a text message and there's a pending callback decision awaiting time
     const svcPending = getServiceClient();
@@ -223,7 +388,7 @@ Deno.serve(async (req) => {
 
     // Default response for any other message
     await sendTelegramMessage(chatId,
-      `Hi ${firstName}! I'm the VaaniAI notification bot. I'll send you live call notifications here.\n\nDuring a live call, use the buttons to control what AI does.\n\nCommands:\n/disconnect — Stop receiving notifications`
+      `Hi ${firstName}! I'm the VaaniAI notification bot.\n\n🎯 <b>Status Commands:</b>\n/status — Set your availability status\n/customstatus — Create custom status\n/clearstatus — Clear status (Available)\n\n📞 <b>During Live Calls:</b>\nUse buttons to control AI\n\n⚙️ <b>Other:</b>\n/disconnect — Stop notifications`
     );
 
     return Response.json({ ok: true });
@@ -232,6 +397,26 @@ Deno.serve(async (req) => {
     return Response.json({ ok: true });
   }
 });
+
+async function ensurePresetsExist(svc, clientId) {
+  const existing = await svc.entities.OwnerStatus.filter({ client_id: clientId, is_preset: true });
+  if (existing.length >= 5) return; // Already has presets
+  // Create default presets
+  for (const preset of DEFAULT_PRESETS) {
+    const exists = existing.find(e => e.title === preset.title);
+    if (!exists) {
+      await svc.entities.OwnerStatus.create({
+        client_id: clientId,
+        title: preset.title,
+        icon: preset.icon,
+        caller_message_hindi: preset.caller_message_hindi,
+        is_active: false,
+        is_preset: true
+      });
+    }
+  }
+  console.log(`[telegramWebhook] ✅ Presets ensured for client ${clientId}`);
+}
 
 async function sendTelegramMessage(chatId, text, replyMarkup) {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
