@@ -211,7 +211,8 @@ Deno.serve(async (req) => {
     }
 
     // Handle /disconnect command
-    if (text === '/disconnect') {
+    // Also handle persistent keyboard button "🔕 Disconnect"
+    if (text === '/disconnect' || text === '🔕 Disconnect') {
       const svcDisc = getServiceClient();
       try {
         const clients = await svcDisc.entities.Client.filter({ telegram_chat_id: chatId });
@@ -233,7 +234,8 @@ Deno.serve(async (req) => {
     }
 
     // ═══ HANDLE /status COMMAND — Show status menu ═══
-    if (text === '/status' || text === '/setstatus') {
+    // Also handle persistent keyboard button "🎯 Set Status"
+    if (text === '/status' || text === '/setstatus' || text === '🎯 Set Status') {
       const svcStatus = getServiceClient();
       try {
         const clients = await svcStatus.entities.Client.filter({ telegram_chat_id: chatId });
@@ -277,6 +279,13 @@ Deno.serve(async (req) => {
     }
 
     // ═══ HANDLE /customstatus COMMAND — Create custom status ═══
+    // Also handle persistent keyboard button "✏️ Custom Status"
+    if (text === '✏️ Custom Status') {
+      await sendTelegramMessage(chatId,
+        `✏️ <b>Create Custom Status</b>\n\nFormat:\n<code>/customstatus Title | Time | Hindi Message</code>\n\nExamples:\n<code>/customstatus Bank Meeting | 1 PM to 3 PM | Sir bank meeting mein hain 3 baje tak busy hain</code>\n\n<code>/customstatus Hospital Visit | 2 hours | Sir hospital gaye hain 2 ghante mein wapas aayenge</code>`
+      );
+      return Response.json({ ok: true });
+    }
     if (text.startsWith('/customstatus')) {
       const svcCS = getServiceClient();
       try {
@@ -328,7 +337,8 @@ Deno.serve(async (req) => {
     }
 
     // ═══ HANDLE /clearstatus COMMAND ═══
-    if (text === '/clearstatus' || text === '/available') {
+    // Also handle persistent keyboard button "✅ Clear Status"
+    if (text === '/clearstatus' || text === '/available' || text === '✅ Clear Status') {
       const svcClear = getServiceClient();
       try {
         const clients = await svcClear.entities.Client.filter({ telegram_chat_id: chatId });
@@ -418,10 +428,26 @@ async function ensurePresetsExist(svc, clientId) {
   console.log(`[telegramWebhook] ✅ Presets ensured for client ${clientId}`);
 }
 
+// Persistent reply keyboard — always visible at bottom of Telegram chat
+const PERSISTENT_KEYBOARD = {
+  keyboard: [
+    [{ text: '🎯 Set Status' }, { text: '✅ Clear Status' }],
+    [{ text: '✏️ Custom Status' }, { text: '🔕 Disconnect' }]
+  ],
+  resize_keyboard: true,
+  is_persistent: true
+};
+
 async function sendTelegramMessage(chatId, text, replyMarkup) {
   const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
   const payload = { chat_id: chatId, text, parse_mode: 'HTML' };
-  if (replyMarkup) payload.reply_markup = replyMarkup;
+  if (replyMarkup) {
+    // If inline buttons are provided, use them (for status selection, call decisions, etc.)
+    payload.reply_markup = replyMarkup;
+  } else {
+    // Otherwise always show the persistent keyboard
+    payload.reply_markup = PERSISTENT_KEYBOARD;
+  }
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
