@@ -179,7 +179,7 @@ Deno.serve(async (req) => {
 
       if (!clientId) {
         await sendTelegramMessage(chatId,
-          `👋 Hello ${firstName}!\n\nTo connect your VaaniAI account, please use the connect link from your VaaniAI dashboard.\n\nThis will link your Telegram to receive live call notifications.`
+          `👋 Hello ${firstName}!\n\nTo connect your Getway AI account, please use the connect link from your Getway AI dashboard.\n\nThis will link your Telegram to receive live call notifications.`
         );
         return Response.json({ ok: true });
       }
@@ -200,7 +200,7 @@ Deno.serve(async (req) => {
         });
 
         await sendTelegramMessage(chatId,
-          `✅ Connected successfully!\n\n🔔 You will now receive live call notifications here.\n\nAccount: ${client.company_name}\n\nYou can disconnect anytime from your VaaniAI dashboard.`
+          `✅ Connected successfully!\n\n🔔 You will now receive live call notifications here.\n\nAccount: ${client.company_name}\n\nYou can disconnect anytime from your Getway AI dashboard.`
         );
         console.log(`[telegramWebhook] ✅ Client ${clientId} connected Telegram chat ${chatId}`);
       } catch (err) {
@@ -398,7 +398,7 @@ Deno.serve(async (req) => {
 
     // Default response for any other message
     await sendTelegramMessage(chatId,
-      `Hi ${firstName}! I'm the VaaniAI notification bot.\n\n🎯 <b>Status Commands:</b>\n/status — Set your availability status\n/customstatus — Create custom status\n/clearstatus — Clear status (Available)\n\n📞 <b>During Live Calls:</b>\nUse buttons to control AI\n\n⚙️ <b>Other:</b>\n/disconnect — Stop notifications`
+      `Hi ${firstName}! I'm the Getway AI notification bot.\n\n🎯 <b>Status Commands:</b>\n/status — Set your availability status\n/customstatus — Create custom status\n/clearstatus — Clear status (Available)\n\n📞 <b>During Live Calls:</b>\nUse buttons to control AI\n\n⚙️ <b>Other:</b>\n/disconnect — Stop notifications`
     );
 
     return Response.json({ ok: true });

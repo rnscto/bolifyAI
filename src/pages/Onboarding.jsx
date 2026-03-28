@@ -298,8 +298,8 @@ FOR SPAM/TELEMARKETING:
           <div className="max-w-3xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-3">
               <img
-                src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/9b1876319_WhatsApp_Image_2026-02-11_at_44923_PM-removebg-preview.png"
-                alt="VaaniAI"
+                src="https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/8e9cbc9d4_Getway_Logojpg.jpeg"
+                alt="Getway AI"
                 className="h-10 object-contain"
               />
               <span className="text-sm text-gray-500">Step {step + 1} of {totalSteps}</span>

@@ -26,7 +26,7 @@ export default function OnboardingComplete({ agentName, didNumber, isPersonal })
         <p className="text-gray-500 text-lg mb-8">
           {isPersonal 
             ? 'Your personal AI call assistant is ready. Forward your calls to the assigned number and let AI handle the rest.'
-            : 'Your 7-day free trial has started. Explore everything VaaniAI has to offer.'}
+            : 'Your 7-day free trial has started. Explore everything Getway AI has to offer.'}
         </p>
       </motion.div>
 
