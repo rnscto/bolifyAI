@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { Shield, Database, Phone, Eye, Lock, Clock, UserCheck, Scale, ArrowLeft } from 'lucide-react';
 
-const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/9b1876319_WhatsApp_Image_2026-02-11_at_44923_PM-removebg-preview.png";
+const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/8e9cbc9d4_Getway_Logojpg.jpeg";
 
 export default function CompliancePolicy() {
   return (
@@ -15,7 +15,7 @@ export default function CompliancePolicy() {
             <ArrowLeft className="w-4 h-4 mr-1" /> Back to Home
           </Link>
           <div className="flex items-center gap-3 mb-4">
-            <img src={LOGO_URL} alt="VaaniAI" className="h-12 object-contain brightness-0 invert" />
+            <img src={LOGO_URL} alt="Getway AI" className="h-12 object-contain rounded-md" />
           </div>
           <h1 className="text-3xl font-bold mb-2">Platform Data Retention & Compliance Policy</h1>
           <p className="text-blue-200">Version 2.1 — Effective March 2026</p>
@@ -37,8 +37,8 @@ export default function CompliancePolicy() {
               <Shield className="w-6 h-6 text-blue-600" /> 1. Introduction & Scope
             </h2>
             <p className="text-gray-600 mt-3">
-              VaaniAI ("Platform"), operated by Tech Brainbucks Infosoft Pvt Ltd (CIN: U74999RJ2022PTC083830), 
-              is an AI-powered voice calling platform. This policy governs how we collect, process, store, and 
+              Getway AI ("Platform"), operated by Getway Technology, 
+              is an AI-powered business automation platform. This policy governs how we collect, process, store, and 
               delete personal data in compliance with Indian regulatory frameworks.
             </p>
             <p className="text-gray-600">
@@ -189,13 +189,13 @@ export default function CompliancePolicy() {
               <UserCheck className="w-6 h-6 text-teal-600" /> 7. Data Protection Officer
             </h2>
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mt-4">
-              <p className="font-bold text-blue-900 text-lg">Nand K. Yadav</p>
+              <p className="font-bold text-blue-900 text-lg">Bijendra Saini</p>
               <p className="text-blue-800 mt-1">Data Protection Officer</p>
               <div className="mt-3 space-y-1 text-sm text-blue-700">
-                <p>📧 Email: nand@brainbucks.in</p>
-                <p>📞 Phone: +91-7020609101</p>
-                <p>🏢 Tech Brainbucks Infosoft Pvt Ltd</p>
-                <p>📍 101 Chanda Tower, Gandhi Path, Vaishali Nagar, Jaipur 302021</p>
+                <p>📧 Email: <a href="mailto:connect@getway.in" className="underline">connect@getway.in</a></p>
+                <p>📞 Phone: <a href="tel:+919255522544" className="underline">92555-22544</a></p>
+                <p>🏢 Getway Technology</p>
+                <p>📍 SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, Gurugram (HR) - 122001</p>
               </div>
               <p className="text-xs text-blue-600 mt-3">
                 For data access, correction, erasure, or portability requests, please contact the DPO. 
@@ -229,7 +229,7 @@ export default function CompliancePolicy() {
           </section>
 
           <p className="text-xs text-gray-400 text-center mt-8">
-            Last updated: March 2026 | Version 2.1 | © {new Date().getFullYear()} Tech Brainbucks Infosoft Pvt Ltd
+            Last updated: March 2026 | Version 2.1 | © {new Date().getFullYear()} Getway Technology
           </p>
         </div>
       </div>

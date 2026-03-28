@@ -26,19 +26,18 @@ export default function TermsOfService() {
           <h2 className="text-2xl font-bold text-gray-900 mb-4">1. Acceptance of Terms</h2>
           <p className="text-gray-600 leading-relaxed">
             These Terms of Service ("Terms") constitute a legally binding agreement between you ("User," "you," "your") 
-            and <strong>Tech Brainbucks Infosoft Pvt Ltd</strong>, a company incorporated under the laws of India 
-            (CIN: U74999RJ2022PTC083830), with its registered office at 101 Chanda Tower, Gandhi Path, Vaishali Nagar, 
-            Jaipur 302021, Rajasthan, India, operating the brand <strong>VaaniAI</strong> ("Company," "we," "us," "our").
+            and <strong>Getway Technology</strong>, operating the brand <strong>Getway AI</strong> ("Company," "we," "us," "our"), 
+            with its registered office at SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, Gurugram (HR) - 122001.
           </p>
           <p className="text-gray-600 leading-relaxed mt-3">
-            By accessing or using our AI-powered voice sales platform and CRM services at vaaniai.io (the "Service"), 
+            By accessing or using our AI-powered business automation platform and CRM services at getway.in (the "Service"), 
             you agree to be bound by these Terms. If you do not agree, do not use the Service.
           </p>
         </section>
 
         <section className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">2. Description of Service</h2>
-          <p className="text-gray-600 leading-relaxed">VaaniAI provides:</p>
+          <p className="text-gray-600 leading-relaxed">Getway AI provides:</p>
           <ul className="list-disc pl-6 text-gray-600 space-y-1 mt-2">
             <li>AI-powered voice agents for automated outbound and inbound calling</li>
             <li>Call transcription and AI-driven conversation analysis</li>
@@ -102,7 +101,7 @@ export default function TermsOfService() {
             <li>Cancellation takes effect at the end of the current billing period.</li>
             <li>No pro-rata refunds are provided for partial billing periods.</li>
             <li>Upon cancellation, your data will be retained for 90 days, after which it will be permanently deleted.</li>
-            <li>Refund requests for specific circumstances may be submitted to <a href="mailto:sales@vaaniai.io" className="text-blue-600 hover:underline">sales@vaaniai.io</a> and will be reviewed on a case-by-case basis.</li>
+            <li>Refund requests for specific circumstances may be submitted to <a href="mailto:connect@getway.in" className="text-blue-600 hover:underline">connect@getway.in</a> and will be reviewed on a case-by-case basis.</li>
           </ul>
         </section>
 
@@ -124,7 +123,7 @@ export default function TermsOfService() {
         <section className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">8. Intellectual Property</h2>
           <ul className="list-disc pl-6 text-gray-600 space-y-2">
-            <li>The VaaniAI platform, including its software, design, logos, and documentation, is the exclusive property of Tech Brainbucks Infosoft Pvt Ltd.</li>
+            <li>The Getway AI platform, including its software, design, logos, and documentation, is the exclusive property of Getway Technology.</li>
             <li>You retain ownership of your data, including leads, contacts, deals, and uploaded documents.</li>
             <li>By using the Service, you grant us a limited license to process your data solely for providing the Service.</li>
             <li>We do not claim ownership of any content you create or upload.</li>
@@ -148,7 +147,7 @@ export default function TermsOfService() {
         <section className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">10. Call Recording and Compliance</h2>
           <ul className="list-disc pl-6 text-gray-600 space-y-2">
-            <li>Calls made through VaaniAI may be recorded for quality, training, and compliance purposes.</li>
+            <li>Calls made through Getway AI may be recorded for quality, training, and compliance purposes.</li>
             <li>You are solely responsible for obtaining necessary consents from call recipients as required by applicable laws.</li>
             <li>You must comply with all applicable telecom regulations, including TRAI guidelines.</li>
             <li>We are not liable for any non-compliance on your part regarding call recording regulations.</li>
@@ -191,7 +190,7 @@ export default function TermsOfService() {
         <section className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">14. Indemnification</h2>
           <p className="text-gray-600 leading-relaxed">
-            You agree to indemnify and hold harmless Tech Brainbucks Infosoft Pvt Ltd, its officers, directors, 
+            You agree to indemnify and hold harmless Getway Technology, its officers, directors, 
             employees, and agents from any claims, liabilities, damages, losses, and expenses (including legal fees) 
             arising from your use of the Service, violation of these Terms, or infringement of any third-party rights.
           </p>
@@ -237,7 +236,7 @@ export default function TermsOfService() {
           <h2 className="text-2xl font-bold text-gray-900 mb-4">19. Entire Agreement</h2>
           <p className="text-gray-600 leading-relaxed">
             These Terms, together with the Privacy Policy, constitute the entire agreement between you and 
-            Tech Brainbucks Infosoft Pvt Ltd regarding the use of the Service and supersede all prior agreements 
+            Getway Technology regarding the use of the Service and supersede all prior agreements 
             and understandings.
           </p>
         </section>
@@ -248,11 +247,10 @@ export default function TermsOfService() {
             For questions regarding these Terms, please contact us:
           </p>
           <div className="bg-slate-50 rounded-lg p-4 mt-3 text-gray-600 text-sm">
-            <p><strong>Tech Brainbucks Infosoft Pvt Ltd</strong></p>
-            <p>101 Chanda Tower, Gandhi Path, Vaishali Nagar, Jaipur 302021, Rajasthan, India</p>
-            <p>CIN: U74999RJ2022PTC083830</p>
-            <p>Email: <a href="mailto:sales@vaaniai.io" className="text-blue-600 hover:underline">sales@vaaniai.io</a></p>
-            <p>Phone: <a href="tel:+917020609101" className="text-blue-600 hover:underline">+91-7020609101</a></p>
+            <p><strong>Getway Technology</strong></p>
+            <p>SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, Gurugram (HR) - 122001</p>
+            <p>Email: <a href="mailto:connect@getway.in" className="text-blue-600 hover:underline">connect@getway.in</a></p>
+            <p>Phone: <a href="tel:+919255522544" className="text-blue-600 hover:underline">92555-22544</a></p>
           </div>
         </section>
       </div>
