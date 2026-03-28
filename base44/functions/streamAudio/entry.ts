@@ -1357,7 +1357,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
       // When multiple calls are ringing (e.g. campaign batch), prefer matching by callee number
       if (!callLog) {
         try {
-          const recentLogs = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20);
+          const recentLogsRaw = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20);
+          const recentLogs = Array.isArray(recentLogsRaw) ? recentLogsRaw : [];
           const unclaimed = recentLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
           console.log(`[${reqId}] 🔍 Ringing unclaimed: ${unclaimed.length} (total ringing: ${recentLogs.length}), calleeNumber=${session.calleeNumber}`);
 
@@ -1388,7 +1389,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
 
       if (!callLog) {
         try {
-          const initLogs = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20);
+          const initLogsRaw = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20);
+          const initLogs = Array.isArray(initLogsRaw) ? initLogsRaw : [];
           const unclaimed = initLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
           console.log(`[${reqId}] 🔍 Initiated unclaimed: ${unclaimed.length}`);
 
@@ -1417,13 +1419,9 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
       // ── Strategy 3: Broadest fallback ──
       if (!callLog) {
         try {
-          const allRecent = await svc.entities.CallLog.list('-created_date', 15);
-          const candidates = allRecent.filter(l =>
-            !l.stream_sid &&
-            l.created_date >= cutoff &&
-            l.agent_config_cache?.system_prompt &&
-            ['initiated', 'ringing', 'answered'].includes(l.status)
-          );
+          const allRecentRaw = await svc.entities.CallLog.list('-created_date', 15);
+          const allRecent = Array.isArray(allRecentRaw) ? allRecentRaw : [];
+          const candidates = allRecent.filter(l => !l.stream_sid && l.created_date >= cutoff && l.agent_config_cache?.system_prompt && ['initiated', 'ringing', 'answered'].includes(l.status));
           if (candidates.length > 0) {
             // Try phone match first
             if (session.calleeNumber) {
@@ -1450,15 +1448,16 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
       // ── Strategy 4: INBOUND CALL — DID → Agent direct resolution ──
       // For inbound calls, the WebSocket connects BEFORE smartfloWebhook creates a CallLog.
       // Resolve the agent directly from the DID that was called.
-      if (!callLog && session.calleeNumber) {
-        console.log(`[${reqId}] 🔍 No CallLog found. Trying inbound DID→Agent resolution for: ${session.calleeNumber}`);
-        const cleanCalleeDID = session.calleeNumber.replace(/[^0-9]/g, '').slice(-10);
+      if (!callLog && (session.calleeNumber || session.callerNumber)) {
+        const callerDID = (session.callerNumber || '').replace(/[^0-9]/g, '').slice(-10);
+        console.log(`[${reqId}] 🔍 DID→Agent: callee=${(session.calleeNumber||'').replace(/\D/g,'').slice(-10)}, caller=${callerDID}`);
+        const cleanCalleeDID = (session.calleeNumber || '').replace(/[^0-9]/g, '').slice(-10);
 
         if (cleanCalleeDID) {
           // Try DID entity first
-          const allDIDs = await svc.entities.DID.list('-created_date', 200);
-          const matchedDID = allDIDs.find(d => (d.number || '').replace(/\D/g, '').slice(-10) === cleanCalleeDID);
-
+          const allDIDsRaw = await svc.entities.DID.list('-created_date', 200);
+          const allDIDs = Array.isArray(allDIDsRaw) ? allDIDsRaw : [];
+          const matchedDID = allDIDs.find(d => { const n = (d.number||'').replace(/\D/g,'').slice(-10); return n === cleanCalleeDID || n === callerDID; });
           let didAgent = null;
           let didClient = null;
 
@@ -1471,10 +1470,11 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
 
           // Fallback: search agents' assigned_dids arrays
           if (!didAgent) {
-            const allAgents = await svc.entities.Agent.list('-created_date', 100);
+            const allAgentsRaw = await svc.entities.Agent.list('-created_date', 100);
+            const allAgents = Array.isArray(allAgentsRaw) ? allAgentsRaw : [];
             didAgent = allAgents.find(a => {
               const dids = a.assigned_dids || (a.assigned_did ? [a.assigned_did] : []);
-              return dids.some(d => (d || '').replace(/\D/g, '').slice(-10) === cleanCalleeDID);
+              return dids.some(d => { const n = (d||'').replace(/\D/g,'').slice(-10); return n === cleanCalleeDID || n === callerDID; });
             });
             if (didAgent && !didClient && didAgent.client_id) {
               try { didClient = await svc.entities.Client.get(didAgent.client_id); } catch (_) {}
@@ -1482,9 +1482,13 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
           }
 
           if (didAgent) {
-            console.log(`[${reqId}] ✅ INBOUND: DID ${session.calleeNumber} → Agent "${didAgent.name}" (${didAgent.id}), Client: ${didClient?.company_name || 'unknown'}`);
-
-            // Build agent config directly (no CallLog yet — will be created by webhook later)
+            // Fix Smartflo swap: if callerNumber is the DID, swap so callerNumber = external person
+            const agentDids = (didAgent.assigned_dids||[]).concat(didAgent.assigned_did?[didAgent.assigned_did]:[]);
+            if (agentDids.some(d=>(d||'').replace(/\D/g,'').slice(-10)===callerDID) && session.callerNumber && session.calleeNumber) {
+              const tmp=session.callerNumber; session.callerNumber=session.calleeNumber; session.calleeNumber=tmp;
+              console.log(`[${reqId}] 🔄 Swapped: caller=${session.callerNumber}, callee(DID)=${session.calleeNumber}`);
+            }
+            console.log(`[${reqId}] ✅ INBOUND: Agent="${didAgent.name}", client=${didClient?.company_name||'?'}`);
             session.clientId = didClient?.id || didAgent.client_id;
 
             let kbContent = '';
@@ -1503,7 +1507,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
               const cleanCaller = session.callerNumber.replace(/\D/g, '').slice(-10);
               if (cleanCaller) {
                 try {
-                  const clientLeads = await svc.entities.Lead.filter({ client_id: didClient.id });
+                  const clientLeadsRaw = await svc.entities.Lead.filter({ client_id: didClient.id });
+                  const clientLeads = Array.isArray(clientLeadsRaw) ? clientLeadsRaw : [];
                   const matchedLead = clientLeads.find(l => l.phone && l.phone.replace(/\D/g, '').slice(-10) === cleanCaller);
                   if (matchedLead) {
                     console.log(`[${reqId}] 🎯 Caller identified as Lead: "${matchedLead.name}" (score: ${matchedLead.score})`);
@@ -1523,8 +1528,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
 
                     // Also get recent call history for this lead
                     try {
-                      const leadCalls = await svc.entities.CallLog.filter({ lead_id: matchedLead.id });
-                      const recentCalls = leadCalls
+                      const lcRaw = await svc.entities.CallLog.filter({ lead_id: matchedLead.id });
+                      const recentCalls = (Array.isArray(lcRaw) ? lcRaw : [])
                         .sort((a, b) => new Date(b.call_start_time || b.created_date) - new Date(a.call_start_time || a.created_date))
                         .slice(0, 3);
                       if (recentCalls.length > 0) {
@@ -1606,8 +1611,9 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
               let trustedName = '';
               if (callerClean) {
                 try {
-                  const trustedContacts = await svc.entities.TrustedContact.filter({ client_id: didClient.id });
-                  const match = trustedContacts.find(tc => tc.phone && tc.phone.replace(/\D/g, '').slice(-10) === callerClean);
+                  const tcRaw = await svc.entities.TrustedContact.filter({ client_id: didClient.id });
+                  const tcs = Array.isArray(tcRaw) ? tcRaw : [];
+                  const match = tcs.find(tc => tc.phone && tc.phone.replace(/\D/g, '').slice(-10) === callerClean);
                   if (match) { isTrusted = true; trustedName = match.name || ''; }
                 } catch (_) {}
               }
@@ -1687,11 +1693,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
       // ── Check for Shopify marketplace integration ──
       if (callLog.client_id) {
         try {
-          const shopifyIntegrations = await svc.entities.MarketplaceIntegration.filter({
-            client_id: callLog.client_id,
-            platform: 'shopify',
-            status: 'active'
-          });
+          const siRaw = await svc.entities.MarketplaceIntegration.filter({ client_id: callLog.client_id, platform: 'shopify', status: 'active' });
+          const shopifyIntegrations = Array.isArray(siRaw) ? siRaw : [];
           if (shopifyIntegrations.length > 0) {
             session.hasShopify = true;
             console.log(`[${reqId}] 🛒 Shopify integration found for client ${callLog.client_id}`);
@@ -1723,13 +1726,10 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
               let isTrusted = false;
               let trustedName = '';
               if (cleanCaller) {
-                const trustedContacts = await svc.entities.TrustedContact.filter({ client_id: callLog.client_id });
-                const match = trustedContacts.find(tc => tc.phone && tc.phone.replace(/\D/g, '').slice(-10) === cleanCaller);
-                if (match) {
-                  isTrusted = true;
-                  trustedName = match.name || '';
-                  console.log(`[${reqId}] 👤 Caller is TRUSTED CONTACT: "${trustedName}" (${callerNum})`);
-                }
+                const tc2Raw = await svc.entities.TrustedContact.filter({ client_id: callLog.client_id });
+                const tc2 = Array.isArray(tc2Raw) ? tc2Raw : [];
+                const match = tc2.find(tc => tc.phone && tc.phone.replace(/\D/g, '').slice(-10) === cleanCaller);
+                if (match) { isTrusted = true; trustedName = match.name || ''; console.log(`[${reqId}] 👤 TRUSTED: "${trustedName}"`); }
               }
 
               let personalInstructions = '\n\n--- PERSONAL AI ASSISTANT MODE ---';
