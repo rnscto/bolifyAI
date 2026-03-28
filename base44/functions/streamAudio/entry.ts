@@ -423,11 +423,11 @@ Deno.serve(async (req) => {
   // Non-WebSocket: return status
   if (!isWebSocket) {
     const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
-    const protocol = req.headers.get('x-forwarded-proto') === 'https' ? 'wss' : 'ws';
+    // Always use wss:// — Deno Deploy always runs over TLS
     return new Response(JSON.stringify({
       status: 'ready',
       version: 'v7.0-hybrid-gpt5nano',
-      wss_url: `${protocol}://${host}/functions/streamAudio`
+      wss_url: `wss://${host}/functions/streamAudio`
     }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
