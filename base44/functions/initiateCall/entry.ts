@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
 
 Deno.serve(async (req) => {
   try {
@@ -30,8 +30,7 @@ Deno.serve(async (req) => {
     }
 
     // Ownership validation: ensure the user owns this client's agent and lead
-    const clientsRaw = await base44.entities.Client.filter({ user_id: user.id });
-    const clients = Array.isArray(clientsRaw) ? clientsRaw : (clientsRaw?.results || clientsRaw?.data || []);
+    const clients = await base44.entities.Client.filter({ user_id: user.id });
     const userClientIds = clients.map(c => c.id);
     
     if (!userClientIds.includes(agent.client_id)) {
@@ -52,11 +51,11 @@ Deno.serve(async (req) => {
       }, { status: 400 });
     }
 
-    // Check if this is a demo agent (client is trial/onboarding)
+    // Check if this is a demo agent (client is trial/onboarding and DID is from demo pool)
     const clientData = clients[0];
     const isDemoAgent = clientData.account_status === 'trial' || clientData.account_status === 'onboarding';
 
-    // Use the agent's assigned DID
+    // Use primary DID for single calls
     const callerDID = allDIDs[0];
 
     // Pre-fetch knowledge base content for agent config cache
@@ -80,10 +79,9 @@ Deno.serve(async (req) => {
     let leadContext = '';
     try {
       // Fetch last 3 call logs for this lead
-      const callLogsRaw = await base44.asServiceRole.entities.CallLog.filter(
+      const callLogs = await base44.asServiceRole.entities.CallLog.filter(
         { lead_id: lead.id }, '-created_date', 3
       );
-      const callLogs = Array.isArray(callLogsRaw) ? callLogsRaw : (callLogsRaw?.results || callLogsRaw?.data || []);
 
       const sections = [];
       sections.push(`CUSTOMER PROFILE:`);
@@ -141,12 +139,11 @@ Deno.serve(async (req) => {
     // Check for Shopify marketplace integration
     let shopifyContext = '';
     try {
-      const shopifyIntegrationsRaw = await base44.asServiceRole.entities.MarketplaceIntegration.filter({
+      const shopifyIntegrations = await base44.asServiceRole.entities.MarketplaceIntegration.filter({
         client_id: agent.client_id,
         platform: 'shopify',
         status: 'active'
       });
-      const shopifyIntegrations = Array.isArray(shopifyIntegrationsRaw) ? shopifyIntegrationsRaw : (shopifyIntegrationsRaw?.results || shopifyIntegrationsRaw?.data || []);
       if (shopifyIntegrations.length > 0) {
         shopifyContext = `\n\n--- SHOPIFY STORE INTEGRATION (ACTIVE) ---
 You have a LIVE connection to the client's Shopify store. You can look up real-time data using the shopify_lookup tool.
@@ -180,13 +177,11 @@ IMPORTANT RULES:
     ].filter(Boolean).join('\n');
 
     // Create call log with cached agent config (so streamAudio WebSocket can read it without cross-function calls)
-    // Use Smartflo's ref_id as the call_sid so streamAudio can match it when the WebSocket connects
-    const tempCallSid = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const callLog = await base44.asServiceRole.entities.CallLog.create({
       client_id: agent.client_id,
       agent_id: agent_id,
       lead_id: lead_id,
-      call_sid: tempCallSid,
+      call_sid: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       caller_id: callerDID,
       callee_number: phone_number,
       direction: 'outbound',
@@ -236,13 +231,7 @@ IMPORTANT RULES:
         api_key: smartfloApiKey,
         customer_number: cleanPhoneNumber,
         caller_id: cleanCallerID,
-        async: 1,
-        // Pass custom params so streamAudio can detect this as outbound and match the CallLog
-        customParameters: {
-          customer_number: cleanPhoneNumber,
-          lead_id: lead_id,
-          agent_id: agent_id
-        }
+        async: 1
       })
     });
 
@@ -267,9 +256,8 @@ IMPORTANT RULES:
     }
 
     // Update call log with Smartflo response
-    // Use ref_id (the Smartflo call ID that will appear in the WebSocket start event)
     await base44.asServiceRole.entities.CallLog.update(callLog.id, {
-      call_sid: smartfloData.ref_id || smartfloData.call_id || smartfloData.call_sid || tempCallSid,
+      call_sid: smartfloData.call_id || smartfloData.call_sid || callLog.call_sid,
       status: 'ringing'
     });
 
