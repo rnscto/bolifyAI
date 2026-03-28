@@ -30,7 +30,8 @@ Deno.serve(async (req) => {
     }
 
     // Ownership validation: ensure the user owns this client's agent and lead
-    const clients = await base44.entities.Client.filter({ user_id: user.id });
+    const clientsRaw = await base44.entities.Client.filter({ user_id: user.id });
+    const clients = Array.isArray(clientsRaw) ? clientsRaw : (clientsRaw?.results || clientsRaw?.data || []);
     const userClientIds = clients.map(c => c.id);
     
     if (!userClientIds.includes(agent.client_id)) {
@@ -79,9 +80,10 @@ Deno.serve(async (req) => {
     let leadContext = '';
     try {
       // Fetch last 3 call logs for this lead
-      const callLogs = await base44.asServiceRole.entities.CallLog.filter(
+      const callLogsRaw = await base44.asServiceRole.entities.CallLog.filter(
         { lead_id: lead.id }, '-created_date', 3
       );
+      const callLogs = Array.isArray(callLogsRaw) ? callLogsRaw : (callLogsRaw?.results || callLogsRaw?.data || []);
 
       const sections = [];
       sections.push(`CUSTOMER PROFILE:`);
@@ -139,11 +141,12 @@ Deno.serve(async (req) => {
     // Check for Shopify marketplace integration
     let shopifyContext = '';
     try {
-      const shopifyIntegrations = await base44.asServiceRole.entities.MarketplaceIntegration.filter({
+      const shopifyIntegrationsRaw = await base44.asServiceRole.entities.MarketplaceIntegration.filter({
         client_id: agent.client_id,
         platform: 'shopify',
         status: 'active'
       });
+      const shopifyIntegrations = Array.isArray(shopifyIntegrationsRaw) ? shopifyIntegrationsRaw : (shopifyIntegrationsRaw?.results || shopifyIntegrationsRaw?.data || []);
       if (shopifyIntegrations.length > 0) {
         shopifyContext = `\n\n--- SHOPIFY STORE INTEGRATION (ACTIVE) ---
 You have a LIVE connection to the client's Shopify store. You can look up real-time data using the shopify_lookup tool.
