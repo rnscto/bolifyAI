@@ -1357,7 +1357,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
       // When multiple calls are ringing (e.g. campaign batch), prefer matching by callee number
       if (!callLog) {
         try {
-          const recentLogs = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20);
+          const recentLogsRaw = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20);
+          const recentLogs = Array.isArray(recentLogsRaw) ? recentLogsRaw : (recentLogsRaw?.results || recentLogsRaw?.data || []);
           const unclaimed = recentLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
           console.log(`[${reqId}] 🔍 Ringing unclaimed: ${unclaimed.length} (total ringing: ${recentLogs.length}), calleeNumber=${session.calleeNumber}`);
 
@@ -1388,7 +1389,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
 
       if (!callLog) {
         try {
-          const initLogs = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20);
+          const initLogsRaw = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20);
+          const initLogs = Array.isArray(initLogsRaw) ? initLogsRaw : (initLogsRaw?.results || initLogsRaw?.data || []);
           const unclaimed = initLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
           console.log(`[${reqId}] 🔍 Initiated unclaimed: ${unclaimed.length}`);
 
@@ -1414,10 +1416,10 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
         }
       }
 
-      // ── Strategy 3: Broadest fallback ──
       if (!callLog) {
         try {
-          const allRecent = await svc.entities.CallLog.list('-created_date', 15);
+          const allRecentRaw = await svc.entities.CallLog.list('-created_date', 15);
+          const allRecent = Array.isArray(allRecentRaw) ? allRecentRaw : (allRecentRaw?.results || allRecentRaw?.data || []);
           const candidates = allRecent.filter(l =>
             !l.stream_sid &&
             l.created_date >= cutoff &&
@@ -1455,23 +1457,15 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
         const cleanCalleeDID = session.calleeNumber.replace(/[^0-9]/g, '').slice(-10);
 
         if (cleanCalleeDID) {
-          // Try DID entity first
-          const allDIDs = await svc.entities.DID.list('-created_date', 200);
+          const allDIDsRaw = await svc.entities.DID.list('-created_date', 200);
+          const allDIDs = Array.isArray(allDIDsRaw) ? allDIDsRaw : (allDIDsRaw?.results || allDIDsRaw?.data || []);
           const matchedDID = allDIDs.find(d => (d.number || '').replace(/\D/g, '').slice(-10) === cleanCalleeDID);
-
-          let didAgent = null;
-          let didClient = null;
-
-          if (matchedDID?.agent_id) {
-            try { didAgent = await svc.entities.Agent.get(matchedDID.agent_id); } catch (_) {}
-          }
-          if (matchedDID?.client_id) {
-            try { didClient = await svc.entities.Client.get(matchedDID.client_id); } catch (_) {}
-          }
-
-          // Fallback: search agents' assigned_dids arrays
+          let didAgent = null, didClient = null;
+          if (matchedDID?.agent_id) { try { didAgent = await svc.entities.Agent.get(matchedDID.agent_id); } catch (_) {} }
+          if (matchedDID?.client_id) { try { didClient = await svc.entities.Client.get(matchedDID.client_id); } catch (_) {} }
           if (!didAgent) {
-            const allAgents = await svc.entities.Agent.list('-created_date', 100);
+            const allAgentsRaw = await svc.entities.Agent.list('-created_date', 100);
+            const allAgents = Array.isArray(allAgentsRaw) ? allAgentsRaw : (allAgentsRaw?.results || allAgentsRaw?.data || []);
             didAgent = allAgents.find(a => {
               const dids = a.assigned_dids || (a.assigned_did ? [a.assigned_did] : []);
               return dids.some(d => (d || '').replace(/\D/g, '').slice(-10) === cleanCalleeDID);
