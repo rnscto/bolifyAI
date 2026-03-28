@@ -66,8 +66,15 @@ export default function Onboarding() {
       email: currentUser.email,
     }));
 
-    // Check if already has a client account
-    const clients = await base44.entities.Client.filter({ user_id: currentUser.id });
+    // Check if already has a client account (by user_id, or fallback to email)
+    let clients = await base44.entities.Client.filter({ user_id: currentUser.id });
+    if (clients.length === 0) {
+      const byEmail = await base44.entities.Client.filter({ email: currentUser.email });
+      if (byEmail.length > 0) {
+        await base44.entities.Client.update(byEmail[0].id, { user_id: currentUser.id });
+        clients = byEmail;
+      }
+    }
     if (clients.length > 0) {
       if (clients[0].onboarding_completed) {
         navigate(createPageUrl('ClientDashboard'));

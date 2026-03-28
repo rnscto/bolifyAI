@@ -52,7 +52,16 @@ export default function Layout({ children, currentPageName }) {
       setUser(currentUser);
       
       if (currentUser.role !== 'admin') {
-        const clients = await base44.entities.Client.filter({ user_id: currentUser.id });
+        let clients = await base44.entities.Client.filter({ user_id: currentUser.id });
+        // Fallback: match by email if no user_id-linked client found (e.g. admin-created accounts)
+        if (clients.length === 0) {
+          const byEmail = await base44.entities.Client.filter({ email: currentUser.email });
+          if (byEmail.length > 0) {
+            // Link user_id for future lookups
+            await base44.entities.Client.update(byEmail[0].id, { user_id: currentUser.id });
+            clients = byEmail;
+          }
+        }
         if (clients.length > 0) {
           setClient(clients[0]);
           // If onboarding not completed, redirect
