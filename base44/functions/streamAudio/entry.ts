@@ -366,7 +366,8 @@ Deno.serve(async (req) => {
       // ── Strategy 2: Recent unclaimed calls by callee ──
       if (!callLog && session.calleeNumber) {
         const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '').slice(-10);
-        const recentLogs = await svc.entities.CallLog.list('-created_date', 20);
+        const recentLogsRaw = await svc.entities.CallLog.list('-created_date', 20);
+        const recentLogs = Array.isArray(recentLogsRaw) ? recentLogsRaw : (recentLogsRaw?.results || recentLogsRaw?.data || []);
         const candidates = recentLogs.filter(l => {
           const logPhone = (l.callee_number || '').replace(/[^0-9]/g, '').slice(-10);
           return logPhone === cleanCallee && !l.stream_sid && ['initiated', 'ringing', 'answered'].includes(l.status);
