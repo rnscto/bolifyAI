@@ -1345,101 +1345,42 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
         }
       }
 
-      // ── Strategy 2: Recent unclaimed ringing/initiated calls ──
-      // When multiple calls are ringing (e.g. campaign batch), prefer matching by callee number
-      if (!callLog) {
+      // ── Strategy 2: Match by callee_number + call_start_time proximity (fallback for call_sid mismatch) ──
+      // Smartflo's WebSocket callSid format may not match the stored call_sid, so use callee number + time proximity
+      if (!callLog && session.calleeNumber) {
         try {
-          const recentLogsRaw = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20);
-          const recentLogs = Array.isArray(recentLogsRaw) ? recentLogsRaw : (recentLogsRaw?.results || recentLogsRaw?.data || []);
-          const unclaimed = recentLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
-          console.log(`[${reqId}] 🔍 Ringing unclaimed: ${unclaimed.length} (total ringing: ${recentLogs.length}), calleeNumber=${session.calleeNumber}`);
+          const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '').slice(-10);
+          const now = Date.now();
+          const windowStart = new Date(now - 60000).toISOString(); // 60s window (before WebSocket connect)
+          const windowEnd = new Date(now + 10000).toISOString(); // allow 10s future for time sync issues
 
-          if (unclaimed.length >= 1) {
-            // Try to match by callee_number first (critical for concurrent campaign calls)
-            if (session.calleeNumber) {
-              const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '');
-              const phoneMatch = unclaimed.find(l => {
-                const logPhone = (l.callee_number || '').replace(/[^0-9]/g, '');
-                // Match last 10 digits (ignore country code differences)
-                return logPhone.slice(-10) === cleanCallee.slice(-10);
-              });
-              if (phoneMatch) {
-                callLog = phoneMatch;
-                console.log(`[${reqId}] ⚡ Phone match: ringing call ${callLog.id} (${callLog.callee_number})`);
-              }
-            }
-            // Fallback: pick most recent unclaimed
-            if (!callLog) {
-              callLog = unclaimed[0];
-              console.log(`[${reqId}] ⚡ Recent match: ringing call ${callLog.id} (${callLog.callee_number})`);
-            }
-          }
-        } catch (e) {
-          console.log(`[${reqId}] ⚠️ Ringing lookup failed: ${e.message}`);
-        }
-      }
+          // Fetch all recent calls in the window
+          const recentRaw = await svc.entities.CallLog.list('-created_date', 100);
+          const allRecent = Array.isArray(recentRaw) ? recentRaw : (recentRaw?.results || recentRaw?.data || []);
+          
+          const candidates = allRecent.filter(l => {
+            const logTime = new Date(l.created_date || l.call_start_time);
+            const inWindow = logTime >= new Date(windowStart) && logTime <= new Date(windowEnd);
+            const logPhone = (l.callee_number || '').replace(/[^0-9]/g, '').slice(-10);
+            const phoneMatch = logPhone === cleanCallee;
+            const unclaimed = !l.stream_sid;
+            const isActive = ['initiated', 'ringing', 'answered'].includes(l.status);
+            return inWindow && phoneMatch && unclaimed && isActive;
+          });
 
-      if (!callLog) {
-        try {
-          const initLogsRaw = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20);
-          const initLogs = Array.isArray(initLogsRaw) ? initLogsRaw : (initLogsRaw?.results || initLogsRaw?.data || []);
-          const unclaimed = initLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
-          console.log(`[${reqId}] 🔍 Initiated unclaimed: ${unclaimed.length}`);
-
-          if (unclaimed.length >= 1) {
-            if (session.calleeNumber) {
-              const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '');
-              const phoneMatch = unclaimed.find(l => {
-                const logPhone = (l.callee_number || '').replace(/[^0-9]/g, '');
-                return logPhone.slice(-10) === cleanCallee.slice(-10);
-              });
-              if (phoneMatch) {
-                callLog = phoneMatch;
-                console.log(`[${reqId}] ⚡ Phone match: initiated call ${callLog.id} (${callLog.callee_number})`);
-              }
-            }
-            if (!callLog) {
-              callLog = unclaimed[0];
-              console.log(`[${reqId}] ⚡ Recent match: initiated call ${callLog.id} (${callLog.callee_number})`);
-            }
-          }
-        } catch (e) {
-          console.log(`[${reqId}] ⚠️ Initiated lookup failed: ${e.message}`);
-        }
-      }
-
-      if (!callLog) {
-        try {
-          const allRecentRaw = await svc.entities.CallLog.list('-created_date', 15);
-          const allRecent = Array.isArray(allRecentRaw) ? allRecentRaw : (allRecentRaw?.results || allRecentRaw?.data || []);
-          const candidates = allRecent.filter(l =>
-            !l.stream_sid &&
-            l.created_date >= cutoff &&
-            l.agent_config_cache?.system_prompt &&
-            ['initiated', 'ringing', 'answered'].includes(l.status)
-          );
           if (candidates.length > 0) {
-            // Try phone match first
-            if (session.calleeNumber) {
-              const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '');
-              const phoneMatch = candidates.find(l => {
-                const logPhone = (l.callee_number || '').replace(/[^0-9]/g, '');
-                return logPhone.slice(-10) === cleanCallee.slice(-10);
-              });
-              if (phoneMatch) {
-                callLog = phoneMatch;
-                console.log(`[${reqId}] 🔍 Broad phone match: ${callLog.id} (${callLog.callee_number})`);
-              }
-            }
-            if (!callLog) {
-              callLog = candidates[0];
-              console.log(`[${reqId}] 🔍 Broad fallback match: ${callLog.id} (status=${callLog.status})`);
-            }
+            // Pick the most recent candidate
+            callLog = candidates[0];
+            console.log(`[${reqId}] 🔍 Proximity match (callee_number + time): ${callLog.id} (${callLog.callee_number}, ${callLog.status})`);
+          } else {
+            console.log(`[${reqId}] 🔍 No proximity match found. Candidates checked: ${allRecent.filter(l => (l.callee_number || '').replace(/[^0-9]/g, '').slice(-10) === cleanCallee).length} with matching callee`);
           }
         } catch (e) {
-          console.log(`[${reqId}] ⚠️ Broad fallback failed: ${e.message}`);
+          console.log(`[${reqId}] ⚠️ Proximity lookup failed: ${e.message}`);
         }
       }
+
+
 
       // ── Strategy 4: INBOUND CALL — DID → Agent direct resolution ──
       // For inbound calls, the WebSocket connects BEFORE smartfloWebhook creates a CallLog.
