@@ -86,9 +86,9 @@ export default function FooterSection() {
                 </a>
               </li>
               <li>
-                <a href="mailto:sales@getway.ai" className="flex items-center gap-2 text-gray-500 hover:text-[#00bcd4] transition-colors">
+                <a href="mailto:connect@getway.in" className="flex items-center gap-2 text-gray-500 hover:text-[#00bcd4] transition-colors">
                   <Mail className="w-4 h-4 text-[#00bcd4]" />
-                  sales@getway.ai
+                  connect@getway.in
                 </a>
               </li>
             </ul>
@@ -96,7 +96,7 @@ export default function FooterSection() {
             <h4 className="text-[#0097a7] font-semibold mt-6 mb-3">Data Protection Officer</h4>
             <div className="text-sm text-gray-500 space-y-1">
               <p className="font-medium text-gray-700">Getway AI Support</p>
-              <p>support@getway.ai</p>
+              <p>connect@getway.in</p>
               <p>+91-7020609101</p>
             </div>
           </div>
