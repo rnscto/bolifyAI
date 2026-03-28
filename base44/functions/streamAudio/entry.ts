@@ -1345,16 +1345,47 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
         }
       }
 
-      // ── Strategy 2: Match by callee_number + call_start_time proximity (fallback for call_sid mismatch) ──
-      // Smartflo's WebSocket callSid format may not match the stored call_sid, so use callee number + time proximity
+      // ── Strategy 2: Match outbound calls by caller_id (DID) + time proximity ──
+      // For outbound calls: caller_id = the DID, callee_number = lead phone
+      // Match by DID + time window to handle WebSocket call_sid format mismatch
+      if (!callLog && session.callerNumber) {
+        try {
+          const cleanCaller = session.callerNumber.replace(/[^0-9]/g, '').slice(-10);
+          const now = Date.now();
+          const windowStart = new Date(now - 90000).toISOString(); // 90s window (includes initiateCall delay)
+          const windowEnd = new Date(now + 10000).toISOString();
+
+          const recentRaw = await svc.entities.CallLog.list('-created_date', 100);
+          const allRecent = Array.isArray(recentRaw) ? recentRaw : (recentRaw?.results || recentRaw?.data || []);
+          
+          const candidates = allRecent.filter(l => {
+            const logTime = new Date(l.created_date || l.call_start_time);
+            const inWindow = logTime >= new Date(windowStart) && logTime <= new Date(windowEnd);
+            const logCallerDID = (l.caller_id || '').replace(/[^0-9]/g, '').slice(-10);
+            const callerMatch = logCallerDID === cleanCaller;
+            const unclaimed = !l.stream_sid;
+            const isOutbound = l.direction === 'outbound';
+            const isActive = ['initiated', 'ringing', 'answered'].includes(l.status);
+            return inWindow && callerMatch && unclaimed && isOutbound && isActive;
+          });
+
+          if (candidates.length > 0) {
+            callLog = candidates[0];
+            console.log(`[${reqId}] 🔍 Outbound match (caller_id/DID + time): ${callLog.id} (DID: ${callLog.caller_id}, lead: ${callLog.callee_number})`);
+          }
+        } catch (e) {
+          console.log(`[${reqId}] ⚠️ Outbound lookup failed: ${e.message}`);
+        }
+      }
+
+      // ── Strategy 3: Match by callee_number (inbound fallback) ──
       if (!callLog && session.calleeNumber) {
         try {
           const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '').slice(-10);
           const now = Date.now();
-          const windowStart = new Date(now - 60000).toISOString(); // 60s window (before WebSocket connect)
-          const windowEnd = new Date(now + 10000).toISOString(); // allow 10s future for time sync issues
+          const windowStart = new Date(now - 60000).toISOString();
+          const windowEnd = new Date(now + 10000).toISOString();
 
-          // Fetch all recent calls in the window
           const recentRaw = await svc.entities.CallLog.list('-created_date', 100);
           const allRecent = Array.isArray(recentRaw) ? recentRaw : (recentRaw?.results || recentRaw?.data || []);
           
@@ -1369,14 +1400,11 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
           });
 
           if (candidates.length > 0) {
-            // Pick the most recent candidate
             callLog = candidates[0];
-            console.log(`[${reqId}] 🔍 Proximity match (callee_number + time): ${callLog.id} (${callLog.callee_number}, ${callLog.status})`);
-          } else {
-            console.log(`[${reqId}] 🔍 No proximity match found. Candidates checked: ${allRecent.filter(l => (l.callee_number || '').replace(/[^0-9]/g, '').slice(-10) === cleanCallee).length} with matching callee`);
+            console.log(`[${reqId}] 🔍 Inbound match (callee_number + time): ${callLog.id} (${callLog.callee_number}, ${callLog.status})`);
           }
         } catch (e) {
-          console.log(`[${reqId}] ⚠️ Proximity lookup failed: ${e.message}`);
+          console.log(`[${reqId}] ⚠️ Inbound lookup failed: ${e.message}`);
         }
       }
 
