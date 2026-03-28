@@ -179,7 +179,8 @@ export default function ClientLeads() {
     } catch (error) {
       setCallingLeadId(null);
       console.error('Error initiating call:', error);
-      toast.error('Failed to initiate call');
+      const errMsg = error?.response?.data?.error || error?.message || 'Failed to initiate call';
+      toast.error(errMsg);
     }
   };
 
