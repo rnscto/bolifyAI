@@ -23,7 +23,7 @@ const faqs = [
   },
   {
     q: "How much does the Personal AI Assistant cost?",
-    a: "The Personal AI Assistant starts at just ₹499/month with a 7-day free trial. The Business AI Agent starts at ₹6,500/month per channel. No credit card required for the free trial."
+    a: "The Personal AI Assistant is ₹1,999/month + GST with a 7-day free trial. The Business AI Agent starts at ₹14,999/month per channel + GST, and the Business + CRM plan is ₹19,999/month per channel + GST. No credit card required for the free trial."
   },
   {
     q: "Which languages does Getway AI support?",

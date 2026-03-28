@@ -10,8 +10,9 @@ import { createPageUrl } from '../../utils';
 const plans = [
   {
     name: 'Personal AI Assistant',
-    price: '₹499',
+    price: '₹1,999',
     period: '/month',
+    gst: '+ GST',
     billing: '7-day free trial',
     description: 'AI handles your personal calls — screens spam, takes messages, transfers to you',
     features: [
@@ -30,10 +31,11 @@ const plans = [
   },
   {
     name: 'Business Voice AI',
-    price: '₹6,500',
+    price: '₹14,999',
     period: '/channel/month',
-    billing: 'Billed quarterly',
-    description: 'AI-powered outbound sales calling software with CRM',
+    gst: '+ GST',
+    billing: 'Billed monthly per channel',
+    description: 'AI-powered outbound sales calling software for growing businesses',
     features: [
       'AI Voice Agent (Hindi + English)',
       'Dedicated DID Number (+91)',
@@ -49,9 +51,10 @@ const plans = [
   },
   {
     name: 'Business + CRM',
-    price: '₹8,499',
+    price: '₹19,999',
     period: '/channel/month',
-    billing: '7-day free trial',
+    gst: '+ GST',
+    billing: 'Billed monthly per channel',
     description: 'Everything in Business + industry-specific sales CRM',
     features: [
       'Everything in Business Voice AI',
@@ -106,8 +109,9 @@ export default function PricingSection() {
                   <p className="text-sm text-gray-500 mt-1">{plan.description}</p>
                   <div className="mt-4">
                     <span className="text-4xl font-bold text-[#1a365d]">{plan.price}</span>
-                    <span className="text-gray-500">{plan.period}</span>
+                    <span className="text-gray-500 text-sm">{plan.period}</span>
                   </div>
+                  <p className="text-xs text-gray-400 font-medium mt-0.5">{plan.gst}</p>
                   <p className="text-xs text-[#e67e22] font-semibold mt-1">{plan.billing}</p>
                 </CardHeader>
                 <CardContent className="pb-8">

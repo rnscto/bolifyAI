@@ -320,7 +320,7 @@ export default function Layout({ children, currentPageName }) {
                   <span className="font-medium text-[#0097a7]">Admin Panel — Getway AI</span>
                 ) : (
                   <span>
-                    Plan: <span className="font-medium">₹6,500/mo × {client?.total_channels || 1} channel(s)</span>
+                    Plan: <span className="font-medium">₹14,999/mo × {client?.total_channels || 1} channel(s)</span>
                   </span>
                 )}
               </div>
