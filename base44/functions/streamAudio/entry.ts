@@ -1331,25 +1331,16 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
       let callLog = null;
       const cutoff = new Date(Date.now() - 120000).toISOString(); // 2 minute window
 
-      // ── Strategy 1: call_sid match (most reliable when formats align) ──
+      // ── Strategy 1: call_sid match ──
       if (!callLog && session.callSid) {
-        const variants = [session.callSid];
-        // Smartflo WebSocket callSid may differ from API call_id — try numeric core
-        const numericCore = session.callSid.replace(/^[^-]*-/, '').replace(/\.[^.]*$/, '');
-        if (numericCore && numericCore !== session.callSid) variants.push(numericCore);
-        // Also try just digits
-        const digitsOnly = session.callSid.replace(/\D/g, '');
-        if (digitsOnly && digitsOnly.length > 5) variants.push(digitsOnly);
-
+        const variants = [session.callSid, session.callSid.replace(/^[^-]*-/, '').replace(/\.[^.]*$/, ''), session.callSid.replace(/\D/g, '')].filter((v, i, a) => v && a.indexOf(v) === i);
         for (const sid of variants) {
           if (callLog) break;
           try {
             const logs = await svc.entities.CallLog.filter({ call_sid: sid });
-            if (logs.length > 0) {
-              callLog = logs[0];
-              console.log(`[${reqId}] 🔍 call_sid match (${sid}): ${callLog.id}`);
-            }
-          } catch (e) {}
+            const arr = Array.isArray(logs) ? logs : (logs?.results || logs?.data || []);
+            if (arr.length > 0) { callLog = arr[0]; console.log(`[${reqId}] 🔍 call_sid match (${sid}): ${callLog.id}`); }
+          } catch (_) {}
         }
       }
 
@@ -1457,15 +1448,27 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
         const cleanCalleeDID = session.calleeNumber.replace(/[^0-9]/g, '').slice(-10);
 
         if (cleanCalleeDID) {
-          const allDIDsRaw = await svc.entities.DID.list('-created_date', 200);
-          const allDIDs = Array.isArray(allDIDsRaw) ? allDIDsRaw : (allDIDsRaw?.results || allDIDsRaw?.data || []);
+          // First try exact filter, then list-all fallback
+          let allDIDs = [];
+          try {
+            const exactRaw = await svc.entities.DID.filter({ number: session.calleeNumber });
+            const exact = Array.isArray(exactRaw) ? exactRaw : (exactRaw?.results || exactRaw?.data || []);
+            if (exact.length > 0) allDIDs = exact;
+          } catch (_) {}
+          if (allDIDs.length === 0) {
+            const raw = await svc.entities.DID.list('-created_date', 200);
+            allDIDs = Array.isArray(raw) ? raw : (raw?.results || raw?.data || []);
+          }
+          console.log(`[${reqId}] 🔍 DID list: ${allDIDs.length} DIDs, seeking last10=${cleanCalleeDID}`);
           const matchedDID = allDIDs.find(d => (d.number || '').replace(/\D/g, '').slice(-10) === cleanCalleeDID);
+          console.log(`[${reqId}] 🔍 DID: ${matchedDID ? matchedDID.number + ' agent=' + matchedDID.agent_id : 'no match'}`);
           let didAgent = null, didClient = null;
           if (matchedDID?.agent_id) { try { didAgent = await svc.entities.Agent.get(matchedDID.agent_id); } catch (_) {} }
           if (matchedDID?.client_id) { try { didClient = await svc.entities.Client.get(matchedDID.client_id); } catch (_) {} }
           if (!didAgent) {
-            const allAgentsRaw = await svc.entities.Agent.list('-created_date', 100);
-            const allAgents = Array.isArray(allAgentsRaw) ? allAgentsRaw : (allAgentsRaw?.results || allAgentsRaw?.data || []);
+            const agRaw = await svc.entities.Agent.list('-created_date', 100);
+            const allAgents = Array.isArray(agRaw) ? agRaw : (agRaw?.results || agRaw?.data || []);
+            console.log(`[${reqId}] 🔍 Agent list: ${allAgents.length}, searching for DID ${cleanCalleeDID}`);
             didAgent = allAgents.find(a => {
               const dids = a.assigned_dids || (a.assigned_did ? [a.assigned_did] : []);
               return dids.some(d => (d || '').replace(/\D/g, '').slice(-10) === cleanCalleeDID);
@@ -1474,6 +1477,7 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
               try { didClient = await svc.entities.Client.get(didAgent.client_id); } catch (_) {}
             }
           }
+          console.log(`[${reqId}] 🔍 Agent resolved: ${didAgent ? didAgent.name : 'NOT FOUND'}, client: ${didClient?.company_name || 'none'}`);
 
           if (didAgent) {
             console.log(`[${reqId}] ✅ INBOUND: DID ${session.calleeNumber} → Agent "${didAgent.name}" (${didAgent.id}), Client: ${didClient?.company_name || 'unknown'}`);
@@ -1497,7 +1501,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
               const cleanCaller = session.callerNumber.replace(/\D/g, '').slice(-10);
               if (cleanCaller) {
                 try {
-                  const clientLeads = await svc.entities.Lead.filter({ client_id: didClient.id });
+                  const clientLeadsRaw = await svc.entities.Lead.filter({ client_id: didClient.id });
+                  const clientLeads = Array.isArray(clientLeadsRaw) ? clientLeadsRaw : (clientLeadsRaw?.results || clientLeadsRaw?.data || []);
                   const matchedLead = clientLeads.find(l => l.phone && l.phone.replace(/\D/g, '').slice(-10) === cleanCaller);
                   if (matchedLead) {
                     console.log(`[${reqId}] 🎯 Caller identified as Lead: "${matchedLead.name}" (score: ${matchedLead.score})`);
