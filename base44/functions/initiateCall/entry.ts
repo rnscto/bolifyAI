@@ -236,7 +236,13 @@ IMPORTANT RULES:
         api_key: smartfloApiKey,
         customer_number: cleanPhoneNumber,
         caller_id: cleanCallerID,
-        async: 1
+        async: 1,
+        // Pass custom params so streamAudio can detect this as outbound and match the CallLog
+        customParameters: {
+          customer_number: cleanPhoneNumber,
+          lead_id: lead_id,
+          agent_id: agent_id
+        }
       })
     });
 
