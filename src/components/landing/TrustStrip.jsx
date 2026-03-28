@@ -11,7 +11,7 @@ const items = [
 
 export default function TrustStrip() {
   return (
-    <section className="py-6 bg-[#fafbfc] border-y border-gray-100">
+    <section className="py-6 bg-[#fafbfc] border-y border-cyan-100">
       <div className="max-w-7xl mx-auto px-4">
         <div className="flex flex-wrap justify-center gap-6 lg:gap-12">
           {items.map((item, i) => {
@@ -25,8 +25,8 @@ export default function TrustStrip() {
                 transition={{ delay: i * 0.05, duration: 0.25 }}
                 className="flex items-center gap-2 text-sm font-medium text-gray-600"
               >
-                <div className="w-8 h-8 rounded-full bg-[#138808]/8 flex items-center justify-center">
-                  <Icon className="w-4 h-4 text-[#138808]" />
+                <div className="w-8 h-8 rounded-full bg-[#00bcd4]/10 flex items-center justify-center">
+                  <Icon className="w-4 h-4 text-[#00bcd4]" />
                 </div>
                 {item.text}
               </motion.div>

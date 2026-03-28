@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '../../utils';
 
-const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/9b1876319_WhatsApp_Image_2026-02-11_at_44923_PM-removebg-preview.png";
+const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/8e9cbc9d4_Getway_Logojpg.jpeg";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
@@ -46,7 +46,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-18 py-2">
           <a href="#" className="flex items-center gap-2 shrink-0">
-            <img src={LOGO_URL} alt="VaaniAI" className="h-[68px] object-contain" />
+            <img src={LOGO_URL} alt="Getway AI" className="h-[60px] object-contain rounded-md" />
           </a>
 
           {/* Desktop nav */}
@@ -56,7 +56,7 @@ export default function Navbar() {
                 <Link
                   key={link.label}
                   to={link.href}
-                  className={`text-sm font-medium transition-colors ${scrolled ? 'text-gray-600 hover:text-[#1a365d]' : 'text-white/80 hover:text-white'}`}
+                  className={`text-sm font-medium transition-colors ${scrolled ? 'text-gray-600 hover:text-[#00bcd4]' : 'text-white/80 hover:text-white'}`}
                 >
                   {link.label}
                 </Link>
@@ -64,7 +64,7 @@ export default function Navbar() {
                 <a
                   key={link.label}
                   href={link.href}
-                  className={`text-sm font-medium transition-colors ${scrolled ? 'text-gray-600 hover:text-[#1a365d]' : 'text-white/80 hover:text-white'}`}
+                  className={`text-sm font-medium transition-colors ${scrolled ? 'text-gray-600 hover:text-[#00bcd4]' : 'text-white/80 hover:text-white'}`}
                 >
                   {link.label}
                 </a>
@@ -75,7 +75,7 @@ export default function Navbar() {
           <div className="hidden md:flex items-center gap-3">
             {isLoggedIn ? (
               <Button
-                className="bg-gradient-to-r from-[#e67e22] to-[#f39c12] hover:from-[#d35400] hover:to-[#e67e22] text-white font-semibold shadow-md shadow-orange-200"
+                className="bg-gradient-to-r from-[#00bcd4] to-[#0097a7] hover:from-[#0097a7] hover:to-[#00838f] text-white font-semibold shadow-md shadow-cyan-200"
                 onClick={() => {
                   const dashPage = userRole === 'admin' ? 'AdminDashboard' : 'ClientDashboard';
                   window.location.href = createPageUrl(dashPage);
@@ -87,13 +87,13 @@ export default function Navbar() {
               <>
                 <Button
                   variant="ghost"
-                  className={`font-medium ${scrolled ? 'text-gray-700 hover:text-[#1a365d]' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
+                  className={`font-medium ${scrolled ? 'text-gray-700 hover:text-[#00bcd4]' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
                   onClick={() => base44.auth.redirectToLogin()}
                 >
                   Log In
                 </Button>
                 <Button
-                  className="bg-gradient-to-r from-[#e67e22] to-[#f39c12] hover:from-[#d35400] hover:to-[#e67e22] text-white font-semibold shadow-md shadow-orange-200"
+                  className="bg-gradient-to-r from-[#00bcd4] to-[#0097a7] hover:from-[#0097a7] hover:to-[#00838f] text-white font-semibold shadow-md shadow-cyan-200"
                   onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
                 >
                   Start Free Trial
@@ -119,7 +119,7 @@ export default function Navbar() {
                 <Link
                   key={link.label}
                   to={link.href}
-                  className="block px-3 py-2.5 text-sm font-medium text-gray-700 hover:text-[#1a365d] hover:bg-gray-50 rounded-lg"
+                  className="block px-3 py-2.5 text-sm font-medium text-gray-700 hover:text-[#00bcd4] hover:bg-cyan-50 rounded-lg"
                   onClick={() => setOpen(false)}
                 >
                   {link.label}
@@ -128,7 +128,7 @@ export default function Navbar() {
                 <a
                   key={link.label}
                   href={link.href}
-                  className="block px-3 py-2.5 text-sm font-medium text-gray-700 hover:text-[#1a365d] hover:bg-gray-50 rounded-lg"
+                  className="block px-3 py-2.5 text-sm font-medium text-gray-700 hover:text-[#00bcd4] hover:bg-cyan-50 rounded-lg"
                   onClick={() => setOpen(false)}
                 >
                   {link.label}
@@ -138,7 +138,7 @@ export default function Navbar() {
             <div className="flex gap-3 mt-4 px-3">
               {isLoggedIn ? (
                 <Button
-                  className="flex-1 bg-gradient-to-r from-[#e67e22] to-[#f39c12] text-white font-semibold"
+                  className="flex-1 bg-gradient-to-r from-[#00bcd4] to-[#0097a7] text-white font-semibold"
                   onClick={() => {
                     const dashPage = userRole === 'admin' ? 'AdminDashboard' : 'ClientDashboard';
                     window.location.href = createPageUrl(dashPage);
@@ -151,13 +151,13 @@ export default function Navbar() {
                 <>
                   <Button
                     variant="outline"
-                    className="flex-1 border-gray-300 text-gray-700"
+                    className="flex-1 border-[#00bcd4] text-[#00bcd4]"
                     onClick={() => base44.auth.redirectToLogin()}
                   >
                     Log In
                   </Button>
                   <Button
-                    className="flex-1 bg-gradient-to-r from-[#e67e22] to-[#f39c12] text-white font-semibold"
+                    className="flex-1 bg-gradient-to-r from-[#00bcd4] to-[#0097a7] text-white font-semibold"
                     onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
                   >
                     Sign Up

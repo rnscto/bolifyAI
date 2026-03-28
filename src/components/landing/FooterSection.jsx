@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { createPageUrl } from '../../utils';
 import { Mail, Phone, MapPin } from 'lucide-react';
 
-const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/9b1876319_WhatsApp_Image_2026-02-11_at_44923_PM-removebg-preview.png";
+const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/8e9cbc9d4_Getway_Logojpg.jpeg";
 
 export default function FooterSection() {
   return (
@@ -14,17 +14,18 @@ export default function FooterSection() {
           {/* Company Info */}
           <div className="md:col-span-2">
             <div className="mb-5">
-              <img src={LOGO_URL} alt="VaaniAI" className="h-[76px] object-contain" />
+              <img src={LOGO_URL} alt="Getway AI" className="h-[64px] object-contain rounded-md" />
             </div>
+            <p className="text-xs text-[#00bcd4] font-bold tracking-wider uppercase mb-1">Digital Way to Grow</p>
             <p className="text-sm leading-relaxed max-w-sm mb-6 text-gray-500">
-              India's leading AI voice agent platform for automated outbound sales calling, AI lead qualification, and CRM pipeline management — available in Hindi & English for 23+ industries.
+              India's leading Business Automation Platform — AI CRM, AI Agent, IVR & WhatsApp automation for 23+ industries in Hindi & English.
             </p>
             <div className="space-y-2 text-sm">
-              <p className="text-[#1a365d] font-semibold text-xs uppercase tracking-wider mb-3">
-                Tech Brainbucks Infosoft Pvt Ltd
+              <p className="text-[#0097a7] font-semibold text-xs uppercase tracking-wider mb-3">
+                Getway AI — Business Automation Platform
               </p>
               <div className="flex items-start gap-2 text-gray-600">
-                <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-[#138808]" />
+                <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-[#00bcd4]" />
                 <span>101 Chanda Tower, Gandhi Path, Vaishali Nagar, Jaipur 302021</span>
               </div>
               <div className="flex items-center gap-2 text-gray-600">
@@ -36,42 +37,42 @@ export default function FooterSection() {
 
           {/* Product Links */}
           <div>
-            <h4 className="text-[#1a365d] font-semibold mb-4">Product</h4>
+            <h4 className="text-[#0097a7] font-semibold mb-4">Product</h4>
             <ul className="space-y-2 text-sm">
-              <li><a href="#features" className="text-gray-500 hover:text-[#e67e22] transition-colors">Features</a></li>
-              <li><a href="#pricing" className="text-gray-500 hover:text-[#e67e22] transition-colors">Pricing</a></li>
-              <li><a href="#how-it-works" className="text-gray-500 hover:text-[#e67e22] transition-colors">How It Works</a></li>
-              <li><a href="#industries" className="text-gray-500 hover:text-[#e67e22] transition-colors">Industries</a></li>
+              <li><a href="#features" className="text-gray-500 hover:text-[#00bcd4] transition-colors">Features</a></li>
+              <li><a href="#pricing" className="text-gray-500 hover:text-[#00bcd4] transition-colors">Pricing</a></li>
+              <li><a href="#how-it-works" className="text-gray-500 hover:text-[#00bcd4] transition-colors">How It Works</a></li>
+              <li><a href="#industries" className="text-gray-500 hover:text-[#00bcd4] transition-colors">Industries</a></li>
             </ul>
 
-            <h4 className="text-[#1a365d] font-semibold mt-6 mb-4">Partners</h4>
+            <h4 className="text-[#0097a7] font-semibold mt-6 mb-4">Partners</h4>
             <ul className="space-y-2 text-sm mb-6">
               <li>
-                <Link to={createPageUrl('PartnerSignup')} className="text-gray-500 hover:text-[#e67e22] transition-colors">
+                <Link to={createPageUrl('PartnerSignup')} className="text-gray-500 hover:text-[#00bcd4] transition-colors">
                   Partner Program
                 </Link>
               </li>
             </ul>
 
-            <h4 className="text-[#1a365d] font-semibold mt-6 mb-4">Legal</h4>
+            <h4 className="text-[#0097a7] font-semibold mt-6 mb-4">Legal</h4>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link to={createPageUrl('PrivacyPolicy')} className="text-gray-500 hover:text-[#e67e22] transition-colors">
+                <Link to={createPageUrl('PrivacyPolicy')} className="text-gray-500 hover:text-[#00bcd4] transition-colors">
                   Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link to={createPageUrl('TermsOfService')} className="text-gray-500 hover:text-[#e67e22] transition-colors">
+                <Link to={createPageUrl('TermsOfService')} className="text-gray-500 hover:text-[#00bcd4] transition-colors">
                   Terms of Service
                 </Link>
               </li>
               <li>
-                <Link to={createPageUrl('RefundPolicy')} className="text-gray-500 hover:text-[#e67e22] transition-colors">
+                <Link to={createPageUrl('RefundPolicy')} className="text-gray-500 hover:text-[#00bcd4] transition-colors">
                   Refund Policy
                 </Link>
               </li>
               <li>
-                <Link to={createPageUrl('CompliancePolicy')} className="text-gray-500 hover:text-[#e67e22] transition-colors">
+                <Link to={createPageUrl('CompliancePolicy')} className="text-gray-500 hover:text-[#00bcd4] transition-colors">
                   Compliance Policy
                 </Link>
               </li>
@@ -80,55 +81,51 @@ export default function FooterSection() {
 
           {/* Contact */}
           <div>
-            <h4 className="text-[#1a365d] font-semibold mb-4">Contact Us</h4>
+            <h4 className="text-[#0097a7] font-semibold mb-4">Contact Us</h4>
             <ul className="space-y-3 text-sm">
               <li>
-                <a href="tel:+917020609101" className="flex items-center gap-2 text-gray-500 hover:text-[#e67e22] transition-colors">
-                  <Phone className="w-4 h-4 text-[#FF9933]" />
+                <a href="tel:+917020609101" className="flex items-center gap-2 text-gray-500 hover:text-[#00bcd4] transition-colors">
+                  <Phone className="w-4 h-4 text-[#00bcd4]" />
                   +91-7020609101
                 </a>
               </li>
               <li>
-                <a href="mailto:sales@vaaniai.io" className="flex items-center gap-2 text-gray-500 hover:text-[#e67e22] transition-colors">
-                  <Mail className="w-4 h-4 text-[#FF9933]" />
-                  sales@vaaniai.io
+                <a href="mailto:sales@getway.ai" className="flex items-center gap-2 text-gray-500 hover:text-[#00bcd4] transition-colors">
+                  <Mail className="w-4 h-4 text-[#00bcd4]" />
+                  sales@getway.ai
                 </a>
               </li>
             </ul>
 
-            <h4 className="text-[#1a365d] font-semibold mt-6 mb-3">Data Protection Officer</h4>
+            <h4 className="text-[#0097a7] font-semibold mt-6 mb-3">Data Protection Officer</h4>
             <div className="text-sm text-gray-500 space-y-1">
-              <p className="font-medium text-gray-700">Nand K. Yadav</p>
-              <p>nand@brainbucks.in</p>
+              <p className="font-medium text-gray-700">Getway AI Support</p>
+              <p>support@getway.ai</p>
               <p>+91-7020609101</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Bottom bar with tricolor accent */}
-      <div className="bg-[#1a365d]">
-        {/* Tricolor strip */}
-        <div className="flex h-1">
-          <div className="flex-1 bg-[#FF9933]" />
-          <div className="flex-1 bg-white" />
-          <div className="flex-1 bg-[#138808]" />
-        </div>
+      {/* Bottom bar */}
+      <div style={{ background: 'linear-gradient(135deg, #003d4d, #0097a7)' }}>
+        {/* Cyan accent strip */}
+        <div className="h-1 bg-gradient-to-r from-[#00bcd4] via-[#00e5ff] to-[#00bcd4]" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <p className="text-xs text-slate-300">
-            © {new Date().getFullYear()} Tech Brainbucks Infosoft Pvt Ltd. All rights reserved.
+          <p className="text-xs text-cyan-100">
+            © {new Date().getFullYear()} Getway AI — Business Automation Platform. All rights reserved.
           </p>
           <div className="flex gap-6 text-xs">
-            <Link to={createPageUrl('PrivacyPolicy')} className="text-slate-300 hover:text-[#FF9933] transition-colors">
+            <Link to={createPageUrl('PrivacyPolicy')} className="text-cyan-200 hover:text-white transition-colors">
               Privacy Policy
             </Link>
-            <Link to={createPageUrl('TermsOfService')} className="text-slate-300 hover:text-[#FF9933] transition-colors">
+            <Link to={createPageUrl('TermsOfService')} className="text-cyan-200 hover:text-white transition-colors">
               Terms of Service
             </Link>
-            <Link to={createPageUrl('RefundPolicy')} className="text-slate-300 hover:text-[#FF9933] transition-colors">
+            <Link to={createPageUrl('RefundPolicy')} className="text-cyan-200 hover:text-white transition-colors">
               Refund Policy
             </Link>
-            <Link to={createPageUrl('CompliancePolicy')} className="text-slate-300 hover:text-[#FF9933] transition-colors">
+            <Link to={createPageUrl('CompliancePolicy')} className="text-cyan-200 hover:text-white transition-colors">
               Compliance Policy
             </Link>
           </div>

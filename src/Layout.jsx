@@ -221,7 +221,7 @@ export default function Layout({ children, currentPageName }) {
           {/* Logo */}
           <div className="flex items-center justify-between p-6 border-b">
             <div className="flex items-center gap-2">
-              <img src="https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/9b1876319_WhatsApp_Image_2026-02-11_at_44923_PM-removebg-preview.png" alt="VaaniAI" className="h-[68px] object-contain" />
+              <img src="https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/8e9cbc9d4_Getway_Logojpg.jpeg" alt="Getway AI" className="h-[56px] object-contain rounded-md" />
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -243,8 +243,8 @@ export default function Layout({ children, currentPageName }) {
                         to={createPageUrl(item.path)}
                         className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                           isActive
-                            ? 'bg-blue-50 text-blue-700'
-                            : 'text-gray-700 hover:bg-gray-50'
+                            ? 'bg-cyan-50 text-[#0097a7]'
+                            : 'text-gray-700 hover:bg-gray-50 hover:text-[#00bcd4]'
                         }`}
                       >
                         <Icon className="w-5 h-5" />
@@ -266,8 +266,8 @@ export default function Layout({ children, currentPageName }) {
                             to={createPageUrl(item.path)}
                             className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                               isActive
-                                ? 'bg-indigo-50 text-indigo-700'
-                                : 'text-gray-700 hover:bg-gray-50'
+                                ? 'bg-cyan-50 text-[#0097a7]'
+                                  : 'text-gray-700 hover:bg-gray-50 hover:text-[#00bcd4]'
                             }`}
                           >
                             <Icon className="w-5 h-5" />
@@ -317,7 +317,7 @@ export default function Layout({ children, currentPageName }) {
             <div className="flex-1 lg:flex lg:justify-end">
               <div className="text-sm text-gray-600">
                 {isAdmin ? (
-                  <span className="font-medium">Admin Panel</span>
+                  <span className="font-medium text-[#0097a7]">Admin Panel — Getway AI</span>
                 ) : (
                   <span>
                     Plan: <span className="font-medium">₹6,500/mo × {client?.total_channels || 1} channel(s)</span>
