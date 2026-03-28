@@ -278,20 +278,11 @@ Deno.serve(async (req) => {
     if (type === 'session.created') {
       console.log(`[${reqId}] ✅ Realtime session created`);
       session.realtimeReady = true;
-
-      const sessionConfig = {
-        input_audio_format: 'pcm16',
-        output_audio_format: 'pcm16',
-        input_audio_transcription: { model: 'whisper-1', language: 'hi' },
-        modalities: ['text', 'audio'],
-        voice: session.voiceType,
-        instructions: session.systemPrompt,
-        turn_detection: { type: 'server_vad', threshold: 0.65, prefix_padding_ms: 800, silence_duration_ms: 800 }
-      };
-
-      sendToRealtime({ type: 'session.update', session: sessionConfig });
-      console.log(`[${reqId}] 📤 Session configured`);
-      triggerGreeting();
+      // If agent config already loaded and was waiting for realtime, configure now
+      if (session._pendingConfigure) {
+        session._pendingConfigure = false;
+        configureAndGreet();
+      }
       return;
     }
 
@@ -327,6 +318,28 @@ Deno.serve(async (req) => {
       }
       return;
     }
+  }
+
+  // ─── Configure Realtime session and trigger greeting (called after agent config loads) ───
+  function configureAndGreet() {
+    if (!session.realtimeReady) {
+      console.log(`[${reqId}] ⏳ Realtime not ready yet, will configure when ready`);
+      // Set a flag to configure when session.created fires
+      session._pendingConfigure = true;
+      return;
+    }
+    const sessionConfig = {
+      input_audio_format: 'pcm16',
+      output_audio_format: 'pcm16',
+      input_audio_transcription: { model: 'whisper-1', language: 'hi' },
+      modalities: ['text', 'audio'],
+      voice: session.voiceType,
+      instructions: session.systemPrompt,
+      turn_detection: { type: 'server_vad', threshold: 0.65, prefix_padding_ms: 800, silence_duration_ms: 800 }
+    };
+    sendToRealtime({ type: 'session.update', session: sessionConfig });
+    console.log(`[${reqId}] 📤 Session configured with agent prompt (voice=${session.voiceType})`);
+    triggerGreeting();
   }
 
   // ─── Trigger greeting ───
@@ -373,23 +386,66 @@ Deno.serve(async (req) => {
         }
       }
 
-      // ── Strategy 3: Recent unclaimed calls by callee ──
-      if (!callLog && session.calleeNumber) {
-        const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '').slice(-10);
-        const recentLogsRaw = await svc.entities.CallLog.list('-created_date', 20);
+      // ── Strategy 3: Recent unclaimed calls by callee+caller within last 2 min ──
+      if (!callLog && (session.calleeNumber || session.callerNumber)) {
+        const cleanCallee = (session.calleeNumber || '').replace(/[^0-9]/g, '').slice(-10);
+        const cleanCaller = (session.callerNumber || '').replace(/[^0-9]/g, '').slice(-10);
+        const twoMinAgo = Date.now() - 120000;
+        const recentLogsRaw = await svc.entities.CallLog.list('-created_date', 30);
         const recentLogs = Array.isArray(recentLogsRaw) ? recentLogsRaw : (recentLogsRaw?.results || recentLogsRaw?.data || []);
+        console.log(`[${reqId}] 🔍 Strategy 3: checking ${recentLogs.length} recent logs, callee=${cleanCallee}, caller=${cleanCaller}`);
         const candidates = recentLogs.filter(l => {
-          const logPhone = (l.callee_number || '').replace(/[^0-9]/g, '').slice(-10);
-          return logPhone === cleanCallee && !l.stream_sid && ['initiated', 'ringing', 'answered'].includes(l.status);
+          // Must be recent (within 2 minutes) and not yet streamed
+          const logCreated = new Date(l.created_date).getTime();
+          if (logCreated < twoMinAgo) return false;
+          if (!['initiated', 'ringing', 'answered'].includes(l.status)) return false;
+          
+          // Match by callee number
+          const logCallee = (l.callee_number || '').replace(/[^0-9]/g, '').slice(-10);
+          if (cleanCallee && logCallee === cleanCallee) return true;
+          
+          // Match by caller DID
+          const logCaller = (l.caller_id || '').replace(/[^0-9]/g, '').slice(-10);
+          if (cleanCaller && logCaller === cleanCaller) return true;
+          
+          return false;
         });
         if (candidates.length > 0) {
           callLog = candidates[0];
-          console.log(`[${reqId}] 🔍 Callee match: ${callLog.id}`);
+          console.log(`[${reqId}] 🔍 Phone match: ${callLog.id} (callee=${callLog.callee_number}, caller=${callLog.caller_id})`);
+        }
+      }
+
+      // ── Strategy 4: DID-to-agent mapping (for inbound calls) ──
+      if (!callLog && session.calleeNumber) {
+        const cleanCallee = (session.calleeNumber || '').replace(/[^0-9]/g, '').slice(-10);
+        const cleanCaller = (session.callerNumber || '').replace(/[^0-9]/g, '').slice(-10);
+        // Check if the callee or caller is a known DID
+        const didNumber = cleanCaller || cleanCallee;
+        const didsRaw = await svc.entities.DID.filter({ status: 'assigned' });
+        const dids = Array.isArray(didsRaw) ? didsRaw : (didsRaw?.results || didsRaw?.data || []);
+        const matchedDID = dids.find(d => {
+          const dNum = (d.number || '').replace(/[^0-9]/g, '').slice(-10);
+          return dNum === cleanCaller || dNum === cleanCallee;
+        });
+        if (matchedDID && matchedDID.agent_id) {
+          console.log(`[${reqId}] 🔍 DID match: ${matchedDID.number} → agent ${matchedDID.agent_id}`);
+          // Load agent config directly without a CallLog
+          const agent = await svc.entities.Agent.get(matchedDID.agent_id);
+          if (agent) {
+            session.clientId = agent.client_id;
+            session.systemPrompt = agent.system_prompt || session.systemPrompt;
+            session.greetingMessage = agent.greeting_message || '';
+            if (agent.persona?.voice_type) session.voiceType = agent.persona.voice_type;
+            console.log(`[${reqId}] ✅ Agent config from DID: ${agent.name}, voice=${session.voiceType}`);
+          }
         }
       }
 
       if (!callLog) {
-        console.log(`[${reqId}] ⚠️ No call log found (sid=${session.callSid}, lead=${session.leadId}, callee=${session.calleeNumber})`);
+        console.log(`[${reqId}] ⚠️ No call log found (sid=${session.callSid}, lead=${session.leadId}, callee=${session.calleeNumber}, caller=${session.callerNumber})`);
+        // Still configure Realtime (either with DID-loaded agent config or defaults)
+        configureAndGreet();
         return;
       }
 
@@ -401,10 +457,15 @@ Deno.serve(async (req) => {
         session.systemPrompt = cache.system_prompt;
         if (cache.greeting_message) session.greetingMessage = cache.greeting_message;
         if (cache.persona?.voice_type) session.voiceType = cache.persona.voice_type;
-        console.log(`[${reqId}] ✅ Agent config loaded: engine=${session.voiceEngine}, voice=${session.voiceType}`);
+        console.log(`[${reqId}] ✅ Agent config loaded from CallLog: voice=${session.voiceType}`);
       }
+
+      // Configure Realtime session now that we have agent config
+      configureAndGreet();
     } catch (e) {
       console.error(`[${reqId}] ❌ Agent config load failed: ${e.message}`);
+      // Still configure with defaults so the call doesn't hang
+      configureAndGreet();
     }
   }
 
