@@ -1,0 +1,104 @@
+{
+  "name": "CRMConfig",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "industry_template_id": {
+      "type": "string",
+      "description": "Selected industry template ID"
+    },
+    "industry_name": {
+      "type": "string",
+      "description": "Industry name for display"
+    },
+    "deal_stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "type": "number"
+          },
+          "color": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Configured deal pipeline stages"
+    },
+    "lead_sources": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Configured lead sources"
+    },
+    "activity_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Configured activity types"
+    },
+    "custom_fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entity": {
+            "type": "string"
+          },
+          "field_name": {
+            "type": "string"
+          },
+          "field_type": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "description": "Active custom fields"
+    },
+    "automation_rules": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "trigger_type": {
+            "type": "string"
+          },
+          "trigger_value": {
+            "type": "string"
+          },
+          "action_type": {
+            "type": "string"
+          },
+          "action_value": {
+            "type": "string"
+          },
+          "enabled": {
+            "type": "boolean"
+          }
+        }
+      },
+      "description": "Automation rules for pipeline"
+    }
+  },
+  "required": [
+    "client_id"
+  ]
+}

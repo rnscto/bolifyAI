@@ -1,0 +1,241 @@
+{
+  "name": "Client",
+  "type": "object",
+  "properties": {
+    "company_name": {
+      "type": "string",
+      "description": "Name of the client company or person's name (for personal accounts)"
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Primary contact email"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Contact phone number"
+    },
+    "registered_address": {
+      "type": "string",
+      "description": "Registered business address"
+    },
+    "account_type": {
+      "type": "string",
+      "enum": [
+        "business",
+        "personal"
+      ],
+      "default": "business",
+      "description": "Whether this is a business or personal AI assistant account"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "suspended",
+        "cancelled"
+      ],
+      "default": "active",
+      "description": "Client account status"
+    },
+    "account_status": {
+      "type": "string",
+      "enum": [
+        "onboarding",
+        "trial",
+        "active",
+        "expired",
+        "suspended"
+      ],
+      "default": "onboarding",
+      "description": "Overall account lifecycle status"
+    },
+    "trial_start_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Trial start date"
+    },
+    "trial_end_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Trial end date (7 days from start)"
+    },
+    "onboarding_completed": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether onboarding wizard is completed"
+    },
+    "subscription_plan": {
+      "type": "string",
+      "default": "quarterly",
+      "description": "Billing cycle"
+    },
+    "total_channels": {
+      "type": "number",
+      "default": 1,
+      "description": "Total number of channels (DIDs) subscribed"
+    },
+    "monthly_rate_per_channel": {
+      "type": "number",
+      "default": 6500,
+      "description": "Rate per channel in INR"
+    },
+    "next_billing_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Next billing date"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Associated user account ID"
+    },
+    "industry": {
+      "type": "string",
+      "description": "Selected industry"
+    },
+    "has_custom_crm": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether client has custom CRM enabled"
+    },
+    "crm_subscription_status": {
+      "type": "string",
+      "enum": [
+        "none",
+        "trialing",
+        "active",
+        "inactive",
+        "cancelled"
+      ],
+      "default": "none",
+      "description": "CRM subscription status"
+    },
+    "crm_trial_start_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "CRM trial start date"
+    },
+    "crm_trial_end_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "CRM trial end date"
+    },
+    "crm_monthly_rate": {
+      "type": "number",
+      "default": 1999,
+      "description": "CRM monthly rate in INR"
+    },
+    "crm_next_billing_date": {
+      "type": "string",
+      "format": "date",
+      "description": "CRM next billing date"
+    },
+    "industry_template_id": {
+      "type": "string",
+      "description": "Selected industry template"
+    },
+    "dlt_entity_id": {
+      "type": "string",
+      "description": "DLT Principal Entity ID (TRAI registration)"
+    },
+    "dlt_registered": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether client is DLT registered"
+    },
+    "dpdp_consent_given": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether DPDP processing consent was given during onboarding"
+    },
+    "dpdp_consent_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When DPDP consent was given"
+    },
+    "data_retention_days": {
+      "type": "number",
+      "default": 30,
+      "description": "Data retention period in days (default 30)"
+    },
+    "kyc_status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "under_review",
+        "approved",
+        "rejected",
+        "not_required"
+      ],
+      "default": "pending",
+      "description": "KYC verification status"
+    },
+    "kyc_deadline": {
+      "type": "string",
+      "format": "date",
+      "description": "Deadline to complete KYC (30 days from onboarding)"
+    },
+    "company_type": {
+      "type": "string",
+      "enum": [
+        "proprietorship",
+        "partnership",
+        "llp",
+        "private_limited",
+        "public_limited",
+        "one_person_company",
+        "individual",
+        "other"
+      ],
+      "description": "Type of business entity"
+    },
+    "owner_notification_channel": {
+      "type": "string",
+      "enum": [
+        "whatsapp",
+        "sms",
+        "push",
+        "telegram"
+      ],
+      "default": "whatsapp",
+      "description": "How to notify the owner during live calls (personal accounts)"
+    },
+    "owner_whatsapp_number": {
+      "type": "string",
+      "description": "WhatsApp number for real-time call notifications (personal accounts)"
+    },
+    "dnd_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Do Not Disturb mode \u2014 AI handles all calls silently without owner notifications"
+    },
+    "ai_response_mode": {
+      "type": "string",
+      "enum": [
+        "screen_all",
+        "allow_contacts",
+        "take_messages",
+        "block_all"
+      ],
+      "default": "screen_all",
+      "description": "AI response mode for personal accounts"
+    },
+    "telegram_chat_id": {
+      "type": "string",
+      "description": "Telegram chat ID for receiving call notifications via Telegram bot"
+    },
+    "telegram_connected": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the user has connected their Telegram account"
+    },
+    "telegram_username": {
+      "type": "string",
+      "description": "Telegram username for display"
+    }
+  },
+  "required": [
+    "company_name",
+    "email"
+  ]
+}

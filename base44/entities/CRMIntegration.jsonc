@@ -1,0 +1,66 @@
+{
+  "name": "CRMIntegration",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "crm_type": {
+      "type": "string",
+      "enum": [
+        "salesforce",
+        "hubspot",
+        "zoho",
+        "custom",
+        "built_in"
+      ],
+      "description": "CRM platform type"
+    },
+    "webhook_url": {
+      "type": "string",
+      "description": "Webhook URL for pushing updates"
+    },
+    "api_key": {
+      "type": "string",
+      "description": "CRM API key (encrypted)"
+    },
+    "api_endpoint": {
+      "type": "string",
+      "description": "CRM API endpoint"
+    },
+    "sync_direction": {
+      "type": "string",
+      "enum": [
+        "push",
+        "pull",
+        "bidirectional"
+      ],
+      "default": "push",
+      "description": "Data sync direction"
+    },
+    "field_mapping": {
+      "type": "object",
+      "description": "Field mapping configuration"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive",
+        "error"
+      ],
+      "default": "inactive",
+      "description": "Integration status"
+    },
+    "last_sync": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last successful sync"
+    }
+  },
+  "required": [
+    "client_id",
+    "crm_type"
+  ]
+}

@@ -1,0 +1,154 @@
+{
+  "name": "ClientMessagingConfig",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "whatsapp_provider": {
+      "type": "string",
+      "enum": [
+        "none",
+        "meta_cloud",
+        "gupshup",
+        "aisensy",
+        "wati",
+        "interakt",
+        "twilio",
+        "valuefirst"
+      ],
+      "default": "none",
+      "description": "WhatsApp Business API provider"
+    },
+    "whatsapp_api_key": {
+      "type": "string",
+      "description": "WhatsApp API key / access token"
+    },
+    "whatsapp_api_endpoint": {
+      "type": "string",
+      "description": "WhatsApp API base URL (if custom)"
+    },
+    "whatsapp_phone_number_id": {
+      "type": "string",
+      "description": "WhatsApp phone number ID (Meta) or sender number"
+    },
+    "whatsapp_business_id": {
+      "type": "string",
+      "description": "WhatsApp Business Account ID (Meta) or App ID"
+    },
+    "whatsapp_status": {
+      "type": "string",
+      "enum": [
+        "disconnected",
+        "connected",
+        "error"
+      ],
+      "default": "disconnected"
+    },
+    "whatsapp_last_tested": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "rcs_provider": {
+      "type": "string",
+      "enum": [
+        "none",
+        "gupshup",
+        "smartflo",
+        "kaleyra",
+        "route_mobile",
+        "twilio"
+      ],
+      "default": "none",
+      "description": "RCS / SMS provider"
+    },
+    "rcs_api_key": {
+      "type": "string",
+      "description": "RCS/SMS API key"
+    },
+    "rcs_api_endpoint": {
+      "type": "string",
+      "description": "RCS/SMS API base URL"
+    },
+    "rcs_sender_id": {
+      "type": "string",
+      "description": "Sender ID / DLT Header"
+    },
+    "rcs_status": {
+      "type": "string",
+      "enum": [
+        "disconnected",
+        "connected",
+        "error"
+      ],
+      "default": "disconnected"
+    },
+    "rcs_last_tested": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "email_provider": {
+      "type": "string",
+      "enum": [
+        "none",
+        "smtp",
+        "resend",
+        "sendgrid",
+        "mailgun",
+        "ses",
+        "postmark"
+      ],
+      "default": "none",
+      "description": "Email provider"
+    },
+    "email_api_key": {
+      "type": "string",
+      "description": "Email API key (for API providers)"
+    },
+    "email_smtp_host": {
+      "type": "string",
+      "description": "SMTP host"
+    },
+    "email_smtp_port": {
+      "type": "number",
+      "description": "SMTP port"
+    },
+    "email_smtp_user": {
+      "type": "string",
+      "description": "SMTP username"
+    },
+    "email_smtp_pass": {
+      "type": "string",
+      "description": "SMTP password"
+    },
+    "email_from_address": {
+      "type": "string",
+      "description": "From email address"
+    },
+    "email_from_name": {
+      "type": "string",
+      "description": "From display name"
+    },
+    "email_domain": {
+      "type": "string",
+      "description": "Verified sending domain"
+    },
+    "email_status": {
+      "type": "string",
+      "enum": [
+        "disconnected",
+        "connected",
+        "error"
+      ],
+      "default": "disconnected"
+    },
+    "email_last_tested": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "client_id"
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "TrustedClient",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Client/company name"
+    },
+    "logo_url": {
+      "type": "string",
+      "description": "Logo image URL"
+    },
+    "order": {
+      "type": "number",
+      "default": 0,
+      "description": "Display order (lower = first)"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Show on website"
+    }
+  },
+  "required": [
+    "name",
+    "logo_url"
+  ]
+}

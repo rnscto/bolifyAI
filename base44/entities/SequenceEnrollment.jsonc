@@ -1,0 +1,137 @@
+{
+  "name": "SequenceEnrollment",
+  "type": "object",
+  "properties": {
+    "sequence_id": {
+      "type": "string",
+      "description": "Email sequence ID"
+    },
+    "client_id": {
+      "type": "string",
+      "description": "Client ID"
+    },
+    "lead_id": {
+      "type": "string",
+      "description": "Lead ID (if lead)"
+    },
+    "recipient_email": {
+      "type": "string",
+      "format": "email",
+      "description": "Recipient email"
+    },
+    "recipient_name": {
+      "type": "string",
+      "description": "Recipient name"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "completed",
+        "opted_out",
+        "paused",
+        "failed"
+      ],
+      "default": "active",
+      "description": "Enrollment status"
+    },
+    "current_step": {
+      "type": "number",
+      "default": 0,
+      "description": "Current step index (0-based, 0 means step 1 not yet sent)"
+    },
+    "steps_completed": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of steps sent"
+    },
+    "total_steps": {
+      "type": "number",
+      "description": "Total steps in sequence at enrollment time"
+    },
+    "next_send_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When to send the next email"
+    },
+    "last_sent_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the last email was sent"
+    },
+    "enrolled_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When enrolled"
+    },
+    "opt_out_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When opted out"
+    },
+    "qualification_tier": {
+      "type": "string",
+      "enum": [
+        "hot",
+        "warm",
+        "nurture",
+        "cold"
+      ],
+      "description": "Lead's tier at enrollment time"
+    },
+    "call_outcome": {
+      "type": "string",
+      "description": "Call outcome that triggered enrollment"
+    },
+    "call_summary": {
+      "type": "string",
+      "description": "AI call summary for dynamic content personalization"
+    },
+    "call_topics": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Key topics from the call for content adaptation"
+    },
+    "objections": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Objections raised during call for content adaptation"
+    },
+    "intent_signals": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Lead's intent signals for personalization"
+    },
+    "send_log": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "step_number": {
+            "type": "number"
+          },
+          "sent_date": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "subject": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Log of each step sent"
+    }
+  },
+  "required": [
+    "sequence_id",
+    "recipient_email"
+  ]
+}

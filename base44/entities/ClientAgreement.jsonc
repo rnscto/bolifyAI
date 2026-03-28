@@ -1,0 +1,96 @@
+{
+  "name": "ClientAgreement",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Client ID"
+    },
+    "template_id": {
+      "type": "string",
+      "description": "Agreement template ID used"
+    },
+    "template_version": {
+      "type": "string",
+      "description": "Template version at time of signing"
+    },
+    "agreement_number": {
+      "type": "string",
+      "description": "Unique agreement number (e.g., VAANI-CSA-2026-001)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending_signature",
+        "signed",
+        "expired",
+        "revoked"
+      ],
+      "default": "pending_signature",
+      "description": "Agreement status"
+    },
+    "client_name": {
+      "type": "string",
+      "description": "Client company name at signing"
+    },
+    "signatory_name": {
+      "type": "string",
+      "description": "Name of person who signed"
+    },
+    "signatory_email": {
+      "type": "string",
+      "description": "Email of person who signed"
+    },
+    "signatory_designation": {
+      "type": "string",
+      "description": "Designation of person who signed"
+    },
+    "client_address": {
+      "type": "string",
+      "description": "Client address"
+    },
+    "company_signatory_name": {
+      "type": "string",
+      "description": "Company signatory name"
+    },
+    "company_signatory_designation": {
+      "type": "string",
+      "description": "Company signatory designation"
+    },
+    "signature_image_url": {
+      "type": "string",
+      "description": "URL of the client's drawn signature image"
+    },
+    "signature_name": {
+      "type": "string",
+      "description": "Typed full name as digital signature"
+    },
+    "signed_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the client signed"
+    },
+    "signed_ip_address": {
+      "type": "string",
+      "description": "IP address at time of signing"
+    },
+    "effective_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Agreement effective date"
+    },
+    "expiry_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Agreement expiry date"
+    },
+    "rendered_html": {
+      "type": "string",
+      "description": "Final rendered HTML with all placeholders filled"
+    }
+  },
+  "required": [
+    "client_id",
+    "agreement_number"
+  ]
+}

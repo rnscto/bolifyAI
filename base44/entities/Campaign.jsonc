@@ -1,0 +1,196 @@
+{
+  "name": "Campaign",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "name": {
+      "type": "string",
+      "description": "Campaign name"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "cold_call",
+        "followup"
+      ],
+      "default": "cold_call",
+      "description": "Campaign type"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Agent assigned to make calls"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "scheduled",
+        "running",
+        "paused",
+        "completed",
+        "cancelled"
+      ],
+      "default": "draft",
+      "description": "Campaign status"
+    },
+    "total_leads": {
+      "type": "number",
+      "default": 0,
+      "description": "Total leads in campaign"
+    },
+    "calls_completed": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of calls completed"
+    },
+    "calls_failed": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of calls failed"
+    },
+    "max_concurrent_calls": {
+      "type": "number",
+      "default": 5,
+      "description": "Max simultaneous calls"
+    },
+    "call_script": {
+      "type": "object",
+      "properties": {
+        "opening": {
+          "type": "string",
+          "description": "Opening/greeting script"
+        },
+        "pitch": {
+          "type": "string",
+          "description": "Main pitch/value proposition script"
+        },
+        "objection_handling": {
+          "type": "string",
+          "description": "Common objections and responses"
+        },
+        "closing": {
+          "type": "string",
+          "description": "Closing/CTA script"
+        }
+      },
+      "description": "Structured call script for the campaign"
+    },
+    "scheduled_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When to start the campaign"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Actual start time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Completion time"
+    },
+    "followup_rules": {
+      "type": "object",
+      "properties": {
+        "interested_email": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send AI-personalized follow-up email when lead is interested"
+        },
+        "interested_callback_days": {
+          "type": "number",
+          "default": 2,
+          "description": "Days after interested outcome to schedule callback"
+        },
+        "interested_ai_email": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use AI to generate personalized email from transcript context"
+        },
+        "callback_email": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send confirmation email for callback outcomes"
+        },
+        "callback_create_task": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-create agent task with AI talking points for callback"
+        },
+        "callback_ai_talking_points": {
+          "type": "boolean",
+          "default": true,
+          "description": "Generate AI talking points for callback tasks"
+        },
+        "not_interested_email": {
+          "type": "boolean",
+          "default": false,
+          "description": "Send email if not interested"
+        },
+        "no_answer_retry": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-retry no-answer leads"
+        },
+        "no_answer_retry_hours": {
+          "type": "number",
+          "default": 4,
+          "description": "Hours to wait before retrying no-answer"
+        },
+        "no_answer_max_retries": {
+          "type": "number",
+          "default": 3,
+          "description": "Maximum retry attempts for no-answer leads"
+        }
+      },
+      "description": "AI-driven automated follow-up rules"
+    },
+    "outcomes_summary": {
+      "type": "object",
+      "properties": {
+        "neutral": {
+          "type": "number",
+          "default": 0
+        },
+        "interested": {
+          "type": "number",
+          "default": 0
+        },
+        "not_interested": {
+          "type": "number",
+          "default": 0
+        },
+        "not_answered": {
+          "type": "number",
+          "default": 0
+        },
+        "callback": {
+          "type": "number",
+          "default": 0
+        },
+        "converted": {
+          "type": "number",
+          "default": 0
+        },
+        "do_not_call": {
+          "type": "number",
+          "default": 0
+        }
+      },
+      "description": "Summary of call outcomes"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Campaign notes"
+    }
+  },
+  "required": [
+    "client_id",
+    "name",
+    "agent_id"
+  ]
+}

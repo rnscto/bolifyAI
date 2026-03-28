@@ -1,0 +1,63 @@
+{
+  "name": "Payment",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Client ID"
+    },
+    "subscription_id": {
+      "type": "string",
+      "description": "Associated subscription ID"
+    },
+    "cashfree_order_id": {
+      "type": "string",
+      "description": "Cashfree order ID"
+    },
+    "cashfree_payment_id": {
+      "type": "string",
+      "description": "Cashfree payment ID after successful payment"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Payment amount in INR"
+    },
+    "currency": {
+      "type": "string",
+      "default": "INR",
+      "description": "Currency"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "paid",
+        "failed",
+        "refunded"
+      ],
+      "default": "pending",
+      "description": "Payment status"
+    },
+    "payment_method": {
+      "type": "string",
+      "description": "Payment method used (UPI, card, etc.)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Payment description"
+    },
+    "payment_session_id": {
+      "type": "string",
+      "description": "Cashfree payment session ID for checkout"
+    },
+    "paid_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Payment completion timestamp"
+    }
+  },
+  "required": [
+    "client_id",
+    "amount"
+  ]
+}

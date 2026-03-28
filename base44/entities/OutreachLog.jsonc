@@ -1,0 +1,88 @@
+{
+  "name": "OutreachLog",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "lead_id": {
+      "type": "string",
+      "description": "Associated lead ID"
+    },
+    "call_log_id": {
+      "type": "string",
+      "description": "Triggering call log ID"
+    },
+    "channel": {
+      "type": "string",
+      "enum": [
+        "email",
+        "rcs",
+        "sms"
+      ],
+      "description": "Communication channel"
+    },
+    "recipient_email": {
+      "type": "string",
+      "description": "Recipient email address"
+    },
+    "recipient_phone": {
+      "type": "string",
+      "description": "Recipient phone number"
+    },
+    "subject": {
+      "type": "string",
+      "description": "Email subject or message title"
+    },
+    "body": {
+      "type": "string",
+      "description": "Message content (HTML for email)"
+    },
+    "outreach_type": {
+      "type": "string",
+      "enum": [
+        "lead_followup",
+        "retention",
+        "re_engagement",
+        "thank_you",
+        "proposal",
+        "callback_reminder"
+      ],
+      "description": "Type of outreach"
+    },
+    "call_outcome": {
+      "type": "string",
+      "description": "Call outcome that triggered this outreach"
+    },
+    "ai_summary": {
+      "type": "string",
+      "description": "AI-generated summary used for personalization"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "sent",
+        "failed",
+        "pending",
+        "skipped"
+      ],
+      "default": "pending",
+      "description": "Delivery status"
+    },
+    "error_message": {
+      "type": "string",
+      "description": "Error details if failed"
+    },
+    "is_retention": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this is a platform retention outreach"
+    }
+  },
+  "required": [
+    "client_id",
+    "channel",
+    "outreach_type"
+  ]
+}

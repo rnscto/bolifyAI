@@ -1,0 +1,98 @@
+{
+  "name": "CallLog",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Agent that made the call"
+    },
+    "lead_id": {
+      "type": "string",
+      "description": "Lead called"
+    },
+    "call_sid": {
+      "type": "string",
+      "description": "Unique call identifier"
+    },
+    "stream_sid": {
+      "type": "string",
+      "description": "WebSocket stream identifier from Smartflo"
+    },
+    "caller_id": {
+      "type": "string",
+      "description": "DID used for calling"
+    },
+    "callee_number": {
+      "type": "string",
+      "description": "Number called"
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "inbound",
+        "outbound"
+      ],
+      "description": "Call direction"
+    },
+    "duration": {
+      "type": "number",
+      "description": "Call duration in seconds"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "initiated",
+        "ringing",
+        "answered",
+        "completed",
+        "failed",
+        "no_answer"
+      ],
+      "default": "initiated",
+      "description": "Call status"
+    },
+    "recording_url": {
+      "type": "string",
+      "description": "URL to the call recording audio file"
+    },
+    "transcript": {
+      "type": "string",
+      "description": "Full conversation transcript"
+    },
+    "conversation_summary": {
+      "type": "string",
+      "description": "AI-generated summary"
+    },
+    "lead_status_updated": {
+      "type": "string",
+      "description": "Updated lead status after call"
+    },
+    "transferred_to": {
+      "type": "string",
+      "description": "Transfer details if applicable"
+    },
+    "call_start_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Call start timestamp"
+    },
+    "call_end_time": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Call end timestamp"
+    },
+    "agent_config_cache": {
+      "type": "object",
+      "description": "Cached agent config for WebSocket use (system_prompt, persona, knowledge_base_content)"
+    }
+  },
+  "required": [
+    "client_id",
+    "agent_id",
+    "call_sid"
+  ]
+}

@@ -1,0 +1,66 @@
+{
+  "name": "MarketplaceIntegration",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "shopify",
+        "woocommerce",
+        "amazon",
+        "magento",
+        "custom"
+      ],
+      "description": "Marketplace platform"
+    },
+    "store_url": {
+      "type": "string",
+      "description": "Store URL (e.g. mystore.myshopify.com)"
+    },
+    "api_access_token": {
+      "type": "string",
+      "description": "API access token / secret key"
+    },
+    "api_version": {
+      "type": "string",
+      "default": "2024-01",
+      "description": "API version"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive",
+        "error"
+      ],
+      "default": "inactive",
+      "description": "Integration status"
+    },
+    "last_tested": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last successful connection test"
+    },
+    "error_message": {
+      "type": "string",
+      "description": "Last error message"
+    },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Enabled capabilities (order_lookup, product_search, customer_lookup, refund_status)"
+    }
+  },
+  "required": [
+    "client_id",
+    "platform",
+    "store_url",
+    "api_access_token"
+  ]
+}

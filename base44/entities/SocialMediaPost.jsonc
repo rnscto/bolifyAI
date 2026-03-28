@@ -1,0 +1,90 @@
+{
+  "name": "SocialMediaPost",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "title": {
+      "type": "string",
+      "description": "Post title/topic"
+    },
+    "caption": {
+      "type": "string",
+      "description": "Post caption/body text"
+    },
+    "hashtags": {
+      "type": "string",
+      "description": "Hashtags for the post"
+    },
+    "poster_url": {
+      "type": "string",
+      "description": "Generated poster image URL"
+    },
+    "platform": {
+      "type": "string",
+      "enum": [
+        "all",
+        "instagram",
+        "linkedin",
+        "facebook",
+        "twitter",
+        "whatsapp"
+      ],
+      "default": "all",
+      "description": "Target platform"
+    },
+    "content_type": {
+      "type": "string",
+      "enum": [
+        "promotional",
+        "educational",
+        "testimonial",
+        "behind_the_scenes",
+        "tips",
+        "announcement",
+        "festival",
+        "engagement"
+      ],
+      "default": "promotional",
+      "description": "Type of content"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending_approval",
+        "approved",
+        "rejected",
+        "shared",
+        "expired"
+      ],
+      "default": "pending_approval",
+      "description": "Approval status"
+    },
+    "scheduled_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date this post is scheduled for"
+    },
+    "rejection_reason": {
+      "type": "string",
+      "description": "Reason for rejection"
+    },
+    "shared_on": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Platforms where this was shared"
+    },
+    "ai_prompt_used": {
+      "type": "string",
+      "description": "The prompt used to generate this content"
+    }
+  },
+  "required": [
+    "client_id",
+    "caption"
+  ]
+}

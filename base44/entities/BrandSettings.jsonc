@@ -1,0 +1,262 @@
+{
+  "name": "BrandSettings",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "brand_voice": {
+      "type": "string",
+      "description": "Brand voice description"
+    },
+    "tone": {
+      "type": "string",
+      "enum": [
+        "professional",
+        "casual",
+        "witty",
+        "inspirational",
+        "bold",
+        "friendly",
+        "formal"
+      ],
+      "default": "professional"
+    },
+    "target_audience": {
+      "type": "string",
+      "description": "Target audience description"
+    },
+    "logo_url": {
+      "type": "string",
+      "description": "Brand logo URL"
+    },
+    "brand_colors": {
+      "type": "string",
+      "description": "Brand colors (hex codes)"
+    },
+    "tagline": {
+      "type": "string",
+      "description": "Brand tagline or slogan"
+    },
+    "content_themes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Preferred content themes"
+    },
+    "avoid_topics": {
+      "type": "string",
+      "description": "Topics to avoid in content"
+    },
+    "language_preference": {
+      "type": "string",
+      "enum": [
+        "english",
+        "hindi",
+        "hinglish",
+        "bilingual"
+      ],
+      "default": "english"
+    },
+    "posting_frequency": {
+      "type": "string",
+      "enum": [
+        "daily",
+        "twice_daily",
+        "thrice_weekly",
+        "weekly"
+      ],
+      "default": "daily"
+    },
+    "cta_style": {
+      "type": "string",
+      "description": "Preferred call-to-action style"
+    },
+    "competitor_brands": {
+      "type": "string",
+      "description": "Competitor brands for differentiation"
+    },
+    "about_brand": {
+      "type": "string",
+      "description": "About the brand - story, mission, vision"
+    },
+    "products": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "price": {
+            "type": "string"
+          },
+          "image_url": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Products list"
+    },
+    "services": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "price": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Services list"
+    },
+    "usps": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Unique Selling Propositions"
+    },
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Key features"
+    },
+    "pricing_info": {
+      "type": "string",
+      "description": "General pricing information"
+    },
+    "current_offers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "valid_until": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Current discounts and offers"
+    },
+    "addresses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "address": {
+            "type": "string"
+          },
+          "city": {
+            "type": "string"
+          },
+          "state": {
+            "type": "string"
+          },
+          "pincode": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Business addresses"
+    },
+    "contact_phone": {
+      "type": "string",
+      "description": "Primary contact phone"
+    },
+    "contact_email": {
+      "type": "string",
+      "description": "Primary contact email"
+    },
+    "contact_whatsapp": {
+      "type": "string",
+      "description": "WhatsApp number"
+    },
+    "website_url": {
+      "type": "string",
+      "description": "Website URL"
+    },
+    "social_instagram": {
+      "type": "string",
+      "description": "Instagram handle"
+    },
+    "social_facebook": {
+      "type": "string",
+      "description": "Facebook page URL"
+    },
+    "social_linkedin": {
+      "type": "string",
+      "description": "LinkedIn page URL"
+    },
+    "social_twitter": {
+      "type": "string",
+      "description": "Twitter/X handle"
+    },
+    "social_youtube": {
+      "type": "string",
+      "description": "YouTube channel URL"
+    },
+    "google_maps_link": {
+      "type": "string",
+      "description": "Google Maps link"
+    },
+    "enabled_occasions": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Enabled festival/occasion IDs for auto-posting"
+    },
+    "custom_occasions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "date": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "emoji": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Client-added custom occasions not in default calendar"
+    }
+  },
+  "required": [
+    "client_id"
+  ]
+}

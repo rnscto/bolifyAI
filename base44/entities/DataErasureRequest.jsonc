@@ -1,0 +1,72 @@
+{
+  "name": "DataErasureRequest",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Client requesting erasure"
+    },
+    "requester_email": {
+      "type": "string",
+      "format": "email",
+      "description": "Email of the person requesting erasure"
+    },
+    "requester_name": {
+      "type": "string",
+      "description": "Name of requester"
+    },
+    "requester_phone": {
+      "type": "string",
+      "description": "Phone number of requester"
+    },
+    "data_type": {
+      "type": "string",
+      "enum": [
+        "call_recordings",
+        "transcripts",
+        "lead_data",
+        "all_personal_data",
+        "specific_records"
+      ],
+      "description": "Type of data to erase"
+    },
+    "description": {
+      "type": "string",
+      "description": "Details of the erasure request"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "in_progress",
+        "completed",
+        "rejected",
+        "partially_completed"
+      ],
+      "default": "pending",
+      "description": "Request status"
+    },
+    "rejection_reason": {
+      "type": "string",
+      "description": "Reason for rejection (e.g. legal hold)"
+    },
+    "completed_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When erasure was completed"
+    },
+    "records_deleted": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of records deleted"
+    },
+    "processed_by": {
+      "type": "string",
+      "description": "Admin who processed the request"
+    }
+  },
+  "required": [
+    "requester_email",
+    "data_type"
+  ]
+}

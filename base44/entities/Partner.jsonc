@@ -1,0 +1,134 @@
+{
+  "name": "Partner",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Partner full name"
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Partner email"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Partner phone number"
+    },
+    "company_name": {
+      "type": "string",
+      "description": "Partner company/agency name"
+    },
+    "registered_address": {
+      "type": "string",
+      "description": "Registered business address"
+    },
+    "gst_number": {
+      "type": "string",
+      "description": "GST number for invoicing"
+    },
+    "pan_number": {
+      "type": "string",
+      "description": "PAN number"
+    },
+    "bank_name": {
+      "type": "string",
+      "description": "Bank name for payouts"
+    },
+    "bank_account_number": {
+      "type": "string",
+      "description": "Bank account number"
+    },
+    "bank_ifsc": {
+      "type": "string",
+      "description": "Bank IFSC code"
+    },
+    "upi_id": {
+      "type": "string",
+      "description": "UPI ID for payouts"
+    },
+    "referral_code": {
+      "type": "string",
+      "description": "Unique referral code (e.g. VAANI-PARTNER123)"
+    },
+    "referral_link": {
+      "type": "string",
+      "description": "Full referral URL"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "suspended",
+        "rejected"
+      ],
+      "default": "pending",
+      "description": "Partner approval status"
+    },
+    "commission_rate": {
+      "type": "number",
+      "default": 20,
+      "description": "Revenue share percentage"
+    },
+    "total_referrals": {
+      "type": "number",
+      "default": 0,
+      "description": "Total clients referred"
+    },
+    "active_referrals": {
+      "type": "number",
+      "default": 0,
+      "description": "Currently active referred clients"
+    },
+    "total_earned": {
+      "type": "number",
+      "default": 0,
+      "description": "Total commission earned (INR)"
+    },
+    "total_paid": {
+      "type": "number",
+      "default": 0,
+      "description": "Total commission paid out (INR)"
+    },
+    "pending_payout": {
+      "type": "number",
+      "default": 0,
+      "description": "Pending commission (INR)"
+    },
+    "user_id": {
+      "type": "string",
+      "description": "Associated user account ID"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Admin notes"
+    },
+    "city": {
+      "type": "string",
+      "description": "City"
+    },
+    "state": {
+      "type": "string",
+      "description": "State"
+    },
+    "brand_logo_url": {
+      "type": "string",
+      "description": "Partner brand logo URL for white-label referral page"
+    },
+    "brand_color": {
+      "type": "string",
+      "default": "#2563eb",
+      "description": "Partner brand primary color (hex)"
+    },
+    "brand_tagline": {
+      "type": "string",
+      "description": "Custom tagline displayed on partner referral page"
+    }
+  },
+  "required": [
+    "name",
+    "email",
+    "phone"
+  ]
+}

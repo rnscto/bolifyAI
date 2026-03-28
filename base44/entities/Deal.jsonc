@@ -1,0 +1,100 @@
+{
+  "name": "Deal",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "title": {
+      "type": "string",
+      "description": "Deal title"
+    },
+    "lead_id": {
+      "type": "string",
+      "description": "Associated lead"
+    },
+    "contact_id": {
+      "type": "string",
+      "description": "Associated contact"
+    },
+    "value": {
+      "type": "number",
+      "description": "Deal value in currency"
+    },
+    "currency": {
+      "type": "string",
+      "default": "INR",
+      "description": "Currency code"
+    },
+    "stage": {
+      "type": "string",
+      "default": "new",
+      "description": "Current pipeline stage"
+    },
+    "probability": {
+      "type": "number",
+      "default": 10,
+      "description": "Win probability percentage"
+    },
+    "expected_close_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Expected close date"
+    },
+    "actual_close_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Actual close date"
+    },
+    "source": {
+      "type": "string",
+      "description": "Lead source"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "Sales rep email"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "won",
+        "lost",
+        "on_hold"
+      ],
+      "default": "open",
+      "description": "Deal status"
+    },
+    "lost_reason": {
+      "type": "string",
+      "description": "Reason for losing the deal"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Deal notes"
+    },
+    "custom_fields": {
+      "type": "object",
+      "description": "Industry-specific custom fields"
+    },
+    "last_activity_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last activity timestamp"
+    },
+    "proposal_uploaded": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether proposal has been uploaded"
+    },
+    "proposal_url": {
+      "type": "string",
+      "description": "Proposal document URL"
+    }
+  },
+  "required": [
+    "client_id",
+    "title"
+  ]
+}

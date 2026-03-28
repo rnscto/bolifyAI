@@ -1,0 +1,89 @@
+{
+  "name": "IndustryTemplate",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Industry name"
+    },
+    "icon": {
+      "type": "string",
+      "description": "Icon identifier"
+    },
+    "description": {
+      "type": "string",
+      "description": "Brief description of the industry template"
+    },
+    "default_lead_sources": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Default lead sources for this industry"
+    },
+    "default_deal_stages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "order": {
+            "type": "number"
+          },
+          "color": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Default deal pipeline stages"
+    },
+    "default_activity_types": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Default activity types"
+    },
+    "custom_fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "entity": {
+            "type": "string"
+          },
+          "field_name": {
+            "type": "string"
+          },
+          "field_type": {
+            "type": "string"
+          },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "description": "Custom fields for leads, deals, contacts"
+    },
+    "ai_system_prompt_template": {
+      "type": "string",
+      "description": "Default AI agent system prompt for this industry"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "draft"
+      ],
+      "default": "active"
+    }
+  },
+  "required": [
+    "name"
+  ]
+}

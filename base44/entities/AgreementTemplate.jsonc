@@ -1,0 +1,48 @@
+{
+  "name": "AgreementTemplate",
+  "type": "object",
+  "properties": {
+    "title": {
+      "type": "string",
+      "description": "Agreement template title"
+    },
+    "version": {
+      "type": "string",
+      "default": "1.0",
+      "description": "Template version"
+    },
+    "body_html": {
+      "type": "string",
+      "description": "Full HTML body of the agreement with placeholders like {{partner_name}}, {{partner_company}}, {{effective_date}}, etc."
+    },
+    "company_signatory_name": {
+      "type": "string",
+      "default": "Guddu Kumar Yadav",
+      "description": "Company authorized signatory name"
+    },
+    "company_signatory_designation": {
+      "type": "string",
+      "default": "Director",
+      "description": "Company signatory designation"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this is the currently active template"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "active",
+        "archived"
+      ],
+      "default": "draft",
+      "description": "Template status"
+    }
+  },
+  "required": [
+    "title",
+    "body_html"
+  ]
+}

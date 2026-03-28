@@ -1,0 +1,119 @@
+{
+  "name": "KYCDocument",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Client ID"
+    },
+    "partner_id": {
+      "type": "string",
+      "description": "Partner ID (if partner KYC)"
+    },
+    "entity_type": {
+      "type": "string",
+      "enum": [
+        "client",
+        "partner"
+      ],
+      "default": "client",
+      "description": "Whether this is a client or partner KYC"
+    },
+    "company_type": {
+      "type": "string",
+      "enum": [
+        "proprietorship",
+        "partnership",
+        "llp",
+        "private_limited",
+        "public_limited",
+        "one_person_company",
+        "other"
+      ],
+      "description": "Type of business entity"
+    },
+    "signatory_aadhaar_url": {
+      "type": "string",
+      "description": "Uploaded Aadhaar document URL of authorized signatory"
+    },
+    "signatory_aadhaar_number": {
+      "type": "string",
+      "description": "Last 4 digits of Aadhaar for reference"
+    },
+    "pan_url": {
+      "type": "string",
+      "description": "Uploaded PAN card document URL"
+    },
+    "pan_number": {
+      "type": "string",
+      "description": "PAN number"
+    },
+    "company_kyc_url": {
+      "type": "string",
+      "description": "Company registration document URL (COI/Partnership Deed/LLP Agreement etc.)"
+    },
+    "company_kyc_doc_type": {
+      "type": "string",
+      "enum": [
+        "certificate_of_incorporation",
+        "partnership_deed",
+        "llp_agreement",
+        "gst_certificate",
+        "shop_establishment",
+        "udyam_certificate",
+        "other"
+      ],
+      "description": "Type of company KYC document uploaded"
+    },
+    "additional_doc_url": {
+      "type": "string",
+      "description": "Any additional supporting document URL"
+    },
+    "additional_doc_type": {
+      "type": "string",
+      "description": "Description of additional document"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "under_review",
+        "approved",
+        "rejected",
+        "expired"
+      ],
+      "default": "pending",
+      "description": "KYC verification status"
+    },
+    "rejection_reason": {
+      "type": "string",
+      "description": "Reason for rejection if rejected"
+    },
+    "reviewed_by": {
+      "type": "string",
+      "description": "Admin email who reviewed"
+    },
+    "reviewed_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When KYC was reviewed"
+    },
+    "kyc_deadline": {
+      "type": "string",
+      "format": "date",
+      "description": "Deadline to complete KYC (30 days from onboarding)"
+    },
+    "entity_name": {
+      "type": "string",
+      "description": "Company/firm name for reference"
+    },
+    "signatory_name": {
+      "type": "string",
+      "description": "Name of authorized signatory"
+    }
+  },
+  "required": [
+    "entity_type",
+    "company_type"
+  ]
+}
