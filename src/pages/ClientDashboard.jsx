@@ -201,7 +201,7 @@ export default function ClientDashboard() {
               <div className="flex items-center justify-between">
                 <span className="text-sm text-gray-600">Monthly Rate</span>
                 <span className="text-sm font-medium">
-                  ₹{((client?.total_channels || 1) * 6500).toLocaleString()}
+                  ₹{((client?.total_channels || 1) * 14999).toLocaleString()}
                 </span>
               </div>
               <div className="pt-3 border-t">
