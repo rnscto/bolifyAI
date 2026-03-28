@@ -1065,7 +1065,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
         return;
       }
       try {
-        const decs = await svc.entities.CallDecision.filter({ call_log_id: session.callLogId, status: 'pending' });
+        const decsRaw = await svc.entities.CallDecision.filter({ call_log_id: session.callLogId, status: 'pending' });
+        const decs = Array.isArray(decsRaw) ? decsRaw : (decsRaw?.results || decsRaw?.data || []);
         const dec = decs.find(d => d.custom_message !== '__AWAITING_TIME__' && d.custom_message !== '__AWAITING_MESSAGE__');
         if (!dec) return;
         clearInterval(iv);
@@ -1605,8 +1606,9 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
               let trustedName = '';
               if (callerClean) {
                 try {
-                  const trustedContacts = await svc.entities.TrustedContact.filter({ client_id: didClient.id });
-                  const match = trustedContacts.find(tc => tc.phone && tc.phone.replace(/\D/g, '').slice(-10) === callerClean);
+                    const trustedContactsRaw = await svc.entities.TrustedContact.filter({ client_id: didClient.id });
+                    const trustedContacts = Array.isArray(trustedContactsRaw) ? trustedContactsRaw : (trustedContactsRaw?.results || trustedContactsRaw?.data || []);
+                    const match = trustedContacts.find(tc => tc.phone && tc.phone.replace(/\D/g, '').slice(-10) === callerClean);
                   if (match) { isTrusted = true; trustedName = match.name || ''; }
                 } catch (_) {}
               }
@@ -1722,7 +1724,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
               let isTrusted = false;
               let trustedName = '';
               if (cleanCaller) {
-                const trustedContacts = await svc.entities.TrustedContact.filter({ client_id: callLog.client_id });
+                const trustedContactsRaw = await svc.entities.TrustedContact.filter({ client_id: callLog.client_id });
+                const trustedContacts = Array.isArray(trustedContactsRaw) ? trustedContactsRaw : (trustedContactsRaw?.results || trustedContactsRaw?.data || []);
                 const match = trustedContacts.find(tc => tc.phone && tc.phone.replace(/\D/g, '').slice(-10) === cleanCaller);
                 if (match) {
                   isTrusted = true;
