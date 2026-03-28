@@ -22,15 +22,11 @@ export default function FooterSection() {
             </p>
             <div className="space-y-2 text-sm">
               <p className="text-[#0097a7] font-semibold text-xs uppercase tracking-wider mb-3">
-                Getway AI — Business Automation Platform
+                GETWAY TECHNOLOGY
               </p>
               <div className="flex items-start gap-2 text-gray-600">
                 <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-[#00bcd4]" />
-                <span>101 Chanda Tower, Gandhi Path, Vaishali Nagar, Jaipur 302021</span>
-              </div>
-              <div className="flex items-center gap-2 text-gray-600">
-                <span className="text-xs text-gray-400">CIN:</span>
-                <span>U74999RJ2022PTC083830</span>
+                <span>SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, GURUGRAM (HR) - 122001</span>
               </div>
             </div>
           </div>
@@ -84,9 +80,9 @@ export default function FooterSection() {
             <h4 className="text-[#0097a7] font-semibold mb-4">Contact Us</h4>
             <ul className="space-y-3 text-sm">
               <li>
-                <a href="tel:+917020609101" className="flex items-center gap-2 text-gray-500 hover:text-[#00bcd4] transition-colors">
+                <a href="tel:+919255522544" className="flex items-center gap-2 text-gray-500 hover:text-[#00bcd4] transition-colors">
                   <Phone className="w-4 h-4 text-[#00bcd4]" />
-                  +91-7020609101
+                  92555-22544
                 </a>
               </li>
               <li>
