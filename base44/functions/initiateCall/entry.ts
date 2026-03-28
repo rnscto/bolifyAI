@@ -180,11 +180,13 @@ IMPORTANT RULES:
     ].filter(Boolean).join('\n');
 
     // Create call log with cached agent config (so streamAudio WebSocket can read it without cross-function calls)
+    // Use Smartflo's ref_id as the call_sid so streamAudio can match it when the WebSocket connects
+    const tempCallSid = `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const callLog = await base44.asServiceRole.entities.CallLog.create({
       client_id: agent.client_id,
       agent_id: agent_id,
       lead_id: lead_id,
-      call_sid: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      call_sid: tempCallSid,
       caller_id: callerDID,
       callee_number: phone_number,
       direction: 'outbound',
@@ -259,8 +261,9 @@ IMPORTANT RULES:
     }
 
     // Update call log with Smartflo response
+    // Use ref_id (the Smartflo call ID that will appear in the WebSocket start event)
     await base44.asServiceRole.entities.CallLog.update(callLog.id, {
-      call_sid: smartfloData.call_id || smartfloData.call_sid || callLog.call_sid,
+      call_sid: smartfloData.ref_id || smartfloData.call_id || smartfloData.call_sid || tempCallSid,
       status: 'ringing'
     });
 
