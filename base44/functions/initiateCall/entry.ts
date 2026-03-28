@@ -51,12 +51,16 @@ Deno.serve(async (req) => {
       }, { status: 400 });
     }
 
-    // Check if this is a demo agent (client is trial/onboarding and DID is from demo pool)
+    // Check if this is a demo agent (client is trial/onboarding)
     const clientData = clients[0];
     const isDemoAgent = clientData.account_status === 'trial' || clientData.account_status === 'onboarding';
 
-    // Use primary DID for single calls
-    const callerDID = allDIDs[0];
+    // For demo agents, always use a DID from the shared API key's valid pool (85xxx series)
+    // These are the only DIDs mapped to the shared SMARTFLO_API_KEY
+    const DEMO_VALID_DIDS = ['918065485979', '918065485980', '918065485981', '918065485982', '918065485984'];
+    const callerDID = isDemoAgent
+      ? DEMO_VALID_DIDS[Math.floor(Math.random() * DEMO_VALID_DIDS.length)]
+      : allDIDs[0];
 
     // Pre-fetch knowledge base content for agent config cache
     let kbContent = '';
