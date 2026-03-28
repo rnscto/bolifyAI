@@ -363,7 +363,17 @@ Deno.serve(async (req) => {
         }
       }
 
-      // ── Strategy 2: Recent unclaimed calls by callee ──
+      // ── Strategy 2: lead_id from customParameters ──
+      if (!callLog && session.leadId) {
+        const logsRaw = await svc.entities.CallLog.filter({ lead_id: session.leadId, status: 'ringing' });
+        const logs = Array.isArray(logsRaw) ? logsRaw : (logsRaw?.results || logsRaw?.data || []);
+        if (logs.length > 0) {
+          callLog = logs[0];
+          console.log(`[${reqId}] 🔍 lead_id match: ${callLog.id}`);
+        }
+      }
+
+      // ── Strategy 3: Recent unclaimed calls by callee ──
       if (!callLog && session.calleeNumber) {
         const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '').slice(-10);
         const recentLogsRaw = await svc.entities.CallLog.list('-created_date', 20);
@@ -379,7 +389,7 @@ Deno.serve(async (req) => {
       }
 
       if (!callLog) {
-        console.log(`[${reqId}] ⚠️ No call log found`);
+        console.log(`[${reqId}] ⚠️ No call log found (sid=${session.callSid}, lead=${session.leadId}, callee=${session.calleeNumber})`);
         return;
       }
 
@@ -444,12 +454,14 @@ Deno.serve(async (req) => {
         const startData = msg.start || {};
         session.streamSid = startData.streamSid;
         session.callSid = startData.callSid;
+        session.leadId = startData.customParameters?.lead_id || '';
+        session.agentId = startData.customParameters?.agent_id || '';
 
         session.calleeNumber = startData.customParameters?.customer_number ||
           startData.customParameters?.called_number || startData.to || '';
         session.callerNumber = startData.from || startData.customParameters?.from || '';
 
-        console.log(`[${reqId}] 📞 Call start: sid=${session.callSid}, callee=${session.calleeNumber}, caller=${session.callerNumber}`);
+        console.log(`[${reqId}] 📞 Call start: sid=${session.callSid}, lead=${session.leadId}, callee=${session.calleeNumber}, caller=${session.callerNumber}`);
 
         // Reset audio conversion state
         _lastUpsampleValue = 0;
