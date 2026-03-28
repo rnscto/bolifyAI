@@ -176,12 +176,6 @@ IMPORTANT RULES:
       `\n\n--- LEAD CONTEXT (YOU MUST USE THIS DATA IN THE CONVERSATION) ---\n${leadContext}`
     ].filter(Boolean).join('\n');
 
-    // Normalize callee number: always store as 12-digit (91XXXXXXXXXX) to match Smartflo WebSocket 'to' field
-    let normalizedCalleeNumber = phone_number.replace(/[^0-9]/g, '');
-    if (normalizedCalleeNumber.length === 10) {
-      normalizedCalleeNumber = '91' + normalizedCalleeNumber;
-    }
-
     // Create call log with cached agent config (so streamAudio WebSocket can read it without cross-function calls)
     const callLog = await base44.asServiceRole.entities.CallLog.create({
       client_id: agent.client_id,
@@ -189,7 +183,7 @@ IMPORTANT RULES:
       lead_id: lead_id,
       call_sid: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       caller_id: callerDID,
-      callee_number: normalizedCalleeNumber,
+      callee_number: phone_number,
       direction: 'outbound',
       status: 'initiated',
       call_start_time: new Date().toISOString(),
@@ -262,13 +256,10 @@ IMPORTANT RULES:
     }
 
     // Update call log with Smartflo response
-    // When call_id is null, Smartflo still provides ref_id — use it so webhook can match
-    const newCallSid = smartfloData.call_id || smartfloData.call_sid || smartfloData.ref_id || callLog.call_sid;
     await base44.asServiceRole.entities.CallLog.update(callLog.id, {
-      call_sid: newCallSid,
+      call_sid: smartfloData.call_id || smartfloData.call_sid || callLog.call_sid,
       status: 'ringing'
     });
-    console.log(`Call log updated: call_sid=${newCallSid}, ref_id=${smartfloData.ref_id}`);
 
     // Update lead status
     await base44.asServiceRole.entities.Lead.update(lead_id, {
