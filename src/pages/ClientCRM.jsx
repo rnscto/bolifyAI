@@ -86,24 +86,24 @@ export default function ClientCRM() {
       />
 
       {/* CRM Active - Quick Access */}
-      {client?.has_custom_crm && (
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between flex-wrap gap-4">
-              <div className="flex items-center gap-3">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-                <div>
-                  <p className="font-semibold text-green-900">Custom CRM Active</p>
-                  <p className="text-sm text-green-700">Your industry-specific CRM is ready to use</p>
-                </div>
-              </div>
-              <Link to={createPageUrl('ClientCRMDashboard')}>
-                <Button className="bg-green-600 hover:bg-green-700">Go to CRM Dashboard</Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+       {client?.has_custom_crm && (
+         <Card className="border-primary/20 bg-primary/5">
+           <CardContent className="p-6">
+             <div className="flex items-center justify-between flex-wrap gap-4">
+               <div className="flex items-center gap-3">
+                 <CheckCircle className="w-6 h-6 text-primary" />
+                 <div>
+                   <p className="font-semibold text-primary">Custom CRM Active</p>
+                   <p className="text-sm text-primary/70">Your industry-specific CRM is ready to use</p>
+                 </div>
+               </div>
+               <Link to={createPageUrl('ClientCRMDashboard')}>
+                 <Button className="bg-primary hover:bg-primary/90">Go to CRM Dashboard</Button>
+               </Link>
+             </div>
+           </CardContent>
+         </Card>
+       )}
 
       {/* External CRM Integrations */}
       <div className="flex items-center justify-between">
