@@ -35,7 +35,7 @@ export default function ActiveSubscription({ client, subscription }) {
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  ₹{((client?.total_channels || 1) * 6500).toLocaleString()}
+                  ₹{((client?.total_channels || 1) * 14999).toLocaleString()}
                 </p>
                 <p className="text-sm text-gray-600">Monthly Rate</p>
               </div>
@@ -77,7 +77,7 @@ export default function ActiveSubscription({ client, subscription }) {
           </div>
           <div className="flex items-center justify-between py-2 border-b">
             <span className="text-gray-600">Rate per Channel</span>
-            <span className="font-medium">₹6,500/month</span>
+            <span className="font-medium">₹14,999/month</span>
           </div>
           <div className="flex items-center justify-between py-2 border-b">
             <span className="text-gray-600">Total Channels</span>
@@ -92,7 +92,7 @@ export default function ActiveSubscription({ client, subscription }) {
           <div className="flex items-center justify-between py-2 border-b">
             <span className="text-gray-600">Quarterly Total</span>
             <span className="font-medium text-lg">
-              ₹{(((client?.total_channels || 1) * 6500 + (client?.has_custom_crm ? 1999 : 0)) * 3).toLocaleString()}
+              ₹{(((client?.total_channels || 1) * 14999 + (client?.has_custom_crm ? 1999 : 0)) * 3).toLocaleString()}
             </span>
           </div>
           {subscription?.billing_start_date && (

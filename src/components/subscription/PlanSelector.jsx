@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Check, Minus, Plus } from 'lucide-react';
 
 export default function PlanSelector({ channels, setChannels, includeCRM, setIncludeCRM, onSubscribe, loading }) {
-  const ratePerChannel = 6500;
+  const ratePerChannel = 14999;
   const crmRate = 1999;
   const months = 3;
 
