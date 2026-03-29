@@ -26,8 +26,8 @@ export default function RefundPolicy() {
           <h2 className="text-2xl font-bold text-gray-900 mb-4">1. Overview</h2>
           <p className="text-gray-600 leading-relaxed">
             This Refund & Cancellation Policy applies to all subscription plans and services offered by 
-            <strong> Tech Brainbucks Infosoft Pvt Ltd</strong> (CIN: U74999RJ2022PTC083830), operating the brand 
-            <strong> VaaniAI</strong>, through the platform at vaaniai.io. By subscribing to our services, you agree 
+            <strong> Getway Technology</strong>, operating the brand 
+            <strong> Getway AI</strong>, through the platform at getway.in. By subscribing to our services, you agree 
             to the terms outlined in this policy.
           </p>
         </section>
@@ -61,7 +61,7 @@ export default function RefundPolicy() {
         <section className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">4. Cancellation Policy</h2>
           <ul className="list-disc pl-6 text-gray-600 space-y-2">
-            <li>You may cancel your subscription at any time through your account dashboard or by contacting us at <a href="mailto:sales@vaaniai.io" className="text-blue-600 hover:underline">sales@vaaniai.io</a>.</li>
+            <li>You may cancel your subscription at any time through your account dashboard or by contacting us at <a href="mailto:connect@getway.in" className="text-blue-600 hover:underline">connect@getway.in</a>.</li>
             <li>Cancellation will take effect at the <strong>end of the current billing period</strong>.</li>
             <li>You will continue to have access to the service until the end of the paid period.</li>
             <li>No partial or pro-rata refunds will be issued for unused days within a billing cycle.</li>
@@ -103,7 +103,7 @@ export default function RefundPolicy() {
           <h2 className="text-2xl font-bold text-gray-900 mb-4">6. How to Request a Refund</h2>
           <p className="text-gray-600 leading-relaxed">To submit a refund request, follow these steps:</p>
           <ol className="list-decimal pl-6 text-gray-600 space-y-2 mt-2">
-            <li>Send an email to <a href="mailto:sales@vaaniai.io" className="text-blue-600 hover:underline">sales@vaaniai.io</a> with the subject line: <strong>"Refund Request – [Your Company Name]"</strong>.</li>
+            <li>Send an email to <a href="mailto:connect@getway.in" className="text-blue-600 hover:underline">connect@getway.in</a> with the subject line: <strong>"Refund Request – [Your Company Name]"</strong>.</li>
             <li>Include the following details:
               <ul className="list-disc pl-6 space-y-1 mt-1">
                 <li>Your registered email address</li>
@@ -152,11 +152,10 @@ export default function RefundPolicy() {
             For refund-related queries or to submit a request, please contact us:
           </p>
           <div className="bg-slate-50 rounded-lg p-4 mt-3 text-gray-600 text-sm">
-            <p><strong>Tech Brainbucks Infosoft Pvt Ltd</strong></p>
-            <p>101 Chanda Tower, Gandhi Path, Vaishali Nagar, Jaipur 302021, Rajasthan, India</p>
-            <p>CIN: U74999RJ2022PTC083830</p>
-            <p>Email: <a href="mailto:sales@vaaniai.io" className="text-blue-600 hover:underline">sales@vaaniai.io</a></p>
-            <p>Phone: <a href="tel:+917020609101" className="text-blue-600 hover:underline">+91-7020609101</a></p>
+            <p><strong>Getway Technology</strong></p>
+            <p>SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, Gurugram (HR) - 122001</p>
+            <p>Email: <a href="mailto:connect@getway.in" className="text-blue-600 hover:underline">connect@getway.in</a></p>
+            <p>Phone: <a href="tel:+919255522544" className="text-blue-600 hover:underline">+91-9255522544</a></p>
           </div>
         </section>
       </div>

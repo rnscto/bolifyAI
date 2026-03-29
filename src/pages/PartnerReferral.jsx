@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, Loader2, Users, IndianRupee, TrendingUp, Handshake, Phone, Cpu, BarChart3 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const DEFAULT_LOGO = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/9b1876319_WhatsApp_Image_2026-02-11_at_44923_PM-removebg-preview.png";
+const DEFAULT_LOGO = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/8e9cbc9d4_Getway_Logojpg.jpeg";
 
 const FEATURES = [
   { icon: Phone, title: 'AI Voice Calls', desc: 'Automated outbound & inbound calls in Hindi/English' },
@@ -102,7 +102,7 @@ export default function PartnerReferral() {
             <CardContent className="pt-8 pb-8">
               <CheckCircle2 className="w-16 h-16 mx-auto mb-4" style={{ color: brandColor }} />
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Thank You!</h2>
-              <p className="text-gray-600 mb-4">Your interest has been recorded. Our team will contact you shortly to set up your VaaniAI account.</p>
+              <p className="text-gray-600 mb-4">Your interest has been recorded. Our team will contact you shortly to set up your Getway AI account.</p>
               <Badge style={{ backgroundColor: `${brandColor}20`, color: brandColor }}>Referred by {partner.company_name || partner.name}</Badge>
             </CardContent>
           </Card>
@@ -141,7 +141,7 @@ export default function PartnerReferral() {
         {/* Signup Form */}
         <Card className="max-w-xl mx-auto mb-16">
           <CardHeader>
-            <CardTitle>Get Started with VaaniAI</CardTitle>
+            <CardTitle>Get Started with Getway AI</CardTitle>
             <CardDescription>Fill in your details and our team will set you up within 24 hours.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -172,7 +172,7 @@ export default function PartnerReferral() {
               </Button>
 
               <p className="text-xs text-gray-400 text-center">
-                Referred by <strong>{partner.company_name || partner.name}</strong> • Powered by VaaniAI
+                Referred by <strong>{partner.company_name || partner.name}</strong> • Powered by Getway AI
               </p>
             </form>
           </CardContent>

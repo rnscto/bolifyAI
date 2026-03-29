@@ -9,14 +9,14 @@ const CONSENTS = [
   {
     id: 'platform_tos',
     label: 'Terms of Service & Platform Usage',
-    description: 'I agree to VaaniAI\'s Terms of Service and acceptable use policy for AI voice calling.',
+    description: 'I agree to Getway AI\'s Terms of Service and acceptable use policy for AI voice calling.',
     icon: Scale,
     required: true,
   },
   {
     id: 'dpdp_processing',
     label: 'Data Processing (DPDP Act 2023)',
-    description: 'I consent to VaaniAI processing voice recordings, transcripts, and lead data as a Data Processor under the DPDP Act. All data is stored on Indian servers.',
+    description: 'I consent to Getway AI processing voice recordings, transcripts, and lead data as a Data Processor under the DPDP Act. All data is stored on Indian servers.',
     icon: Database,
     required: true,
   },
@@ -92,8 +92,8 @@ export default function ComplianceConsentStep({ onNext, onBack, consents, onCons
       <div className="bg-gray-50 rounded-xl p-4 text-sm">
         <p className="font-medium text-gray-700 mb-2">Data Protection Officer (DPO)</p>
         <div className="text-gray-500 space-y-1">
-          <p>Nand K. Yadav</p>
-          <p>Email: nand@brainbucks.in | Phone: +91-7020609101</p>
+          <p>Bijendra Saini</p>
+          <p>Email: connect@getway.in | Phone: +91-9255522544</p>
           <p className="text-xs mt-2">For data access, correction, or erasure requests, contact the DPO.</p>
         </div>
       </div>

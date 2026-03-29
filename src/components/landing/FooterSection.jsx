@@ -95,9 +95,9 @@ export default function FooterSection() {
 
             <h4 className="text-[#0097a7] font-semibold mt-6 mb-3">Data Protection Officer</h4>
             <div className="text-sm text-gray-500 space-y-1">
-              <p className="font-medium text-gray-700">Getway AI Support</p>
+              <p className="font-medium text-gray-700">Bijendra Saini</p>
               <p>connect@getway.in</p>
-              <p>+91-7020609101</p>
+              <p>+91-9255522544</p>
             </div>
           </div>
         </div>

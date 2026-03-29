@@ -61,7 +61,7 @@ export default function BuildCRMCard({ onGetStarted, trialDaysLeft, crmStatus })
               <h2 className="text-3xl md:text-4xl font-extrabold text-white leading-tight">
                 Build your CRM with
                 <span className="block bg-clip-text text-transparent bg-gradient-to-r from-yellow-200 to-pink-200">
-                  VaaniAI
+                  Getway AI
                 </span>
               </h2>
               <p className="text-lg text-indigo-100 max-w-md">

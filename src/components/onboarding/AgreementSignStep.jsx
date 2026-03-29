@@ -42,7 +42,7 @@ export default function AgreementSignStep({ onNext, onBack, profileData, user })
     const formattedDate = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
 
     let html = tmpl.body_html
-      .replace(/\{\{agreement_number\}\}/g, 'VAANI-CSA-XXXX-XXX')
+      .replace(/\{\{agreement_number\}\}/g, 'GETWAY-CSA-XXXX-XXX')
       .replace(/\{\{effective_date_formatted\}\}/g, formattedDate)
       .replace(/\{\{client_name\}\}/g, profileData.company_name || '')
       .replace(/\{\{signatory_name\}\}/g, user?.full_name || '')
@@ -74,7 +74,7 @@ export default function AgreementSignStep({ onNext, onBack, profileData, user })
 
     // Generate agreement number
     const allAgr = await base44.entities.ClientAgreement.list();
-    const agrNum = `VAANI-CSA-${signedDate.getFullYear()}-${String(allAgr.length + 1).padStart(3, '0')}`;
+    const agrNum = `GETWAY-CSA-${signedDate.getFullYear()}-${String(allAgr.length + 1).padStart(3, '0')}`;
     const effectiveDate = signedDate.toISOString().split('T')[0];
     const expiryDate = new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0];
     const formattedEffective = signedDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
