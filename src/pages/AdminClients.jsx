@@ -28,11 +28,12 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Edit, Trash2, FileText } from 'lucide-react';
+import { Plus, Edit, Trash2, FileText, CreditCard } from 'lucide-react';
 import { toast } from 'sonner';
 import ClientAgreementTemplateEditor from '../components/admin/ClientAgreementTemplateEditor';
 import AdminSignedAgreements from '../components/admin/AdminSignedAgreements';
 import AdminKYCManagement from '../components/admin/AdminKYCManagement';
+import ActivateClientDialog from '../components/admin/ActivateClientDialog';
 
 export default function AdminClients() {
   const [clients, setClients] = useState([]);
@@ -40,6 +41,7 @@ export default function AdminClients() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
   const [users, setUsers] = useState([]);
+  const [activateClient, setActivateClient] = useState(null);
   const [formData, setFormData] = useState({
     company_name: '',
     email: '',
@@ -316,6 +318,15 @@ export default function AdminClients() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          title="Manage Account & Billing"
+                          onClick={() => setActivateClient(client)}
+                        >
+                          <CreditCard className="w-4 h-4 text-blue-600" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Edit Details"
                           onClick={() => handleEdit(client)}
                         >
                           <Edit className="w-4 h-4" />
@@ -323,6 +334,7 @@ export default function AdminClients() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          title="Delete"
                           onClick={() => handleDelete(client.id)}
                         >
                           <Trash2 className="w-4 h-4 text-red-600" />
@@ -350,6 +362,14 @@ export default function AdminClients() {
           <ClientAgreementTemplateEditor />
         </TabsContent>
       </Tabs>
+      {activateClient && (
+        <ActivateClientDialog
+          client={activateClient}
+          open={!!activateClient}
+          onOpenChange={(open) => { if (!open) setActivateClient(null); }}
+          onUpdated={loadClients}
+        />
+      )}
     </div>
   );
 }
