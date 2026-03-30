@@ -420,15 +420,15 @@ Deno.serve(async (req) => {
   }
   const base44 = createClientFromRequest(base44Req);
 
-  // Non-WebSocket: return status
+  // Non-WebSocket: Smartflo Dynamic endpoint or status check
   if (!isWebSocket) {
     const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
-    const protocol = req.headers.get('x-forwarded-proto') === 'https' ? 'wss' : 'ws';
-    return new Response(JSON.stringify({
-      status: 'ready',
-      version: 'v7.0-hybrid-gpt5nano',
-      wss_url: `${protocol}://${host}/functions/streamAudio`
-    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    const wssUrl = `wss://${host}/functions/streamAudio`;
+    if (req.method === 'POST') {
+      try { const bd = await req.json(); console.log(`[${reqId}] 📨 Dynamic POST:`, JSON.stringify(bd)); } catch (_) {}
+    }
+    // Smartflo Dynamic endpoint requires exactly {"sucess": true, "wss_url": "wss://..."} — note: "sucess" with one 's' is Smartflo's spec
+    return new Response(JSON.stringify({ sucess: true, wss_url: wssUrl }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 
   // ─── Upgrade Smartflo WebSocket ───
