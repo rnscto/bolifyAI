@@ -20,7 +20,7 @@ export default function NotificationSettings({ client, onUpdate }) {
   const [disconnectingTg, setDisconnectingTg] = useState(false);
 
   const isTelegramConnected = client?.telegram_connected && client?.telegram_chat_id;
-  const botUsername = 'vaaniaiio_bot';
+  const botUsername = 'getway_aibot';
   const connectUrl = `https://t.me/${botUsername}?start=${client?.id || ''}`;
 
   const handleSave = async () => {

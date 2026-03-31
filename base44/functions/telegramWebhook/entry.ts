@@ -188,7 +188,7 @@ Deno.serve(async (req) => {
       try {
         const client = await svcStart.entities.Client.get(clientId);
         if (!client) {
-          await sendTelegramMessage(chatId, '❌ Invalid link. Please try again from your VaaniAI dashboard.');
+          await sendTelegramMessage(chatId, '❌ Invalid link. Please try again from your Getway AI dashboard.');
           return Response.json({ ok: true });
         }
 
@@ -225,7 +225,7 @@ Deno.serve(async (req) => {
           });
           await sendTelegramMessage(chatId, '🔕 Disconnected. You will no longer receive call notifications here.');
         } else {
-          await sendTelegramMessage(chatId, 'No VaaniAI account is linked to this chat.');
+          await sendTelegramMessage(chatId, 'No Getway AI account is linked to this chat.');
         }
       } catch (err) {
         console.error('[telegramWebhook] Disconnect error:', err.message);

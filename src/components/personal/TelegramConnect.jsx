@@ -12,7 +12,7 @@ export default function TelegramConnect({ client, onUpdate }) {
   const isConnected = client?.telegram_connected && client?.telegram_chat_id;
 
   // Build the Telegram deep link with client ID
-  const botUsername = 'vaaniaiio_bot';
+  const botUsername = 'getway_aibot';
   const connectUrl = `https://t.me/${botUsername}?start=${client?.id || ''}`;
 
   const handleDisconnect = async () => {
