@@ -1,0 +1,27 @@
+{
+  "name": "LeadGroup",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "name": {
+      "type": "string",
+      "description": "Group name (e.g., Tech Summit 2026, LinkedIn Campaign)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Optional description of this group"
+    },
+    "color": {
+      "type": "string",
+      "default": "#3b82f6",
+      "description": "Badge color for display"
+    }
+  },
+  "required": [
+    "client_id",
+    "name"
+  ]
+}

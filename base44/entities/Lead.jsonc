@@ -88,11 +88,11 @@
       "items": {
         "type": "string"
       },
-      "description": "AI-detected intent keywords (e.g. pricing_inquiry, demo_request, competitor_mention)"
+      "description": "AI-detected intent keywords"
     },
     "score_breakdown": {
       "type": "object",
-      "description": "AI score breakdown: {sentiment_score, intent_score, engagement_score, keyword_score, reasoning}"
+      "description": "AI score breakdown"
     },
     "qualification_tier": {
       "type": "string",
@@ -114,7 +114,7 @@
       "items": {
         "type": "string"
       },
-      "description": "Log of automated actions taken (e.g. task_created, nurture_enrolled, flagged_removal)"
+      "description": "Log of automated actions taken"
     },
     "tags": {
       "type": "array",
@@ -132,6 +132,10 @@
       "type": "number",
       "default": 0,
       "description": "Total engagement count"
+    },
+    "group_id": {
+      "type": "string",
+      "description": "Lead group ID for organizing leads"
     }
   },
   "required": [

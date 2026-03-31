@@ -28,12 +28,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter, Loader2, PhoneCall, Eye } from 'lucide-react';
+import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter, Loader2, PhoneCall, Eye, FolderOpen, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import CSVImportDialog from '../components/leads/CSVImportDialog';
 import LeadScoreBadge from '../components/leads/LeadScoreBadge';
+import LeadGroupManager from '../components/leads/LeadGroupManager';
 
 export default function ClientLeads() {
   const [leads, setLeads] = useState([]);
@@ -46,14 +47,18 @@ export default function ClientLeads() {
   const [tierFilter, setTierFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [sourceFilter, setSourceFilter] = useState('all');
+  const [groupFilter, setGroupFilter] = useState('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [callingLeadId, setCallingLeadId] = useState(null);
+  const [groups, setGroups] = useState([]);
+  const [groupManagerOpen, setGroupManagerOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
     email: '',
     company: '',
-    notes: ''
+    notes: '',
+    group_id: ''
   });
 
   useEffect(() => {
@@ -71,13 +76,15 @@ export default function ClientLeads() {
         const clientData = clients[0];
         setClient(clientData);
 
-        const [leadsData, agentsData] = await Promise.all([
+        const [leadsData, agentsData, groupsData] = await Promise.all([
           base44.entities.Lead.filter({ client_id: clientData.id }, '-created_date'),
-          base44.entities.Agent.filter({ client_id: clientData.id })
+          base44.entities.Agent.filter({ client_id: clientData.id }),
+          base44.entities.LeadGroup.filter({ client_id: clientData.id }, '-created_date')
         ]);
 
         setLeads(leadsData);
         setAgents(agentsData);
+        setGroups(groupsData);
       }
     } catch (error) {
       console.error('Error loading data:', error);
@@ -121,7 +128,7 @@ export default function ClientLeads() {
 
   const resetForm = () => {
     setEditingLead(null);
-    setFormData({ name: '', phone: '', email: '', company: '', notes: '' });
+    setFormData({ name: '', phone: '', email: '', company: '', notes: '', group_id: '' });
     setDialogOpen(false);
   };
 
@@ -132,7 +139,8 @@ export default function ClientLeads() {
       phone: lead.phone,
       email: lead.email || '',
       company: lead.company || '',
-      notes: lead.notes || ''
+      notes: lead.notes || '',
+      group_id: lead.group_id || ''
     });
     setDialogOpen(true);
   };
@@ -210,6 +218,9 @@ export default function ClientLeads() {
           <p className="text-gray-600 mt-1">Manage your lead database</p>
         </div>
         <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setGroupManagerOpen(true)}>
+            <FolderOpen className="w-4 h-4 mr-2" /> Groups
+          </Button>
           <Button variant="outline" onClick={() => setCsvDialogOpen(true)}>
             <Upload className="w-4 h-4 mr-2" /> Import Leads
           </Button>
@@ -266,13 +277,32 @@ export default function ClientLeads() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="notes">Notes</Label>
-                  <Input
-                    id="notes"
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                  />
+                  <Label htmlFor="group">Group</Label>
+                  <Select value={formData.group_id || '_none'} onValueChange={(v) => setFormData({ ...formData, group_id: v === '_none' ? '' : v })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="No Group" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="_none">No Group</SelectItem>
+                      {groups.map(g => (
+                        <SelectItem key={g.id} value={g.id}>
+                          <span className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: g.color || '#3b82f6' }} />
+                            {g.name}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
+                <div>
+                   <Label htmlFor="notes">Notes</Label>
+                   <Input
+                     id="notes"
+                     value={formData.notes}
+                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                   />
+                 </div>
                 <div className="flex gap-3 justify-end">
                   <Button type="button" variant="outline" onClick={() => { setDialogOpen(false); resetForm(); }}>
                     Cancel
@@ -350,8 +380,25 @@ export default function ClientLeads() {
                   ))}
                 </SelectContent>
               </Select>
-              {(tierFilter !== 'all' || statusFilter !== 'all' || sourceFilter !== 'all') && (
-                <Button size="sm" variant="ghost" onClick={() => { setTierFilter('all'); setStatusFilter('all'); setSourceFilter('all'); }}>
+              <Select value={groupFilter} onValueChange={setGroupFilter}>
+                <SelectTrigger className="w-40 h-8 text-sm">
+                  <SelectValue placeholder="Group" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Groups</SelectItem>
+                  <SelectItem value="_ungrouped">Ungrouped</SelectItem>
+                  {groups.map(g => (
+                    <SelectItem key={g.id} value={g.id}>
+                      <span className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: g.color || '#3b82f6' }} />
+                        {g.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {(tierFilter !== 'all' || statusFilter !== 'all' || sourceFilter !== 'all' || groupFilter !== 'all') && (
+                <Button size="sm" variant="ghost" onClick={() => { setTierFilter('all'); setStatusFilter('all'); setSourceFilter('all'); setGroupFilter('all'); }}>
                   <Filter className="w-3 h-3 mr-1" /> Clear filters
                 </Button>
               )}
@@ -364,6 +411,7 @@ export default function ClientLeads() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Phone</TableHead>
+                <TableHead>Group</TableHead>
                 <TableHead>Company</TableHead>
                 <TableHead>AI Score</TableHead>
                 <TableHead>Status</TableHead>
@@ -377,6 +425,7 @@ export default function ClientLeads() {
                   .filter(l => tierFilter === 'all' || l.qualification_tier === tierFilter)
                   .filter(l => statusFilter === 'all' || l.status === statusFilter)
                   .filter(l => sourceFilter === 'all' || l.source === sourceFilter)
+                  .filter(l => groupFilter === 'all' || (groupFilter === '_ungrouped' ? !l.group_id : l.group_id === groupFilter))
                   .filter(l => {
                     if (!searchTerm) return true;
                     const s = searchTerm.toLowerCase();
@@ -386,7 +435,7 @@ export default function ClientLeads() {
                   });
                 return filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-gray-500">
+                  <TableCell colSpan={8} className="text-center text-gray-500">
                     {leads.length === 0 ? 'No leads found. Add your first lead to get started.' : 'No leads match the current filter.'}
                   </TableCell>
                 </TableRow>
@@ -400,6 +449,16 @@ export default function ClientLeads() {
                       </Link>
                     </TableCell>
                     <TableCell>{lead.phone}</TableCell>
+                    <TableCell>
+                      {(() => {
+                        const g = groups.find(gr => gr.id === lead.group_id);
+                        return g ? (
+                          <Badge variant="outline" className="text-xs font-normal" style={{ borderColor: g.color, color: g.color }}>
+                            {g.name}
+                          </Badge>
+                        ) : <span className="text-gray-400 text-xs">—</span>;
+                      })()}
+                    </TableCell>
                     <TableCell>{lead.company || '-'}</TableCell>
                     <TableCell>
                       <LeadScoreBadge lead={lead} />
@@ -464,6 +523,14 @@ export default function ClientLeads() {
         onOpenChange={setCsvDialogOpen}
         clientId={client?.id}
         onComplete={loadData}
+      />
+
+      <LeadGroupManager
+        open={groupManagerOpen}
+        onOpenChange={setGroupManagerOpen}
+        groups={groups}
+        clientId={client?.id}
+        onRefresh={loadData}
       />
     </div>
     </FeatureGate>
