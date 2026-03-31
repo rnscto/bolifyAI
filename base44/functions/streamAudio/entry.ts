@@ -540,11 +540,22 @@ Deno.serve(async (req) => {
     session.realtimeWs = ws;
   }
 
-  // ─── Build marketplace tool definitions ───
+  // ─── Hang up call via Smartflo API ───
+  async function hangupCall(reason) {
+    console.log(`[${reqId}] 📴 Hanging up: "${reason}", callSid=${session.callSid}`);
+    session._callEnded = true;
+    try {
+      const sfE=Deno.env.get('SMARTFLO_EMAIL'),sfP=Deno.env.get('SMARTFLO_PASSWORD');
+      if(sfE&&sfP&&session.callSid){const lr=await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({email:sfE,password:sfP})});const ld=await lr.json(),tk=ld.access_token||ld.token;if(tk){const hr=await fetch('https://api-smartflo.tatateleservices.com/v1/call/options',{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/json','Authorization':`Bearer ${tk}`},body:JSON.stringify({type:5,call_id:session.callSid})});console.log(`[${reqId}] 📴 Hangup: ${hr.status}`);}}
+    }catch(e){console.error(`[${reqId}] ⚠️ Hangup failed: ${e.message}`);}
+    if(session.realtimeWs?.readyState===WebSocket.OPEN)session.realtimeWs.close();
+  }
+
   function buildToolDefinitions() {
     const tools = [];
-
-    // Transfer to human agent tool — always available if transfer number is configured
+    // End call tool
+    tools.push({type:'function',name:'end_call',description:'End/disconnect the call. Use when: conversation concluded with goodbye, spam declined, or caller asked to end. Say goodbye BEFORE calling this.',parameters:{type:'object',properties:{reason:{type:'string',description:'Brief reason'}},required:['reason']}});
+    // Transfer to human agent tool
     if (session.humanTransferNumber) {
       tools.push({
         type: 'function',
@@ -595,7 +606,8 @@ Deno.serve(async (req) => {
   async function executeToolCall(callId, functionName, argsStr) {
     console.log(`[${reqId}] 🔧 Tool call: ${functionName}(${argsStr.substring(0, 200)})`);
     let result = { error: `Unknown tool: ${functionName}` };
-
+    // ─── End call ───
+    if (functionName==='end_call'){const a=JSON.parse(argsStr);result={success:true};sendToRealtime({type:'conversation.item.create',item:{type:'function_call_output',call_id:callId,output:JSON.stringify(result)}});session.transcript.push({speaker:'System',text:`[Call ended: ${a.reason}]`});setTimeout(()=>hangupCall(a.reason||'ended'),2000);return;}
     // ─── Transfer to human agent ───
     if (functionName === 'transfer_to_human' && session.humanTransferNumber) {
       try {
@@ -792,25 +804,9 @@ Deno.serve(async (req) => {
     sendToRealtime({ type: 'response.create' });
   }
 
-  // ─── Format Shopify order for concise voice response ───
-  function formatShopifyOrder(order) {
-    const fulfillment = order.fulfillment_status || 'unfulfilled';
-    const tracking = (order.fulfillments || []).filter(f => f.tracking_number).map(f => ({
-      tracking_number: f.tracking_number,
-      company: f.tracking_company,
-      url: f.tracking_url,
-      status: f.shipment_status || f.status
-    }));
-    return {
-      order_number: order.name || `#${order.order_number}`,
-      date: order.created_at?.substring(0, 10),
-      status: order.cancelled_at ? 'cancelled' : fulfillment,
-      payment: order.financial_status,
-      total: `${order.currency} ${order.total_price}`,
-      items: (order.line_items || []).map(li => `${li.title} x${li.quantity}`).join(', '),
-      tracking: tracking.length > 0 ? tracking : 'no tracking yet',
-      shipping_city: order.shipping_address?.city || ''
-    };
+  function formatShopifyOrder(o) {
+    const t = (o.fulfillments||[]).filter(f=>f.tracking_number).map(f=>({tracking_number:f.tracking_number,company:f.tracking_company,url:f.tracking_url,status:f.shipment_status||f.status}));
+    return { order_number:o.name||`#${o.order_number}`, date:o.created_at?.substring(0,10), status:o.cancelled_at?'cancelled':(o.fulfillment_status||'unfulfilled'), payment:o.financial_status, total:`${o.currency} ${o.total_price}`, items:(o.line_items||[]).map(li=>`${li.title} x${li.quantity}`).join(', '), tracking:t.length>0?t:'no tracking yet', shipping_city:o.shipping_address?.city||'' };
   }
 
   function applySessionConfig() {
@@ -821,15 +817,16 @@ Deno.serve(async (req) => {
       input_audio_transcription: { model: 'whisper-1', language: 'hi' },
       turn_detection: {
         type: 'server_vad',
-        threshold: 0.65,
-        prefix_padding_ms: 800,
-        silence_duration_ms: 800
+        threshold: 0.5,
+        prefix_padding_ms: 400,
+        silence_duration_ms: 500
       }
     };
 
-    // Inject live IST timestamp so the agent knows the current time
+    // Inject live IST timestamp + background noise handling instructions
     const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
-    const timeInjection = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}. Use this to compute relative times (e.g. "30 minutes later", "tomorrow 10 AM"). Always state callback times in IST.\n`;
+    const timeInjection = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}. Use this to compute relative times.\n`;
+    const noiseHandling = `\n[AUDIO RULES] IMPORTANT: This is a phone call with possible background noise. (1) ONLY respond to the PRIMARY speaker who is directly talking to you. Ignore background voices, TV, radio, or ambient conversations. (2) If you hear unclear or garbled audio, ask the caller to repeat. (3) Keep responses SHORT (1-2 sentences) to avoid being interrupted. (4) When the conversation has concluded and both sides have said goodbye, use the end_call tool to disconnect.\n`;
 
     // Build transfer instructions if enabled
     let transferInstructions = '';
@@ -851,11 +848,11 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
       sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
       sessionConfig.modalities = ['text'];
       sessionConfig.voice = 'alloy';
-      session.chatHistory = [{ role: 'system', content: timeInjection + session.systemPrompt + transferInstructions }];
+      session.chatHistory = [{ role: 'system', content: timeInjection + noiseHandling + session.systemPrompt + transferInstructions }];
       console.log(`[${reqId}] 🔀 Hybrid mode: Realtime STT → LLM → Azure Speech TTS (${session.voiceType})`);
     } else {
       sessionConfig.modalities = ['text', 'audio'];
-      sessionConfig.instructions = timeInjection + session.systemPrompt + transferInstructions;
+      sessionConfig.instructions = timeInjection + noiseHandling + session.systemPrompt + transferInstructions;
       sessionConfig.voice = session.voiceType;
       sessionConfig.output_audio_format = 'pcm16';
     }
@@ -893,7 +890,7 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
         const sessionConfig = {
           input_audio_format: 'pcm16',
           input_audio_transcription: { model: 'whisper-1', language: 'hi' },
-          turn_detection: { type: 'server_vad', threshold: 0.65, prefix_padding_ms: 800, silence_duration_ms: 800 }
+          turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 400, silence_duration_ms: 500 }
         };
         if (isHybrid) {
           sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
@@ -920,7 +917,7 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
           modalities: ['text', 'audio'],
           voice: 'alloy',
           instructions: 'You are a friendly AI voice assistant. Be professional and concise. Wait for the system to provide further instructions before speaking.',
-          turn_detection: { type: 'server_vad', threshold: 0.65, prefix_padding_ms: 800, silence_duration_ms: 800 }
+          turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 400, silence_duration_ms: 500 }
         }});
         console.log(`[${reqId}] 📤 Minimal config sent (waiting for agent config before greeting)`);
       }
@@ -1169,7 +1166,7 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
 
   // ─── Send mu-law audio to Smartflo in 160-byte aligned chunks ───
   function sendMulawToSmartflo(mulawBytes) {
-    const CHUNK_SIZE = 1600; // 200ms at 8kHz mu-law (larger = fewer sends, less overhead)
+    const CHUNK_SIZE = 960; // 120ms at 8kHz mu-law (smaller = smoother audio, less breaking)
     for (let i = 0; i < mulawBytes.length; i += CHUNK_SIZE) {
       const end = Math.min(i + CHUNK_SIZE, mulawBytes.length);
       let chunk = mulawBytes.slice(i, end);
@@ -1217,9 +1214,7 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
     finally { session.isSpeaking = false; session._ttsAbort = null; }
   }
 
-  function cleanTextForTTS(text) {
-    return text.replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'$1').replace(/__([^_]+)__/g,'$1').replace(/_([^_]+)_/g,'$1').replace(/#{1,6}\s*/g,'').replace(/```[\s\S]*?```/g,'').replace(/`([^`]+)`/g,'$1').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,'').replace(/[😊🙏👋✅❌🎯📋🕐⚠️💡🔊🎙️]/gu,'').replace(/\n{2,}/g,'. ').replace(/\n/g,' ').replace(/\s{2,}/g,' ').trim();
-  }
+  const cleanTextForTTS = t => t.replace(/\*\*([^*]+)\*\*/g,'$1').replace(/\*([^*]+)\*/g,'$1').replace(/__([^_]+)__/g,'$1').replace(/_([^_]+)_/g,'$1').replace(/#{1,6}\s*/g,'').replace(/```[\s\S]*?```/g,'').replace(/`([^`]+)`/g,'$1').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2600}-\u{26FF}\u{2700}-\u{27BF}]/gu,'').replace(/[😊🙏👋✅❌🎯📋🕐⚠️💡🔊🎙️]/gu,'').replace(/\n{2,}/g,'. ').replace(/\n/g,' ').replace(/\s{2,}/g,' ').trim();
 
   // ─── LLM text generation with streaming (hybrid mode) ───
   async function generateGpt5NanoResponse(userText) {
