@@ -183,7 +183,9 @@ export default function ClientCallLogs() {
                         <span className="capitalize">{call.direction}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="font-medium">{call.callee_number}</TableCell>
+                    <TableCell className="font-medium">
+                      {call.direction === 'inbound' ? (call.caller_id || call.callee_number) : call.callee_number}
+                    </TableCell>
                     <TableCell>
                       {call.lead_id ? (
                         <Link to={createPageUrl('LeadDetail') + `?id=${call.lead_id}`} className="text-blue-600 hover:underline text-sm flex items-center gap-1">
@@ -252,8 +254,10 @@ export default function ClientCallLogs() {
                   <p className="font-medium capitalize">{selectedCall.direction}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-600">Number</p>
-                  <p className="font-medium">{selectedCall.callee_number}</p>
+                  <p className="text-sm text-gray-600">{selectedCall.direction === 'inbound' ? 'Caller Number' : 'Called Number'}</p>
+                  <p className="font-medium">
+                    {selectedCall.direction === 'inbound' ? (selectedCall.caller_id || selectedCall.callee_number) : selectedCall.callee_number}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Duration</p>
