@@ -23,8 +23,19 @@ Deno.serve(async (req) => {
       console.log('[checkTelegramWebhook] Set webhook:', JSON.stringify(setResult));
       return Response.json(setResult);
     }
+
+    // If auto_fix is set, use the telegramWebhook function URL from the SDK
+    if (body.auto_fix) {
+      // Call telegramWebhook via SDK to get its deployment host
+      try {
+        const res = await base44.functions.invoke('telegramWebhook', {});
+        console.log('[checkTelegramWebhook] telegramWebhook test:', JSON.stringify(res.data));
+      } catch (e) {
+        console.log('[checkTelegramWebhook] telegramWebhook invoke result:', e.message);
+      }
+    }
     
-    // Otherwise, get current info
+    // Get current webhook info
     const res = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo`);
     const info = await res.json();
     console.log('[checkTelegramWebhook] Info:', JSON.stringify(info));
