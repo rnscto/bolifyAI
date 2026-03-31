@@ -92,7 +92,7 @@ export default function ComplianceConsentStep({ onNext, onBack, consents, onCons
       <div className="bg-gray-50 rounded-xl p-4 text-sm">
         <p className="font-medium text-gray-700 mb-2">Data Protection Officer (DPO)</p>
         <div className="text-gray-500 space-y-1">
-          <p>Bijendra Saini</p>
+          <p>Satish Saini</p>
           <p>Email: connect@getway.in | Phone: +91-9255522544</p>
           <p className="text-xs mt-2">For data access, correction, or erasure requests, contact the DPO.</p>
         </div>
