@@ -889,6 +889,42 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
         }
       }
 
+      // 1.6 Fetch recording from Smartflo CDR API (recordings not in webhook payload)
+      if (!freshCallLog.recording_url && freshCallLog.call_sid && effectiveStatus === 'completed') {
+        // Delay 15s to allow Smartflo to finalize the recording
+        setTimeout(async () => {
+          try {
+            const sfE2 = Deno.env.get('SMARTFLO_EMAIL'), sfP2 = Deno.env.get('SMARTFLO_PASSWORD');
+            if (sfE2 && sfP2) {
+              const lr2 = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
+                method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ email: sfE2, password: sfP2 })
+              });
+              const ld2 = await lr2.json(), tk2 = ld2.access_token || ld2.token;
+              if (tk2) {
+                const cdrR = await fetch(
+                  `https://api-smartflo.tatateleservices.com/v1/call/records?call_id=${encodeURIComponent(freshCallLog.call_sid)}&limit=1`,
+                  { headers: { 'Authorization': `Bearer ${tk2}`, 'Accept': 'application/json' } }
+                );
+                if (cdrR.ok) {
+                  const cdrD = await cdrR.json();
+                  const recs = cdrD.data || cdrD.records || cdrD.results || (Array.isArray(cdrD) ? cdrD : []);
+                  if (recs.length > 0) {
+                    const recUrl = recs[0].recording_url || recs[0].recording || recs[0].record_url || null;
+                    if (recUrl) {
+                      await base44.entities.CallLog.update(callLog.id, { recording_url: recUrl });
+                      console.log(`[smartfloWebhook] 🎙️ Recording fetched: ${recUrl.substring(0, 80)}`);
+                    }
+                  }
+                }
+              }
+            }
+          } catch (recErr) {
+            console.error(`[smartfloWebhook] Recording fetch failed: ${recErr.message}`);
+          }
+        }, 15000);
+      }
+
       // 2. Invoke postCallFollowup — handles email/RCS outreach for non-campaign calls
       try {
         console.log(`[smartfloWebhook] Direct-invoking postCallFollowup for CallLog ${callLog.id}`);

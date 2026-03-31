@@ -18,7 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing, FileText, ExternalLink } from 'lucide-react';
+import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing, FileText, ExternalLink, Disc } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import AudioPlayer from '../components/calls/AudioPlayer';
@@ -158,6 +158,7 @@ export default function ClientCallLogs() {
                 <TableHead>Duration</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Transcript</TableHead>
+                <TableHead>Recording</TableHead>
                 <TableHead>Date</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -165,7 +166,7 @@ export default function ClientCallLogs() {
             <TableBody>
               {calls.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-gray-500">
+                  <TableCell colSpan={9} className="text-center text-gray-500">
                     No call history yet
                   </TableCell>
                 </TableRow>
@@ -200,6 +201,15 @@ export default function ClientCallLogs() {
                       {call.transcript ? (
                         <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
                           <FileText className="w-3.5 h-3.5" /> Available
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {call.recording_url ? (
+                        <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
+                          <Disc className="w-3.5 h-3.5" /> Available
                         </span>
                       ) : (
                         <span className="text-gray-400 text-xs">—</span>
