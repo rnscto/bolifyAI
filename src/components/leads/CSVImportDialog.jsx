@@ -118,9 +118,19 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
       toast.error('Please paste some data first');
       return;
     }
-    const { headers, rows } = parseCSVLocally(pasteText);
+    const trimmed = pasteText.trim();
+    const lines = trimmed.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split('\n').filter(l => l.trim());
+    if (lines.length < 2) {
+      toast.error('Need at least a header row and one data row. Make sure you include column headers.');
+      return;
+    }
+    const { headers, rows } = parseCSVLocally(trimmed);
+    if (headers.length === 0) {
+      toast.error('Could not detect column headers. Check your data format.');
+      return;
+    }
     if (rows.length === 0) {
-      toast.error('No data found. Make sure you copy rows with headers from Excel.');
+      toast.error('No data rows found. Make sure you copy rows with headers from Excel.');
       return;
     }
     const mapping = autoMapFields(headers);
@@ -408,7 +418,7 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
                 {pasteText.trim() && (
                   <p className="text-xs text-gray-400">{pasteText.trim().split('\n').length - 1} data row(s) detected</p>
                 )}
-                <Button onClick={handlePasteSubmit} disabled={!pasteText.trim()} className="w-full bg-blue-600 hover:bg-blue-700">
+                <Button type="button" onClick={handlePasteSubmit} disabled={!pasteText.trim()} className="w-full bg-blue-600 hover:bg-blue-700">
                   <ArrowRight className="w-4 h-4 mr-2" /> Continue to Mapping
                 </Button>
               </div>
