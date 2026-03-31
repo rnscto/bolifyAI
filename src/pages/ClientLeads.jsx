@@ -523,6 +523,7 @@ export default function ClientLeads() {
         onOpenChange={setCsvDialogOpen}
         clientId={client?.id}
         onComplete={loadData}
+        groups={groups}
       />
 
       <LeadGroupManager

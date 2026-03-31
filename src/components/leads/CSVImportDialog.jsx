@@ -100,7 +100,7 @@ function autoMapFields(headers) {
   return autoMap;
 }
 
-export default function CSVImportDialog({ open, onOpenChange, clientId, onComplete }) {
+export default function CSVImportDialog({ open, onOpenChange, clientId, onComplete, groups = [] }) {
   const [step, setStep] = useState(1);
   const [file, setFile] = useState(null);
   const [uploading, setUploading] = useState(false);
@@ -111,6 +111,7 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
   const [result, setResult] = useState(null);
   const [inputMode, setInputMode] = useState('file'); // 'file' or 'paste'
   const [pasteText, setPasteText] = useState('');
+  const [selectedGroupId, setSelectedGroupId] = useState('');
 
   const handlePasteSubmit = () => {
     if (!pasteText.trim()) {
@@ -297,6 +298,7 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
       notes: lead.notes || '',
       source: lead.source || 'file_import',
       status: 'new',
+      ...(selectedGroupId ? { group_id: selectedGroupId } : {}),
     }));
 
     const chunkSize = 50;
@@ -323,6 +325,7 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
     setResult(null);
     setInputMode('file');
     setPasteText('');
+    setSelectedGroupId('');
     onOpenChange(false);
   };
 
@@ -553,6 +556,29 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
                 <p className="text-xs text-gray-400 text-center py-2">Showing first 20 of {rawData.length} rows</p>
               )}
             </div>
+            {/* Group assignment */}
+            {groups.length > 0 && (
+              <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <span className="text-sm text-blue-800 font-medium whitespace-nowrap">Assign to Group:</span>
+                <Select value={selectedGroupId || '_none'} onValueChange={(v) => setSelectedGroupId(v === '_none' ? '' : v)}>
+                  <SelectTrigger className="flex-1 bg-white">
+                    <SelectValue placeholder="No Group" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="_none">No Group</SelectItem>
+                    {groups.map(g => (
+                      <SelectItem key={g.id} value={g.id}>
+                        <span className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: g.color || '#3b82f6' }} />
+                          {g.name}
+                        </span>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="flex gap-3 justify-between">
               <Button variant="outline" onClick={() => setStep(2)}>
                 <ArrowLeft className="w-4 h-4 mr-1" /> Edit Mapping
