@@ -1,12 +1,15 @@
-import { createClient } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
 // Fetch call recording URL from Smartflo CDR API for a given call
 // Can be called per-call or in bulk for recent calls missing recordings
 
 Deno.serve(async (req) => {
   try {
-    const appId = Deno.env.get('BASE44_APP_ID');
-    const base44 = createClient({ appId, asServiceRole: true });
+    const base44 = createClientFromRequest(req);
+    const user = await base44.auth.me();
+    if (!user) {
+      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    }
 
     const { call_log_id, bulk } = await req.json();
 
@@ -28,14 +31,14 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Smartflo login failed', details: loginData }, { status: 500 });
     }
 
-    // Determine which calls to process
+    // Determine which calls to process — use service role for entity access
     let callLogs = [];
     if (call_log_id) {
-      const log = await base44.entities.CallLog.get(call_log_id);
+      const log = await base44.asServiceRole.entities.CallLog.get(call_log_id);
       if (log) callLogs = [log];
     } else if (bulk) {
       // Fetch recent completed calls without recording_url
-      const recent = await base44.entities.CallLog.filter({ status: 'completed' }, '-created_date', 50);
+      const recent = await base44.asServiceRole.entities.CallLog.filter({ status: 'completed' }, '-created_date', 50);
       callLogs = recent.filter(l => !l.recording_url && l.call_sid);
     }
 
@@ -112,7 +115,7 @@ Deno.serve(async (req) => {
         }
 
         if (recordingUrl) {
-          await base44.entities.CallLog.update(log.id, { recording_url: recordingUrl });
+          await base44.asServiceRole.entities.CallLog.update(log.id, { recording_url: recordingUrl });
           updated++;
           results.push({ id: log.id, call_sid: callSid, recording_url: recordingUrl });
           console.log(`[fetchCallRecording] ✅ Updated ${log.id}: ${recordingUrl.substring(0, 80)}`);
