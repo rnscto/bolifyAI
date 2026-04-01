@@ -18,7 +18,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing, FileText, ExternalLink, Disc } from 'lucide-react';
+import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing, FileText, ExternalLink, Disc, Download, Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import AudioPlayer from '../components/calls/AudioPlayer';
@@ -29,6 +29,8 @@ export default function ClientCallLogs() {
   const [selectedCall, setSelectedCall] = useState(null);
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [fetchingRecording, setFetchingRecording] = useState(null);
+  const [fetchingBulk, setFetchingBulk] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -57,6 +59,26 @@ export default function ClientCallLogs() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchRecording = async (callLogId) => {
+    setFetchingRecording(callLogId);
+    const res = await base44.functions.invoke('fetchCallRecording', { call_log_id: callLogId });
+    if (res.data?.updated > 0) {
+      await loadData();
+      if (selectedCall?.id === callLogId) {
+        const updated = await base44.entities.CallLog.get(callLogId);
+        setSelectedCall(updated);
+      }
+    }
+    setFetchingRecording(null);
+  };
+
+  const fetchBulkRecordings = async () => {
+    setFetchingBulk(true);
+    await base44.functions.invoke('fetchCallRecording', { bulk: true });
+    await loadData();
+    setFetchingBulk(false);
   };
 
   const statusColors = {
@@ -89,6 +111,12 @@ export default function ClientCallLogs() {
       <div>
         <h1 className="text-3xl font-bold text-gray-900">Call Logs</h1>
         <p className="text-gray-600 mt-1">View all your call history and transcripts</p>
+      </div>
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={fetchBulkRecordings} disabled={fetchingBulk} className="gap-2">
+          {fetchingBulk ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+          {fetchingBulk ? 'Fetching Recordings...' : 'Fetch All Recordings'}
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -213,6 +241,11 @@ export default function ClientCallLogs() {
                         <span className="inline-flex items-center gap-1 text-green-600 text-xs font-medium">
                           <Disc className="w-3.5 h-3.5" /> Available
                         </span>
+                      ) : call.status === 'completed' ? (
+                        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs gap-1" onClick={() => fetchRecording(call.id)} disabled={fetchingRecording === call.id}>
+                          {fetchingRecording === call.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+                          Fetch
+                        </Button>
                       ) : (
                         <span className="text-gray-400 text-xs">—</span>
                       )}
@@ -311,12 +344,19 @@ export default function ClientCallLogs() {
                 </div>
               )}
 
-              {selectedCall.recording_url && (
-                <div>
-                  <p className="text-sm text-gray-600 mb-2">Call Recording</p>
+              <div>
+                <p className="text-sm text-gray-600 mb-2">Call Recording</p>
+                {selectedCall.recording_url ? (
                   <AudioPlayer url={selectedCall.recording_url} />
-                </div>
-              )}
+                ) : selectedCall.status === 'completed' ? (
+                  <Button variant="outline" size="sm" onClick={() => fetchRecording(selectedCall.id)} disabled={fetchingRecording === selectedCall.id} className="gap-2">
+                    {fetchingRecording === selectedCall.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    {fetchingRecording === selectedCall.id ? 'Fetching...' : 'Fetch Recording from Smartflo'}
+                  </Button>
+                ) : (
+                  <p className="text-sm text-gray-400 italic">No recording available</p>
+                )}
+              </div>
             </div>
           )}
         </DialogContent>
