@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft, Phone, Mail, Building2, Edit, PhoneCall, Loader2,
-  Calendar, Clock, MessageSquare, Activity, ExternalLink
+  Calendar, Clock, MessageSquare, Activity, ExternalLink, Send
 } from 'lucide-react';
 import { toast } from 'sonner';
 import LeadScoreBadge from '../components/leads/LeadScoreBadge';
@@ -26,6 +26,7 @@ export default function LeadDetail() {
   const [loading, setLoading] = useState(true);
   const [callingLead, setCallingLead] = useState(false);
   const [emailComposerOpen, setEmailComposerOpen] = useState(false);
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
   const urlParams = new URLSearchParams(window.location.search);
   const leadId = urlParams.get('id');
@@ -67,6 +68,27 @@ export default function LeadDetail() {
     setCampaignLeads(campLeads);
     setAgents(agentsData);
     setLoading(false);
+  };
+
+  const sendToGetwayCRM = async () => {
+    setSendingWhatsApp(true);
+    const response = await base44.functions.invoke('sendGetwayCRM', {
+      lead_id: lead.id,
+      contact_name: lead.name,
+      contact_phone: lead.phone,
+      contact_email: lead.email,
+      client_company: client?.company_name,
+      source: 'manual',
+      lead_status: lead.status,
+      lead_score: lead.score,
+      qualification_tier: lead.qualification_tier
+    });
+    if (response.data.success) {
+      toast.success('Contact sent to WhatsApp/RCS automation');
+    } else {
+      toast.error(response.data.error || 'Failed to send');
+    }
+    setSendingWhatsApp(false);
   };
 
   const initiateCall = async () => {
@@ -139,6 +161,17 @@ export default function LeadDetail() {
               <Calendar className="w-4 h-4 mr-1.5" /> Callbacks
             </Link>
           </Button>
+          {lead?.phone && (
+            <Button
+              size="sm" variant="outline"
+              onClick={sendToGetwayCRM}
+              disabled={sendingWhatsApp}
+              className="gap-1"
+            >
+              {sendingWhatsApp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              WhatsApp/RCS
+            </Button>
+          )}
           {lead?.email && (
             <Button
               size="sm" variant="outline"

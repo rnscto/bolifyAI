@@ -667,6 +667,41 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
   });
 
   // ============================================================
+  // GETWAY CRM — WhatsApp/RCS via Getway CRM automation
+  // ============================================================
+  if (lead && (lead.phone || lead.email) && outcome !== 'not_answered') {
+    try {
+      const getwayCrmToken = Deno.env.get('GETWAY_CRM_API_TOKEN');
+      if (getwayCrmToken) {
+        const crmParams = new URLSearchParams();
+        crmParams.set('api_token', getwayCrmToken);
+        crmParams.set('contact_name', lead.name || campaignLead.lead_name || 'Unknown');
+        if (lead.email) crmParams.set('contact_email', lead.email);
+        if (lead.phone) crmParams.set('contact_phone', lead.phone);
+        if (summary) crmParams.set('call_summary', summary.substring(0, 500));
+        if (outcome) crmParams.set('call_outcome', outcome);
+        if (callLog.duration) crmParams.set('call_duration', String(callLog.duration));
+        if (client?.company_name) crmParams.set('client_company', client.company_name);
+        if (campaign?.name) crmParams.set('campaign_name', campaign.name);
+        if (campaignId) crmParams.set('campaign_id', campaignId);
+        crmParams.set('source', 'campaign');
+        if (lead.status) crmParams.set('lead_status', lead.status);
+        if (aiScore) crmParams.set('lead_score', String(aiScore));
+        if (qualificationTier) crmParams.set('qualification_tier', qualificationTier);
+
+        const crmResp = await fetch(`https://login.getwaycrm.com/api/automations/69cb6ef8707f8/execute?${crmParams.toString()}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+        });
+        const crmResult = await crmResp.json();
+        console.log(`[campaignPostCall] Getway CRM sent for ${lead.phone || lead.email}: ${crmResult.status}`);
+      }
+    } catch (getwayErr) {
+      console.error(`[campaignPostCall] Getway CRM failed: ${getwayErr.message}`);
+    }
+  }
+
+  // ============================================================
   // AUTO-ENROLL INTO AI EMAIL SEQUENCE based on tier
   // (Direct fetch — bypasses Base44 functions.invoke to avoid integration credits)
   // ============================================================
@@ -807,6 +842,39 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
     followup_email_sent: emailSent, followup_scheduled: callbackScheduled,
     ...(callbackScheduled ? { followup_call_date: new Date(Date.now() + 2 * 86400000).toISOString() } : {})
   });
+
+  // ============================================================
+  // GETWAY CRM — WhatsApp/RCS via Getway CRM automation (doFollowUpActions)
+  // ============================================================
+  if (lead && (lead.phone || lead.email) && outcome !== 'not_answered') {
+    try {
+      const getwayCrmToken = Deno.env.get('GETWAY_CRM_API_TOKEN');
+      if (getwayCrmToken) {
+        const crmParams = new URLSearchParams();
+        crmParams.set('api_token', getwayCrmToken);
+        crmParams.set('contact_name', lead.name || campaignLead.lead_name || 'Unknown');
+        if (lead.email) crmParams.set('contact_email', lead.email);
+        if (lead.phone) crmParams.set('contact_phone', lead.phone);
+        const summaryText = lead.notes || '';
+        if (summaryText) crmParams.set('call_summary', summaryText.substring(0, 500));
+        if (outcome) crmParams.set('call_outcome', outcome);
+        if (client?.company_name) crmParams.set('client_company', client.company_name);
+        if (campaign?.name) crmParams.set('campaign_name', campaign.name);
+        crmParams.set('source', 'campaign');
+        if (lead.score) crmParams.set('lead_score', String(lead.score));
+        if (qualificationTier) crmParams.set('qualification_tier', qualificationTier);
+
+        const crmResp = await fetch(`https://login.getwaycrm.com/api/automations/69cb6ef8707f8/execute?${crmParams.toString()}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+        });
+        const crmResult = await crmResp.json();
+        console.log(`[campaignPostCall:doFollowUp] Getway CRM sent: ${crmResult.status}`);
+      }
+    } catch (getwayErr) {
+      console.error(`[campaignPostCall:doFollowUp] Getway CRM failed: ${getwayErr.message}`);
+    }
+  }
 
   // Auto-enroll into email sequence if not already done by streamAudio
   // (Direct fetch — bypasses Base44 functions.invoke to avoid integration credits)

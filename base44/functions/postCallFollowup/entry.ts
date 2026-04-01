@@ -316,6 +316,41 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
     }
 
     // ===================================================================
+    // PART 1.2: GETWAY CRM — WhatsApp/RCS via Getway CRM automation
+    // ===================================================================
+    if (lead && (lead.phone || lead.email)) {
+      try {
+        const getwayCrmToken = Deno.env.get('GETWAY_CRM_API_TOKEN');
+        if (getwayCrmToken) {
+          const crmParams = new URLSearchParams();
+          crmParams.set('api_token', getwayCrmToken);
+          crmParams.set('contact_name', lead.name || 'Unknown');
+          if (lead.email) crmParams.set('contact_email', lead.email);
+          if (lead.phone) crmParams.set('contact_phone', lead.phone);
+          if (summary) crmParams.set('call_summary', summary.substring(0, 500));
+          if (leadStatusAfterCall) crmParams.set('call_outcome', leadStatusAfterCall);
+          if (callLog.duration) crmParams.set('call_duration', String(callLog.duration));
+          if (client.company_name) crmParams.set('client_company', client.company_name);
+          crmParams.set('source', 'post_call');
+          if (lead.status) crmParams.set('lead_status', lead.status);
+          if (lead.score) crmParams.set('lead_score', String(lead.score));
+          if (lead.qualification_tier) crmParams.set('qualification_tier', lead.qualification_tier);
+
+          const crmResp = await fetch(`https://login.getwaycrm.com/api/automations/69cb6ef8707f8/execute?${crmParams.toString()}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
+          });
+          const crmResult = await crmResp.json();
+          console.log(`[postCallFollowup] Getway CRM sent for ${lead.phone || lead.email}: ${crmResult.status}`);
+          results.getway_crm = { status: crmResult.status, phone: lead.phone };
+        }
+      } catch (getwayErr) {
+        console.error(`[postCallFollowup] Getway CRM failed: ${getwayErr.message}`);
+        results.errors.push({ channel: 'getway_crm', error: getwayErr.message });
+      }
+    }
+
+    // ===================================================================
     // PART 1.5: CREATE CALLBACK/FOLLOWUP ACTIVITY (for manual non-campaign calls)
     // This ensures manual calls appear in Automation Engine & Callbacks page
     // ===================================================================
