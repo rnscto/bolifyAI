@@ -1,14 +1,9 @@
-import { createClient } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
 // This function runs every 5 minutes to:
 // 1. Fix stuck "calling" leads (calls that never got a webhook callback)
 // 2. Automatically trigger next batch of calls for running campaigns
 // 3. Auto-complete campaigns when all leads are processed
-//
-// Can be invoked by:
-// - Base44 scheduled automation (internal)
-// - External cron service (e.g. cron-job.org) via GET with ?cron_secret=<SMARTFLO_WEBHOOK_SECRET>
-//   This eliminates dependency on Base44 integration credits for scheduling.
 
 Deno.serve(async (req) => {
   try {
@@ -26,8 +21,8 @@ Deno.serve(async (req) => {
       console.log('[campaignPoller] Triggered by external cron');
     }
 
-    const appId = Deno.env.get('BASE44_APP_ID');
-    const svc = createClient({ appId, asServiceRole: true });
+    const base44 = createClientFromRequest(req);
+    const svc = base44.asServiceRole;
     const results = { campaigns_processed: 0, stuck_fixed: 0, batches_triggered: 0, completed: 0, errors: [] };
 
     // Find all running campaigns

@@ -1,10 +1,10 @@
-import { createClient } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
 Deno.serve(async (req) => {
   try {
-    // Entity automation — no user session, use service role directly
-    const appId = Deno.env.get('BASE44_APP_ID');
-    const base44 = createClient({ appId, asServiceRole: true });
+    // Entity automation — use createClientFromRequest + asServiceRole
+    const base44_client = createClientFromRequest(req);
+    const base44 = base44_client.asServiceRole;
 
     const payload = await req.json();
     const { event, data, old_data } = payload;

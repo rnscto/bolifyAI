@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
 const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
@@ -45,8 +45,9 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
 // There is NO user session — we MUST use service role directly.
 Deno.serve(async (req) => {
   try {
-    // Entity automation — no user session, use service role directly (same as campaignPoller)
-    const base44 = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+    // Entity automation — use createClientFromRequest + asServiceRole
+    const base44_client = createClientFromRequest(req);
+    const base44 = base44_client.asServiceRole;
     const payload = await req.json();
     const { event, data, old_data } = payload;
 

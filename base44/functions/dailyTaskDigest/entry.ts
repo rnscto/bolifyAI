@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
 const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
@@ -28,7 +28,8 @@ Deno.serve(async (req) => {
       if (!expected || cronKey !== expected) return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+    const base44_client = createClientFromRequest(req);
+    const svc = base44_client.asServiceRole;
 
     const humanTypes = ['email', 'task', 'demo', 'visit', 'meeting', 'appointment', 'booking'];
 

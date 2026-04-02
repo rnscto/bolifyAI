@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
 const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
@@ -62,8 +62,8 @@ Deno.serve(async (req) => {
       console.log('[FollowupEngine] Triggered by external cron');
     }
 
-    const appId = Deno.env.get('BASE44_APP_ID');
-    const svc = createClient({ appId, asServiceRole: true });
+    const base44 = createClientFromRequest(req);
+    const svc = base44.asServiceRole;
 
     const now = new Date();
     const results = {

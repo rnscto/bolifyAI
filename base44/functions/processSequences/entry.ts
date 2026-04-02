@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
 const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
@@ -59,8 +59,8 @@ Deno.serve(async (req) => {
       console.log('[processSequences] Triggered by external cron');
     }
 
-    const appId = Deno.env.get('BASE44_APP_ID');
-    const base44 = createClient({ appId, asServiceRole: true });
+    const base44_client = createClientFromRequest(req);
+    const base44 = base44_client.asServiceRole;
 
     const results = { sent: 0, skipped: 0, completed: 0, errors: 0, adapted: 0, total_active: 0 };
     const BATCH_LIMIT = 15; // Max emails per run to avoid timeout

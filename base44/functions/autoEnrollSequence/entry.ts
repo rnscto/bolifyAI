@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
 async function azureLLM(prompt, systemPrompt, jsonSchema) {
@@ -38,8 +38,8 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const appId = Deno.env.get('BASE44_APP_ID');
-    const base44 = createClient({ appId, asServiceRole: true });
+    const base44_client = createClientFromRequest(req);
+    const base44 = base44_client.asServiceRole;
 
     // ── CRON MODE (GET): Batch-scan leads that need enrollment ──
     if (req.method === 'GET') {

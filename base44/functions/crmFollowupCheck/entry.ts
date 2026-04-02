@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
 // Scheduled function: checks for leads with no response in 48h and creates follow-up tasks
 Deno.serve(async (req) => {
@@ -17,8 +17,8 @@ Deno.serve(async (req) => {
       console.log('[crmFollowupCheck] Triggered by external cron');
     }
 
-    // Scheduled automation — no user session, use service role directly
-    const base44 = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+    const base44_client = createClientFromRequest(req);
+    const base44 = base44_client.asServiceRole;
 
     const cutoff = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     let createdCount = 0;
