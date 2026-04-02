@@ -1029,7 +1029,10 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
       const cl = await svc.entities.Client.get(session._personalClientId);
       if (!cl?.telegram_connected || !cl?.telegram_chat_id || cl.dnd_enabled || cl.owner_notification_channel !== 'telegram') return;
       const convo = session.transcript.map(t => `${t.speaker}: ${t.text}`).join('\n');
-      const bUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, ''), dep = Deno.env.get('AZURE_OPENAI_DEPLOYMENT'), ak = Deno.env.get('AZURE_OPENAI_KEY');
+      let bUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
+      const oI = bUrl.indexOf('/openai/'); if (oI > 0) bUrl = bUrl.substring(0, oI);
+      const pI = bUrl.indexOf('/api/projects'); if (pI > 0) bUrl = bUrl.substring(0, pI);
+      const dep = Deno.env.get('AZURE_OPENAI_DEPLOYMENT'), ak = Deno.env.get('AZURE_OPENAI_KEY');
       const res = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2024-08-01-preview`, {
         method: 'POST', headers: { 'api-key': ak, 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [
