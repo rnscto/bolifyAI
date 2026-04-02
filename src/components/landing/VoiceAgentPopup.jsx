@@ -7,7 +7,7 @@ import { base44 } from '@/api/base44Client';
 import LeadCaptureForm from './LeadCaptureForm';
 import PreChatForm from './PreChatForm';
 
-const LOGO_URL = "https://qtrypzzcjebvfcihiynt.supabase.co/storage/v1/object/public/base44-prod/public/698823c19043e168a5daaa86/9b1876319_WhatsApp_Image_2026-02-11_at_44923_PM-removebg-preview.png";
+const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/8e9cbc9d4_Getway_Logojpg.jpeg";
 const SAMPLE_RATE = 24000;
 
 const buildSystemPrompt = (visitorInfo) => {
@@ -16,7 +16,7 @@ const buildSystemPrompt = (visitorInfo) => {
   const phone = visitorInfo?.phone || '';
   const solution = visitorInfo?.solution || '';
 
-  return `You are VaaniAI's friendly voice assistant on the website. Your name is Vaani.
+  return `You are Getway AI's friendly voice assistant on the website. Your name is Getway.
 
 === LANGUAGE & VOICE INSTRUCTIONS ===
 - ALWAYS speak in Indian English accent. You are an Indian assistant based in India.
@@ -32,13 +32,13 @@ ${phone ? `- Phone: ${phone}` : '- Phone: Not provided'}
 ${solution ? `- Interested In: ${solution}` : '- Interest: General inquiry'}
 
 === GREETING INSTRUCTIONS ===
-${name ? `START the conversation by greeting the visitor BY NAME. Say something like "Hi ${name}! Welcome to VaaniAI. ${solution ? `I see you're interested in ${solution} — ` : ''}How can I help you today?"` : 'Greet the visitor warmly and ask how you can help.'}
+${name ? `START the conversation by greeting the visitor BY NAME. Say something like "Hi ${name}! Welcome to Getway AI. ${solution ? `I see you're interested in ${solution} — ` : ''}How can I help you today?"` : 'Greet the visitor warmly and ask how you can help.'}
 ${email ? `You already have their email (${email}). You do NOT need to ask for it again. Use it directly with the send_email tool when needed.` : 'Try to naturally collect their email during the conversation.'}
 ${phone ? `You already have their phone number (${phone}). No need to ask again.` : ''}
 
 === YOUR GOALS ===
 1. Greet the visitor personally using their name
-2. Answer questions about VaaniAI using your knowledge base
+2. Answer questions about Getway AI using your knowledge base
 3. If they shared a solution interest, tailor the conversation around that
 4. Encourage the 7-day free trial
 5. When appropriate, use the send_email tool to send them relevant info
@@ -50,12 +50,12 @@ Available template types:
 - "free_trial" — Free trial signup link
 - "pricing" — Detailed pricing breakdown  
 - "demo" — Demo booking link
-- "offer" — Special 20% discount offer with coupon code VAANI20
+- "offer" — Special 20% discount offer with coupon code GETWAY20
 
 After sending an email, confirm to the visitor that you've sent it.
 
-=== ABOUT VAANIAI ===
-VaaniAI is India's #1 AI-powered voice agent platform for sales automation, lead qualification, customer engagement, and e-Governance. We automate outbound and inbound calling with human-like AI voice agents in English, Hindi, and Hinglish.
+=== ABOUT GETWAY AI ===
+Getway AI is India's #1 AI-powered voice agent platform for sales automation, lead qualification, customer engagement, and e-Governance. We automate outbound and inbound calling with human-like AI voice agents in English, Hindi, and Hinglish.
 
 === PRICING ===
 - Voice AI Agent: ₹6,500/month per channel (₹19,500/quarter)
@@ -65,7 +65,7 @@ VaaniAI is India's #1 AI-powered voice agent platform for sales automation, lead
 - 7-day free trial, no credit card required
 
 === CURRENT OFFERS ===
-- 20% off first quarter with code VAANI20
+- 20% off first quarter with code GETWAY20
 - 7-day free trial, no credit card required
 
 === INDUSTRIES ===
@@ -450,7 +450,7 @@ export default function VoiceAgentPopup() {
     vlog('info', `▶️ Pre-chat form submitted: name=${info.name} email=${info.email} phone=${info.phone} solution=${info.solution}`);
     setVisitorInfo(info);
     setShowPulse(false);
-    setMessages([{ role: 'system', text: 'Connecting to VaaniAI...' }]);
+    setMessages([{ role: 'system', text: 'Connecting to Getway AI...' }]);
     setShowLeadForm(false);
     connectToAzure(info);
 
@@ -462,7 +462,7 @@ export default function VoiceAgentPopup() {
     setShowPulse(false);
     setMessages([]);
     setShowLeadForm(false);
-    setMessages([{ role: 'system', text: 'Connecting to VaaniAI...' }]);
+    setMessages([{ role: 'system', text: 'Connecting to Getway AI...' }]);
     connectToAzure(visitorInfo);
   };
 
@@ -550,7 +550,7 @@ export default function VoiceAgentPopup() {
             transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 2 }}
             onClick={() => setIsOpen(true)}
             className="fixed bottom-6 right-6 z-[60] w-16 h-16 rounded-full bg-gradient-to-br from-[#1a365d] to-[#2563eb] text-white shadow-2xl flex items-center justify-center hover:scale-110 transition-transform group"
-            aria-label="Talk to VaaniAI"
+            aria-label="Talk to Getway AI"
           >
             {showPulse && (
               <>
@@ -560,7 +560,7 @@ export default function VoiceAgentPopup() {
             )}
             <Mic className="w-7 h-7 relative z-10" />
             <span className="absolute bottom-full right-0 mb-3 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-              Talk to VaaniAI Assistant
+              Talk to Getway AI Assistant
             </span>
           </motion.button>
         )}
@@ -579,7 +579,7 @@ export default function VoiceAgentPopup() {
             {/* Header */}
             <div className="bg-gradient-to-r from-[#1a365d] to-[#2563eb] px-4 py-3 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-2.5">
-                <img src={LOGO_URL} alt="VaaniAI" className="h-8 brightness-0 invert" />
+                <img src={LOGO_URL} alt="Getway AI" className="h-8 brightness-0 invert" />
                 <div>
                   <p className="text-white text-sm font-semibold leading-tight">Voice Assistant</p>
                   <div className="flex items-center gap-1.5">
@@ -676,7 +676,7 @@ export default function VoiceAgentPopup() {
                       </Button>
                     </form>
                     <div className="flex justify-between items-center">
-                      <p className="text-[10px] text-gray-400">Powered by VaaniAI</p>
+                      <p className="text-[10px] text-gray-400">Powered by Getway AI</p>
                       <button
                         onClick={handleEndConversation}
                         className="text-[10px] text-red-500 hover:text-red-600 flex items-center gap-1"
