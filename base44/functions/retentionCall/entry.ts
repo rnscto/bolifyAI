@@ -172,9 +172,11 @@ Deno.serve(async (req) => {
       promptParts.push(`\nDefault points to cover:\n1. Greet warmly\n2. Ask about their trial experience\n3. Highlight that their setup is preserved\n4. Mention pricing: ₹6,500/month per channel (quarterly billing)\n5. Be respectful if not interested\n\nKeep it conversational and under 200 words. Indian business context.`);
 
       // Use Azure OpenAI with the standard secrets
-      const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+      let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
       const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
       const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+      const oIdx = baseUrl.indexOf('/openai/'); if (oIdx > 0) baseUrl = baseUrl.substring(0, oIdx);
+      const pIdx = baseUrl.indexOf('/api/projects'); if (pIdx > 0) baseUrl = baseUrl.substring(0, pIdx);
 
       if (!baseUrl || !deployment || !apiKey) {
         results.errors.push({ client_id: client.id, error: 'Missing Azure OpenAI secrets' });

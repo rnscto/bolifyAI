@@ -194,7 +194,9 @@ IMPORTANT RULES:
         persona: agent.persona || {},
         knowledge_base_content: kbContent,
         lead_context: leadContext,
-        greeting_message: agent.greeting_message || ''
+        greeting_message: agent.greeting_message || '',
+        human_transfer_number: agent.human_transfer_number || '',
+        enable_auto_transfer: agent.enable_auto_transfer !== false
       }
     });
 

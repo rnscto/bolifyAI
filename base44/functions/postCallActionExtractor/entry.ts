@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
 // Post-Call AI Action Extractor - v2: Force redeploy
 // Analyzes call transcripts to extract specific action items:
@@ -11,8 +11,9 @@ import { createClient } from 'npm:@base44/sdk@0.8.20';
 
 Deno.serve(async (req) => {
   try {
-    // Entity automation — no user session, use service role directly (same as campaignPoller)
-    const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+    // Entity automation or fire-and-forget — use service role
+    const base44_client = createClientFromRequest(req);
+    const svc = base44_client.asServiceRole;
 
     // Accept either direct invocation or entity automation payload
     const body = await req.json();
@@ -80,9 +81,12 @@ Deno.serve(async (req) => {
     const istTimeStr = `${istNow.getUTCHours().toString().padStart(2,'0')}:${istNow.getUTCMinutes().toString().padStart(2,'0')} IST`;
 
     // Use Azure OpenAI to extract action items
-    const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+    let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
     const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
     const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+    // Normalize: strip /openai/... or /api/projects/... from AI Foundry endpoints
+    const oIdx = baseUrl.indexOf('/openai/'); if (oIdx > 0) baseUrl = baseUrl.substring(0, oIdx);
+    const pIdx = baseUrl.indexOf('/api/projects'); if (pIdx > 0) baseUrl = baseUrl.substring(0, pIdx);
 
     const extractionResponse = await fetch(
       `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`,

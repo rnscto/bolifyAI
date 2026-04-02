@@ -142,9 +142,20 @@ async function saveCallRecord(session, reqId, duration) {
     const appId = Deno.env.get('BASE44_APP_ID');
     const serviceClient = createClient({ appId, asServiceRole: true });
 
-    const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+    const rawEndpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT') || '';
     const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
     const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+
+    // Normalize Azure endpoint: strip trailing slash and any /openai/... suffix to get just the base
+    let baseUrl = rawEndpoint.replace(/\/+$/, '');
+    // If endpoint already contains /openai/ path (e.g. from Azure AI Foundry), strip it
+    const openaiIdx = baseUrl.indexOf('/openai/');
+    if (openaiIdx > 0) baseUrl = baseUrl.substring(0, openaiIdx);
+    // Also strip /api/projects/... paths from AI Foundry endpoints
+    const apiProjIdx = baseUrl.indexOf('/api/projects');
+    if (apiProjIdx > 0) baseUrl = baseUrl.substring(0, apiProjIdx);
+
+    console.log(`[${reqId}] 🔗 Azure OpenAI base: ${baseUrl.substring(0, 60)}..., deployment: ${deployment}`);
 
     // ===== STEP 1: AI Analysis — summary + scoring + intent (single LLM call) =====
     let summary = '';
@@ -158,8 +169,10 @@ async function saveCallRecord(session, reqId, duration) {
 
     if (transcript && transcript.trim().length > 30) {
       try {
+        const analysisUrl = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+        console.log(`[${reqId}] 🧠 AI Analysis URL: ${analysisUrl.substring(0, 100)}...`);
         const analysisRes = await fetch(
-          `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`,
+          analysisUrl,
           {
             method: 'POST',
             headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
