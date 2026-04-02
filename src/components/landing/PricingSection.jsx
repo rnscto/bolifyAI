@@ -10,7 +10,7 @@ import { createPageUrl } from '../../utils';
 const plans = [
   {
     name: 'Personal AI Assistant',
-    price: '₹1,999',
+    price: '₹3,999',
     period: '/month',
     gst: '+ GST',
     billing: '7-day free trial',
