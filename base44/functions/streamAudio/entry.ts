@@ -817,16 +817,23 @@ Deno.serve(async (req) => {
       input_audio_transcription: { model: 'whisper-1', language: 'hi' },
       turn_detection: {
         type: 'server_vad',
-        threshold: 0.5,
-        prefix_padding_ms: 400,
-        silence_duration_ms: 500
+        threshold: 0.7,
+        prefix_padding_ms: 300,
+        silence_duration_ms: 700
       }
     };
 
     // Inject live IST timestamp + background noise handling instructions
     const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
     const timeInjection = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}. Use this to compute relative times.\n`;
-    const noiseHandling = `\n[AUDIO RULES] IMPORTANT: This is a phone call with possible background noise. (1) ONLY respond to the PRIMARY speaker who is directly talking to you. Ignore background voices, TV, radio, or ambient conversations. (2) If you hear unclear or garbled audio, ask the caller to repeat. (3) Keep responses SHORT (1-2 sentences) to avoid being interrupted. (4) When the conversation has concluded and both sides have said goodbye, use the end_call tool to disconnect.\n`;
+    const noiseHandling = `\n[AUDIO RULES] CRITICAL NOISE HANDLING FOR PHONE CALLS:
+(1) You are on a PHONE CALL in India where callers may be outdoors, in traffic, or in crowded places.
+(2) ONLY respond to CLEAR, DIRECTED human speech. If you receive garbled, unclear, or very short utterances (single syllables, repeated nonsense), DO NOT respond to them. Instead STAY SILENT and wait for the caller to speak clearly.
+(3) If you hear what sounds like background noise being transcribed as words (e.g., random syllables, repeated "bye-bye", wind sounds), IGNORE it completely. Do NOT say goodbye or end the call based on noise.
+(4) Only respond when you hear a COMPLETE, MEANINGFUL sentence or question from the caller.
+(5) If audio quality is consistently poor, say ONCE: "Aapki awaaz thodi unclear aa rahi hai, kya aap zara clearly bol sakte hain?" then wait.
+(6) Keep responses SHORT (1-2 sentences) to minimize interruption.
+(7) NEVER end the call based on a single unclear word. Only use end_call when there has been a clear, mutual goodbye exchange with 2+ clear sentences from the caller.\n`;
 
     // Build transfer instructions if enabled
     let transferInstructions = '';
@@ -890,7 +897,7 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
         const sessionConfig = {
           input_audio_format: 'pcm16',
           input_audio_transcription: { model: 'whisper-1', language: 'hi' },
-          turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 400, silence_duration_ms: 500 }
+          turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 }
         };
         if (isHybrid) {
           sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
@@ -916,8 +923,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
           input_audio_transcription: { model: 'whisper-1' },
           modalities: ['text', 'audio'],
           voice: 'alloy',
-          instructions: 'You are a friendly AI voice assistant. Be professional and concise. Wait for the system to provide further instructions before speaking.',
-          turn_detection: { type: 'server_vad', threshold: 0.5, prefix_padding_ms: 400, silence_duration_ms: 500 }
+          instructions: 'You are a friendly AI voice assistant. Be professional and concise. Wait for the system to provide further instructions before speaking. IMPORTANT: Ignore any background noise or unclear audio — only respond to clear human speech directed at you.',
+          turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 }
         }});
         console.log(`[${reqId}] 📤 Minimal config sent (waiting for agent config before greeting)`);
       }
@@ -946,22 +953,20 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
       return;
     }
 
-    if (type === 'response.audio.done') {
-      session.isSpeaking = false;
-      console.log(`[${reqId}] 🔊 Audio response complete`);
-      return;
-    }
+    if (type === 'response.audio.done') { session.isSpeaking = false; return; }
 
     // ─── Transcription of user's speech ───
-    // Log transcription failures with details
-    if (type === 'conversation.item.input_audio_transcription.failed') {
-      console.error(`[${reqId}] ❌ Input transcription FAILED:`, JSON.stringify(msg.error || msg));
-      return;
-    }
+    if (type === 'conversation.item.input_audio_transcription.failed') { console.error(`[${reqId}] ❌ STT fail`); return; }
 
     if (type === 'conversation.item.input_audio_transcription.completed' && msg.transcript) {
       const text = msg.transcript.trim();
       if (text) {
+        // Noise filter: reject Whisper hallucinations from background noise
+        const clean = text.toLowerCase().replace(/[^a-z\u0900-\u097F\s]/g, '').trim();
+        const wc = clean.split(/\s+/).filter(w => w).length;
+        if (wc <= 2 && /^(bye[\s-]*bye|bye|ba+h*|hmm+|uh+|um+|ah+|oh+|huh|tch|shh|ss+|mm+|nah+|ha+)$/i.test(clean)) {
+          console.log(`[${reqId}] 🔇 Noise: "${text}"`); return;
+        }
         console.log(`[${reqId}] 🗣️ Customer: "${text.substring(0, 100)}"`);
         session.transcript.push({ speaker: 'Customer', text });
         if (session.voiceEngine === 'azure_speech') { generateGpt5NanoResponse(text); }
