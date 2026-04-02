@@ -1353,67 +1353,28 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
         }
       }
 
-      // ── Strategy 2: Recent unclaimed ringing/initiated calls ──
-      // When multiple calls are ringing (e.g. campaign batch), prefer matching by callee number
+      // ── Strategy 2: Recent unclaimed ringing/initiated calls (PARALLEL) ──
       if (!callLog) {
-        try {
-          const recentLogsRaw = await svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20);
-          const recentLogs = Array.isArray(recentLogsRaw) ? recentLogsRaw : [];
-          const unclaimed = recentLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
-          console.log(`[${reqId}] 🔍 Ringing unclaimed: ${unclaimed.length} (total ringing: ${recentLogs.length}), calleeNumber=${session.calleeNumber}`);
-
-          if (unclaimed.length >= 1) {
-            // Try to match by callee_number first (critical for concurrent campaign calls)
-            if (session.calleeNumber) {
-              const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '');
-              const phoneMatch = unclaimed.find(l => {
-                const logPhone = (l.callee_number || '').replace(/[^0-9]/g, '');
-                // Match last 10 digits (ignore country code differences)
-                return logPhone.slice(-10) === cleanCallee.slice(-10);
-              });
-              if (phoneMatch) {
-                callLog = phoneMatch;
-                console.log(`[${reqId}] ⚡ Phone match: ringing call ${callLog.id} (${callLog.callee_number})`);
-              }
-            }
-            // Fallback: pick most recent unclaimed
-            if (!callLog) {
-              callLog = unclaimed[0];
-              console.log(`[${reqId}] ⚡ Recent match: ringing call ${callLog.id} (${callLog.callee_number})`);
-            }
+        const cleanCallee = session.calleeNumber ? session.calleeNumber.replace(/[^0-9]/g, '') : '';
+        const matchPhone = (list) => {
+          const unclaimed = list.filter(l => !l.stream_sid && l.created_date >= cutoff);
+          if (unclaimed.length === 0) return null;
+          if (cleanCallee) {
+            const pm = unclaimed.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10));
+            if (pm) return pm;
           }
-        } catch (e) {
-          console.log(`[${reqId}] ⚠️ Ringing lookup failed: ${e.message}`);
-        }
-      }
-
-      if (!callLog) {
+          return unclaimed[0];
+        };
         try {
-          const initLogsRaw = await svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20);
-          const initLogs = Array.isArray(initLogsRaw) ? initLogsRaw : [];
-          const unclaimed = initLogs.filter(l => !l.stream_sid && l.created_date >= cutoff);
-          console.log(`[${reqId}] 🔍 Initiated unclaimed: ${unclaimed.length}`);
-
-          if (unclaimed.length >= 1) {
-            if (session.calleeNumber) {
-              const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '');
-              const phoneMatch = unclaimed.find(l => {
-                const logPhone = (l.callee_number || '').replace(/[^0-9]/g, '');
-                return logPhone.slice(-10) === cleanCallee.slice(-10);
-              });
-              if (phoneMatch) {
-                callLog = phoneMatch;
-                console.log(`[${reqId}] ⚡ Phone match: initiated call ${callLog.id} (${callLog.callee_number})`);
-              }
-            }
-            if (!callLog) {
-              callLog = unclaimed[0];
-              console.log(`[${reqId}] ⚡ Recent match: initiated call ${callLog.id} (${callLog.callee_number})`);
-            }
-          }
-        } catch (e) {
-          console.log(`[${reqId}] ⚠️ Initiated lookup failed: ${e.message}`);
-        }
+          // Fire ringing + initiated queries in parallel
+          const [ringingRaw, initRaw] = await Promise.all([
+            svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
+            svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => [])
+          ]);
+          callLog = matchPhone(Array.isArray(ringingRaw) ? ringingRaw : []);
+          if (callLog) console.log(`[${reqId}] ⚡ Ringing match: ${callLog.id}`);
+          if (!callLog) { callLog = matchPhone(Array.isArray(initRaw) ? initRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Initiated match: ${callLog.id}`); }
+        } catch (e) { console.log(`[${reqId}] ⚠️ Strategy 2 failed: ${e.message}`); }
       }
 
       // ── Strategy 3: Broadest fallback ──
@@ -1461,11 +1422,13 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
           let didAgent = null;
           let didClient = null;
 
-          if (matchedDID?.agent_id) {
-            try { didAgent = await svc.entities.Agent.get(matchedDID.agent_id); } catch (_) {}
-          }
-          if (matchedDID?.client_id) {
-            try { didClient = await svc.entities.Client.get(matchedDID.client_id); } catch (_) {}
+          // Parallel fetch agent + client
+          if (matchedDID?.agent_id || matchedDID?.client_id) {
+            const [_a, _c] = await Promise.all([
+              matchedDID.agent_id ? svc.entities.Agent.get(matchedDID.agent_id).catch(()=>null) : null,
+              matchedDID.client_id ? svc.entities.Client.get(matchedDID.client_id).catch(()=>null) : null
+            ]);
+            didAgent = _a; didClient = _c;
           }
 
           // Fallback: search agents' assigned_dids arrays
@@ -1491,61 +1454,24 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
             console.log(`[${reqId}] ✅ INBOUND: Agent="${didAgent.name}", client=${didClient?.company_name||'?'}`);
             session.clientId = didClient?.id || didAgent.client_id;
 
+            // Parallel: fetch KB docs + leads simultaneously
             let kbContent = '';
-            if (didAgent.knowledge_base_ids?.length > 0) {
-              for (const kbId of didAgent.knowledge_base_ids) {
-                try {
-                  const doc = await svc.entities.KnowledgeBase.get(kbId);
-                  if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
-                } catch (_) {}
-              }
-            }
-
-            // Check for caller identity (lead matching) using session.callerNumber if available
             let callerContext = '';
-            if (session.callerNumber && didClient) {
-              const cleanCaller = session.callerNumber.replace(/\D/g, '').slice(-10);
-              if (cleanCaller) {
-                try {
-                  const clientLeadsRaw = await svc.entities.Lead.filter({ client_id: didClient.id });
-                  const clientLeads = Array.isArray(clientLeadsRaw) ? clientLeadsRaw : [];
-                  const matchedLead = clientLeads.find(l => l.phone && l.phone.replace(/\D/g, '').slice(-10) === cleanCaller);
-                  if (matchedLead) {
-                    console.log(`[${reqId}] 🎯 Caller identified as Lead: "${matchedLead.name}" (score: ${matchedLead.score})`);
-                    callerContext = [
-                      `\n\n--- INBOUND CALL - RETURNING LEAD ---`,
-                      `- Name: ${matchedLead.name || 'Unknown'}`,
-                      `- Phone: ${matchedLead.phone}`,
-                      matchedLead.email ? `- Email: ${matchedLead.email}` : null,
-                      matchedLead.company ? `- Company: ${matchedLead.company}` : null,
-                      `- Status: ${matchedLead.status || 'new'}`,
-                      `- Score: ${matchedLead.score || 0}/100`,
-                      matchedLead.qualification_tier ? `- Tier: ${matchedLead.qualification_tier}` : null,
-                      matchedLead.notes ? `- Notes: ${matchedLead.notes.substring(0, 300)}` : null,
-                      ``,
-                      `CRITICAL: This is an INBOUND callback. Address them by name "${matchedLead.name || 'Sir/Madam'}".`,
-                    ].filter(Boolean).join('\n');
-
-                    // Also get recent call history for this lead
-                    try {
-                      const lcRaw = await svc.entities.CallLog.filter({ lead_id: matchedLead.id });
-                      const recentCalls = (Array.isArray(lcRaw) ? lcRaw : [])
-                        .sort((a, b) => new Date(b.call_start_time || b.created_date) - new Date(a.call_start_time || a.created_date))
-                        .slice(0, 3);
-                      if (recentCalls.length > 0) {
-                        callerContext += '\n\nLAST CALL HISTORY:';
-                        recentCalls.forEach(c => {
-                          callerContext += `\n- ${c.direction} | ${c.status} | ${(c.conversation_summary || 'No summary').substring(0, 150)}`;
-                        });
-                      }
-                    } catch (_) {}
-
-                    // Store lead_id for later CallLog association
-                    session._inboundLeadId = matchedLead.id;
-                  }
-                } catch (e) {
-                  console.log(`[${reqId}] ⚠️ Lead matching failed: ${e.message}`);
-                }
+            const cleanCaller = session.callerNumber ? session.callerNumber.replace(/\D/g, '').slice(-10) : '';
+            const kbIds = didAgent.knowledge_base_ids || [];
+            const [kbDocs, leadsRaw] = await Promise.all([
+              kbIds.length > 0 ? Promise.all(kbIds.map(id => svc.entities.KnowledgeBase.get(id).catch(()=>null))) : [],
+              (cleanCaller && didClient) ? svc.entities.Lead.filter({ client_id: didClient.id }).catch(()=>[]) : []
+            ]);
+            kbDocs.filter(Boolean).forEach(doc => { if (doc.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`; });
+            if (cleanCaller && didClient) {
+              const leads = Array.isArray(leadsRaw) ? leadsRaw : [];
+              const matchedLead = leads.find(l => l.phone && l.phone.replace(/\D/g,'').slice(-10) === cleanCaller);
+              if (matchedLead) {
+                console.log(`[${reqId}] 🎯 Lead: "${matchedLead.name}" (score: ${matchedLead.score})`);
+                callerContext = [`\n\n--- INBOUND CALL - RETURNING LEAD ---`,`- Name: ${matchedLead.name||'Unknown'}`,`- Phone: ${matchedLead.phone}`,matchedLead.email?`- Email: ${matchedLead.email}`:null,matchedLead.company?`- Company: ${matchedLead.company}`:null,`- Status: ${matchedLead.status||'new'}`,`- Score: ${matchedLead.score||0}/100`,matchedLead.qualification_tier?`- Tier: ${matchedLead.qualification_tier}`:null,matchedLead.notes?`- Notes: ${matchedLead.notes.substring(0,300)}`:null,'',`CRITICAL: This is an INBOUND callback. Address them by name "${matchedLead.name||'Sir/Madam'}".`].filter(Boolean).join('\n');
+                try { const lcRaw=await svc.entities.CallLog.filter({lead_id:matchedLead.id});const rc=(Array.isArray(lcRaw)?lcRaw:[]).sort((a,b)=>new Date(b.call_start_time||b.created_date)-new Date(a.call_start_time||a.created_date)).slice(0,3);if(rc.length>0){callerContext+='\n\nLAST CALL HISTORY:';rc.forEach(c=>{callerContext+=`\n- ${c.direction} | ${c.status} | ${(c.conversation_summary||'No summary').substring(0,150)}`;});} } catch(_){}
+                session._inboundLeadId = matchedLead.id;
               }
             }
 
@@ -1607,33 +1533,23 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
               const dndEnabled = didClient.dnd_enabled || false;
               const callerClean = (session.callerNumber || '').replace(/\D/g, '').slice(-10);
 
-              let isTrusted = false;
-              let trustedName = '';
-              if (callerClean) {
-                try {
-                  const tcRaw = await svc.entities.TrustedContact.filter({ client_id: didClient.id });
-                  const tcs = Array.isArray(tcRaw) ? tcRaw : [];
-                  const match = tcs.find(tc => tc.phone && tc.phone.replace(/\D/g, '').slice(-10) === callerClean);
-                  if (match) { isTrusted = true; trustedName = match.name || ''; }
-                } catch (_) {}
-              }
-
+              // Parallel: TrustedContact + OwnerStatus
+              let isTrusted = false, trustedName = '';
+              const [tcRaw, osRaw] = await Promise.all([
+                callerClean ? svc.entities.TrustedContact.filter({ client_id: didClient.id }).catch(()=>[]) : [],
+                svc.entities.OwnerStatus.filter({ client_id: didClient.id, is_active: true }).catch(()=>[])
+              ]);
+              if (callerClean) { const tcs=Array.isArray(tcRaw)?tcRaw:[]; const m=tcs.find(tc=>tc.phone&&tc.phone.replace(/\D/g,'').slice(-10)===callerClean); if(m){isTrusted=true;trustedName=m.name||'';} }
               let personalInstructions = '\n\n--- PERSONAL AI ASSISTANT MODE ---';
-              if (aiMode === 'block_all') {
-                personalInstructions += '\nMODE: BLOCK ALL. Politely tell the caller the owner is unavailable. Do NOT take messages. End quickly.';
-              } else if (aiMode === 'take_messages') {
-                personalInstructions += `\nMODE: TAKE MESSAGES. Take a message from every caller. Ask who is calling, their purpose, and collect their message.`;
-              } else if (aiMode === 'allow_contacts' && isTrusted) {
-                personalInstructions += `\nMODE: ALLOW CONTACTS. Caller "${trustedName}" is TRUSTED. Be warm and transfer if possible.`;
-              } else if (aiMode === 'allow_contacts' && !isTrusted) {
-                personalInstructions += '\nMODE: ALLOW CONTACTS (unknown). Screen this unknown caller. Take a message if legitimate.';
-              } else {
-                personalInstructions += `\nMODE: SCREEN ALL. Screen every call. Classify as family/business/promotional/spam. Take messages for legitimate callers.`;
-              }
-              if (dndEnabled) personalInstructions += '\nDND IS ON: Handle everything silently. Do not mention transferring.';
-              personalInstructions += '\nAFTER EVERY CALL: Classify as family/business/promotional/spam/unknown in your summary.';
-              // Fetch active OwnerStatus for dynamic prompt injection
-              try { const _as = await svc.entities.OwnerStatus.filter({ client_id: didClient.id, is_active: true }); if (_as.length > 0) { const _s = _as[0]; personalInstructions += `\n\n--- OWNER STATUS: ${_s.icon} ${_s.title}${_s.start_time ? ' (' + _s.start_time + (_s.end_time ? ' to ' + _s.end_time : '') + ')' : ''} ---\nCRITICAL: Tell callers in Hindi: "${_s.caller_message_hindi}"`; console.log(`[${reqId}] 🎯 OwnerStatus: ${_s.title}`); } } catch (_) {}
+              if (aiMode==='block_all') personalInstructions+='\nMODE: BLOCK ALL. Politely tell the caller the owner is unavailable. Do NOT take messages. End quickly.';
+              else if (aiMode==='take_messages') personalInstructions+='\nMODE: TAKE MESSAGES. Take a message from every caller. Ask who is calling, their purpose, and collect their message.';
+              else if (aiMode==='allow_contacts'&&isTrusted) personalInstructions+=`\nMODE: ALLOW CONTACTS. Caller "${trustedName}" is TRUSTED. Be warm and transfer if possible.`;
+              else if (aiMode==='allow_contacts'&&!isTrusted) personalInstructions+='\nMODE: ALLOW CONTACTS (unknown). Screen this unknown caller. Take a message if legitimate.';
+              else personalInstructions+='\nMODE: SCREEN ALL. Screen every call. Classify as family/business/promotional/spam. Take messages for legitimate callers.';
+              if (dndEnabled) personalInstructions+='\nDND IS ON: Handle everything silently. Do not mention transferring.';
+              personalInstructions+='\nAFTER EVERY CALL: Classify as family/business/promotional/spam/unknown in your summary.';
+              const _osList=Array.isArray(osRaw)?osRaw:[];
+              if(_osList.length>0){const _s=_osList[0];personalInstructions+=`\n\n--- OWNER STATUS: ${_s.icon} ${_s.title}${_s.start_time?' ('+_s.start_time+(_s.end_time?' to '+_s.end_time:'')+')':''} ---\nCRITICAL: Tell callers in Hindi: "${_s.caller_message_hindi}"`;console.log(`[${reqId}] 🎯 OwnerStatus: ${_s.title}`);}
 
               session.systemPrompt += personalInstructions;
               session._personalMode = aiMode;
@@ -1690,79 +1606,44 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
       session.clientId = callLog.client_id;
       const cache = callLog.agent_config_cache;
 
-      // ── Check for Shopify marketplace integration ──
-      if (callLog.client_id) {
-        try {
-          const siRaw = await svc.entities.MarketplaceIntegration.filter({ client_id: callLog.client_id, platform: 'shopify', status: 'active' });
-          const shopifyIntegrations = Array.isArray(siRaw) ? siRaw : [];
-          if (shopifyIntegrations.length > 0) {
-            session.hasShopify = true;
-            console.log(`[${reqId}] 🛒 Shopify integration found for client ${callLog.client_id}`);
-          }
-        } catch (e) {
-          console.log(`[${reqId}] ⚠️ Shopify check failed: ${e.message}`);
-        }
-      }
-
       if (cache && cache.system_prompt) {
         session.systemPrompt = cache.system_prompt;
-        if (cache.knowledge_base_content) {
-          session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
-        }
+        if (cache.knowledge_base_content) session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
         if (cache.human_transfer_number) session.humanTransferNumber = cache.human_transfer_number;
         if (cache.enable_auto_transfer === false) session.enableAutoTransfer = false;
 
-        // ═══ PERSONAL AI ASSISTANT: Inject screening mode instructions ═══
+        // Parallel: Shopify check + Client fetch for personal mode
         if (callLog.client_id) {
+          const [siRaw, ownerClient] = await Promise.all([
+            svc.entities.MarketplaceIntegration.filter({ client_id: callLog.client_id, platform: 'shopify', status: 'active' }).catch(()=>[]),
+            svc.entities.Client.get(callLog.client_id).catch(()=>null)
+          ]);
+          const si = Array.isArray(siRaw) ? siRaw : [];
+          if (si.length > 0) { session.hasShopify = true; console.log(`[${reqId}] 🛒 Shopify found`); }
           try {
-            const ownerClient = await svc.entities.Client.get(callLog.client_id);
             if (ownerClient && ownerClient.account_type === 'personal') {
               const aiMode = ownerClient.ai_response_mode || 'screen_all';
               const dndEnabled = ownerClient.dnd_enabled || false;
               const callerNum = callLog.caller_id || session.callerNumber || '';
               const cleanCaller = callerNum.replace(/\D/g, '').slice(-10);
 
-              // Check if caller is a trusted contact
-              let isTrusted = false;
-              let trustedName = '';
-              if (cleanCaller) {
-                const tc2Raw = await svc.entities.TrustedContact.filter({ client_id: callLog.client_id });
-                const tc2 = Array.isArray(tc2Raw) ? tc2Raw : [];
-                const match = tc2.find(tc => tc.phone && tc.phone.replace(/\D/g, '').slice(-10) === cleanCaller);
-                if (match) { isTrusted = true; trustedName = match.name || ''; console.log(`[${reqId}] 👤 TRUSTED: "${trustedName}"`); }
-              }
-
+              // Parallel: TrustedContact + OwnerStatus
+              let isTrusted = false, trustedName = '';
+              const [tc2Raw, os2Raw] = await Promise.all([
+                cleanCaller ? svc.entities.TrustedContact.filter({ client_id: callLog.client_id }).catch(()=>[]) : [],
+                svc.entities.OwnerStatus.filter({ client_id: callLog.client_id, is_active: true }).catch(()=>[])
+              ]);
+              if(cleanCaller){const tc2=Array.isArray(tc2Raw)?tc2Raw:[];const m=tc2.find(tc=>tc.phone&&tc.phone.replace(/\D/g,'').slice(-10)===cleanCaller);if(m){isTrusted=true;trustedName=m.name||'';console.log(`[${reqId}] 👤 TRUSTED: "${trustedName}"`);}  }
               let personalInstructions = '\n\n--- PERSONAL AI ASSISTANT MODE ---';
-              
-              if (aiMode === 'block_all') {
-                personalInstructions += '\nMODE: BLOCK ALL. Politely tell the caller that the owner is unavailable and cannot receive calls at this time. Do NOT take messages. End the call quickly.';
-              } else if (aiMode === 'take_messages') {
-                personalInstructions += `\nMODE: TAKE MESSAGES. The owner wants you to take a message from every caller.
-Steps: 1) Greet warmly, 2) Ask who is calling and purpose, 3) Collect their message, 4) Confirm you will pass it along, 5) Thank them.
-${isTrusted ? `NOTE: This is "${trustedName}", a known contact. Be extra warm but still take their message.` : ''}`;
-              } else if (aiMode === 'allow_contacts' && isTrusted) {
-                personalInstructions += `\nMODE: ALLOW CONTACTS. This caller "${trustedName}" is a TRUSTED CONTACT. 
-${ownerClient.human_transfer_number ? 'Transfer them to the owner immediately using the transfer function.' : 'Tell them the owner will be connected shortly. Meanwhile, be friendly and make small talk.'}`;
-                if (ownerClient.human_transfer_number) {
-                  session.humanTransferNumber = ownerClient.human_transfer_number;
-                  session.enableAutoTransfer = true;
-                }
-              } else if (aiMode === 'allow_contacts' && !isTrusted) {
-                personalInstructions += `\nMODE: ALLOW CONTACTS (unknown caller). This is an UNKNOWN number — screen this call.
-Steps: 1) Greet professionally, 2) Ask who is calling and their purpose, 3) If they seem legitimate, take a message. If spam/telemarketing, politely end the call.`;
-              } else {
-                // screen_all (default)
-                personalInstructions += `\nMODE: SCREEN ALL. Screen every incoming call.
-Steps: 1) Greet warmly, 2) Ask who is calling and their purpose, 3) Classify the call (family/business/promotional/spam), 4) If legitimate, take a detailed message. If spam, politely end the call.
-${isTrusted ? `NOTE: This is "${trustedName}", a known contact. Be warm and take their message promptly.` : ''}`;
-              }
-
-              if (dndEnabled) {
-                personalInstructions += '\nDND IS ON: Do NOT mention transferring to the owner. Handle everything yourself quietly.';
-              }
-              personalInstructions += `\nAFTER EVERY CALL: Classify the call as one of: family, business, promotional, spam, unknown. Include this in your summary.`;
-              // Fetch active OwnerStatus for dynamic prompt injection
-              try { const _as2 = await svc.entities.OwnerStatus.filter({ client_id: callLog.client_id, is_active: true }); if (_as2.length > 0) { const _s2 = _as2[0]; personalInstructions += `\n\n--- OWNER STATUS: ${_s2.icon} ${_s2.title}${_s2.start_time ? ' (' + _s2.start_time + (_s2.end_time ? ' to ' + _s2.end_time : '') + ')' : ''} ---\nCRITICAL: Tell callers in Hindi: "${_s2.caller_message_hindi}"`; console.log(`[${reqId}] 🎯 OwnerStatus: ${_s2.title}`); } } catch (_) {}
+              if(aiMode==='block_all') personalInstructions+='\nMODE: BLOCK ALL. Politely tell the caller the owner is unavailable. Do NOT take messages. End quickly.';
+              else if(aiMode==='take_messages') personalInstructions+=`\nMODE: TAKE MESSAGES. Take a message from every caller.${isTrusted?` NOTE: "${trustedName}" is known. Be extra warm.`:''}`;
+              else if(aiMode==='allow_contacts'&&isTrusted){personalInstructions+=`\nMODE: ALLOW CONTACTS. "${trustedName}" is TRUSTED.${ownerClient.human_transfer_number?' Transfer immediately.':' Be friendly.'}`;if(ownerClient.human_transfer_number){session.humanTransferNumber=ownerClient.human_transfer_number;session.enableAutoTransfer=true;}}
+              else if(aiMode==='allow_contacts'&&!isTrusted) personalInstructions+='\nMODE: ALLOW CONTACTS (unknown). Screen this caller. Take message if legitimate.';
+              else personalInstructions+=`\nMODE: SCREEN ALL. Screen every call. Classify as family/business/promotional/spam.${isTrusted?` NOTE: "${trustedName}" is known.`:''}`;
+              if(dndEnabled) personalInstructions+='\nDND IS ON: Handle everything silently.';
+              personalInstructions+='\nAFTER EVERY CALL: Classify as family/business/promotional/spam/unknown.';
+              const os2=Array.isArray(os2Raw)?os2Raw:[];
+              if(os2.length>0){const _s2=os2[0];personalInstructions+=`\n\n--- OWNER STATUS: ${_s2.icon} ${_s2.title}${_s2.start_time?' ('+_s2.start_time+(_s2.end_time?' to '+_s2.end_time:'')+')':''} ---\nCRITICAL: Tell callers in Hindi: "${_s2.caller_message_hindi}"`;console.log(`[${reqId}] 🎯 OwnerStatus: ${_s2.title}`);}
 
               session.systemPrompt += personalInstructions;
               session._personalMode = aiMode;
