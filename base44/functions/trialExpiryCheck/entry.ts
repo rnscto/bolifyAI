@@ -7,7 +7,7 @@ const emailClient = new EmailClient(connStr);
 async function sendEmail({ to, subject, html, displayName }) {
   const message = {
     senderAddress: 'DoNotReply@vaaniai.io',
-    displayName: displayName || 'VaaniAI',
+    displayName: displayName || 'Getway AI',
     content: { subject, html },
     recipients: { to: [{ address: to }] }
   };
@@ -60,11 +60,11 @@ Deno.serve(async (req) => {
         // Send expiry email
         await sendEmail({
           to: client.email,
-          subject: 'Your VaaniAI trial has expired — special offer inside!',
+          subject: 'Your Getway AI trial has expired — special offer inside!',
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
-                <h1 style="color: white; margin: 0;">VaaniAI</h1>
+                <h1 style="color: white; margin: 0;">Getway AI</h1>
               </div>
               <div style="padding: 30px; background: white; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
                 <h2 style="color: #1a365d;">Hi ${client.company_name},</h2>
@@ -79,7 +79,7 @@ Deno.serve(async (req) => {
                   </ul>
                 </div>
                 <div style="text-align: center; margin: 30px 0;">
-                  <a href="https://vaaniai.in" style="background: linear-gradient(135deg, #e67e22, #f39c12); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Subscribe Now — ₹6,500/mo</a>
+                  <a href="https://getway.ai" style="background: linear-gradient(135deg, #e67e22, #f39c12); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Subscribe Now — ₹6,500/mo</a>
                 </div>
                 <p style="color: #718096; font-size: 13px; text-align: center;">Questions? Reply to this email or call us.</p>
               </div>
@@ -94,11 +94,11 @@ Deno.serve(async (req) => {
       if (daysLeft === 3) {
         await sendEmail({
           to: client.email,
-          subject: `Only 3 days left on your VaaniAI trial!`,
+          subject: `Only 3 days left on your Getway AI trial!`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
-                <h1 style="color: white; margin: 0;">VaaniAI</h1>
+                <h1 style="color: white; margin: 0;">Getway AI</h1>
               </div>
               <div style="padding: 30px; background: white; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
                 <h2 style="color: #1a365d;">Hi ${client.company_name},</h2>
@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
                   <p style="margin: 0; color: #2c5282;"><strong>Pro tip:</strong> Upload more training documents to make your agent even smarter before going live!</p>
                 </div>
                 <div style="text-align: center; margin: 30px 0;">
-                  <a href="https://vaaniai.in" style="background: linear-gradient(135deg, #e67e22, #f39c12); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">View Subscription Plans</a>
+                  <a href="https://getway.ai" style="background: linear-gradient(135deg, #e67e22, #f39c12); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">View Subscription Plans</a>
                 </div>
               </div>
             </div>
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
       if (daysLeft === 1) {
         await sendEmail({
           to: client.email,
-          subject: `⚠️ Last day of your VaaniAI trial!`,
+          subject: `⚠️ Last day of your Getway AI trial!`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: linear-gradient(135deg, #c53030, #e53e3e); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
@@ -132,7 +132,7 @@ Deno.serve(async (req) => {
                 <p style="color: #4a5568; line-height: 1.6;">This is your <strong>last day</strong> of the free trial. After today, your AI agent will stop handling calls.</p>
                 <p style="color: #4a5568; line-height: 1.6;">Don't lose your setup — subscribe now to keep everything running.</p>
                 <div style="text-align: center; margin: 30px 0;">
-                  <a href="https://vaaniai.in" style="background: #c53030; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Subscribe Now</a>
+                  <a href="https://getway.ai" style="background: #c53030; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Subscribe Now</a>
                 </div>
                 <p style="color: #718096; font-size: 13px; text-align: center;">Our team may also reach out to help you get started.</p>
               </div>

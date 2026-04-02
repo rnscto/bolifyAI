@@ -8,7 +8,7 @@ const emailClient = new EmailClient(connStr);
 async function sendEmailViaACS({ to, fromName, subject, html }) {
   const message = {
     senderAddress: 'DoNotReply@vaaniai.io',
-    displayName: fromName || 'VaaniAI',
+    displayName: fromName || 'Getway AI',
     content: { subject, html },
     recipients: { to: [{ address: to }] }
   };
@@ -421,13 +421,13 @@ Deno.serve(async (req) => {
               const istScheduled = new Date(scheduledDate.getTime() + (5.5 * 60 * 60 * 1000));
               const istDateStr = istScheduled.toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Asia/Kolkata' });
               const reminderContent = await azureLLM(
-                `Write a brief reminder email for ${lead.name || 'customer'} about their ${activityType}: "${activity.title}". Scheduled: ${istDateStr} IST. From ${client?.company_name || 'VaaniAI'}. Under 80 words, HTML body only. IMPORTANT: Show the time as ${istDateStr} IST in the email.`,
+                `Write a brief reminder email for ${lead.name || 'customer'} about their ${activityType}: "${activity.title}". Scheduled: ${istDateStr} IST. From ${client?.company_name || 'Getway AI'}. Under 80 words, HTML body only. IMPORTANT: Show the time as ${istDateStr} IST in the email.`,
                 'You are an email copywriter. Always respond in valid JSON.',
                 { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } } }
               );
               await sendEmailViaACS({
                 to: lead.email,
-                fromName: client?.company_name || 'VaaniAI',
+                fromName: client?.company_name || 'Getway AI',
                 subject: reminderContent.subject,
                 html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${reminderContent.body_html}</div>`
               });
@@ -536,7 +536,7 @@ async function sendAdminAlert(svc, client, activity, lead, alertType, reason) {
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
       <div style="background:linear-gradient(135deg,#dc2626,#b91c1c);padding:20px 30px;border-radius:12px 12px 0 0;">
         <h2 style="color:white;margin:0;">${label}</h2>
-        <p style="color:#fecaca;margin:4px 0 0;font-size:13px;">${companyName} — VaaniAI Automation Engine</p>
+        <p style="color:#fecaca;margin:4px 0 0;font-size:13px;">${companyName} — Getway AI Automation Engine</p>
       </div>
       <div style="padding:24px 30px;background:white;border:1px solid #e2e8f0;border-top:none;">
         <h3 style="color:#1e293b;margin:0 0 8px;">${activity.title || activity.type}</h3>
@@ -561,13 +561,13 @@ async function sendAdminAlert(svc, client, activity, lead, alertType, reason) {
         ${lead?.notes ? `<div style="margin:12px 0;padding:12px;background:#f1f5f9;border-radius:8px;"><p style="margin:0 0 4px;color:#64748b;font-size:12px;font-weight:600;">LEAD HISTORY:</p><p style="margin:0;color:#334155;font-size:13px;">${lead.notes.substring(0, 400)}</p></div>` : ''}
       </div>
       <div style="padding:16px 30px;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;text-align:center;">
-        <p style="margin:0;color:#94a3b8;font-size:12px;">Sent by VaaniAI Follow-up Automation Engine</p>
+        <p style="margin:0;color:#94a3b8;font-size:12px;">Sent by Getway AI Follow-up Automation Engine</p>
       </div>
     </div>`;
 
   await sendEmailViaACS({
     to: client.email,
-    fromName: 'VaaniAI Automation',
+    fromName: 'Getway AI Automation',
     subject: `[${label}] ${activity.title || activity.type} — ${leadName}`,
     html: emailBody
   });

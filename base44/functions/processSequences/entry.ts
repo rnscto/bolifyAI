@@ -8,7 +8,7 @@ const emailClient = new EmailClient(connStr);
 async function sendLeadEmail({ to, fromName, subject, html }) {
   const message = {
     senderAddress: 'DoNotReply@vaaniai.io',
-    displayName: fromName || 'VaaniAI',
+    displayName: fromName || 'Getway AI',
     content: { subject, html },
     recipients: { to: [{ address: to }] }
   };
@@ -225,7 +225,7 @@ Return the adapted subject and body_html.`,
       bodyHtml = bodyHtml.replace(/\{\{name\}\}/g, enrollment.recipient_name || 'there');
 
       // Determine sender from pre-fetched cache
-      let fromName = 'VaaniAI';
+      let fromName = 'Getway AI';
       if (enrollment.client_id && clientMap[enrollment.client_id]?.company_name) {
         fromName = clientMap[enrollment.client_id].company_name;
       }

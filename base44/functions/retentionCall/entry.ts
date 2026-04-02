@@ -7,7 +7,7 @@ const emailClient = new EmailClient(connStr);
 async function sendEmailViaACS({ to, fromName, subject, html }) {
   const message = {
     senderAddress: 'DoNotReply@vaaniai.io',
-    displayName: fromName || 'VaaniAI',
+    displayName: fromName || 'Getway AI',
     content: { subject, html },
     recipients: { to: [{ address: to }] }
   };
@@ -144,7 +144,7 @@ Deno.serve(async (req) => {
 
       // Build personalized prompt
       let promptParts = [];
-      promptParts.push(`Generate a short, warm, professional retention phone call script for a VaaniAI sales agent calling a customer whose free trial has expired.`);
+      promptParts.push(`Generate a short, warm, professional retention phone call script for a Getway AI sales agent calling a customer whose free trial has expired.`);
       promptParts.push(`\nCustomer details:\n- Company: ${client.company_name}\n- Industry: ${client.industry || 'General'}\n- Trial expired: ${daysSinceExpiry} days ago\n- Has CRM: ${client.has_custom_crm ? 'Yes' : 'No'}`);
 
       if (config.greeting_template) {
@@ -259,7 +259,7 @@ Deno.serve(async (req) => {
       const retentionSystemPrompt = [
         retentionAgent.system_prompt || '',
         `\n--- CURRENT DATE & TIME (IST) ---\nRight now it is: ${nowIST} (Indian Standard Time). Use this for any relative time calculations. Always confirm callback times in IST.`,
-        `\nYou are ${retentionAgent.name}, an AI voice agent from VaaniAI.`,
+        `\nYou are ${retentionAgent.name}, an AI voice agent from Getway AI.`,
         `IMPORTANT: Always start the call by greeting the customer warmly and introducing yourself.`,
         `\nRetention call script:\n${scriptResponse?.script || 'Standard retention script'}`,
         scriptResponse?.key_objection_handlers ? `\nKey objection handlers:\n${scriptResponse.key_objection_handlers.join('\n')}` : '',
@@ -357,22 +357,22 @@ Deno.serve(async (req) => {
 
           await sendEmailViaACS({
             to: client.email,
-            fromName: 'VaaniAI',
-            subject: 'Following up on our call — VaaniAI',
+            fromName: 'Getway AI',
+            subject: 'Following up on our call — Getway AI',
             html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
               <div style="background:linear-gradient(135deg,#1a365d,#2d3748);padding:30px;text-align:center;border-radius:12px 12px 0 0;">
-                <h1 style="color:white;margin:0;">VaaniAI</h1>
+                <h1 style="color:white;margin:0;">Getway AI</h1>
               </div>
               <div style="padding:30px;background:white;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;">
                 <h2 style="color:#1a365d;">Hi ${client.company_name},</h2>
-                <p style="color:#4a5568;line-height:1.6;">Thanks for taking our call! Your VaaniAI setup is still intact and ready to go.</p>
+                <p style="color:#4a5568;line-height:1.6;">Thanks for taking our call! Your Getway AI setup is still intact and ready to go.</p>
                 ${offerHtml}
                 <div style="background:#f7fafc;border-radius:8px;padding:20px;margin:20px 0;text-align:center;">
                   <p style="margin:0 0 8px;color:#2d3748;font-weight:bold;">Starting at just ₹6,500/month</p>
                   <p style="margin:0;color:#718096;font-size:13px;">Quarterly billing • Cancel anytime</p>
                 </div>
                 <div style="text-align:center;margin:30px 0;">
-                  <a href="https://vaaniai.in" style="background:linear-gradient(135deg,#e67e22,#f39c12);color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px;">Subscribe Now</a>
+                  <a href="https://getway.ai" style="background:linear-gradient(135deg,#e67e22,#f39c12);color:white;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:bold;font-size:16px;">Subscribe Now</a>
                 </div>
               </div>
             </div>`

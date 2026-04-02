@@ -8,7 +8,7 @@ const emailClient = new EmailClient(connStr);
 async function sendLeadEmail({ to, fromName, subject, html }) {
   const message = {
     senderAddress: 'DoNotReply@vaaniai.io',
-    displayName: fromName || 'VaaniAI',
+    displayName: fromName || 'Getway AI',
     content: { subject, html },
     recipients: { to: [{ address: to }] }
   };

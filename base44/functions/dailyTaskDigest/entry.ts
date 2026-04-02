@@ -7,7 +7,7 @@ const emailClient = new EmailClient(connStr);
 async function sendEmail({ to, subject, html }) {
   const message = {
     senderAddress: 'DoNotReply@vaaniai.io',
-    displayName: 'VaaniAI Tasks',
+    displayName: 'Getway AI Tasks',
     content: { subject, html },
     recipients: { to: [{ address: to }] }
   };
@@ -143,14 +143,14 @@ Deno.serve(async (req) => {
         </div>
 
         <div style="padding:16px 30px;background:#f8fafc;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 12px 12px;text-align:center;">
-          <p style="margin:0;color:#94a3b8;font-size:12px;">VaaniAI Automation Engine — Daily Task Digest</p>
+          <p style="margin:0;color:#94a3b8;font-size:12px;">Getway AI Automation Engine — Daily Task Digest</p>
         </div>
       </div>`;
 
       try {
         await sendEmail({
           to: client.email,
-          subject: `[VaaniAI] ${overdueCount > 0 ? `⚠️ ${overdueCount} Overdue + ` : ''}${pendingCount} Pending Tasks — Action Required`,
+          subject: `[Getway AI] ${overdueCount > 0 ? `⚠️ ${overdueCount} Overdue + ` : ''}${pendingCount} Pending Tasks — Action Required`,
           html
         });
         emailsSent++;

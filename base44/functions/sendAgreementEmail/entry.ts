@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
             <p>You can view and download your signed agreement anytime from your Partner Dashboard.</p>
             <p style="color:#666;font-size:13px;margin-top:20px;">This is a legally binding digital agreement under the Information Technology Act, 2000.</p>
             <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />
-            <p style="color:#999;font-size:12px;">TECH BRAINBUCKS INFOSOFT PVT LTD | VaaniAI.io</p>
+            <p style="color:#999;font-size:12px;">TECH BRAINBUCKS INFOSOFT PVT LTD | Getway AI</p>
           </div>
         </div>`
       );
