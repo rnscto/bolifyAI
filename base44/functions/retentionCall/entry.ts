@@ -279,7 +279,7 @@ Deno.serve(async (req) => {
         direction: 'outbound',
         status: 'initiated',
         call_start_time: new Date().toISOString(),
-        conversation_summary: `Retention call - Day ${daysSinceExpiry}. ${config.active_offer ? 'Offer: ' + config.active_offer : ''}`,
+        conversation_summary: '',
         agent_config_cache: {
           agent_name: retentionAgent.name,
           system_prompt: retentionSystemPrompt,

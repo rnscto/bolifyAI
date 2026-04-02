@@ -315,7 +315,14 @@ export default function ClientCallLogs() {
                 <div>
                   <p className="text-sm font-medium text-gray-700 mb-2">Summary</p>
                   <p className="text-sm bg-blue-50 p-3 rounded-lg border border-blue-100">
-                    {selectedCall.conversation_summary.replace(/^\[LEAD CONTEXT\][\s\S]*?---\n*/m, '').trim() || selectedCall.conversation_summary}
+                    {(() => {
+                      const raw = selectedCall.conversation_summary;
+                      // Strip polluted lead context that was accidentally stored as summary
+                      if (raw.startsWith('[LEAD CONTEXT]') || raw.startsWith('CUSTOMER PROFILE:')) {
+                        return 'Summary not available — call data is being reprocessed.';
+                      }
+                      return raw;
+                    })()}
                   </p>
                 </div>
               )}

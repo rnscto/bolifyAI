@@ -82,7 +82,14 @@ Deno.serve(async (req) => {
         const duration = cl.duration ? `${Math.round(cl.duration)}s` : 'N/A';
         sections.push(`\nCall ${i + 1} — ${date} (${duration}, ${cl.status}):`);
         if (cl.conversation_summary) {
-          sections.push(`  Summary: ${cl.conversation_summary}`);
+          // Strip any accidentally stored lead context from summary
+          let cleanSummary = cl.conversation_summary;
+          if (cleanSummary.startsWith('[LEAD CONTEXT]') || cleanSummary.startsWith('CUSTOMER PROFILE:')) {
+            cleanSummary = ''; // Skip polluted summaries
+          }
+          if (cleanSummary) {
+            sections.push(`  Summary: ${cleanSummary.substring(0, 300)}`);
+          }
         }
         if (cl.lead_status_updated) {
           sections.push(`  Outcome: ${cl.lead_status_updated}`);

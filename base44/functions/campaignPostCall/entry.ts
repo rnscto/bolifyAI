@@ -379,6 +379,7 @@ async function triggerNextBatch(base44, campaignId) {
         client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
         call_sid: callSid, caller_id: selectedDID, callee_number: cl.lead_phone,
         direction: 'outbound', status: 'initiated', call_start_time: new Date().toISOString(),
+        conversation_summary: '',
         agent_config_cache: {
           agent_name: agent.name, system_prompt: personalizedPrompt,
           persona: agent.persona || {}, knowledge_base_content: kbContent, lead_context: leadContext

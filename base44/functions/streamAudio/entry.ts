@@ -289,7 +289,7 @@ async function saveCallRecord(session, reqId, duration) {
         transcript: transcript || '',
         duration: duration,
         lead_status_updated: leadStatus,
-        ...(enrichedSummary ? { conversation_summary: enrichedSummary } : {})
+        conversation_summary: enrichedSummary || summary || ''
       });
       console.log(`[${reqId}] 💾 Call already ${currentLog.status}, added transcript+analysis: ${session.callLogId}`);
     } else {
@@ -299,7 +299,7 @@ async function saveCallRecord(session, reqId, duration) {
         duration: duration,
         call_end_time: new Date().toISOString(),
         lead_status_updated: leadStatus,
-        ...(enrichedSummary ? { conversation_summary: enrichedSummary } : {})
+        conversation_summary: enrichedSummary || summary || ''
       });
       console.log(`[${reqId}] 💾 Call saved as completed with analysis: ${session.callLogId}, score=${leadScore}`);
     }

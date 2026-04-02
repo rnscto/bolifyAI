@@ -187,7 +187,7 @@ IMPORTANT RULES:
       direction: 'outbound',
       status: 'initiated',
       call_start_time: new Date().toISOString(),
-      conversation_summary: leadContext ? `[LEAD CONTEXT]\n${leadContext}` : '',
+      conversation_summary: '',
       agent_config_cache: {
         agent_name: agent.name,
         system_prompt: personalizedPrompt,
