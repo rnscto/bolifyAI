@@ -54,15 +54,21 @@ export default function WebsiteLeadsSection() {
   }, []);
 
   const loadData = async () => {
-    const [allLeads, clients, users] = await Promise.all([
+    const [allLeads, clients] = await Promise.all([
       base44.entities.Lead.filter({ source: 'website_voice_agent' }, '-created_date', 50),
       base44.entities.Client.list('-created_date'),
-      base44.entities.User.list('-created_date'),
     ]);
 
     setLeads(allLeads);
     setTrialClients(clients.filter(c => c.account_status === 'trial' || c.account_status === 'onboarding'));
-    setSignedUpUsers(users.filter(u => u.role !== 'admin'));
+    // Derive signups from Client records instead of User entity (which has restricted access)
+    setSignedUpUsers(clients.map(c => ({
+      id: c.id,
+      full_name: c.company_name,
+      email: c.email,
+      role: c.account_type || 'business',
+      created_date: c.created_date
+    })));
     setLoading(false);
   };
 
