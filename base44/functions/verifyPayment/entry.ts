@@ -52,14 +52,52 @@ Deno.serve(async (req) => {
       });
 
       // Parse plan details from payment description
-      let subscribedChannels = 1;
-      let includeCRM = false;
+      let planDetails = {};
       try {
-        const planDetails = JSON.parse(payment.description);
-        subscribedChannels = planDetails.channels || 1;
-        includeCRM = planDetails.include_crm || false;
+        planDetails = JSON.parse(payment.description);
       } catch (e) {
-        // Legacy format fallback - try to extract from text
+        planDetails = {};
+      }
+
+      // ── WALLET TOP-UP ──
+      if (planDetails.type === 'wallet_topup') {
+        const topupAmount = planDetails.amount || payment.amount;
+        const client = await base44.asServiceRole.entities.Client.get(payment.client_id);
+        const currentBalance = client?.wallet_balance || 0;
+        const newBalance = currentBalance + topupAmount;
+
+        await base44.asServiceRole.entities.Client.update(payment.client_id, {
+          wallet_balance: newBalance,
+        });
+
+        // Create usage log for the top-up
+        await base44.asServiceRole.entities.UsageLog.create({
+          client_id: payment.client_id,
+          type: 'topup',
+          direction: 'credit',
+          amount: topupAmount,
+          balance_before: currentBalance,
+          balance_after: newBalance,
+          description: `Wallet top-up ₹${topupAmount}`,
+          payment_id: payment.id,
+        });
+
+        console.log(`[verifyPayment] Wallet top-up: ₹${topupAmount}, balance ₹${currentBalance} → ₹${newBalance}`);
+
+        return Response.json({
+          status: 'paid',
+          type: 'wallet_topup',
+          order_status: cfData.order_status,
+          amount: topupAmount,
+          new_balance: newBalance,
+        });
+      }
+
+      // ── SUBSCRIPTION PAYMENT (existing logic) ──
+      let subscribedChannels = planDetails.channels || 1;
+      let includeCRM = planDetails.include_crm || false;
+      if (!planDetails.channels) {
+        // Legacy format fallback
         const chMatch = payment.description?.match(/^(\d+)\s*channel/);
         if (chMatch) subscribedChannels = parseInt(chMatch[1]);
         includeCRM = payment.description?.includes('CRM') || false;
@@ -73,6 +111,7 @@ Deno.serve(async (req) => {
       await base44.asServiceRole.entities.Client.update(payment.client_id, {
         account_status: 'active',
         status: 'active',
+        billing_type: 'unlimited',
         total_channels: subscribedChannels,
         monthly_rate_per_channel: 6500,
         has_custom_crm: includeCRM,

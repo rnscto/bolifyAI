@@ -121,6 +121,13 @@ export default function Onboarding() {
       trial_end_date: trialEnd.toISOString(),
       onboarding_completed: true,
       total_channels: 1,
+      // Per-minute billing with 50 free trial minutes
+      billing_type: 'per_minute',
+      per_minute_rate: 4,
+      wallet_balance: 0,
+      free_minutes_remaining: 50,
+      total_minutes_used: 0,
+      total_amount_spent: 0,
       kyc_status: isPersonal ? 'not_required' : 'pending',
       kyc_deadline: isPersonal ? undefined : kycDeadlineStr,
       owner_whatsapp_number: profileData.owner_whatsapp_number || '',

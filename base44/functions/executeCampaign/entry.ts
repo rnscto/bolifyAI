@@ -50,6 +50,33 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, skipped: `campaign_${campaign.status}` });
     }
 
+    // ── BALANCE CHECK before starting campaign (per-minute billing) ──
+    const clientData = await svc.entities.Client.get(campaign.client_id);
+    if (clientData && clientData.billing_type !== 'unlimited') {
+      const freeMinutes = clientData.free_minutes_remaining || 0;
+      const walletBalance = clientData.wallet_balance || 0;
+      const rate = clientData.per_minute_rate || 4;
+      const minBalance = 100;
+
+      // Estimate cost: count pending leads × avg 2 min per call
+      const pendingCount = campaign.total_leads - (campaign.calls_completed || 0) - (campaign.calls_failed || 0);
+      const estimatedMinutes = pendingCount * 2;
+      const paidMinutesNeeded = Math.max(0, estimatedMinutes - freeMinutes);
+      const estimatedCost = paidMinutesNeeded * rate;
+
+      if (freeMinutes <= 0 && walletBalance < minBalance) {
+        return Response.json({
+          error: 'insufficient_balance',
+          message: `Insufficient balance. Minimum ₹${minBalance} required. Current: ₹${walletBalance}`,
+          wallet_balance: walletBalance,
+          estimated_cost: estimatedCost,
+          recommended_topup: Math.max(500, Math.ceil(estimatedCost / 100) * 100)
+        }, { status: 402 });
+      }
+
+      console.log(`[campaign] Balance check: ₹${walletBalance} wallet + ${freeMinutes} free min, est. cost ₹${estimatedCost} for ${pendingCount} leads`);
+    }
+
     // Start or resume campaign
     await svc.entities.Campaign.update(campaign_id, {
       status: 'running',

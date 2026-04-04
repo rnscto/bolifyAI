@@ -50,6 +50,40 @@
       "default": "onboarding",
       "description": "Overall account lifecycle status"
     },
+    "billing_type": {
+      "type": "string",
+      "enum": [
+        "per_minute",
+        "unlimited"
+      ],
+      "default": "per_minute",
+      "description": "Billing plan type \u2014 per_minute (\u20b94/min prepaid) or unlimited (flat channel rate)"
+    },
+    "per_minute_rate": {
+      "type": "number",
+      "default": 4,
+      "description": "Rate per minute in INR (default \u20b94)"
+    },
+    "wallet_balance": {
+      "type": "number",
+      "default": 0,
+      "description": "Prepaid wallet balance in INR"
+    },
+    "free_minutes_remaining": {
+      "type": "number",
+      "default": 0,
+      "description": "Free trial minutes remaining"
+    },
+    "total_minutes_used": {
+      "type": "number",
+      "default": 0,
+      "description": "Total billable minutes consumed"
+    },
+    "total_amount_spent": {
+      "type": "number",
+      "default": 0,
+      "description": "Total INR spent on calling"
+    },
     "trial_start_date": {
       "type": "string",
       "format": "date-time",
@@ -207,7 +241,7 @@
     "dnd_enabled": {
       "type": "boolean",
       "default": false,
-      "description": "Do Not Disturb mode \u2014 AI handles all calls silently without owner notifications"
+      "description": "Do Not Disturb mode"
     },
     "ai_response_mode": {
       "type": "string",

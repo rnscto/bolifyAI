@@ -55,6 +55,23 @@ Deno.serve(async (req) => {
     const clientData = clients[0];
     const isDemoAgent = clientData.account_status === 'trial' || clientData.account_status === 'onboarding';
 
+    // ── BALANCE CHECK for per-minute billing ──
+    if (clientData.billing_type !== 'unlimited') {
+      const freeMin = clientData.free_minutes_remaining || 0;
+      const walletBal = clientData.wallet_balance || 0;
+      const minBalance = 100;
+
+      if (freeMin <= 0 && walletBal < minBalance) {
+        return Response.json({
+          success: false,
+          error: 'insufficient_balance',
+          message: `Insufficient balance. Minimum ₹${minBalance} required to make calls. Current balance: ₹${walletBal}. Please top up your wallet.`,
+          wallet_balance: walletBal,
+          free_minutes_remaining: freeMin
+        }, { status: 402 });
+      }
+    }
+
     // Use primary DID for single calls
     const callerDID = allDIDs[0];
 

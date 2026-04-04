@@ -91,12 +91,32 @@ export default function CampaignDetail() {
         } else {
           toast.success(`Campaign ${action}d`);
         }
+      } else if (res.data.error === 'insufficient_balance') {
+        toast.error(`Insufficient balance! ₹${res.data.wallet_balance || 0} in wallet. Recommended top-up: ₹${res.data.recommended_topup || 500}`, {
+          action: {
+            label: 'Top Up Now',
+            onClick: () => { window.location.href = createPageUrl('ClientSubscription'); }
+          },
+          duration: 10000
+        });
       } else {
         toast.error(res.data.error || `Failed to ${action}`);
       }
       loadData();
     } catch (err) {
-      toast.error(`Failed to ${action} campaign`);
+      // Handle 402 (insufficient balance) from axios error response
+      const errData = err?.response?.data;
+      if (errData?.error === 'insufficient_balance') {
+        toast.error(`Insufficient balance! ₹${errData.wallet_balance || 0} in wallet. Please top up.`, {
+          action: {
+            label: 'Top Up Now',
+            onClick: () => { window.location.href = createPageUrl('ClientSubscription'); }
+          },
+          duration: 10000
+        });
+      } else {
+        toast.error(`Failed to ${action} campaign`);
+      }
     }
   };
 

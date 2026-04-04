@@ -329,7 +329,18 @@ export default function Layout({ children, currentPageName }) {
                   <span className="font-medium text-[#0097a7]">Admin Panel — Getway AI</span>
                 ) : (
                   <span>
-                    Plan: <span className="font-medium">₹14,999/mo × {client?.total_channels || 1} channel(s)</span>
+                    {client?.billing_type === 'unlimited' ? (
+                      <span>Plan: <span className="font-medium">Unlimited × {client?.total_channels || 1} channel(s)</span></span>
+                    ) : (
+                      <span>
+                        Wallet: <span className={`font-medium ${(client?.wallet_balance || 0) < 100 && (client?.free_minutes_remaining || 0) <= 0 ? 'text-red-600' : 'text-green-600'}`}>
+                          ₹{(client?.wallet_balance || 0).toLocaleString()}
+                        </span>
+                        {(client?.free_minutes_remaining || 0) > 0 && (
+                          <span className="ml-2 text-blue-600">+ {client.free_minutes_remaining} free min</span>
+                        )}
+                      </span>
+                    )}
                   </span>
                 )}
               </div>
