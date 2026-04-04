@@ -469,6 +469,7 @@ Deno.serve(async (req) => {
     voiceEngine: 'realtime',  // 'realtime' or 'azure_speech'
     voiceType: 'alloy',       // Default voice, overridden from agent config
     _saved: false,
+    smartfloCallId: null,     // Smartflo REST API call_id (UUID format, different from SIP callSid)
     realtimeWs: null,         // WebSocket connection to Azure Realtime API
     realtimeReady: false,     // Whether session.created has been received
     isSpeaking: false,        // Track if model is currently outputting audio
@@ -555,13 +556,81 @@ Deno.serve(async (req) => {
 
   // ─── Hang up call via Smartflo API ───
   async function hangupCall(reason) {
-    console.log(`[${reqId}] 📴 Hanging up: "${reason}", callSid=${session.callSid}`);
+    console.log(`[${reqId}] 📴 Hanging up: "${reason}", callSid=${session.callSid}, smartfloCallId=${session.smartfloCallId || 'none'}`);
     session._callEnded = true;
     try {
-      const sfE=Deno.env.get('SMARTFLO_EMAIL'),sfP=Deno.env.get('SMARTFLO_PASSWORD');
-      if(sfE&&sfP&&session.callSid){const lr=await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login',{method:'POST',headers:{'Content-Type':'application/json','Accept':'application/json'},body:JSON.stringify({email:sfE,password:sfP})});const ld=await lr.json(),tk=ld.access_token||ld.token;if(tk){const hr=await fetch('https://api-smartflo.tatateleservices.com/v1/call/options',{method:'POST',headers:{'Accept':'application/json','Content-Type':'application/json','Authorization':`Bearer ${tk}`},body:JSON.stringify({type:5,call_id:session.callSid})});console.log(`[${reqId}] 📴 Hangup: ${hr.status}`);}}
-    }catch(e){console.error(`[${reqId}] ⚠️ Hangup failed: ${e.message}`);}
-    if(session.realtimeWs?.readyState===WebSocket.OPEN)session.realtimeWs.close();
+      const sfE = Deno.env.get('SMARTFLO_EMAIL'), sfP = Deno.env.get('SMARTFLO_PASSWORD');
+      if (sfE && sfP) {
+        const lr = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({ email: sfE, password: sfP })
+        });
+        const ld = await lr.json();
+        const tk = ld.access_token || ld.token;
+        if (tk) {
+          // Build list of call_id candidates to try
+          // Smartflo REST API needs the Smartflo call_id (UUID format), not the SIP session ID
+          const callIdCandidates = [];
+          if (session.smartfloCallId) callIdCandidates.push(session.smartfloCallId);
+          if (session.callSid) callIdCandidates.push(session.callSid);
+
+          // If we don't have a Smartflo call_id yet, try to find it via live calls API
+          if (!session.smartfloCallId) {
+            try {
+              const liveRes = await fetch('https://api-smartflo.tatateleservices.com/v1/call/live', {
+                headers: { 'Authorization': `Bearer ${tk}`, 'Accept': 'application/json' }
+              });
+              if (liveRes.ok) {
+                const liveData = await liveRes.json();
+                const liveCalls = liveData.data || liveData.calls || liveData.results || (Array.isArray(liveData) ? liveData : []);
+                // Match by callee number or caller number
+                const calleeClean = (session.calleeNumber || '').replace(/\D/g, '').slice(-10);
+                const callerClean = (session.callerNumber || '').replace(/\D/g, '').slice(-10);
+                const match = liveCalls.find(c => {
+                  const cNum = (c.customer_number || c.callee || c.to || '').replace(/\D/g, '').slice(-10);
+                  const fNum = (c.caller_number || c.caller_id || c.from || '').replace(/\D/g, '').slice(-10);
+                  return (calleeClean && (cNum === calleeClean || fNum === calleeClean)) ||
+                         (callerClean && (cNum === callerClean || fNum === callerClean));
+                });
+                if (match) {
+                  const liveCallId = match.call_id || match.id || match.uuid;
+                  if (liveCallId) {
+                    callIdCandidates.unshift(liveCallId); // prioritize this
+                    session.smartfloCallId = liveCallId;
+                    console.log(`[${reqId}] 📴 Found live call_id: ${liveCallId}`);
+                  }
+                } else {
+                  console.log(`[${reqId}] 📴 No matching live call found (${liveCalls.length} active)`);
+                }
+              }
+            } catch (liveErr) {
+              console.log(`[${reqId}] ⚠️ Live calls lookup failed: ${liveErr.message}`);
+            }
+          }
+
+          // Try hangup with each candidate call_id
+          let hungUp = false;
+          for (const candidateId of callIdCandidates) {
+            if (hungUp) break;
+            for (const hangupType of [5, 6]) {
+              const hr = await fetch('https://api-smartflo.tatateleservices.com/v1/call/options', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': `Bearer ${tk}` },
+                body: JSON.stringify({ type: hangupType, call_id: candidateId })
+              });
+              const hBody = await hr.json().catch(() => ({}));
+              console.log(`[${reqId}] 📴 Hangup type=${hangupType} id=${candidateId.substring(0, 30)}: ${hr.status} ${JSON.stringify(hBody).substring(0, 200)}`);
+              if (hr.ok || hr.status === 200) { hungUp = true; break; }
+            }
+          }
+          if (!hungUp) console.error(`[${reqId}] ❌ All hangup attempts failed`);
+        } else {
+          console.error(`[${reqId}] ⚠️ Smartflo login failed: no token`);
+        }
+      }
+    } catch (e) { console.error(`[${reqId}] ⚠️ Hangup failed: ${e.message}`); }
+    if (session.realtimeWs?.readyState === WebSocket.OPEN) session.realtimeWs.close();
   }
 
   function buildToolDefinitions() {
@@ -620,7 +689,15 @@ Deno.serve(async (req) => {
     console.log(`[${reqId}] 🔧 Tool call: ${functionName}(${argsStr.substring(0, 200)})`);
     let result = { error: `Unknown tool: ${functionName}` };
     // ─── End call ───
-    if (functionName==='end_call'){const a=JSON.parse(argsStr);result={success:true};sendToRealtime({type:'conversation.item.create',item:{type:'function_call_output',call_id:callId,output:JSON.stringify(result)}});session.transcript.push({speaker:'System',text:`[Call ended: ${a.reason}]`});setTimeout(()=>hangupCall(a.reason||'ended'),2000);return;}
+    if (functionName === 'end_call') {
+      const a = JSON.parse(argsStr);
+      result = { success: true };
+      sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } });
+      session.transcript.push({ speaker: 'System', text: `[Call ended: ${a.reason}]` });
+      // Short delay to let the goodbye audio play, then hang up
+      setTimeout(() => hangupCall(a.reason || 'ended'), 1500);
+      return;
+    }
     // ─── Transfer to human agent ───
     if (functionName === 'transfer_to_human' && session.humanTransferNumber) {
       try {
@@ -1620,6 +1697,11 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
       // ── IMMEDIATELY extract config and apply to session (before any DB writes) ──
       session.callLogId = callLog.id;
       session.clientId = callLog.client_id;
+      // Capture the Smartflo REST API call_id (may differ from SIP session callSid)
+      if (callLog.call_sid && callLog.call_sid !== session.callSid) {
+        session.smartfloCallId = callLog.call_sid;
+        console.log(`[${reqId}] 📞 Smartflo call_id from CallLog: ${session.smartfloCallId}`);
+      }
       const cache = callLog.agent_config_cache;
 
       if (cache && cache.system_prompt) {
