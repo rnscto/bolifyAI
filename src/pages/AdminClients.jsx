@@ -260,7 +260,8 @@ export default function AdminClients() {
                 <TableHead>Company</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
-                <TableHead>Channels</TableHead>
+                <TableHead>Billing</TableHead>
+                <TableHead>Balance / Minutes</TableHead>
                 <TableHead>Account</TableHead>
                 <TableHead>KYC</TableHead>
                 <TableHead>Status</TableHead>
@@ -271,7 +272,7 @@ export default function AdminClients() {
             <TableBody>
               {clients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-gray-500">
+                  <TableCell colSpan={11} className="text-center text-gray-500">
                     No clients found. Add your first client to get started.
                   </TableCell>
                 </TableRow>
@@ -281,7 +282,25 @@ export default function AdminClients() {
                     <TableCell className="font-medium">{client.company_name}</TableCell>
                     <TableCell>{client.email}</TableCell>
                     <TableCell>{client.phone || '-'}</TableCell>
-                    <TableCell>{client.total_channels}</TableCell>
+                    <TableCell>
+                      <Badge className={client.billing_type === 'unlimited' ? 'bg-purple-100 text-purple-800' : 'bg-cyan-100 text-cyan-800'}>
+                        {client.billing_type === 'unlimited' ? `Unlimited ×${client.total_channels || 1}` : '₹4/min'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {client.billing_type === 'unlimited' ? (
+                        <span className="text-sm text-gray-500">—</span>
+                      ) : (
+                        <div className="text-xs space-y-0.5">
+                          <div className={`font-medium ${(client.wallet_balance || 0) < 100 ? 'text-red-600' : 'text-green-700'}`}>
+                            ₹{(client.wallet_balance || 0).toLocaleString()}
+                          </div>
+                          {(client.free_minutes_remaining || 0) > 0 && (
+                            <div className="text-blue-600">{client.free_minutes_remaining} free min</div>
+                          )}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge className={{
                         active: 'bg-green-100 text-green-800',

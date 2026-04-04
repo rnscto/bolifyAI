@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CreditCard, Calendar, AlertTriangle } from 'lucide-react';
+import { Loader2, CreditCard, Calendar, AlertTriangle, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function ActivateClientDialog({ client, open, onOpenChange, onUpdated }) {
@@ -25,9 +25,13 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
   const [form, setForm] = useState({
     account_status: client?.account_status || 'trial',
     status: client?.status || 'active',
+    billing_type: client?.billing_type || 'per_minute',
     subscription_plan: client?.subscription_plan || 'quarterly',
     total_channels: client?.total_channels || 1,
     monthly_rate_per_channel: client?.monthly_rate_per_channel || 6500,
+    per_minute_rate: client?.per_minute_rate || 4,
+    wallet_balance: client?.wallet_balance || 0,
+    free_minutes_remaining: client?.free_minutes_remaining || 0,
     next_billing_date: client?.next_billing_date || '',
     trial_end_date: client?.trial_end_date ? new Date(client.trial_end_date).toISOString().slice(0, 10) : '',
   });
@@ -38,9 +42,13 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
     const updateData = {
       account_status: form.account_status,
       status: form.status,
+      billing_type: form.billing_type,
       subscription_plan: form.subscription_plan,
       total_channels: parseInt(form.total_channels) || 1,
       monthly_rate_per_channel: parseFloat(form.monthly_rate_per_channel) || 6500,
+      per_minute_rate: parseFloat(form.per_minute_rate) || 4,
+      wallet_balance: parseFloat(form.wallet_balance) || 0,
+      free_minutes_remaining: parseFloat(form.free_minutes_remaining) || 0,
     };
 
     // Set billing date if activating
@@ -60,8 +68,8 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
 
     await base44.entities.Client.update(client.id, updateData);
 
-    // Also create/update a subscription record when activating
-    if (form.account_status === 'active' && form.next_billing_date) {
+    // Also create/update a subscription record when activating with unlimited billing
+    if (form.account_status === 'active' && form.billing_type === 'unlimited' && form.next_billing_date) {
       const channels = parseInt(form.total_channels) || 1;
       const rate = parseFloat(form.monthly_rate_per_channel) || 6500;
       const billingMonths = form.subscription_plan === 'quarterly' ? 3 : 1;
@@ -135,6 +143,61 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
             </Select>
           </div>
 
+          {/* Billing Type */}
+          <div>
+            <Label>Billing Type</Label>
+            <Select value={form.billing_type} onValueChange={(v) => setForm({ ...form, billing_type: v })}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="per_minute">Per Minute (₹{form.per_minute_rate}/min prepaid)</SelectItem>
+                <SelectItem value="unlimited">Unlimited (flat channel rate)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Per-minute wallet management */}
+          {form.billing_type === 'per_minute' && (
+            <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-3 space-y-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-cyan-800">
+                <Wallet className="w-4 h-4" /> Wallet & Minutes
+              </div>
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <Label className="text-xs">Rate (₹/min)</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={form.per_minute_rate}
+                    onChange={(e) => setForm({ ...form, per_minute_rate: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Wallet Balance (₹)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={form.wallet_balance}
+                    onChange={(e) => setForm({ ...form, wallet_balance: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs">Free Minutes</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={form.free_minutes_remaining}
+                    onChange={(e) => setForm({ ...form, free_minutes_remaining: e.target.value })}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-cyan-700">
+                Current: ₹{(client?.wallet_balance || 0).toLocaleString()} balance, {client?.free_minutes_remaining || 0} free min, {(client?.total_minutes_used || 0).toFixed(1)} min used total
+              </p>
+            </div>
+          )}
+
           {/* Trial end date — only when trial */}
           {form.account_status === 'trial' && (
             <div>
@@ -150,8 +213,8 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
             </div>
           )}
 
-          {/* Billing fields — only when active */}
-          {form.account_status === 'active' && (
+          {/* Unlimited subscription fields — only when active + unlimited */}
+          {form.account_status === 'active' && form.billing_type === 'unlimited' && (
             <>
               <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 text-green-700 shrink-0 mt-0.5" />
