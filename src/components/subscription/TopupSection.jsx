@@ -16,6 +16,9 @@ export default function TopupSection({ onTopup, loading, rate = 4 }) {
   const [customAmount, setCustomAmount] = useState('');
 
   const activeAmount = customAmount ? parseInt(customAmount) : selectedAmount;
+  const gstRate = 0.18;
+  const gstAmount = isNaN(activeAmount) ? 0 : Math.round(activeAmount * gstRate);
+  const totalPayable = activeAmount + gstAmount;
   const minutesForAmount = Math.floor(activeAmount / rate);
   const isValid = activeAmount >= 500;
 
@@ -77,23 +80,31 @@ export default function TopupSection({ onTopup, loading, rate = 4 }) {
         </div>
 
         {/* Summary & Pay */}
-        <div className="bg-green-100/60 rounded-xl p-4 flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-700">
-              <span className="font-semibold">₹{isValid ? activeAmount.toLocaleString() : '—'}</span>
-              {' → '}
-              <span className="font-semibold text-green-700">{isValid ? minutesForAmount : 0} minutes</span>
-            </p>
-            <p className="text-xs text-gray-500 mt-0.5">@ ₹{rate} per minute</p>
+        <div className="bg-green-100/60 rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-700">
+                <span className="font-semibold">₹{isValid ? activeAmount.toLocaleString() : '—'}</span>
+                {' → '}
+                <span className="font-semibold text-green-700">{isValid ? minutesForAmount : 0} minutes</span>
+              </p>
+              <p className="text-xs text-gray-500 mt-0.5">@ ₹{rate} per minute</p>
+            </div>
+            <Button
+              onClick={() => onTopup(activeAmount)}
+              disabled={!isValid || loading}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              <Wallet className="w-4 h-4 mr-1" />
+              {loading ? 'Processing...' : `Pay ₹${isValid ? totalPayable.toLocaleString() : '—'}`}
+            </Button>
           </div>
-          <Button
-            onClick={() => onTopup(activeAmount)}
-            disabled={!isValid || loading}
-            className="bg-green-600 hover:bg-green-700 text-white"
-          >
-            <Wallet className="w-4 h-4 mr-1" />
-            {loading ? 'Processing...' : `Pay ₹${isValid ? activeAmount.toLocaleString() : '—'}`}
-          </Button>
+          {isValid && (
+            <div className="text-xs text-gray-600 border-t border-green-200 pt-2 flex justify-between">
+              <span>Base: ₹{activeAmount.toLocaleString()} + GST (18%): ₹{gstAmount.toLocaleString()}</span>
+              <span className="font-semibold">Total: ₹{totalPayable.toLocaleString()}</span>
+            </div>
+          )}
         </div>
       </CardContent>
     </Card>

@@ -10,11 +10,16 @@ Deno.serve(async (req) => {
 
     const { amount } = await req.json();
 
-    // Validate minimum top-up amount
+    // Validate minimum top-up amount (base amount before GST)
     const minTopup = 500;
     if (!amount || amount < minTopup) {
       return Response.json({ error: `Minimum top-up amount is ₹${minTopup}` }, { status: 400 });
     }
+
+    // Calculate GST-inclusive total
+    const gstRate = 0.18;
+    const gstAmount = Math.round(amount * gstRate);
+    const totalPayable = amount + gstAmount;
 
     // Fetch client
     const clients = await base44.entities.Client.filter({ user_id: user.id });
@@ -41,7 +46,7 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify({
         order_id: orderId,
-        order_amount: amount,
+        order_amount: totalPayable,
         order_currency: 'INR',
         customer_details: {
           customer_id: client.id,
@@ -52,7 +57,7 @@ Deno.serve(async (req) => {
         order_meta: {
           return_url: `${req.headers.get('origin') || 'https://app.base44.com'}/ClientSubscription?order_id=${orderId}&status={order_status}`,
         },
-        order_note: `Getway AI Wallet Top-up ₹${amount}`,
+        order_note: `Getway AI Wallet Top-up ₹${amount} + GST ₹${gstAmount} = ₹${totalPayable}`,
       }),
     });
 
@@ -63,22 +68,22 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Failed to create payment order', details: cfData }, { status: 500 });
     }
 
-    // Create Payment record with topup metadata
+    // Create Payment record with topup metadata (amount = wallet credit, total includes GST)
     const payment = await base44.entities.Payment.create({
       client_id: client.id,
       cashfree_order_id: orderId,
-      amount: amount,
+      amount: totalPayable,
       currency: 'INR',
       status: 'pending',
       payment_session_id: cfData.payment_session_id,
-      description: JSON.stringify({ type: 'wallet_topup', amount }),
+      description: JSON.stringify({ type: 'wallet_topup', amount, gst: gstAmount, total: totalPayable }),
     });
 
     return Response.json({
       order_id: orderId,
       payment_session_id: cfData.payment_session_id,
       payment_id: payment.id,
-      amount: amount,
+      amount: totalPayable,
       environment: env,
     });
   } catch (error) {
