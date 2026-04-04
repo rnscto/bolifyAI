@@ -191,19 +191,54 @@ export default function ClientDashboard() {
           <CardContent>
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Plan</span>
-                <span className="text-sm font-medium">Quarterly</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Channels</span>
-                <span className="text-sm font-medium">{client?.total_channels || 1}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-600">Monthly Rate</span>
-                <span className="text-sm font-medium">
-                  ₹{((client?.total_channels || 1) * 14999).toLocaleString()}
+                <span className="text-sm text-gray-600">Billing Type</span>
+                <span className="text-sm font-medium capitalize">
+                  {client?.billing_type === 'unlimited' ? 'Unlimited' : 'Per-Minute'}
                 </span>
               </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Account Status</span>
+                <span className={`text-sm font-medium capitalize ${
+                  client?.account_status === 'active' ? 'text-green-600' :
+                  client?.account_status === 'trial' ? 'text-blue-600' :
+                  client?.account_status === 'expired' ? 'text-red-600' : 'text-gray-600'
+                }`}>
+                  {client?.account_status || 'Unknown'}
+                </span>
+              </div>
+              {client?.billing_type === 'unlimited' ? (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Channels</span>
+                    <span className="text-sm font-medium">{client?.total_channels || 1}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Monthly Rate</span>
+                    <span className="text-sm font-medium">
+                      ₹{((client?.total_channels || 1) * (client?.monthly_rate_per_channel || 6500)).toLocaleString()}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Wallet Balance</span>
+                    <span className={`text-sm font-medium ${(client?.wallet_balance || 0) < 100 ? 'text-red-600' : 'text-green-600'}`}>
+                      ₹{(client?.wallet_balance || 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-600">Rate</span>
+                    <span className="text-sm font-medium">₹{client?.per_minute_rate || 4}/min</span>
+                  </div>
+                  {(client?.free_minutes_remaining || 0) > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-gray-600">Free Minutes</span>
+                      <span className="text-sm font-medium text-blue-600">{client.free_minutes_remaining} min</span>
+                    </div>
+                  )}
+                </>
+              )}
               <div className="pt-3 border-t">
                 <Link to={createPageUrl('ClientSubscription')}>
                   <Button variant="outline" size="sm" className="w-full">
