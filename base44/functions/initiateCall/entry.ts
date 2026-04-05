@@ -275,8 +275,10 @@ IMPORTANT RULES:
     }
 
     // Update call log with Smartflo response
+    // Smartflo click_to_call returns: {success, ref_id, call_id (often null)}
+    // The ref_id is the origination reference; the real PBX call_id comes later via webhook
     await base44.asServiceRole.entities.CallLog.update(callLog.id, {
-      call_sid: smartfloData.call_id || smartfloData.call_sid || callLog.call_sid,
+      call_sid: smartfloData.call_id || smartfloData.ref_id || smartfloData.call_sid || callLog.call_sid,
       status: 'ringing'
     });
 
