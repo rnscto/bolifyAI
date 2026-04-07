@@ -1569,8 +1569,9 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
             if (didAgent.persona) {
               if (didAgent.persona.voice_engine) session.voiceEngine = didAgent.persona.voice_engine;
               if (didAgent.persona.voice_type) {
-                if (session.voiceEngine === 'realtime') {
-                  const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
+                // For realtime & voice_live_openai engines, validate OpenAI voice names
+                if (session.voiceEngine === 'realtime' || session.voiceEngine === 'voice_live_openai') {
+                  const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse'];
                   const deprecatedMap = { 'nova': 'shimmer', 'onyx': 'ash', 'fable': 'ballad' };
                   let voice = didAgent.persona.voice_type.toLowerCase();
                   if (deprecatedMap[voice]) voice = deprecatedMap[voice];
@@ -1782,8 +1783,8 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
       if (cache && cache.persona) {
         if (cache.persona.voice_engine) session.voiceEngine = cache.persona.voice_engine;
         if (cache.persona.voice_type) {
-          if (session.voiceEngine === 'realtime') {
-            const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
+          if (session.voiceEngine === 'realtime' || session.voiceEngine === 'voice_live_openai') {
+            const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse'];
             const deprecatedMap = { 'nova': 'shimmer', 'onyx': 'ash', 'fable': 'ballad' };
             let voice = cache.persona.voice_type.toLowerCase();
             if (deprecatedMap[voice]) {

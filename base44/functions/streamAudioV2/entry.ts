@@ -169,8 +169,8 @@ Deno.serve(async (req) => {
     transcript: [], startTime: Date.now(),
     systemPrompt: 'You are a friendly AI voice assistant. Be professional and concise.',
     greetingMessage: '',
-    voiceType: 'hi-IN-SwaraNeural', // Azure standard voice for Hindi
-    voiceLiveVoiceConfig: null, // Will be set based on agent persona
+    voiceEngine: 'voice_live_azure', // voice_live_openai | voice_live_azure | realtime | azure_speech
+    voiceType: 'hi-IN-SwaraNeural', // Voice name
     _saved: false, smartfloCallId: null,
     humanTransferNumber: '', enableAutoTransfer: true,
     hasShopify: false, _callEnded: false,
@@ -302,15 +302,19 @@ Deno.serve(async (req) => {
       max_response_output_tokens: 'inf'
     };
 
-    // Voice configuration — Voice Live uses a different voice format
-    // Check if we have an Azure standard voice (like hi-IN-SwaraNeural) or OpenAI voice (like alloy)
-    const openaiVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
+    // Voice configuration for Voice Live API
+    // Supports: openai (alloy, ash, etc.), azure-standard (hi-IN-SwaraNeural, en-US-Ava:DragonHDLatestNeural, etc.)
+    const openaiVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse'];
     const voiceName = session.voiceType || 'hi-IN-SwaraNeural';
 
-    if (openaiVoices.includes(voiceName.toLowerCase())) {
-      sessionConfig.voice = { type: 'openai', name: voiceName.toLowerCase() };
+    // Determine voice type based on engine setting or voice name pattern
+    const engine = session.voiceEngine || '';
+    if (engine === 'voice_live_openai' || openaiVoices.includes(voiceName.toLowerCase())) {
+      // Validate: only send known OpenAI voices; fall back to 'alloy' for unknown
+      const resolvedName = openaiVoices.includes(voiceName.toLowerCase()) ? voiceName.toLowerCase() : 'alloy';
+      sessionConfig.voice = { type: 'openai', name: resolvedName };
     } else {
-      // Azure standard voice (e.g. hi-IN-SwaraNeural, en-US-Ava:DragonHDLatestNeural)
+      // Azure standard voice (Neural TTS, HD Dragon, etc.)
       sessionConfig.voice = { type: 'azure-standard', name: voiceName };
     }
 
@@ -693,6 +697,7 @@ Deno.serve(async (req) => {
             session.systemPrompt = agent.system_prompt || session.systemPrompt;
             if (agent.greeting_message) session.greetingMessage = agent.greeting_message;
             if (agent.human_transfer_number) session.humanTransferNumber = agent.human_transfer_number;
+            if (agent.persona?.voice_engine) session.voiceEngine = agent.persona.voice_engine;
             if (agent.persona?.voice_type) session.voiceType = agent.persona.voice_type;
             if (agent.knowledge_base_ids?.length) {
               const docs = await Promise.all(agent.knowledge_base_ids.map(id=>svc.entities.KnowledgeBase.get(id).catch(()=>null)));
@@ -727,6 +732,7 @@ Deno.serve(async (req) => {
         if (cache.knowledge_base_content) session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
         if (cache.human_transfer_number) session.humanTransferNumber = cache.human_transfer_number;
         if (cache.greeting_message) session.greetingMessage = cache.greeting_message;
+        if (cache.persona?.voice_engine) session.voiceEngine = cache.persona.voice_engine;
         if (cache.persona?.voice_type) session.voiceType = cache.persona.voice_type;
       }
       // Shopify check
