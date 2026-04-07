@@ -498,17 +498,23 @@ Deno.serve(async (req) => {
 
     // Convert https:// to wss:// for WebSocket
     let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
+    // Strip trailing slashes
+    wsUrl = wsUrl.replace(/\/+$/, '');
     // Ensure the URL includes the /openai/realtime path and required query params
-    // If the endpoint is just a base URI (no /openai/realtime), append deployment path
     if (!wsUrl.includes('/openai/realtime')) {
-      wsUrl = wsUrl.replace(/\/+$/, '') + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-1.5';
+      // Use AZURE_REALTIME_DEPLOYMENT env var, or fall back to common names
+      const rtDeployment = Deno.env.get('AZURE_REALTIME_DEPLOYMENT') || 'gpt-4o-realtime-preview';
+      wsUrl = `${wsUrl}/openai/realtime?api-version=2024-10-01-preview&deployment=${rtDeployment}`;
     }
-    // Ensure api-version uses preview (required for WebSocket realtime on Azure)
-    wsUrl = wsUrl.replace('api-version=2025-04-01&', 'api-version=2025-04-01-preview&');
+    // Ensure api-version is a preview version (required for WebSocket realtime on Azure)
+    // Replace any non-preview api-version with the correct preview one
+    wsUrl = wsUrl.replace(/api-version=2025-04-01(?!-preview)/, 'api-version=2024-10-01-preview');
     // Append api-key to URL since Deno WebSocket doesn't support custom headers
     const separator = wsUrl.includes('?') ? '&' : '?';
     wsUrl = `${wsUrl}${separator}api-key=${encodeURIComponent(realtimeKey)}`;
-    console.log(`[${reqId}] 🔌 Connecting to Azure Realtime: ${wsUrl.substring(0, 80)}...`);
+    // Log full URL (without api-key) for debugging
+    const logUrl = wsUrl.replace(/api-key=[^&]+/, 'api-key=***');
+    console.log(`[${reqId}] 🔌 Connecting to Azure Realtime: ${logUrl}`);
 
     const ws = new WebSocket(wsUrl);
 
@@ -548,7 +554,7 @@ Deno.serve(async (req) => {
     };
 
     ws.onerror = (event) => {
-      console.error(`[${reqId}] ❌ Azure Realtime error`);
+      console.error(`[${reqId}] ❌ Azure Realtime error (readyState=${ws.readyState})`);
     };
 
     session.realtimeWs = ws;
