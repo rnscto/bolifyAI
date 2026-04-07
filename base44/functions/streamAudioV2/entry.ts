@@ -175,7 +175,7 @@ Deno.serve(async (req) => {
     humanTransferNumber: '', enableAutoTransfer: true,
     hasShopify: false, _callEnded: false,
     // Voice Live WebSocket
-    _vlWs: null, _vlReady: false, _vlReconnectAttempts: 0,
+    _vlWs: null, _vlReady: false, _vlSessionReady: false, _vlQueue: [], _vlReconnectAttempts: 0,
     _isSpeaking: false,
     // Agent config
     _configReady: false, _greetingSent: false,
@@ -231,9 +231,27 @@ Deno.serve(async (req) => {
   }
 
   // ─── Send to Voice Live ───
+  // Only session.update can be sent before session.updated is received
   function sendToVL(msg) {
     if (session._vlWs?.readyState === WebSocket.OPEN) {
+      // Block non-session.update messages until session is fully configured
+      if (msg.type !== 'session.update' && !session._vlSessionReady) {
+        // Queue for after session is ready
+        if (!session._vlQueue) session._vlQueue = [];
+        session._vlQueue.push(msg);
+        return;
+      }
       session._vlWs.send(JSON.stringify(msg));
+    }
+  }
+
+  // Flush queued messages after session.updated
+  function flushVLQueue() {
+    if (session._vlQueue && session._vlWs?.readyState === WebSocket.OPEN) {
+      for (const msg of session._vlQueue) {
+        session._vlWs.send(JSON.stringify(msg));
+      }
+      session._vlQueue = [];
     }
   }
 
@@ -286,7 +304,7 @@ Deno.serve(async (req) => {
 
     // Voice configuration — Voice Live uses a different voice format
     // Check if we have an Azure standard voice (like hi-IN-SwaraNeural) or OpenAI voice (like alloy)
-    const openaiVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse'];
+    const openaiVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
     const voiceName = session.voiceType || 'hi-IN-SwaraNeural';
 
     if (openaiVoices.includes(voiceName.toLowerCase())) {
@@ -318,23 +336,27 @@ Deno.serve(async (req) => {
       if (session._configReady) {
         applySessionConfig();
       } else {
-        // Send minimal config while waiting for agent config
+        // MUST send session.update as the first message — Voice Live requires it
         sendToVL({ type: 'session.update', session: {
           input_audio_format: 'g711_ulaw',
           output_audio_format: 'g711_ulaw',
           input_audio_sampling_rate: 8000,
           modalities: ['text', 'audio'],
           voice: { type: 'azure-standard', name: 'hi-IN-SwaraNeural' },
-          instructions: 'You are a friendly AI voice assistant. Wait for configuration.',
+          instructions: 'You are a friendly AI voice assistant. Wait for further instructions before speaking.',
           turn_detection: { type: 'azure_semantic_vad', silence_duration_ms: 700 },
-          input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' }
+          input_audio_noise_reduction: { type: 'azure_deep_noise_suppression' },
+          input_audio_echo_cancellation: { type: 'server_echo_cancellation' }
         }});
+        console.log(`[${reqId}] 📤 Minimal session.update sent (waiting for agent config)`);
       }
       return;
     }
 
     if (type === 'session.updated') {
       console.log(`[${reqId}] ✅ Voice Live session updated`);
+      session._vlSessionReady = true;
+      flushVLQueue();
       return;
     }
 
