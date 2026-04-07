@@ -220,6 +220,350 @@ export default function APIDocs() {
           </code>
         </CardContent>
       </Card>
+
+      {/* ─── CRM API SECTION ─── */}
+      <div className="pt-4">
+        <h2 className="text-2xl font-bold text-gray-900 mb-1">CRM Integration APIs</h2>
+        <p className="text-gray-600 mb-4">Connect any external CRM to push/pull data via JSON REST APIs. Authenticate with <code className="bg-gray-100 px-1 rounded text-sm">x-api-key</code> header.</p>
+      </div>
+
+      <Card className="border-purple-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Badge className="bg-purple-100 text-purple-800">CRM Auth</Badge>
+            API Key Authentication
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-gray-600">
+            All CRM API endpoints use an <strong>API key</strong> passed in the <code className="bg-gray-100 px-1 rounded">x-api-key</code> header. 
+            The key is matched against your CRM Integration settings (CRM Integration → API Key field). Each key is scoped to a single client account.
+          </p>
+          <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
+{`// Example request header
+{
+  "Content-Type": "application/json",
+  "x-api-key": "your-crm-api-key-here"
+}`}
+          </pre>
+          <p className="text-xs text-gray-500">Set your API key in: Settings → CRM Integration → API Key</p>
+        </CardContent>
+      </Card>
+
+      {/* INBOUND: Push data TO platform */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Badge className="bg-green-100 text-green-800">POST</Badge>
+            /functions/crmInbound — Push Data to Platform
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-gray-600">External CRM pushes leads, contacts, deals, or activities into your Getway AI platform.</p>
+          
+          <div>
+            <h4 className="font-semibold text-sm mb-2">Supported Actions</h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {['create_lead', 'update_lead', 'create_contact', 'create_deal', 'update_deal', 'create_activity'].map(a => (
+                <Badge key={a} variant="outline" className="justify-center">{a}</Badge>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-1">Create Lead</h4>
+            <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
+{`POST /functions/crmInbound
+Headers: { "x-api-key": "your-key" }
+Body:
+{
+  "action": "create_lead",
+  "data": {
+    "name": "Rahul Sharma",
+    "phone": "9876543210",
+    "email": "rahul@example.com",
+    "company": "ABC Corp",
+    "source": "website",
+    "notes": "Interested in AI calling",
+    "tags": ["hot", "enterprise"]
+  }
+}`}
+            </pre>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-1">Update Lead (by phone or id)</h4>
+            <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
+{`{
+  "action": "update_lead",
+  "data": {
+    "phone": "9876543210",
+    "status": "interested",
+    "notes": "Follow up next week"
+  }
+}`}
+            </pre>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-1">Create Deal</h4>
+            <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
+{`{
+  "action": "create_deal",
+  "data": {
+    "title": "Enterprise Plan - ABC Corp",
+    "value": 150000,
+    "currency": "INR",
+    "stage": "negotiation",
+    "lead_id": "lead_abc123",
+    "expected_close_date": "2026-05-15"
+  }
+}`}
+            </pre>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-1">Create Activity</h4>
+            <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
+{`{
+  "action": "create_activity",
+  "data": {
+    "type": "followup",
+    "title": "Call back Rahul",
+    "scheduled_date": "2026-04-10T10:00:00.000Z",
+    "lead_id": "lead_abc123",
+    "priority": "high"
+  }
+}`}
+            </pre>
+          </div>
+
+          <div className="bg-green-50 border border-green-200 rounded p-3">
+            <p className="text-sm text-green-800"><strong>Response:</strong></p>
+            <pre className="text-sm text-green-900 mt-1">
+{`{ "success": true, "action": "create_lead", "id": "rec_xyz", "data": {...} }`}
+            </pre>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* FETCH: Pull data FROM platform */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Badge className="bg-blue-100 text-blue-800">POST</Badge>
+            /functions/crmFetchData — Pull Data from Platform
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-gray-600">External CRM pulls leads, contacts, deals, call logs, or activities from your platform as JSON.</p>
+          
+          <div>
+            <h4 className="font-semibold text-sm mb-2">Supported Entities</h4>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+              {['leads', 'contacts', 'deals', 'call_logs', 'activities'].map(e => (
+                <Badge key={e} variant="outline" className="justify-center">{e}</Badge>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-1">Fetch Leads (with filters)</h4>
+            <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
+{`POST /functions/crmFetchData
+Headers: { "x-api-key": "your-key" }
+Body:
+{
+  "entity": "leads",
+  "filters": { "status": "interested" },
+  "limit": 50,
+  "sort": "-created_date"
+}`}
+            </pre>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-1">Fetch Call Logs</h4>
+            <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
+{`{
+  "entity": "call_logs",
+  "filters": { "status": "completed" },
+  "limit": 100
+}`}
+            </pre>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-1">Fetch Deals</h4>
+            <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
+{`{
+  "entity": "deals",
+  "filters": { "status": "open" },
+  "sort": "-value"
+}`}
+            </pre>
+          </div>
+
+          <div className="bg-blue-50 border border-blue-200 rounded p-3">
+            <p className="text-sm text-blue-800"><strong>Response:</strong></p>
+            <pre className="text-sm text-blue-900 mt-1">
+{`{
+  "success": true,
+  "entity": "leads",
+  "count": 25,
+  "data": [
+    { "id": "rec_1", "name": "Rahul", "phone": "98765...", "status": "interested", ... },
+    ...
+  ]
+}`}
+            </pre>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* OUTBOUND PUSH: Push data TO external CRM */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Badge className="bg-orange-100 text-orange-800">POST</Badge>
+            /functions/crmOutboundPush — Push Events to External CRM
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-gray-600">Sends real-time event data to your external CRM's webhook URL whenever leads, deals, or calls are created/updated.</p>
+          
+          <div>
+            <h4 className="font-semibold text-sm mb-2">Supported Event Types</h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+              {['lead_created', 'lead_updated', 'deal_created', 'deal_updated', 'call_completed', 'activity_created'].map(e => (
+                <Badge key={e} variant="outline" className="justify-center">{e}</Badge>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-1">Trigger Outbound Push</h4>
+            <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
+{`POST /functions/crmOutboundPush
+Body:
+{
+  "client_id": "client_abc",
+  "event_type": "call_completed",
+  "entity_id": "calllog_xyz"
+}`}
+            </pre>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-1">What your CRM webhook receives</h4>
+            <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
+{`{
+  "event": "call_completed",
+  "timestamp": "2026-04-07T12:00:00.000Z",
+  "source": "getway_ai",
+  "entity_id": "calllog_xyz",
+  "data": {
+    "caller_id": "918065489191",
+    "callee_number": "9876543210",
+    "duration": 180,
+    "status": "completed",
+    "transcript": "...",
+    "conversation_summary": "...",
+    "lead_status_updated": "interested"
+  }
+}`}
+            </pre>
+          </div>
+
+          <div className="bg-orange-50 border border-orange-200 rounded p-3 text-sm text-orange-800">
+            <strong>Setup:</strong> Configure your CRM webhook URL in Settings → CRM Integration → Webhook URL. The platform will POST JSON events to that URL with your API key in the <code>x-api-key</code> header.
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Field Mapping */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Field Mapping (Optional)</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-gray-600">
+            If your CRM uses different field names, configure field mapping in your CRM Integration settings. 
+            The mapping translates between your CRM's field names and Getway AI's internal fields.
+          </p>
+          <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
+{`// Example field_mapping in CRM Integration settings:
+{
+  "create_lead": {
+    "full_name": "name",        // CRM sends "full_name" → mapped to "name"
+    "mobile": "phone",          // CRM sends "mobile" → mapped to "phone"
+    "organisation": "company"   // CRM sends "organisation" → mapped to "company"
+  },
+  "outbound": {
+    "name": "contact_name",     // Internal "name" → sent as "contact_name" to CRM
+    "phone": "mobile_number"    // Internal "phone" → sent as "mobile_number" to CRM
+  }
+}`}
+          </pre>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick Integration Examples</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <h4 className="font-semibold text-sm mb-1">cURL — Create Lead</h4>
+            <pre className="bg-gray-900 text-green-400 p-3 rounded text-sm overflow-x-auto">
+{`curl -X POST ${denoUrl.replace('wss://', 'https://').replace('/functions/streamAudio', '/functions/crmInbound')} \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: your-api-key" \\
+  -d '{"action":"create_lead","data":{"name":"Test Lead","phone":"9876543210"}}'`}
+            </pre>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-1">cURL — Fetch Leads</h4>
+            <pre className="bg-gray-900 text-green-400 p-3 rounded text-sm overflow-x-auto">
+{`curl -X POST ${denoUrl.replace('wss://', 'https://').replace('/functions/streamAudio', '/functions/crmFetchData')} \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: your-api-key" \\
+  -d '{"entity":"leads","filters":{"status":"interested"},"limit":20}'`}
+            </pre>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-1">Python</h4>
+            <pre className="bg-gray-900 text-green-400 p-3 rounded text-sm overflow-x-auto">
+{`import requests
+
+url = "${denoUrl.replace('wss://', 'https://').replace('/functions/streamAudio', '/functions/crmInbound')}"
+headers = {"Content-Type": "application/json", "x-api-key": "your-api-key"}
+
+# Push a lead
+resp = requests.post(url, json={
+    "action": "create_lead",
+    "data": {"name": "Rahul", "phone": "9876543210", "source": "website"}
+}, headers=headers)
+print(resp.json())`}
+            </pre>
+          </div>
+
+          <div>
+            <h4 className="font-semibold text-sm mb-1">JavaScript / Node.js</h4>
+            <pre className="bg-gray-900 text-green-400 p-3 rounded text-sm overflow-x-auto">
+{`const resp = await fetch("${denoUrl.replace('wss://', 'https://').replace('/functions/streamAudio', '/functions/crmFetchData')}", {
+  method: "POST",
+  headers: { "Content-Type": "application/json", "x-api-key": "your-api-key" },
+  body: JSON.stringify({ entity: "call_logs", filters: { status: "completed" }, limit: 50 })
+});
+const data = await resp.json();
+console.log(data);`}
+            </pre>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }
