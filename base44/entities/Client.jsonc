@@ -111,7 +111,7 @@
     },
     "monthly_rate_per_channel": {
       "type": "number",
-      "default": 6500,
+      "default": 14999,
       "description": "Rate per channel in INR"
     },
     "next_billing_date": {
