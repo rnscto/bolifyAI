@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 import { Loader2, Save } from 'lucide-react';
-import { VOICE_ENGINE_OPTIONS, getVoicesForEngine, getDefaultVoice } from './VoiceData';
+import { REALTIME_VOICES, AZURE_SPEECH_VOICES } from './VoiceData';
 
 const TONE_OPTIONS = ['professional', 'friendly', 'formal', 'energetic', 'empathetic'];
 const LANGUAGE_OPTIONS = [
@@ -51,7 +51,7 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved }) 
     }));
   };
 
-  const voices = getVoicesForEngine(form.persona.voice_engine);
+  const voices = form.persona.voice_engine === 'realtime' ? REALTIME_VOICES : AZURE_SPEECH_VOICES;
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -94,40 +94,32 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved }) 
 
           {/* Voice Engine */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="col-span-2">
+            <div>
               <Label>Voice Engine</Label>
               <Select value={form.persona.voice_engine} onValueChange={v => {
                 updatePersona('voice_engine', v);
-                updatePersona('voice_type', getDefaultVoice(v));
+                updatePersona('voice_type', v === 'realtime' ? 'alloy' : 'en-IN-NeerjaNeural');
               }}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {VOICE_ENGINE_OPTIONS.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value}>
-                      {opt.label}
+                  <SelectItem value="realtime">Realtime (GPT-4o built-in)</SelectItem>
+                  <SelectItem value="azure_speech">Azure Speech (400+ voices)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Voice</Label>
+              <Select value={form.persona.voice_type} onValueChange={v => updatePersona('voice_type', v)}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {voices.map(v => (
+                    <SelectItem key={v.name} value={v.name}>
+                      {v.name} — {v.gender}, {v.style}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-gray-500 mt-1">
-                {VOICE_ENGINE_OPTIONS.find(o => o.value === form.persona.voice_engine)?.description || ''}
-              </p>
             </div>
-          </div>
-
-          {/* Voice Selection */}
-          <div>
-            <Label>Voice</Label>
-            <Select value={form.persona.voice_type} onValueChange={v => updatePersona('voice_type', v)}>
-              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {voices.map(v => (
-                  <SelectItem key={v.name} value={v.name}>
-                    {v.name} — {v.gender}, {v.style}{v.lang ? ` (${v.lang})` : ''}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
           </div>
 
           {/* Tone & Language */}

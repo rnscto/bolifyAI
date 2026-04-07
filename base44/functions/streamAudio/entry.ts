@@ -498,23 +498,17 @@ Deno.serve(async (req) => {
 
     // Convert https:// to wss:// for WebSocket
     let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
-    // Strip trailing slashes
-    wsUrl = wsUrl.replace(/\/+$/, '');
     // Ensure the URL includes the /openai/realtime path and required query params
+    // If the endpoint is just a base URI (no /openai/realtime), append deployment path
     if (!wsUrl.includes('/openai/realtime')) {
-      // Use AZURE_REALTIME_DEPLOYMENT env var, or fall back to common names
-      const rtDeployment = Deno.env.get('AZURE_REALTIME_DEPLOYMENT') || 'gpt-4o-realtime-preview';
-      wsUrl = `${wsUrl}/openai/realtime?api-version=2024-10-01-preview&deployment=${rtDeployment}`;
+      wsUrl = wsUrl.replace(/\/+$/, '') + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-1.5';
     }
-    // Ensure api-version is a preview version (required for WebSocket realtime on Azure)
-    // Replace any non-preview api-version with the correct preview one
-    wsUrl = wsUrl.replace(/api-version=2025-04-01(?!-preview)/, 'api-version=2024-10-01-preview');
+    // Ensure api-version uses preview (required for WebSocket realtime on Azure)
+    wsUrl = wsUrl.replace('api-version=2025-04-01&', 'api-version=2025-04-01-preview&');
     // Append api-key to URL since Deno WebSocket doesn't support custom headers
     const separator = wsUrl.includes('?') ? '&' : '?';
     wsUrl = `${wsUrl}${separator}api-key=${encodeURIComponent(realtimeKey)}`;
-    // Log full URL (without api-key) for debugging
-    const logUrl = wsUrl.replace(/api-key=[^&]+/, 'api-key=***');
-    console.log(`[${reqId}] 🔌 Connecting to Azure Realtime: ${logUrl}`);
+    console.log(`[${reqId}] 🔌 Connecting to Azure Realtime: ${wsUrl.substring(0, 80)}...`);
 
     const ws = new WebSocket(wsUrl);
 
@@ -554,7 +548,7 @@ Deno.serve(async (req) => {
     };
 
     ws.onerror = (event) => {
-      console.error(`[${reqId}] ❌ Azure Realtime error (readyState=${ws.readyState})`);
+      console.error(`[${reqId}] ❌ Azure Realtime error`);
     };
 
     session.realtimeWs = ws;
@@ -1569,9 +1563,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
             if (didAgent.persona) {
               if (didAgent.persona.voice_engine) session.voiceEngine = didAgent.persona.voice_engine;
               if (didAgent.persona.voice_type) {
-                // For realtime & voice_live_openai engines, validate OpenAI voice names
-                if (session.voiceEngine === 'realtime' || session.voiceEngine === 'voice_live_openai') {
-                  const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse'];
+                if (session.voiceEngine === 'realtime') {
+                  const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
                   const deprecatedMap = { 'nova': 'shimmer', 'onyx': 'ash', 'fable': 'ballad' };
                   let voice = didAgent.persona.voice_type.toLowerCase();
                   if (deprecatedMap[voice]) voice = deprecatedMap[voice];
@@ -1783,8 +1776,8 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
       if (cache && cache.persona) {
         if (cache.persona.voice_engine) session.voiceEngine = cache.persona.voice_engine;
         if (cache.persona.voice_type) {
-          if (session.voiceEngine === 'realtime' || session.voiceEngine === 'voice_live_openai') {
-            const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse'];
+          if (session.voiceEngine === 'realtime') {
+            const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
             const deprecatedMap = { 'nova': 'shimmer', 'onyx': 'ash', 'fable': 'ballad' };
             let voice = cache.persona.voice_type.toLowerCase();
             if (deprecatedMap[voice]) {
