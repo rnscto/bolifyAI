@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { base44 } from '@/api/base44Client';
-import { Copy, Key, Eye, EyeOff } from 'lucide-react';
+import { Copy, Key, Eye, EyeOff, RefreshCw, Shield, Loader2 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 
@@ -11,10 +12,15 @@ export default function APIDocs() {
   const [crmApiKey, setCrmApiKey] = useState(null);
   const [showKey, setShowKey] = useState(false);
   const [keyLoading, setKeyLoading] = useState(true);
+  const [authKey, setAuthKey] = useState(null);
+  const [showAuthKey, setShowAuthKey] = useState(false);
+  const [authKeyLoading, setAuthKeyLoading] = useState(true);
+  const [generatingKey, setGeneratingKey] = useState(false);
 
   useEffect(() => {
     fetchDenoUrl();
     fetchCrmApiKey();
+    fetchAuthKey();
   }, []);
 
   const fetchDenoUrl = async () => {
@@ -30,6 +36,34 @@ export default function APIDocs() {
       setDenoUrl('Error fetching URL - Check function deployment');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAuthKey = async () => {
+    try {
+      const resp = await base44.functions.invoke('generateAuthKey', {});
+      if (resp.data?.api_auth_key) {
+        setAuthKey(resp.data.api_auth_key);
+      }
+    } catch (e) {
+      console.error('Error fetching auth key:', e);
+    } finally {
+      setAuthKeyLoading(false);
+    }
+  };
+
+  const handleGenerateAuthKey = async () => {
+    setGeneratingKey(true);
+    try {
+      const resp = await base44.functions.invoke('generateAuthKey', { regenerate: true });
+      if (resp.data?.api_auth_key) {
+        setAuthKey(resp.data.api_auth_key);
+        toast.success('Authorization key generated!');
+      }
+    } catch (e) {
+      toast.error('Failed to generate key');
+    } finally {
+      setGeneratingKey(false);
     }
   };
 
@@ -245,8 +279,56 @@ export default function APIDocs() {
       {/* ─── CRM API SECTION ─── */}
       <div className="pt-4">
         <h2 className="text-2xl font-bold text-gray-900 mb-1">CRM Integration APIs</h2>
-        <p className="text-gray-600 mb-4">Connect any external CRM to push/pull data via JSON REST APIs. Authenticate with <code className="bg-gray-100 px-1 rounded text-sm">x-api-key</code> header.</p>
+        <p className="text-gray-600 mb-4">Connect any external CRM to push/pull data via JSON REST APIs.</p>
       </div>
+
+      {/* Platform Authorization Key */}
+      <Card className="border-emerald-300 bg-emerald-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Shield className="w-5 h-5 text-emerald-700" />
+            Your Platform Authorization Key
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-emerald-800">
+            Use this key in the <code className="bg-white px-1.5 py-0.5 rounded border border-emerald-200 text-xs">x-auth-key</code> header when integrating Getway AI into your CRM or any third-party system.
+          </p>
+          {authKeyLoading ? (
+            <div className="flex items-center gap-2">
+              <Loader2 className="w-4 h-4 animate-spin text-emerald-600" />
+              <span className="text-sm text-emerald-700">Loading...</span>
+            </div>
+          ) : authKey ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <code className="flex-1 bg-white p-3 rounded text-sm border border-emerald-300 font-mono break-all">
+                  {showAuthKey ? authKey : '••••••••••••••••••••••••••••••••••••••••'}
+                </code>
+                <button onClick={() => setShowAuthKey(!showAuthKey)} className="px-2 py-2 bg-white border border-emerald-300 rounded hover:bg-emerald-50">
+                  {showAuthKey ? <EyeOff className="w-4 h-4 text-emerald-700" /> : <Eye className="w-4 h-4 text-emerald-700" />}
+                </button>
+                <button onClick={() => copyToClipboard(authKey)} className="px-3 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 flex items-center gap-1">
+                  <Copy className="w-4 h-4" /> Copy
+                </button>
+              </div>
+              <Button variant="outline" size="sm" onClick={handleGenerateAuthKey} disabled={generatingKey} className="text-emerald-700 border-emerald-300 hover:bg-emerald-100">
+                {generatingKey ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />}
+                Regenerate Key
+              </Button>
+              <p className="text-xs text-emerald-600">⚠️ Regenerating will invalidate the old key. Update all your integrations.</p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-sm text-emerald-800">No key generated yet. Click below to create your authorization key.</p>
+              <Button onClick={handleGenerateAuthKey} disabled={generatingKey} className="bg-emerald-600 hover:bg-emerald-700">
+                {generatingKey ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Key className="w-4 h-4 mr-1" />}
+                Generate Authorization Key
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Your API Key */}
       <Card className="border-green-200 bg-green-50">
@@ -296,10 +378,16 @@ export default function APIDocs() {
             The key is matched against your CRM Integration settings (CRM Integration → API Key field). Each key is scoped to a single client account.
           </p>
           <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-{`// Example request header
+{`// Option 1: Platform Authorization Key (recommended)
 {
   "Content-Type": "application/json",
-  "x-api-key": "${crmApiKey ? crmApiKey : 'your-crm-api-key-here'}"
+  "x-auth-key": "${authKey || 'your-platform-auth-key'}"
+}
+
+// Option 2: CRM Integration API Key
+{
+  "Content-Type": "application/json",
+  "x-api-key": "${crmApiKey || 'your-crm-api-key'}"
 }`}
           </pre>
         </CardContent>
@@ -573,7 +661,7 @@ Body:
             <pre className="bg-gray-900 text-green-400 p-3 rounded text-sm overflow-x-auto">
 {`curl -X POST ${denoUrl.replace('wss://', 'https://').replace('/functions/streamAudio', '/functions/crmInbound')} \\
   -H "Content-Type: application/json" \\
-  -H "x-api-key: your-api-key" \\
+  -H "x-auth-key: ${authKey || 'your-platform-auth-key'}" \\
   -d '{"action":"create_lead","data":{"name":"Test Lead","phone":"9876543210"}}'`}
             </pre>
           </div>
@@ -583,7 +671,7 @@ Body:
             <pre className="bg-gray-900 text-green-400 p-3 rounded text-sm overflow-x-auto">
 {`curl -X POST ${denoUrl.replace('wss://', 'https://').replace('/functions/streamAudio', '/functions/crmFetchData')} \\
   -H "Content-Type: application/json" \\
-  -H "x-api-key: your-api-key" \\
+  -H "x-auth-key: ${authKey || 'your-platform-auth-key'}" \\
   -d '{"entity":"leads","filters":{"status":"interested"},"limit":20}'`}
             </pre>
           </div>
@@ -594,7 +682,7 @@ Body:
 {`import requests
 
 url = "${denoUrl.replace('wss://', 'https://').replace('/functions/streamAudio', '/functions/crmInbound')}"
-headers = {"Content-Type": "application/json", "x-api-key": "your-api-key"}
+headers = {"Content-Type": "application/json", "x-auth-key": "${authKey || 'your-platform-auth-key'}"}
 
 # Push a lead
 resp = requests.post(url, json={
@@ -610,7 +698,7 @@ print(resp.json())`}
             <pre className="bg-gray-900 text-green-400 p-3 rounded text-sm overflow-x-auto">
 {`const resp = await fetch("${denoUrl.replace('wss://', 'https://').replace('/functions/streamAudio', '/functions/crmFetchData')}", {
   method: "POST",
-  headers: { "Content-Type": "application/json", "x-api-key": "your-api-key" },
+  headers: { "Content-Type": "application/json", "x-auth-key": "${authKey || 'your-platform-auth-key'}" },
   body: JSON.stringify({ entity: "call_logs", filters: { status: "completed" }, limit: 50 })
 });
 const data = await resp.json();

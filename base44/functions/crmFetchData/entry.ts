@@ -18,19 +18,29 @@ Deno.serve(async (req) => {
     const appId = Deno.env.get('BASE44_APP_ID');
     const base44 = createClient({ appId, asServiceRole: true });
 
-    // Authenticate via API key
+    // Authenticate via x-auth-key (client platform key) OR x-api-key (CRM integration key)
+    const authKey = req.headers.get('x-auth-key');
     const apiKey = req.headers.get('x-api-key');
-    if (!apiKey) {
-      return Response.json({ error: 'Missing x-api-key header' }, { status: 401 });
+
+    if (!authKey && !apiKey) {
+      return Response.json({ error: 'Missing authentication. Provide x-auth-key (platform key) or x-api-key (CRM integration key) header.' }, { status: 401 });
     }
 
-    const integrations = await base44.entities.CRMIntegration.filter({ api_key: apiKey, status: 'active' });
-    if (integrations.length === 0) {
-      return Response.json({ error: 'Invalid API key or integration not active' }, { status: 403 });
-    }
+    let clientId;
 
-    const integration = integrations[0];
-    const clientId = integration.client_id;
+    if (authKey) {
+      const clients = await base44.entities.Client.filter({ api_auth_key: authKey });
+      if (clients.length === 0) {
+        return Response.json({ error: 'Invalid authorization key' }, { status: 403 });
+      }
+      clientId = clients[0].id;
+    } else {
+      const integrations = await base44.entities.CRMIntegration.filter({ api_key: apiKey, status: 'active' });
+      if (integrations.length === 0) {
+        return Response.json({ error: 'Invalid API key or integration not active' }, { status: 403 });
+      }
+      clientId = integrations[0].client_id;
+    }
 
     const { entity, filters, limit, sort } = await req.json();
     if (!entity) {

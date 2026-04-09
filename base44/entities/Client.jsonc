@@ -57,7 +57,7 @@
         "unlimited"
       ],
       "default": "per_minute",
-      "description": "Billing plan type \u2014 per_minute (\u20b94/min prepaid) or unlimited (flat channel rate)"
+      "description": "Billing plan type"
     },
     "per_minute_rate": {
       "type": "number",
@@ -266,6 +266,10 @@
     "telegram_username": {
       "type": "string",
       "description": "Telegram username for display"
+    },
+    "api_auth_key": {
+      "type": "string",
+      "description": "Platform authorization key for clients integrating Getway AI into their CRM. Used in x-auth-key header."
     }
   },
   "required": [
