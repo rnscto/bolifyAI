@@ -1,12 +1,35 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.23';
 
 Deno.serve(async (req) => {
   try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
+    // Support both user session auth AND x-auth-key (platform key) auth
+    const authKey = req.headers.get('x-auth-key');
+    let base44;
+    let clients;
 
-    if (!user) {
-      return Response.json({ error: 'Unauthorized' }, { status: 401 });
+    if (authKey) {
+      // External API call with platform auth key
+      const appId = Deno.env.get('BASE44_APP_ID');
+      base44 = createClient({ appId, asServiceRole: true });
+      clients = await base44.entities.Client.filter({ api_auth_key: authKey });
+      if (clients.length === 0) {
+        return Response.json({ error: 'Invalid authorization key' }, { status: 403 });
+      }
+    } else {
+      // Standard user session auth
+      base44 = createClientFromRequest(req);
+      const user = await base44.auth.me();
+      if (!user) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+      clients = await base44.entities.Client.filter({ user_id: user.id });
+      if (clients.length === 0) {
+        // Fallback: match by email
+        clients = await base44.entities.Client.filter({ email: user.email });
+      }
+      if (clients.length === 0) {
+        return Response.json({ error: 'No client account found' }, { status: 404 });
+      }
     }
 
     const { lead_id, agent_id, phone_number } = await req.json();
@@ -29,8 +52,7 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Lead not found' }, { status: 404 });
     }
 
-    // Ownership validation: ensure the user owns this client's agent and lead
-    const clients = await base44.entities.Client.filter({ user_id: user.id });
+    // Ownership validation
     const userClientIds = clients.map(c => c.id);
     
     if (!userClientIds.includes(agent.client_id)) {

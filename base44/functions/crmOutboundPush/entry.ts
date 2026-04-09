@@ -18,7 +18,20 @@ Deno.serve(async (req) => {
     const base44 = createClient({ appId, asServiceRole: true });
 
     const payload = await req.json();
-    const { client_id, event_type, entity_id, data: overrideData } = payload;
+    let { client_id, event_type, entity_id, data: overrideData } = payload;
+
+    // Support x-auth-key for external callers who don't know their client_id
+    if (!client_id) {
+      const authKey = req.headers.get('x-auth-key');
+      const apiKey = req.headers.get('x-api-key');
+      if (authKey) {
+        const matched = await base44.entities.Client.filter({ api_auth_key: authKey });
+        if (matched.length > 0) client_id = matched[0].id;
+      } else if (apiKey) {
+        const integrations = await base44.entities.CRMIntegration.filter({ api_key: apiKey, status: 'active' });
+        if (integrations.length > 0) client_id = integrations[0].client_id;
+      }
+    }
 
     if (!client_id || !event_type) {
       return Response.json({ error: 'Missing client_id or event_type' }, { status: 400 });
