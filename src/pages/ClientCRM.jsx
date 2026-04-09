@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Database, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Database, CheckCircle, XCircle, RefreshCw, Copy, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
@@ -26,6 +26,7 @@ export default function ClientCRM() {
   const [formData, setFormData] = useState({
     crm_type: '', webhook_url: '', api_key: '', api_endpoint: '', sync_direction: 'push'
   });
+  const [showApiKey, setShowApiKey] = useState({});
 
   useEffect(() => { loadData(); }, []);
 
@@ -132,7 +133,20 @@ export default function ClientCRM() {
               </div>
               <div><Label>Webhook URL</Label><Input value={formData.webhook_url} onChange={e => setFormData({...formData, webhook_url: e.target.value})} placeholder="https://your-crm.com/webhook" /></div>
               <div><Label>API Endpoint</Label><Input value={formData.api_endpoint} onChange={e => setFormData({...formData, api_endpoint: e.target.value})} placeholder="https://api.your-crm.com" /></div>
-              <div><Label>API Key</Label><Input type="password" value={formData.api_key} onChange={e => setFormData({...formData, api_key: e.target.value})} /></div>
+              <div>
+                <Label>API Key</Label>
+                <div className="flex gap-2">
+                  <Input type="password" value={formData.api_key} onChange={e => setFormData({...formData, api_key: e.target.value})} placeholder="Enter or generate a key" />
+                  <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => {
+                    const key = 'gw_' + crypto.randomUUID().replace(/-/g, '').substring(0, 32);
+                    setFormData({...formData, api_key: key});
+                    toast.success('API key generated!');
+                  }}>
+                    <RefreshCw className="w-4 h-4 mr-1" /> Generate
+                  </Button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">This key is used to authenticate CRM API calls (x-api-key header)</p>
+              </div>
               <div>
                 <Label>Sync Direction</Label>
                 <Select value={formData.sync_direction} onValueChange={v => setFormData({...formData, sync_direction: v})}>
@@ -173,8 +187,22 @@ export default function ClientCRM() {
                   <Badge className={statusColors[i.status]}>{i.status}</Badge>
                 </div>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-2">
                 <p className="text-sm text-gray-600">Endpoint: {i.api_endpoint || 'N/A'}</p>
+                {i.api_key && (
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm text-gray-600">API Key: </p>
+                    <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
+                      {showApiKey[i.id] ? i.api_key : '••••••••••••'}
+                    </code>
+                    <button onClick={() => setShowApiKey(prev => ({...prev, [i.id]: !prev[i.id]}))} className="text-gray-400 hover:text-gray-600">
+                      {showApiKey[i.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                    </button>
+                    <button onClick={() => { navigator.clipboard.writeText(i.api_key); toast.success('API key copied!'); }} className="text-gray-400 hover:text-gray-600">
+                      <Copy className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                )}
                 {i.last_sync && <p className="text-sm text-gray-600">Last sync: {new Date(i.last_sync).toLocaleString()}</p>}
               </CardContent>
             </Card>

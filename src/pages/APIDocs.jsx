@@ -1,16 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { base44 } from '@/api/base44Client';
-import { Copy } from 'lucide-react';
+import { Copy, Key, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 
 export default function APIDocs() {
   const [denoUrl, setDenoUrl] = useState('Loading...');
   const [loading, setLoading] = useState(true);
+  const [crmApiKey, setCrmApiKey] = useState(null);
+  const [showKey, setShowKey] = useState(false);
+  const [keyLoading, setKeyLoading] = useState(true);
 
   useEffect(() => {
     fetchDenoUrl();
+    fetchCrmApiKey();
   }, []);
 
   const fetchDenoUrl = async () => {
@@ -26,6 +30,23 @@ export default function APIDocs() {
       setDenoUrl('Error fetching URL - Check function deployment');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCrmApiKey = async () => {
+    try {
+      const user = await base44.auth.me();
+      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      if (clients.length > 0) {
+        const integrations = await base44.entities.CRMIntegration.filter({ client_id: clients[0].id, status: 'active' });
+        if (integrations.length > 0 && integrations[0].api_key) {
+          setCrmApiKey(integrations[0].api_key);
+        }
+      }
+    } catch (e) {
+      console.error('Error fetching CRM API key:', e);
+    } finally {
+      setKeyLoading(false);
     }
   };
 
@@ -227,6 +248,41 @@ export default function APIDocs() {
         <p className="text-gray-600 mb-4">Connect any external CRM to push/pull data via JSON REST APIs. Authenticate with <code className="bg-gray-100 px-1 rounded text-sm">x-api-key</code> header.</p>
       </div>
 
+      {/* Your API Key */}
+      <Card className="border-green-200 bg-green-50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Key className="w-5 h-5 text-green-700" />
+            Your CRM API Key
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {keyLoading ? (
+            <div className="flex items-center gap-2">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
+              <span className="text-sm text-green-700">Loading...</span>
+            </div>
+          ) : crmApiKey ? (
+            <div className="flex items-center gap-2">
+              <code className="flex-1 bg-white p-3 rounded text-sm border border-green-300 font-mono break-all">
+                {showKey ? crmApiKey : '••••••••••••••••••••••••'}
+              </code>
+              <button onClick={() => setShowKey(!showKey)} className="px-2 py-2 bg-white border border-green-300 rounded hover:bg-green-50">
+                {showKey ? <EyeOff className="w-4 h-4 text-green-700" /> : <Eye className="w-4 h-4 text-green-700" />}
+              </button>
+              <button onClick={() => copyToClipboard(crmApiKey)} className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1">
+                <Copy className="w-4 h-4" /> Copy
+              </button>
+            </div>
+          ) : (
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
+              <strong>No API key found.</strong> Go to <strong>CRM Integration</strong> page → Add Integration → Generate an API key.
+            </div>
+          )}
+          <p className="text-xs text-green-700">Use this key in the <code className="bg-white px-1 rounded">x-api-key</code> header for all CRM API calls.</p>
+        </CardContent>
+      </Card>
+
       <Card className="border-purple-200">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -243,10 +299,9 @@ export default function APIDocs() {
 {`// Example request header
 {
   "Content-Type": "application/json",
-  "x-api-key": "your-crm-api-key-here"
+  "x-api-key": "${crmApiKey ? crmApiKey : 'your-crm-api-key-here'}"
 }`}
           </pre>
-          <p className="text-xs text-gray-500">Set your API key in: Settings → CRM Integration → API Key</p>
         </CardContent>
       </Card>
 
