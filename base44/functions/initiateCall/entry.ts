@@ -99,6 +99,7 @@ Deno.serve(async (req) => {
 
     // Pre-fetch knowledge base content for agent config cache
     let kbContent = '';
+    let kbContentUrl = '';
     if (agent.knowledge_base_ids && agent.knowledge_base_ids.length > 0) {
       const kbDocs = [];
       for (const kbId of agent.knowledge_base_ids) {
@@ -111,6 +112,20 @@ Deno.serve(async (req) => {
       }
       if (kbDocs.length > 0) {
         kbContent = kbDocs.map(doc => `[${doc.title}]\n${doc.content}`).join('\n\n---\n\n');
+        // If KB content is large, upload as file and store URL to avoid entity field size limits
+        if (kbContent.length > 50000) {
+          try {
+            const blob = new Blob([kbContent], { type: 'text/plain' });
+            const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
+            const uploadResult = await base44.asServiceRole.integrations.Core.UploadFile({ file });
+            kbContentUrl = uploadResult.file_url;
+            console.log(`KB content uploaded (${kbContent.length} chars) → ${kbContentUrl}`);
+            kbContent = ''; // Clear inline content, use URL instead
+          } catch (uploadErr) {
+            console.log(`KB upload failed, truncating: ${uploadErr.message}`);
+            kbContent = kbContent.substring(0, 50000) + '\n\n[TRUNCATED - Content too large]';
+          }
+        }
       }
     }
 
@@ -232,6 +247,7 @@ IMPORTANT RULES:
         system_prompt: personalizedPrompt,
         persona: agent.persona || {},
         knowledge_base_content: kbContent,
+        knowledge_base_url: kbContentUrl,
         lead_context: leadContext,
         greeting_message: agent.greeting_message || '',
         human_transfer_number: agent.human_transfer_number || '',

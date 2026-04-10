@@ -1575,6 +1575,23 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
               }
             }
 
+            // Upload KB content if too large for entity field
+            let inboundKbContent = kbContent;
+            let inboundKbUrl = '';
+            if (kbContent.length > 50000) {
+              try {
+                const blob = new Blob([kbContent], { type: 'text/plain' });
+                const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
+                const uploadResult = await svc.integrations.Core.UploadFile({ file });
+                inboundKbUrl = uploadResult.file_url;
+                inboundKbContent = '';
+                console.log(`[${reqId}] 📚 KB uploaded for inbound: ${kbContent.length} chars → URL`);
+              } catch (upErr) {
+                console.log(`[${reqId}] ⚠️ KB upload failed, truncating: ${upErr.message}`);
+                inboundKbContent = kbContent.substring(0, 50000) + '\n\n[TRUNCATED]';
+              }
+            }
+
             // Create an inbound CallLog so saveCallRecord can persist transcript later
             try {
               const newInboundLog = await svc.entities.CallLog.create({
@@ -1592,7 +1609,8 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
                   agent_name: didAgent.name,
                   system_prompt: session.systemPrompt,
                   persona: didAgent.persona || {},
-                  knowledge_base_content: kbContent,
+                  knowledge_base_content: inboundKbContent,
+                  knowledge_base_url: inboundKbUrl,
                   lead_context: callerContext,
                   greeting_message: didAgent.greeting_message || '',
                   human_transfer_number: didAgent.human_transfer_number || '',
@@ -1691,7 +1709,20 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
 
       if (cache && cache.system_prompt) {
         session.systemPrompt = cache.system_prompt;
-        if (cache.knowledge_base_content) session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
+        // Load KB content: try inline first, then fetch from URL if stored externally
+        let kbText = cache.knowledge_base_content || '';
+        if (!kbText && cache.knowledge_base_url) {
+          try {
+            const kbResp = await fetch(cache.knowledge_base_url);
+            if (kbResp.ok) {
+              kbText = await kbResp.text();
+              console.log(`[${reqId}] 📚 KB fetched from URL: ${kbText.length} chars`);
+            }
+          } catch (kbErr) {
+            console.log(`[${reqId}] ⚠️ KB URL fetch failed: ${kbErr.message}`);
+          }
+        }
+        if (kbText) session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${kbText}`;
         if (cache.human_transfer_number) session.humanTransferNumber = cache.human_transfer_number;
         if (cache.enable_auto_transfer === false) session.enableAutoTransfer = false;
 

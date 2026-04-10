@@ -298,12 +298,27 @@ Deno.serve(async (req) => {
 
           // Load knowledge base
           let kbContent = '';
+          let kbContentUrl = '';
           if (resolvedAgent.knowledge_base_ids?.length > 0) {
             for (const kbId of resolvedAgent.knowledge_base_ids) {
               try {
                 const doc = await base44.entities.KnowledgeBase.get(kbId);
                 if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
               } catch (_) {}
+            }
+            // Upload large KB content as file
+            if (kbContent.length > 50000) {
+              try {
+                const blob = new Blob([kbContent], { type: 'text/plain' });
+                const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
+                const uploadResult = await base44.integrations.Core.UploadFile({ file });
+                kbContentUrl = uploadResult.file_url;
+                kbContent = '';
+                console.log(`[smartfloWebhook] KB uploaded: ${kbContentUrl}`);
+              } catch (upErr) {
+                console.log(`[smartfloWebhook] KB upload failed, truncating: ${upErr.message}`);
+                kbContent = kbContent.substring(0, 50000) + '\n\n[TRUNCATED]';
+              }
             }
           }
 
@@ -323,6 +338,7 @@ Deno.serve(async (req) => {
               system_prompt: personalizedPrompt,
               persona: resolvedAgent.persona || {},
               knowledge_base_content: kbContent,
+              knowledge_base_url: kbContentUrl,
               lead_context: leadContext,
               greeting_message: resolvedAgent.greeting_message || '',
               human_transfer_number: resolvedAgent.human_transfer_number || '',
@@ -369,13 +385,25 @@ Deno.serve(async (req) => {
           personalizedPrompt += `\n\n--- INBOUND CALL - NEW CALLER ---\nThis is an INBOUND call from a NEW number (${incomingNumber}). This person is NOT in the lead database yet.\nIMPORTANT: Greet them professionally, identify their needs, and collect their name and contact details if possible.\nThis is the client's inbound line, so handle them as a potential customer for "${resolvedClient.company_name}".`;
           if (personalScreeningInstructions) personalizedPrompt += personalScreeningInstructions;
 
-          let kbContent = '';
+          let kbContent2 = '';
+          let kbContentUrl2 = '';
           if (resolvedAgent.knowledge_base_ids?.length > 0) {
             for (const kbId of resolvedAgent.knowledge_base_ids) {
               try {
                 const doc = await base44.entities.KnowledgeBase.get(kbId);
-                if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
+                if (doc?.content) kbContent2 += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
               } catch (_) {}
+            }
+            if (kbContent2.length > 50000) {
+              try {
+                const blob = new Blob([kbContent2], { type: 'text/plain' });
+                const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
+                const uploadResult = await base44.integrations.Core.UploadFile({ file });
+                kbContentUrl2 = uploadResult.file_url;
+                kbContent2 = '';
+              } catch (upErr) {
+                kbContent2 = kbContent2.substring(0, 50000) + '\n\n[TRUNCATED]';
+              }
             }
           }
 
@@ -392,7 +420,8 @@ Deno.serve(async (req) => {
               agent_name: resolvedAgent.name,
               system_prompt: personalizedPrompt,
               persona: resolvedAgent.persona || {},
-              knowledge_base_content: kbContent,
+              knowledge_base_content: kbContent2,
+              knowledge_base_url: kbContentUrl2,
               greeting_message: resolvedAgent.greeting_message || '',
               human_transfer_number: resolvedAgent.human_transfer_number || '',
               enable_auto_transfer: resolvedAgent.enable_auto_transfer !== false
@@ -1046,12 +1075,24 @@ async function triggerNextCampaignCall(base44, campaignId) {
 
     // Knowledge base
     let kbContent = '';
+    let kbContentUrl = '';
     if (agent.knowledge_base_ids?.length > 0) {
       for (const kbId of agent.knowledge_base_ids) {
         try {
           const doc = await base44.entities.KnowledgeBase.get(kbId);
           if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
         } catch (_) {}
+      }
+      if (kbContent.length > 50000) {
+        try {
+          const blob = new Blob([kbContent], { type: 'text/plain' });
+          const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
+          const uploadResult = await base44.integrations.Core.UploadFile({ file });
+          kbContentUrl = uploadResult.file_url;
+          kbContent = '';
+        } catch (upErr) {
+          kbContent = kbContent.substring(0, 50000) + '\n\n[TRUNCATED]';
+        }
       }
     }
 
@@ -1106,6 +1147,7 @@ async function triggerNextCampaignCall(base44, campaignId) {
       agent_config_cache: {
         agent_name: agent.name, system_prompt: personalizedPrompt,
         persona: agent.persona || {}, knowledge_base_content: kbContent,
+        knowledge_base_url: kbContentUrl,
         lead_context: leadContext, greeting_message: agent.greeting_message || '',
         human_transfer_number: agent.human_transfer_number || '',
         enable_auto_transfer: agent.enable_auto_transfer !== false

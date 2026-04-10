@@ -82,11 +82,22 @@ export default function ClientKnowledgeBase() {
       let docData;
 
       if (inputMode === 'text') {
+        let textContent = formData.textContent;
+        let fileUrl = '';
+        // If content is too large for entity field, upload as file
+        if (textContent.length > 100000) {
+          const blob = new Blob([textContent], { type: 'text/plain' });
+          const file = new File([blob], `${formData.title || 'content'}.txt`, { type: 'text/plain' });
+          const uploadResponse = await base44.integrations.Core.UploadFile({ file });
+          fileUrl = uploadResponse.file_url;
+          textContent = textContent.substring(0, 100000) + '\n\n[Full content available in uploaded file]';
+        }
         docData = {
           client_id: client.id,
           title: formData.title,
           category: formData.category,
-          content: formData.textContent,
+          content: textContent,
+          file_url: fileUrl || undefined,
           file_type: 'txt',
           status: 'ready'
         };
