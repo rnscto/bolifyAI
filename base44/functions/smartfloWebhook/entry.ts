@@ -306,8 +306,8 @@ Deno.serve(async (req) => {
                 if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
               } catch (_) {}
             }
-            // Upload large KB content as file
-            if (kbContent.length > 50000) {
+            // Upload KB content as file to avoid entity field size limits
+            if (kbContent.length > 2000) {
               try {
                 const blob = new Blob([kbContent], { type: 'text/plain' });
                 const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
@@ -317,7 +317,7 @@ Deno.serve(async (req) => {
                 console.log(`[smartfloWebhook] KB uploaded: ${kbContentUrl}`);
               } catch (upErr) {
                 console.log(`[smartfloWebhook] KB upload failed, truncating: ${upErr.message}`);
-                kbContent = kbContent.substring(0, 50000) + '\n\n[TRUNCATED]';
+                kbContent = kbContent.substring(0, 2000) + '\n\n[TRUNCATED]';
               }
             }
           }
@@ -394,7 +394,7 @@ Deno.serve(async (req) => {
                 if (doc?.content) kbContent2 += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
               } catch (_) {}
             }
-            if (kbContent2.length > 50000) {
+            if (kbContent2.length > 2000) {
               try {
                 const blob = new Blob([kbContent2], { type: 'text/plain' });
                 const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
@@ -402,7 +402,7 @@ Deno.serve(async (req) => {
                 kbContentUrl2 = uploadResult.file_url;
                 kbContent2 = '';
               } catch (upErr) {
-                kbContent2 = kbContent2.substring(0, 50000) + '\n\n[TRUNCATED]';
+                kbContent2 = kbContent2.substring(0, 2000) + '\n\n[TRUNCATED]';
               }
             }
           }
@@ -1083,7 +1083,7 @@ async function triggerNextCampaignCall(base44, campaignId) {
           if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
         } catch (_) {}
       }
-      if (kbContent.length > 50000) {
+      if (kbContent.length > 2000) {
         try {
           const blob = new Blob([kbContent], { type: 'text/plain' });
           const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
@@ -1091,7 +1091,7 @@ async function triggerNextCampaignCall(base44, campaignId) {
           kbContentUrl = uploadResult.file_url;
           kbContent = '';
         } catch (upErr) {
-          kbContent = kbContent.substring(0, 50000) + '\n\n[TRUNCATED]';
+          kbContent = kbContent.substring(0, 2000) + '\n\n[TRUNCATED]';
         }
       }
     }

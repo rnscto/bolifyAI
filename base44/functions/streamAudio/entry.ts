@@ -1578,7 +1578,7 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
             // Upload KB content if too large for entity field
             let inboundKbContent = kbContent;
             let inboundKbUrl = '';
-            if (kbContent.length > 50000) {
+            if (kbContent.length > 2000) {
               try {
                 const blob = new Blob([kbContent], { type: 'text/plain' });
                 const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
@@ -1588,7 +1588,7 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
                 console.log(`[${reqId}] 📚 KB uploaded for inbound: ${kbContent.length} chars → URL`);
               } catch (upErr) {
                 console.log(`[${reqId}] ⚠️ KB upload failed, truncating: ${upErr.message}`);
-                inboundKbContent = kbContent.substring(0, 50000) + '\n\n[TRUNCATED]';
+                inboundKbContent = kbContent.substring(0, 2000) + '\n\n[TRUNCATED]';
               }
             }
 

@@ -112,8 +112,9 @@ Deno.serve(async (req) => {
       }
       if (kbDocs.length > 0) {
         kbContent = kbDocs.map(doc => `[${doc.title}]\n${doc.content}`).join('\n\n---\n\n');
-        // If KB content is large, upload as file and store URL to avoid entity field size limits
-        if (kbContent.length > 50000) {
+        // Always upload KB content as a file to avoid entity field size limits
+        // Entity fields have a ~10KB limit; KB docs are almost always larger
+        if (kbContent.length > 2000) {
           try {
             const blob = new Blob([kbContent], { type: 'text/plain' });
             const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
@@ -123,7 +124,7 @@ Deno.serve(async (req) => {
             kbContent = ''; // Clear inline content, use URL instead
           } catch (uploadErr) {
             console.log(`KB upload failed, truncating: ${uploadErr.message}`);
-            kbContent = kbContent.substring(0, 50000) + '\n\n[TRUNCATED - Content too large]';
+            kbContent = kbContent.substring(0, 2000) + '\n\n[TRUNCATED - Content too large]';
           }
         }
       }
