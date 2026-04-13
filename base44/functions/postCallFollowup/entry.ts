@@ -1,11 +1,31 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
 import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
 const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
 const emailClient = new EmailClient(connStr);
 
-// ─── Send lead email via Azure Communication Services ───
-async function sendLeadEmail({ to, fromName, subject, html }) {
+// ─── Send email using CLIENT's configured provider (via sendClientEmail function) ───
+// Falls back to platform ACS if client has no email config
+async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
+  // Try using client's own email provider via centralized function
+  if (clientId) {
+    try {
+      const appId = Deno.env.get('BASE44_APP_ID');
+      const svcBase44 = createClient({ appId, asServiceRole: true });
+      const result = await svcBase44.functions.invoke('sendClientEmail', {
+        client_id: clientId,
+        to,
+        subject,
+        html,
+        from_name: fromName
+      });
+      console.log(`[postCallFollowup] Email sent via ${result.data?.provider || 'unknown'} for client ${clientId}`);
+      return result.data;
+    } catch (e) {
+      console.warn(`[postCallFollowup] sendClientEmail failed, falling back to ACS: ${e.message}`);
+    }
+  }
+  // Fallback: platform default ACS
   const message = {
     senderAddress: 'DoNotReply@vaaniai.io',
     displayName: fromName || 'Getway AI',
@@ -203,7 +223,7 @@ Generate the subject line and HTML body.`,
     </p>
   </div>
 </div>`;
-        await sendLeadEmail({ to: lead.email, fromName: client.company_name, subject: aiContent.subject, html: emailHtml });
+        await sendLeadEmail({ to: lead.email, fromName: client.company_name, subject: aiContent.subject, html: emailHtml, clientId: clientId });
 
         // Log the outreach
         await svc.entities.OutreachLog.create({
@@ -456,6 +476,7 @@ INSTRUCTIONS:
           to: client.email,
           fromName: 'Getway AI',
           subject: retentionEmail.subject,
+          clientId: clientId,
           html: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
   <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 24px 30px; border-radius: 12px 12px 0 0; text-align: center;">

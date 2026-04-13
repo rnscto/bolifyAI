@@ -1,10 +1,30 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
 import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
 const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
 const emailClient = new EmailClient(connStr);
 
-async function sendACSEmail({ to, subject, html, displayName }) {
+// Send email using client's configured provider via centralized sendClientEmail function
+// Falls back to platform ACS if client has no email config
+async function sendEmail({ to, subject, html, displayName, clientId }) {
+  if (clientId) {
+    try {
+      const appId = Deno.env.get('BASE44_APP_ID');
+      const svcBase44 = createClient({ appId, asServiceRole: true });
+      const result = await svcBase44.functions.invoke('sendClientEmail', {
+        client_id: clientId,
+        to,
+        subject,
+        html,
+        from_name: displayName
+      });
+      console.log(`[composeEmail] Email sent via ${result.data?.provider || 'unknown'} for client ${clientId}`);
+      return result.data;
+    } catch (e) {
+      console.warn(`[composeEmail] sendClientEmail failed, falling back to ACS: ${e.message}`);
+    }
+  }
+  // Fallback: platform default ACS
   const message = {
     senderAddress: 'DoNotReply@vaaniai.io',
     displayName: displayName || 'VaaniAI',
@@ -162,17 +182,18 @@ RULES:
       ${body_html}
     </div>
     <div style="background:#1f2937;border-radius:0 0 16px 16px;padding:20px 32px;text-align:center;">
-      <p style="color:#9ca3af;font-size:12px;margin:0;">Sent by <strong style="color:#d1d5db;">${companyName}</strong> • Powered by VaaniAI</p>
+      <p style="color:#9ca3af;font-size:12px;margin:0;">Sent by <strong style="color:#d1d5db;">${companyName}</strong> • Powered by Getway AI</p>
     </div>
   </div>
 </body>
 </html>`;
 
-      await sendACSEmail({
+      await sendEmail({
         to: to_email,
         subject,
         html: wrappedHtml,
-        displayName: companyName
+        displayName: companyName,
+        clientId: client_id
       });
 
       // Log the outreach

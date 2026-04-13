@@ -1,11 +1,30 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
 import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
 const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
 const emailClient = new EmailClient(connStr);
 
-// ─── Send lead email via Azure Communication Services ───
-async function sendLeadEmail({ to, fromName, subject, html }) {
+// ─── Send email using CLIENT's configured provider (via sendClientEmail function) ───
+// Falls back to platform ACS if client has no email config
+async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
+  if (clientId) {
+    try {
+      const appId = Deno.env.get('BASE44_APP_ID');
+      const svcBase44 = createClient({ appId, asServiceRole: true });
+      const result = await svcBase44.functions.invoke('sendClientEmail', {
+        client_id: clientId,
+        to,
+        subject,
+        html,
+        from_name: fromName
+      });
+      console.log(`[campaignPostCall] Email sent via ${result.data?.provider || 'unknown'} for client ${clientId}`);
+      return result.data;
+    } catch (e) {
+      console.warn(`[campaignPostCall] sendClientEmail failed, falling back to ACS: ${e.message}`);
+    }
+  }
+  // Fallback: platform default ACS
   const message = {
     senderAddress: 'DoNotReply@vaaniai.io',
     displayName: fromName || 'Getway AI',
@@ -611,7 +630,7 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
         );
         await sendLeadEmail({
           to: lead.email, fromName: client?.company_name || 'VaaniAI',
-          subject: emailContent.subject,
+          subject: emailContent.subject, clientId: campaign.client_id,
           html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${emailContent.body_html}</div>`
         });
         emailSent = true;
@@ -812,7 +831,7 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
         );
         await sendLeadEmail({
           to: lead.email, fromName: client?.company_name || 'VaaniAI',
-          subject: emailContent.subject,
+          subject: emailContent.subject, clientId: campaign.client_id,
           html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${emailContent.body_html}</div>`
         });
         emailSent = true;
@@ -822,25 +841,25 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
           body: emailContent.body_html, outreach_type: 'lead_followup', call_outcome: outcome,
           ai_summary: summary.substring(0, 500), status: 'sent'
         });
-      } catch (e) { console.error(`[campaignPostCall] Email failed: ${e.message}`); }
-    }
+        } catch (e) { console.error(`[campaignPostCall] Email failed: ${e.message}`); }
+        }
 
-    const cbDays = rules.interested_callback_days || 2;
-    const cbDate = new Date(); cbDate.setDate(cbDate.getDate() + cbDays);
-    cbDate.setUTCHours(4, 30, 0, 0); // 10:00 AM IST = 04:30 UTC
-    await base44.entities.Activity.create({
-      client_id: campaign.client_id, lead_id: campaignLead.lead_id, type: 'followup',
-      title: `Follow-up: ${lead?.name || campaignLead.lead_phone} (Interested)`,
-      description: `Campaign "${campaign.name}"\nSummary: ${summary}`,
-      scheduled_date: cbDate.toISOString(), status: 'scheduled', priority: 'high', auto_created: true
-    });
-    callbackScheduled = true;
-  }
+        const cbDays = rules.interested_callback_days || 2;
+        const cbDate = new Date(); cbDate.setDate(cbDate.getDate() + cbDays);
+        cbDate.setUTCHours(4, 30, 0, 0); // 10:00 AM IST = 04:30 UTC
+        await base44.entities.Activity.create({
+        client_id: campaign.client_id, lead_id: campaignLead.lead_id, type: 'followup',
+        title: `Follow-up: ${lead?.name || campaignLead.lead_phone} (Interested)`,
+        description: `Campaign "${campaign.name}"\nSummary: ${summary}`,
+        scheduled_date: cbDate.toISOString(), status: 'scheduled', priority: 'high', auto_created: true
+        });
+        callbackScheduled = true;
+        }
 
-  if (outcome === 'callback') {
-    callbackScheduled = true;
-    console.log(`[campaignPostCall] doFollowUpActions: callback outcome — skipping Activity (no duplicate calls)`);
-  }
+        if (outcome === 'callback') {
+        callbackScheduled = true;
+        console.log(`[campaignPostCall] doFollowUpActions: callback outcome — skipping Activity (no duplicate calls)`);
+        }
 
   // Update campaign lead follow-up flags
   await base44.entities.CampaignLead.update(campaignLead.id, {

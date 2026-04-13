@@ -1,11 +1,30 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
 import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
 const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
 const emailClient = new EmailClient(connStr);
 
-// ─── Send lead email via Azure Communication Services ───
-async function sendLeadEmail({ to, fromName, subject, html }) {
+// ─── Send email using CLIENT's configured provider (via sendClientEmail function) ───
+// Falls back to platform ACS if client has no email config
+async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
+  if (clientId) {
+    try {
+      const appId = Deno.env.get('BASE44_APP_ID');
+      const svcBase44 = createClient({ appId, asServiceRole: true });
+      const result = await svcBase44.functions.invoke('sendClientEmail', {
+        client_id: clientId,
+        to,
+        subject,
+        html,
+        from_name: fromName
+      });
+      console.log(`[processSequences] Email sent via ${result.data?.provider || 'unknown'} for client ${clientId}`);
+      return result.data;
+    } catch (e) {
+      console.warn(`[processSequences] sendClientEmail failed, falling back to ACS: ${e.message}`);
+    }
+  }
+  // Fallback: platform default ACS
   const message = {
     senderAddress: 'DoNotReply@vaaniai.io',
     displayName: fromName || 'Getway AI',
@@ -230,13 +249,14 @@ Return the adapted subject and body_html.`,
         fromName = clientMap[enrollment.client_id].company_name;
       }
 
-      // Send the email via Azure Communication Services
+      // Send the email using client's configured provider (falls back to platform ACS)
       try {
         await sendLeadEmail({
           to: enrollment.recipient_email,
           fromName,
           subject,
-          html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">${bodyHtml}</div>`
+          html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;">${bodyHtml}</div>`,
+          clientId: enrollment.client_id
         });
 
         // Log in OutreachLog
