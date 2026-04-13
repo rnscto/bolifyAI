@@ -2,8 +2,12 @@ import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.23';
 
 Deno.serve(async (req) => {
   try {
-    // Support both user session auth AND x-auth-key (platform key) auth
+    // Support three auth methods:
+    // 1. x-auth-key header (platform authorization key)
+    // 2. x-api-key header (CRM integration API key)
+    // 3. Standard Base44 user session (Authorization: Bearer ...)
     const authKey = req.headers.get('x-auth-key');
+    const apiKey = req.headers.get('x-api-key');
     let base44;
     let clients;
 
@@ -13,14 +17,26 @@ Deno.serve(async (req) => {
       base44 = createClient({ appId, asServiceRole: true });
       clients = await base44.entities.Client.filter({ api_auth_key: authKey });
       if (clients.length === 0) {
-        return Response.json({ error: 'Invalid authorization key' }, { status: 403 });
+        return Response.json({ success: false, error: 'Invalid x-auth-key authorization key' }, { status: 403 });
+      }
+    } else if (apiKey) {
+      // External API call with CRM integration API key
+      const appId = Deno.env.get('BASE44_APP_ID');
+      base44 = createClient({ appId, asServiceRole: true });
+      const integrations = await base44.entities.CRMIntegration.filter({ api_key: apiKey, status: 'active' });
+      if (integrations.length === 0) {
+        return Response.json({ success: false, error: 'Invalid x-api-key or CRM integration not active' }, { status: 403 });
+      }
+      clients = await base44.entities.Client.filter({ id: integrations[0].client_id });
+      if (clients.length === 0) {
+        return Response.json({ success: false, error: 'Client not found for this API key' }, { status: 404 });
       }
     } else {
       // Standard user session auth
       base44 = createClientFromRequest(req);
       const user = await base44.auth.me();
       if (!user) {
-        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+        return Response.json({ success: false, error: 'Unauthorized. Provide x-auth-key, x-api-key, or a valid session token.' }, { status: 401 });
       }
       clients = await base44.entities.Client.filter({ user_id: user.id });
       if (clients.length === 0) {
@@ -28,7 +44,7 @@ Deno.serve(async (req) => {
         clients = await base44.entities.Client.filter({ email: user.email });
       }
       if (clients.length === 0) {
-        return Response.json({ error: 'No client account found' }, { status: 404 });
+        return Response.json({ success: false, error: 'No client account found' }, { status: 404 });
       }
     }
 

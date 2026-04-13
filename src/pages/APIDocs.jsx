@@ -200,9 +200,11 @@ export default function APIDocs() {
               <Badge className="bg-green-100 text-green-800">POST</Badge>
               <code className="text-sm">/api/functions/initiateCall</code>
             </div>
-            <p className="text-sm text-gray-600 mb-2">Initiate an outbound call</p>
+            <p className="text-sm text-gray-600 mb-2">Initiate an outbound call. Supports <code className="bg-gray-200 px-1 rounded text-xs">x-auth-key</code> (platform key) or <code className="bg-gray-200 px-1 rounded text-xs">x-api-key</code> (CRM key) headers for external API access.</p>
             <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-{`{
+{`Headers: { "x-auth-key": "your-platform-key" }  // or x-api-key
+Body:
+{
   "lead_id": "lead_123",
   "agent_id": "agent_456",
   "phone_number": "+911234567890"
