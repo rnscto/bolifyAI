@@ -42,9 +42,13 @@ async function sendEmail({ to, subject, html, displayName, clientId }) {
 
 // Azure OpenAI helper
 async function azureLLM(prompt, systemPrompt, jsonSchema) {
-  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+  let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
   const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
   const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+  // Normalize: strip /openai/... or /api/projects/... or /v1 from AI Foundry endpoints
+  const oIdx = baseUrl.indexOf('/openai/'); if (oIdx > 0) baseUrl = baseUrl.substring(0, oIdx);
+  const pIdx = baseUrl.indexOf('/api/projects'); if (pIdx > 0) baseUrl = baseUrl.substring(0, pIdx);
+  if (baseUrl.endsWith('/v1')) baseUrl = baseUrl.slice(0, -3);
   const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
   const res = await fetch(url, {
     method: 'POST',

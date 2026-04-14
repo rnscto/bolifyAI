@@ -1,28 +1,35 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
-import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
 
-const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
-const emailClient = new EmailClient(connStr);
-
-// ─── Send email via Azure Communication Services ───
-async function sendEmailViaACS({ to, fromName, subject, html }) {
-  const message = {
-    senderAddress: 'DoNotReply@vaaniai.io',
-    displayName: fromName || 'Getway AI',
-    content: { subject, html },
-    recipients: { to: [{ address: to }] }
-  };
-  const poller = await emailClient.beginSend(message);
-  const result = await poller.pollUntilDone();
-  if (result.status !== 'Succeeded') throw new Error(`ACS Email error: ${result.error?.message || result.status}`);
-  return result;
+// ─── Send email via platform SMTP ───
+async function sendEmailViaSMTP({ to, fromName, subject, html }) {
+  const { SMTPClient } = await import('npm:emailjs@4.0.3');
+  const client = new SMTPClient({
+    user: Deno.env.get('PLATFORM_SMTP_USER'),
+    password: Deno.env.get('PLATFORM_SMTP_PASS'),
+    host: Deno.env.get('PLATFORM_SMTP_HOST'),
+    port: parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587'),
+    tls: true,
+    timeout: 15000
+  });
+  const fromAddress = Deno.env.get('PLATFORM_SMTP_FROM') || Deno.env.get('PLATFORM_SMTP_USER');
+  await client.sendAsync({
+    from: `${fromName || 'Getway AI'} <${fromAddress}>`,
+    to,
+    subject,
+    attachment: [{ data: html, alternative: true }]
+  });
+  return { provider: 'platform_smtp', status: 'sent' };
 }
 
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
 async function azureLLM(prompt, systemPrompt, jsonSchema) {
-  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+  let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
   const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
   const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+  // Normalize: strip /openai/... or /api/projects/... or /v1 from AI Foundry endpoints
+  const oIdx = baseUrl.indexOf('/openai/'); if (oIdx > 0) baseUrl = baseUrl.substring(0, oIdx);
+  const pIdx = baseUrl.indexOf('/api/projects'); if (pIdx > 0) baseUrl = baseUrl.substring(0, pIdx);
+  if (baseUrl.endsWith('/v1')) baseUrl = baseUrl.slice(0, -3);
   const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
   const res = await fetch(url, {
     method: 'POST',
@@ -62,8 +69,14 @@ Deno.serve(async (req) => {
       console.log('[FollowupEngine] Triggered by external cron');
     }
 
-    const base44 = createClientFromRequest(req);
-    const svc = base44.asServiceRole;
+    // For external cron (GET), there's no user session — use service role directly
+    let svc;
+    if (req.method === 'GET') {
+      const appId = Deno.env.get('BASE44_APP_ID');
+      svc = createClient({ appId, asServiceRole: true });
+    } else {
+      svc = createClientFromRequest(req).asServiceRole;
+    }
 
     const now = new Date();
     const results = {
@@ -425,7 +438,7 @@ Deno.serve(async (req) => {
                 'You are an email copywriter. Always respond in valid JSON.',
                 { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } } }
               );
-              await sendEmailViaACS({
+              await sendEmailViaSMTP({
                 to: lead.email,
                 fromName: client?.company_name || 'Getway AI',
                 subject: reminderContent.subject,
@@ -565,7 +578,7 @@ async function sendAdminAlert(svc, client, activity, lead, alertType, reason) {
       </div>
     </div>`;
 
-  await sendEmailViaACS({
+  await sendEmailViaSMTP({
     to: client.email,
     fromName: 'Getway AI Automation',
     subject: `[${label}] ${activity.title || activity.type} — ${leadName}`,

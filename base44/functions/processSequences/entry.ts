@@ -42,9 +42,13 @@ async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
 
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
 async function azureLLM(prompt, systemPrompt, jsonSchema) {
-  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+  let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
   const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
   const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+  // Normalize: strip /openai/... or /api/projects/... or /v1 from AI Foundry endpoints
+  const oIdx = baseUrl.indexOf('/openai/'); if (oIdx > 0) baseUrl = baseUrl.substring(0, oIdx);
+  const pIdx = baseUrl.indexOf('/api/projects'); if (pIdx > 0) baseUrl = baseUrl.substring(0, pIdx);
+  if (baseUrl.endsWith('/v1')) baseUrl = baseUrl.slice(0, -3);
   const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
   const res = await fetch(url, {
     method: 'POST',
@@ -81,8 +85,14 @@ Deno.serve(async (req) => {
       console.log('[processSequences] Triggered by external cron');
     }
 
-    const base44_client = createClientFromRequest(req);
-    const base44 = base44_client.asServiceRole;
+    // For external cron (GET), there's no user session — use service role directly
+    let base44;
+    if (req.method === 'GET') {
+      const appId = Deno.env.get('BASE44_APP_ID');
+      base44 = createClient({ appId, asServiceRole: true });
+    } else {
+      base44 = createClientFromRequest(req).asServiceRole;
+    }
 
     const results = { sent: 0, skipped: 0, completed: 0, errors: 0, adapted: 0, total_active: 0 };
     const BATCH_LIMIT = 15; // Max emails per run to avoid timeout
