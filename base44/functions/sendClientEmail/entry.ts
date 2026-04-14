@@ -1,10 +1,9 @@
 import { createClient } from 'npm:@base44/sdk@0.8.25';
-import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
 /**
  * Centralized email sender that uses the CLIENT'S configured email provider
  * from ClientMessagingConfig when available, falling back to the platform
- * default (Azure Communication Services / DoNotReply@vaaniai.io).
+ * default SMTP server.
  *
  * POST /functions/sendClientEmail
  * Body: {
@@ -16,25 +15,25 @@ import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
  * }
  */
 
-const acsConnStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
-let acsClient = null;
-function getACSClient() {
-  if (!acsClient) acsClient = new EmailClient(acsConnStr);
-  return acsClient;
-}
-
-// ─── Platform default: Azure Communication Services ───
-async function sendViaACS({ to, subject, html, fromName }) {
-  const message = {
-    senderAddress: 'DoNotReply@vaaniai.io',
-    displayName: fromName || 'Getway AI',
-    content: { subject, html },
-    recipients: { to: [{ address: to }] }
-  };
-  const poller = await getACSClient().beginSend(message);
-  const result = await poller.pollUntilDone();
-  if (result.status !== 'Succeeded') throw new Error(`ACS Email error: ${result.error?.message || result.status}`);
-  return { provider: 'platform_acs', status: 'sent' };
+// ─── Platform default: SMTP ───
+async function sendViaPlatformSMTP({ to, subject, html, fromName }) {
+  const { SMTPClient } = await import('npm:emailjs@4.0.3');
+  const client = new SMTPClient({
+    user: Deno.env.get('PLATFORM_SMTP_USER'),
+    password: Deno.env.get('PLATFORM_SMTP_PASS'),
+    host: Deno.env.get('PLATFORM_SMTP_HOST'),
+    port: parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587'),
+    tls: true,
+    timeout: 15000
+  });
+  const fromAddress = Deno.env.get('PLATFORM_SMTP_FROM') || Deno.env.get('PLATFORM_SMTP_USER');
+  const message = await client.sendAsync({
+    from: `${fromName || 'Getway AI'} <${fromAddress}>`,
+    to,
+    subject,
+    attachment: [{ data: html, alternative: true }]
+  });
+  return { provider: 'platform_smtp', status: 'sent', from_address: fromAddress };
 }
 
 // ─── Client provider: SMTP ───
@@ -165,7 +164,7 @@ Deno.serve(async (req) => {
 
     // If no client_id, use platform default
     if (!client_id) {
-      const result = await sendViaACS({ to, subject, html, fromName: from_name });
+      const result = await sendViaPlatformSMTP({ to, subject, html, fromName: from_name });
       return Response.json({ success: true, ...result });
     }
 
@@ -212,21 +211,21 @@ Deno.serve(async (req) => {
             result = await sendViaPostmark(emailParams);
             break;
           default:
-            console.log(`[sendClientEmail] Unknown provider ${msgConfig.email_provider}, falling back to platform`);
-            result = await sendViaACS({ to, subject, html, fromName: displayName });
+            console.log(`[sendClientEmail] Unknown provider ${msgConfig.email_provider}, falling back to platform SMTP`);
+            result = await sendViaPlatformSMTP({ to, subject, html, fromName: displayName });
         }
         return Response.json({ success: true, ...result, from_address: fromAddress });
       } catch (clientErr) {
         // If client provider fails, fall back to platform default
-        console.error(`[sendClientEmail] Client provider ${msgConfig.email_provider} failed: ${clientErr.message}. Falling back to platform.`);
-        const fallbackResult = await sendViaACS({ to, subject, html, fromName: displayName });
+        console.error(`[sendClientEmail] Client provider ${msgConfig.email_provider} failed: ${clientErr.message}. Falling back to platform SMTP.`);
+        const fallbackResult = await sendViaPlatformSMTP({ to, subject, html, fromName: displayName });
         return Response.json({ success: true, ...fallbackResult, fallback: true, original_error: clientErr.message });
       }
     }
 
     // No client email config or not connected — use platform default
-    console.log(`[sendClientEmail] No client email config for ${client_id}, using platform ACS`);
-    const result = await sendViaACS({ to, subject, html, fromName: displayName });
+    console.log(`[sendClientEmail] No client email config for ${client_id}, using platform SMTP`);
+    const result = await sendViaPlatformSMTP({ to, subject, html, fromName: displayName });
     return Response.json({ success: true, ...result });
 
   } catch (error) {
