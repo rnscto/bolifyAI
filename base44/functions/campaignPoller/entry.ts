@@ -1,4 +1,4 @@
-import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
 // This function runs every 5 minutes to:
 // 1. Fix stuck "calling" leads (calls that never got a webhook callback)
@@ -8,7 +8,6 @@ import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
 Deno.serve(async (req) => {
   try {
     // Support external cron: allow GET requests with shared secret or CRON_API_KEY
-    let isCron = false;
     if (req.method === 'GET') {
       const url = new URL(req.url);
       const cronSecret = url.searchParams.get('cron_secret');
@@ -19,18 +18,11 @@ Deno.serve(async (req) => {
       if (!isValid) {
         return Response.json({ error: 'Forbidden' }, { status: 403 });
       }
-      isCron = true;
       console.log('[campaignPoller] Triggered by external cron');
     }
 
-    // For external cron (GET), there's no user session — use service role directly
-    let svc;
-    if (isCron) {
-      const appId = Deno.env.get('BASE44_APP_ID');
-      svc = createClient({ appId, asServiceRole: true });
-    } else {
-      svc = createClientFromRequest(req).asServiceRole;
-    }
+    const base44 = createClientFromRequest(req);
+    const svc = base44.asServiceRole;
     const results = { campaigns_processed: 0, stuck_fixed: 0, batches_triggered: 0, completed: 0, errors: [] };
 
     // Find all running campaigns

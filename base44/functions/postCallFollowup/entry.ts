@@ -1,8 +1,13 @@
 import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
+import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
+
+const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
+const emailClient = new EmailClient(connStr);
 
 // ─── Send email using CLIENT's configured provider (via sendClientEmail function) ───
-// Falls back to platform SMTP if client has no email config
+// Falls back to platform ACS if client has no email config
 async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
+  // Try using client's own email provider via centralized function
   if (clientId) {
     try {
       const appId = Deno.env.get('BASE44_APP_ID');
@@ -17,38 +22,27 @@ async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
       console.log(`[postCallFollowup] Email sent via ${result.data?.provider || 'unknown'} for client ${clientId}`);
       return result.data;
     } catch (e) {
-      console.warn(`[postCallFollowup] sendClientEmail failed, falling back to platform SMTP: ${e.message}`);
+      console.warn(`[postCallFollowup] sendClientEmail failed, falling back to ACS: ${e.message}`);
     }
   }
-  // Fallback: platform default SMTP
-  const { SMTPClient } = await import('npm:emailjs@4.0.3');
-  const client = new SMTPClient({
-    user: Deno.env.get('PLATFORM_SMTP_USER'),
-    password: Deno.env.get('PLATFORM_SMTP_PASS'),
-    host: Deno.env.get('PLATFORM_SMTP_HOST'),
-    port: parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587'),
-    tls: true,
-    timeout: 15000
-  });
-  const fromAddress = Deno.env.get('PLATFORM_SMTP_FROM') || Deno.env.get('PLATFORM_SMTP_USER');
-  await client.sendAsync({
-    from: `${fromName || 'Getway AI'} <${fromAddress}>`,
-    to,
-    subject,
-    attachment: [{ data: html, alternative: true }]
-  });
-  return { provider: 'platform_smtp', status: 'sent' };
+  // Fallback: platform default ACS
+  const message = {
+    senderAddress: 'DoNotReply@vaaniai.io',
+    displayName: fromName || 'Getway AI',
+    content: { subject, html },
+    recipients: { to: [{ address: to }] }
+  };
+  const poller = await emailClient.beginSend(message);
+  const result = await poller.pollUntilDone();
+  if (result.status !== 'Succeeded') throw new Error(`ACS Email error: ${result.error?.message || result.status}`);
+  return result;
 }
 
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
 async function azureLLM(prompt, systemPrompt, jsonSchema) {
-  let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
+  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
   const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
   const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  // Normalize: strip /openai/... or /api/projects/... or /v1 from AI Foundry endpoints
-  const oIdx = baseUrl.indexOf('/openai/'); if (oIdx > 0) baseUrl = baseUrl.substring(0, oIdx);
-  const pIdx = baseUrl.indexOf('/api/projects'); if (pIdx > 0) baseUrl = baseUrl.substring(0, pIdx);
-  if (baseUrl.endsWith('/v1')) baseUrl = baseUrl.slice(0, -3);
   const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
   const res = await fetch(url, {
     method: 'POST',
