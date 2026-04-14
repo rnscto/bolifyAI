@@ -201,12 +201,26 @@ export default function APIDocs() {
               <code className="text-sm">/api/functions/initiateCall</code>
             </div>
             <p className="text-sm text-gray-600 mb-2">Initiate an outbound call. Supports <code className="bg-gray-200 px-1 rounded text-xs">x-auth-key</code> (platform key) or <code className="bg-gray-200 px-1 rounded text-xs">x-api-key</code> (CRM key) headers for external API access.</p>
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-3 text-sm text-yellow-800">
+              <strong>💡 Flexible identifiers:</strong> You can use either record IDs or phone numbers:
+              <ul className="ml-4 mt-1 list-disc space-y-0.5">
+                <li><strong>agent_id</strong> (Base44 record ID) OR <strong>agent_did</strong> (DID phone number assigned to agent)</li>
+                <li><strong>lead_id</strong> (Base44 record ID) OR just <strong>phone_number</strong> (lead is auto-matched or created)</li>
+              </ul>
+            </div>
             <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
 {`Headers: { "x-auth-key": "your-platform-key" }  // or x-api-key
-Body:
+
+// Option 1: Using phone numbers (recommended for CRM integrations)
 {
-  "lead_id": "lead_123",
-  "agent_id": "agent_456",
+  "agent_did": "0507279030004",
+  "phone_number": "9355521144"
+}
+
+// Option 2: Using record IDs
+{
+  "lead_id": "rec_abc123",
+  "agent_id": "rec_xyz456",
   "phone_number": "+911234567890"
 }`}
             </pre>

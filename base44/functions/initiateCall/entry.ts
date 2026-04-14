@@ -48,22 +48,59 @@ Deno.serve(async (req) => {
       }
     }
 
-    const { lead_id, agent_id, phone_number } = await req.json();
+    const { lead_id, agent_id, agent_did, phone_number } = await req.json();
 
-    if (!lead_id || !agent_id || !phone_number) {
-      return Response.json({ error: 'Missing required fields' }, { status: 400 });
+    if (!phone_number) {
+      return Response.json({ error: 'phone_number is required' }, { status: 400 });
+    }
+    if (!agent_id && !agent_did) {
+      return Response.json({ error: 'Provide agent_id (record ID) or agent_did (DID phone number)' }, { status: 400 });
     }
 
-    // Get agent and lead details
-    const [agent, lead] = await Promise.all([
-      base44.asServiceRole.entities.Agent.get(agent_id),
-      base44.asServiceRole.entities.Lead.get(lead_id)
-    ]);
-
+    // Resolve agent — by record ID or by DID number
+    let agent;
+    if (agent_id) {
+      agent = await base44.asServiceRole.entities.Agent.get(agent_id);
+    } else {
+      // Look up agent whose assigned_did or assigned_dids contains the given DID
+      const cleanDid = agent_did.replace(/[^0-9]/g, '');
+      const allAgents = await base44.asServiceRole.entities.Agent.filter({ client_id: clients[0].id });
+      agent = allAgents.find(a => {
+        const dids = [...(a.assigned_dids || []), a.assigned_did].filter(Boolean);
+        return dids.some(d => d.replace(/[^0-9]/g, '') === cleanDid || d.replace(/[^0-9]/g, '').endsWith(cleanDid) || cleanDid.endsWith(d.replace(/[^0-9]/g, '')));
+      });
+    }
     if (!agent) {
-      return Response.json({ error: 'Agent not found' }, { status: 404 });
+      return Response.json({ error: agent_id ? 'Agent not found' : `No agent found with DID ${agent_did}` }, { status: 404 });
     }
 
+    // Resolve lead — by record ID or by phone number
+    let lead;
+    if (lead_id) {
+      lead = await base44.asServiceRole.entities.Lead.get(lead_id);
+    } else {
+      // Look up lead by phone number within this client's leads
+      const cleanPhone = phone_number.replace(/[^0-9]/g, '');
+      const matchedLeads = await base44.asServiceRole.entities.Lead.filter({ client_id: clients[0].id, phone: phone_number });
+      if (matchedLeads.length === 0) {
+        // Try without country code — match last 10 digits
+        const allLeads = await base44.asServiceRole.entities.Lead.filter({ client_id: clients[0].id });
+        lead = allLeads.find(l => l.phone && l.phone.replace(/[^0-9]/g, '').slice(-10) === cleanPhone.slice(-10));
+      } else {
+        lead = matchedLeads[0];
+      }
+      // Auto-create lead if not found
+      if (!lead) {
+        lead = await base44.asServiceRole.entities.Lead.create({
+          client_id: clients[0].id,
+          phone: phone_number,
+          name: phone_number,
+          status: 'new',
+          source: 'api'
+        });
+        console.log(`Auto-created lead ${lead.id} for phone ${phone_number}`);
+      }
+    }
     if (!lead) {
       return Response.json({ error: 'Lead not found' }, { status: 404 });
     }
@@ -250,8 +287,8 @@ IMPORTANT RULES:
     // Create call log with cached agent config (so streamAudio WebSocket can read it without cross-function calls)
     const callLog = await base44.asServiceRole.entities.CallLog.create({
       client_id: agent.client_id,
-      agent_id: agent_id,
-      lead_id: lead_id,
+      agent_id: agent.id,
+      lead_id: lead.id,
       call_sid: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       caller_id: callerDID,
       callee_number: phone_number,
@@ -338,7 +375,7 @@ IMPORTANT RULES:
     });
 
     // Update lead status
-    await base44.asServiceRole.entities.Lead.update(lead_id, {
+    await base44.asServiceRole.entities.Lead.update(lead.id, {
       status: 'contacted',
       last_call_date: new Date().toISOString()
     });
