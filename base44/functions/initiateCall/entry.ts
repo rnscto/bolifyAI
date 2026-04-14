@@ -1,4 +1,4 @@
-import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
 
 Deno.serve(async (req) => {
   try {
@@ -8,40 +8,39 @@ Deno.serve(async (req) => {
     // 3. Standard Base44 user session (Authorization: Bearer ...)
     const authKey = req.headers.get('x-auth-key');
     const apiKey = req.headers.get('x-api-key');
-    let base44;
+    
+    // Always create a service-role client for entity operations
+    const appId = Deno.env.get('BASE44_APP_ID');
+    const svc = createClient({ appId, asServiceRole: true });
     let clients;
 
     if (authKey) {
       // External API call with platform auth key
-      const appId = Deno.env.get('BASE44_APP_ID');
-      base44 = createClient({ appId, asServiceRole: true });
-      clients = await base44.entities.Client.filter({ api_auth_key: authKey });
+      clients = await svc.entities.Client.filter({ api_auth_key: authKey });
       if (clients.length === 0) {
         return Response.json({ success: false, error: 'Invalid x-auth-key authorization key' }, { status: 403 });
       }
     } else if (apiKey) {
       // External API call with CRM integration API key
-      const appId = Deno.env.get('BASE44_APP_ID');
-      base44 = createClient({ appId, asServiceRole: true });
-      const integrations = await base44.entities.CRMIntegration.filter({ api_key: apiKey, status: 'active' });
+      const integrations = await svc.entities.CRMIntegration.filter({ api_key: apiKey, status: 'active' });
       if (integrations.length === 0) {
         return Response.json({ success: false, error: 'Invalid x-api-key or CRM integration not active' }, { status: 403 });
       }
-      clients = await base44.entities.Client.filter({ id: integrations[0].client_id });
+      clients = await svc.entities.Client.filter({ id: integrations[0].client_id });
       if (clients.length === 0) {
         return Response.json({ success: false, error: 'Client not found for this API key' }, { status: 404 });
       }
     } else {
       // Standard user session auth
-      base44 = createClientFromRequest(req);
-      const user = await base44.auth.me();
+      const userBase44 = createClientFromRequest(req);
+      const user = await userBase44.auth.me();
       if (!user) {
         return Response.json({ success: false, error: 'Unauthorized. Provide x-auth-key, x-api-key, or a valid session token.' }, { status: 401 });
       }
-      clients = await base44.entities.Client.filter({ user_id: user.id });
+      clients = await svc.entities.Client.filter({ user_id: user.id });
       if (clients.length === 0) {
         // Fallback: match by email
-        clients = await base44.entities.Client.filter({ email: user.email });
+        clients = await svc.entities.Client.filter({ email: user.email });
       }
       if (clients.length === 0) {
         return Response.json({ success: false, error: 'No client account found' }, { status: 404 });
@@ -60,11 +59,11 @@ Deno.serve(async (req) => {
     // Resolve agent — by record ID or by DID number
     let agent;
     if (agent_id) {
-      agent = await base44.asServiceRole.entities.Agent.get(agent_id);
+      agent = await svc.entities.Agent.get(agent_id);
     } else {
       // Look up agent whose assigned_did or assigned_dids contains the given DID
       const cleanDid = agent_did.replace(/[^0-9]/g, '');
-      const allAgents = await base44.asServiceRole.entities.Agent.filter({ client_id: clients[0].id });
+      const allAgents = await svc.entities.Agent.filter({ client_id: clients[0].id });
       agent = allAgents.find(a => {
         const dids = [...(a.assigned_dids || []), a.assigned_did].filter(Boolean);
         return dids.some(d => d.replace(/[^0-9]/g, '') === cleanDid || d.replace(/[^0-9]/g, '').endsWith(cleanDid) || cleanDid.endsWith(d.replace(/[^0-9]/g, '')));
@@ -77,21 +76,21 @@ Deno.serve(async (req) => {
     // Resolve lead — by record ID or by phone number
     let lead;
     if (lead_id) {
-      lead = await base44.asServiceRole.entities.Lead.get(lead_id);
+      lead = await svc.entities.Lead.get(lead_id);
     } else {
       // Look up lead by phone number within this client's leads
       const cleanPhone = phone_number.replace(/[^0-9]/g, '');
-      const matchedLeads = await base44.asServiceRole.entities.Lead.filter({ client_id: clients[0].id, phone: phone_number });
+      const matchedLeads = await svc.entities.Lead.filter({ client_id: clients[0].id, phone: phone_number });
       if (matchedLeads.length === 0) {
         // Try without country code — match last 10 digits
-        const allLeads = await base44.asServiceRole.entities.Lead.filter({ client_id: clients[0].id });
+        const allLeads = await svc.entities.Lead.filter({ client_id: clients[0].id });
         lead = allLeads.find(l => l.phone && l.phone.replace(/[^0-9]/g, '').slice(-10) === cleanPhone.slice(-10));
       } else {
         lead = matchedLeads[0];
       }
       // Auto-create lead if not found
       if (!lead) {
-        lead = await base44.asServiceRole.entities.Lead.create({
+        lead = await svc.entities.Lead.create({
           client_id: clients[0].id,
           phone: phone_number,
           name: phone_number,
@@ -157,7 +156,7 @@ Deno.serve(async (req) => {
       const kbDocs = [];
       for (const kbId of agent.knowledge_base_ids) {
         try {
-          const doc = await base44.asServiceRole.entities.KnowledgeBase.get(kbId);
+          const doc = await svc.entities.KnowledgeBase.get(kbId);
           if (doc && doc.content) kbDocs.push({ title: doc.title, content: doc.content });
         } catch (e) {
           console.log(`KB doc ${kbId} fetch failed: ${e.message}`);
@@ -171,7 +170,7 @@ Deno.serve(async (req) => {
           try {
             const blob = new Blob([kbContent], { type: 'text/plain' });
             const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
-            const uploadResult = await base44.asServiceRole.integrations.Core.UploadFile({ file });
+            const uploadResult = await svc.integrations.Core.UploadFile({ file });
             kbContentUrl = uploadResult.file_url;
             console.log(`KB content uploaded (${kbContent.length} chars) → ${kbContentUrl}`);
             kbContent = ''; // Clear inline content, use URL instead
@@ -187,7 +186,7 @@ Deno.serve(async (req) => {
     let leadContext = '';
     try {
       // Fetch last 3 call logs for this lead
-      const callLogs = await base44.asServiceRole.entities.CallLog.filter(
+      const callLogs = await svc.entities.CallLog.filter(
         { lead_id: lead.id }, '-created_date', 3
       );
 
@@ -247,7 +246,7 @@ Deno.serve(async (req) => {
     // Check for Shopify marketplace integration
     let shopifyContext = '';
     try {
-      const shopifyIntegrations = await base44.asServiceRole.entities.MarketplaceIntegration.filter({
+      const shopifyIntegrations = await svc.entities.MarketplaceIntegration.filter({
         client_id: agent.client_id,
         platform: 'shopify',
         status: 'active'
@@ -285,7 +284,7 @@ IMPORTANT RULES:
     ].filter(Boolean).join('\n');
 
     // Create call log with cached agent config (so streamAudio WebSocket can read it without cross-function calls)
-    const callLog = await base44.asServiceRole.entities.CallLog.create({
+    const callLog = await svc.entities.CallLog.create({
       client_id: agent.client_id,
       agent_id: agent.id,
       lead_id: lead.id,
@@ -356,7 +355,7 @@ IMPORTANT RULES:
         : (smartfloData.message || smartfloData.error || JSON.stringify(smartfloData));
       console.error('Smartflo API error:', errorMsg);
       
-      await base44.asServiceRole.entities.CallLog.update(callLog.id, {
+      await svc.entities.CallLog.update(callLog.id, {
         status: 'failed'
       });
       
@@ -369,13 +368,13 @@ IMPORTANT RULES:
     // Update call log with Smartflo response
     // Smartflo click_to_call returns: {success, ref_id, call_id (often null)}
     // The ref_id is the origination reference; the real PBX call_id comes later via webhook
-    await base44.asServiceRole.entities.CallLog.update(callLog.id, {
+    await svc.entities.CallLog.update(callLog.id, {
       call_sid: smartfloData.call_id || smartfloData.ref_id || smartfloData.call_sid || callLog.call_sid,
       status: 'ringing'
     });
 
     // Update lead status
-    await base44.asServiceRole.entities.Lead.update(lead.id, {
+    await svc.entities.Lead.update(lead.id, {
       status: 'contacted',
       last_call_date: new Date().toISOString()
     });
