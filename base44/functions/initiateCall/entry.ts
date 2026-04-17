@@ -37,15 +37,28 @@ Deno.serve(async (req) => {
       if (!user) {
         return Response.json({ success: false, error: 'Unauthorized. Provide x-auth-key, x-api-key, or a valid session token.' }, { status: 401 });
       }
-      console.log(`User auth: ${user.email}, id: ${user.id}`);
-      clients = await svc.entities.Client.filter({ user_id: user.id });
+      console.log(`User auth: ${user.email}, id: ${user.id}, role: ${user.role}`);
+      // Use user-scoped client for Client lookup (RLS allows user to read their own client record)
+      // Service role filter can fail with 401 for non-admin users
+      try {
+        clients = await base44.entities.Client.filter({ user_id: user.id });
+      } catch (e) {
+        console.log(`User-scoped Client filter by user_id failed: ${e.message}, trying service role`);
+        clients = await svc.entities.Client.filter({ user_id: user.id });
+      }
       if (clients.length === 0) {
         // Fallback: match by email
-        clients = await svc.entities.Client.filter({ email: user.email });
+        try {
+          clients = await base44.entities.Client.filter({ email: user.email });
+        } catch (e) {
+          console.log(`User-scoped Client filter by email failed: ${e.message}, trying service role`);
+          clients = await svc.entities.Client.filter({ email: user.email });
+        }
       }
       if (clients.length === 0) {
         return Response.json({ success: false, error: 'No client account found for user: ' + user.email }, { status: 400 });
       }
+      console.log(`Found client: ${clients[0].id}, company: ${clients[0].company_name}`);
     }
 
     const body = await req.json();
@@ -60,52 +73,82 @@ Deno.serve(async (req) => {
     }
 
     // Resolve agent — by record ID or by DID number
+    // Use service role for agent/lead lookups to avoid RLS issues with cross-entity reads
     let agent;
-    if (agent_id) {
-      agent = await svc.entities.Agent.get(agent_id);
-    } else {
-      // Look up agent whose assigned_did or assigned_dids contains the given DID
-      const cleanDid = agent_did.replace(/[^0-9]/g, '');
-      const allAgents = await svc.entities.Agent.filter({ client_id: clients[0].id });
-      agent = allAgents.find(a => {
-        const dids = [...(a.assigned_dids || []), a.assigned_did].filter(Boolean);
-        return dids.some(d => d.replace(/[^0-9]/g, '') === cleanDid || d.replace(/[^0-9]/g, '').endsWith(cleanDid) || cleanDid.endsWith(d.replace(/[^0-9]/g, '')));
-      });
+    try {
+      if (agent_id) {
+        agent = await svc.entities.Agent.get(agent_id);
+      } else {
+        const cleanDid = agent_did.replace(/[^0-9]/g, '');
+        const allAgents = await svc.entities.Agent.filter({ client_id: clients[0].id });
+        agent = allAgents.find(a => {
+          const dids = [...(a.assigned_dids || []), a.assigned_did].filter(Boolean);
+          return dids.some(d => d.replace(/[^0-9]/g, '') === cleanDid || d.replace(/[^0-9]/g, '').endsWith(cleanDid) || cleanDid.endsWith(d.replace(/[^0-9]/g, '')));
+        });
+      }
+    } catch (agentErr) {
+      console.log(`Service role agent lookup failed, trying user-scoped: ${agentErr.message}`);
+      if (agent_id) {
+        agent = await base44.entities.Agent.get(agent_id);
+      } else {
+        const cleanDid = agent_did.replace(/[^0-9]/g, '');
+        const allAgents = await base44.entities.Agent.filter({ client_id: clients[0].id });
+        agent = allAgents.find(a => {
+          const dids = [...(a.assigned_dids || []), a.assigned_did].filter(Boolean);
+          return dids.some(d => d.replace(/[^0-9]/g, '') === cleanDid || d.replace(/[^0-9]/g, '').endsWith(cleanDid) || cleanDid.endsWith(d.replace(/[^0-9]/g, '')));
+        });
+      }
     }
     if (!agent) {
       return Response.json({ error: agent_id ? 'Agent not found' : `No agent found with DID ${agent_did}` }, { status: 404 });
     }
+    console.log(`Resolved agent: ${agent.id}, name: ${agent.name}`);
 
     // Resolve lead — by record ID or by phone number
     let lead;
-    if (lead_id) {
-      lead = await svc.entities.Lead.get(lead_id);
-    } else {
-      // Look up lead by phone number within this client's leads
-      const cleanPhone = phone_number.replace(/[^0-9]/g, '');
-      const matchedLeads = await svc.entities.Lead.filter({ client_id: clients[0].id, phone: phone_number });
-      if (matchedLeads.length === 0) {
-        // Try without country code — match last 10 digits
-        const allLeads = await svc.entities.Lead.filter({ client_id: clients[0].id });
-        lead = allLeads.find(l => l.phone && l.phone.replace(/[^0-9]/g, '').slice(-10) === cleanPhone.slice(-10));
+    try {
+      if (lead_id) {
+        lead = await svc.entities.Lead.get(lead_id);
       } else {
-        lead = matchedLeads[0];
+        const cleanPhone = phone_number.replace(/[^0-9]/g, '');
+        const matchedLeads = await svc.entities.Lead.filter({ client_id: clients[0].id, phone: phone_number });
+        if (matchedLeads.length === 0) {
+          const allLeads = await svc.entities.Lead.filter({ client_id: clients[0].id });
+          lead = allLeads.find(l => l.phone && l.phone.replace(/[^0-9]/g, '').slice(-10) === cleanPhone.slice(-10));
+        } else {
+          lead = matchedLeads[0];
+        }
       }
-      // Auto-create lead if not found
-      if (!lead) {
-        lead = await svc.entities.Lead.create({
-          client_id: clients[0].id,
-          phone: phone_number,
-          name: phone_number,
-          status: 'new',
-          source: 'api'
-        });
-        console.log(`Auto-created lead ${lead.id} for phone ${phone_number}`);
+    } catch (leadErr) {
+      console.log(`Service role lead lookup failed, trying user-scoped: ${leadErr.message}`);
+      if (lead_id) {
+        lead = await base44.entities.Lead.get(lead_id);
+      } else {
+        const cleanPhone = phone_number.replace(/[^0-9]/g, '');
+        const matchedLeads = await base44.entities.Lead.filter({ client_id: clients[0].id, phone: phone_number });
+        if (matchedLeads.length === 0) {
+          const allLeads = await base44.entities.Lead.filter({ client_id: clients[0].id });
+          lead = allLeads.find(l => l.phone && l.phone.replace(/[^0-9]/g, '').slice(-10) === cleanPhone.slice(-10));
+        } else {
+          lead = matchedLeads[0];
+        }
       }
+    }
+    // Auto-create lead if not found
+    if (!lead) {
+      lead = await svc.entities.Lead.create({
+        client_id: clients[0].id,
+        phone: phone_number,
+        name: phone_number,
+        status: 'new',
+        source: 'api'
+      });
+      console.log(`Auto-created lead ${lead.id} for phone ${phone_number}`);
     }
     if (!lead) {
       return Response.json({ error: 'Lead not found' }, { status: 404 });
     }
+    console.log(`Resolved lead: ${lead.id}, name: ${lead.name}`);
 
     // Ownership validation
     const userClientIds = clients.map(c => c.id);
