@@ -37,17 +37,20 @@ Deno.serve(async (req) => {
       if (!user) {
         return Response.json({ success: false, error: 'Unauthorized. Provide x-auth-key, x-api-key, or a valid session token.' }, { status: 401 });
       }
+      console.log(`User auth: ${user.email}, id: ${user.id}`);
       clients = await svc.entities.Client.filter({ user_id: user.id });
       if (clients.length === 0) {
         // Fallback: match by email
         clients = await svc.entities.Client.filter({ email: user.email });
       }
       if (clients.length === 0) {
-        return Response.json({ success: false, error: 'No client account found' }, { status: 404 });
+        return Response.json({ success: false, error: 'No client account found for user: ' + user.email }, { status: 400 });
       }
     }
 
-    const { lead_id, agent_id, agent_did, phone_number } = await req.json();
+    const body = await req.json();
+    const { lead_id, agent_id, agent_did, phone_number } = body;
+    console.log(`Call request: agent_id=${agent_id}, agent_did=${agent_did}, phone=${phone_number}, lead_id=${lead_id}`);
 
     if (!phone_number) {
       return Response.json({ error: 'phone_number is required' }, { status: 400 });
