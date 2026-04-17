@@ -414,16 +414,25 @@ IMPORTANT RULES:
     // Update call log with Smartflo response
     // Smartflo click_to_call returns: {success, ref_id, call_id (often null)}
     // The ref_id is the origination reference; the real PBX call_id comes later via webhook
-    await svc.entities.CallLog.update(callLog.id, {
-      call_sid: smartfloData.call_id || smartfloData.ref_id || smartfloData.call_sid || callLog.call_sid,
-      status: 'ringing'
-    });
+    try {
+      await svc.entities.CallLog.update(callLog.id, {
+        call_sid: smartfloData.call_id || smartfloData.ref_id || smartfloData.call_sid || callLog.call_sid,
+        status: 'ringing'
+      });
+    } catch (clUpdateErr) {
+      console.log(`CallLog update failed (non-critical): ${clUpdateErr.message}`);
+    }
 
-    // Update lead status
-    await svc.entities.Lead.update(lead.id, {
-      status: 'contacted',
-      last_call_date: new Date().toISOString()
-    });
+    // Update lead status — use user-scoped client (RLS allows user to update their own leads)
+    try {
+      await base44.entities.Lead.update(lead.id, {
+        status: 'contacted',
+        last_call_date: new Date().toISOString()
+      });
+    } catch (leadUpdateErr) {
+      console.log(`Lead status update failed (non-critical): ${leadUpdateErr.message}`);
+      // Non-critical — call was already initiated successfully
+    }
 
     return Response.json({
       success: true,
