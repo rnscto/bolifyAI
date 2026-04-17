@@ -28,22 +28,35 @@ async function sendViaPlatformSMTP({ to, subject, html, fromName }) {
     throw new Error('Platform SMTP not configured. Set PLATFORM_SMTP_HOST, PLATFORM_SMTP_USER, PLATFORM_SMTP_PASS secrets.');
   }
 
-  const client = new SMTPClient({
-    user: smtpUser,
-    password: smtpPass,
-    host: smtpHost,
-    port: smtpPort,
-    tls: true,
-    timeout: 15000
-  });
   const displayName = fromName || 'Bolify AI';
-  const message = await client.sendAsync({
-    from: `${displayName} <${smtpFrom}>`,
-    to,
-    subject,
-    attachment: [{ data: html, alternative: true }]
-  });
-  return { provider: 'platform_smtp', status: 'sent', from: smtpFrom, message_id: message?.header?.['message-id'] || null };
+  try {
+    const client = new SMTPClient({
+      user: smtpUser,
+      password: smtpPass,
+      host: smtpHost,
+      port: smtpPort,
+      tls: true,
+      timeout: 15000
+    });
+    const message = await client.sendAsync({
+      from: `${displayName} <${smtpFrom}>`,
+      to,
+      subject,
+      attachment: [{ data: html, alternative: true }]
+    });
+    return { provider: 'platform_smtp', status: 'sent', from: smtpFrom, message_id: message?.header?.['message-id'] || null };
+  } catch (smtpErr) {
+    console.warn(`[sendClientEmail] Platform SMTP connection failed: ${smtpErr.message}, trying Base44 SendEmail`);
+    try {
+      const appId = Deno.env.get('BASE44_APP_ID');
+      const svc = createClient({ appId, asServiceRole: true });
+      await svc.integrations.Core.SendEmail({ to, subject, body: html, from_name: displayName });
+      return { provider: 'base44_integration', status: 'sent', from: 'base44', fallback: true };
+    } catch (b44Err) {
+      console.error(`[sendClientEmail] Base44 SendEmail also failed: ${b44Err.message}`);
+      throw new Error(`Email delivery failed. SMTP: ${smtpErr.message}. Configure an HTTP email provider (Resend/SendGrid) in your messaging settings.`);
+    }
+  }
 }
 
 // ─── Client provider: SMTP ───
