@@ -269,11 +269,66 @@
     },
     "api_auth_key": {
       "type": "string",
-      "description": "Platform authorization key for clients integrating Getway AI into their CRM. Used in x-auth-key header."
+      "description": "Platform authorization key for clients integrating Bolify AI into their CRM. Used in x-auth-key header."
     }
   },
   "required": [
     "company_name",
     "email"
-  ]
+  ],
+  "rls": {
+    "create": {
+      "_or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "created_by": "{{user.email}}"
+        }
+      ]
+    },
+    "read": {
+      "_or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "data.email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        }
+      ]
+    },
+    "update": {
+      "_or": [
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "data.user_id": "{{user.id}}"
+        },
+        {
+          "data.email": "{{user.email}}"
+        },
+        {
+          "created_by": "{{user.email}}"
+        }
+      ]
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
 }
