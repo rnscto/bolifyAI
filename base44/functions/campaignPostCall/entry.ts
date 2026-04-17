@@ -1,11 +1,7 @@
 import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
-import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
-
-const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
-const emailClient = new EmailClient(connStr);
 
 // ─── Send email using CLIENT's configured provider (via sendClientEmail function) ───
-// Falls back to platform ACS if client has no email config
+// Falls back to platform SMTP if client has no email config
 async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
   if (clientId) {
     try {
@@ -21,20 +17,30 @@ async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
       console.log(`[campaignPostCall] Email sent via ${result.data?.provider || 'unknown'} for client ${clientId}`);
       return result.data;
     } catch (e) {
-      console.warn(`[campaignPostCall] sendClientEmail failed, falling back to ACS: ${e.message}`);
+      console.warn(`[campaignPostCall] sendClientEmail failed, falling back to platform SMTP: ${e.message}`);
     }
   }
-  // Fallback: platform default ACS
-  const message = {
-    senderAddress: 'DoNotReply@vaaniai.io',
-    displayName: fromName || 'Getway AI',
-    content: { subject, html },
-    recipients: { to: [{ address: to }] }
-  };
-  const poller = await emailClient.beginSend(message);
-  const result = await poller.pollUntilDone();
-  if (result.status !== 'Succeeded') throw new Error(`ACS Email error: ${result.error?.message || result.status}`);
-  return result;
+  // Fallback: platform SMTP
+  const { SMTPClient } = await import('npm:emailjs@4.0.3');
+  const smtpHost = Deno.env.get('PLATFORM_SMTP_HOST');
+  const smtpUser = Deno.env.get('PLATFORM_SMTP_USER');
+  const smtpPass = Deno.env.get('PLATFORM_SMTP_PASS');
+  const smtpFrom = Deno.env.get('PLATFORM_SMTP_FROM') || smtpUser;
+  const smtpPort = parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587');
+
+  if (!smtpHost || !smtpUser || !smtpPass) {
+    throw new Error('Platform SMTP not configured');
+  }
+  const client = new SMTPClient({
+    user: smtpUser, password: smtpPass, host: smtpHost, port: smtpPort, tls: true, timeout: 15000
+  });
+  const displayName = fromName || 'Getway AI';
+  await client.sendAsync({
+    from: `${displayName} <${smtpFrom}>`,
+    to, subject,
+    attachment: [{ data: html, alternative: true }]
+  });
+  return { provider: 'platform_smtp', status: 'sent' };
 }
 
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
