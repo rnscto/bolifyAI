@@ -9,14 +9,14 @@ const CONSENTS = [
   {
     id: 'platform_tos',
     label: 'Terms of Service & Platform Usage',
-    description: 'I agree to Getway AI\'s Terms of Service and acceptable use policy for AI voice calling.',
+    description: 'I agree to Bolify AI\'s Terms of Service and acceptable use policy for AI voice calling.',
     icon: Scale,
     required: true,
   },
   {
     id: 'dpdp_processing',
     label: 'Data Processing (DPDP Act 2023)',
-    description: 'I consent to Getway AI processing voice recordings, transcripts, and lead data as a Data Processor under the DPDP Act. All data is stored on Indian servers.',
+    description: 'I consent to Bolify AI processing voice recordings, transcripts, and lead data as a Data Processor under the DPDP Act. All data is stored on Indian servers.',
     icon: Database,
     required: true,
   },

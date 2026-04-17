@@ -37,7 +37,7 @@ export default function AccountTypeStep({ selected, onSelect, onNext }) {
         <div className="w-16 h-16 bg-gradient-to-br from-orange-100 to-blue-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
           <Brain className="w-8 h-8 text-[#e67e22]" />
         </div>
-        <h2 className="text-2xl font-bold text-gray-900">How will you use Getway AI?</h2>
+        <h2 className="text-2xl font-bold text-gray-900">How will you use Bolify AI?</h2>
         <p className="text-gray-500 mt-2">Choose your account type to get a personalized experience</p>
       </div>
 

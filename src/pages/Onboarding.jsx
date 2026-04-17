@@ -312,7 +312,7 @@ FOR SPAM/TELEMARKETING:
           <div className="max-w-3xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-3">
               <img
-                src="https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/8e9cbc9d4_Getway_Logojpg.jpeg"
+                src="https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg"
                 alt="Bolify AI"
                 className="h-10 object-contain"
               />
