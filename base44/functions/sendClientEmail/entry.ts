@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.25';
+import { createClient, createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 /**
  * Centralized email sender that uses the CLIENT'S configured email provider
@@ -163,8 +163,14 @@ async function sendViaPostmark({ to, subject, html, fromAddress, fromName, confi
 
 Deno.serve(async (req) => {
   try {
-    const appId = Deno.env.get('BASE44_APP_ID');
-    const base44 = createClient({ appId, asServiceRole: true });
+    let base44;
+    try {
+      const reqClient = createClientFromRequest(req);
+      base44 = reqClient.asServiceRole;
+    } catch (_) {
+      const appId = Deno.env.get('BASE44_APP_ID');
+      base44 = createClient({ appId, asServiceRole: true });
+    }
 
     const { client_id, to, subject, html, from_name } = await req.json();
 
