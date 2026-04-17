@@ -49,7 +49,12 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
   const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
   const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
   const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+  let cleanBase = baseUrl;
+  const openaiIdx = cleanBase.indexOf('/openai');
+  if (openaiIdx > 0) cleanBase = cleanBase.substring(0, openaiIdx);
+  const apiProjectIdx = cleanBase.indexOf('/api/projects');
+  if (apiProjectIdx > 0) cleanBase = cleanBase.substring(0, apiProjectIdx);
+  const url = `${cleanBase}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
@@ -144,8 +149,16 @@ Deno.serve(async (req) => {
     }
 
     // ===== LOAD CONTEXT =====
-    const client = await svc.entities.Client.get(clientId);
+    let client = null;
+    try {
+      client = await svc.entities.Client.get(clientId);
+    } catch (e) {
+      console.warn(`[postCallFollowup] Client.get failed: ${e.message}, trying filter`);
+      const clients = await svc.entities.Client.filter({ id: clientId });
+      client = clients.length > 0 ? clients[0] : null;
+    }
     if (!client) {
+      console.log(`[postCallFollowup] Client ${clientId} not found, skipping`);
       return Response.json({ success: true, skipped: 'client_not_found' });
     }
 

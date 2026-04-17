@@ -48,20 +48,30 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
   const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
   const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
   const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messages: [
-        { role: 'system', content: systemPrompt || 'You are a helpful assistant. Always respond in valid JSON.' },
-        { role: 'user', content: prompt + (jsonSchema ? '\n\nRespond in JSON matching this schema: ' + JSON.stringify(jsonSchema) : '') }
-      ],
-      max_completion_tokens: 2000,
-      response_format: { type: "json_object" }
-    })
-  });
-  if (!res.ok) throw new Error(`Azure OpenAI error: ${res.status} ${await res.text()}`);
+  // Azure AI Foundry endpoints contain paths like /openai/v1/responses or /openai/v1
+  // Strip everything from /openai/ onward and rebuild the standard Azure OpenAI path
+  let cleanBase = baseUrl;
+  const openaiIdx = cleanBase.indexOf('/openai');
+  if (openaiIdx > 0) cleanBase = cleanBase.substring(0, openaiIdx);
+  const apiProjectIdx = cleanBase.indexOf('/api/projects');
+  if (apiProjectIdx > 0) cleanBase = cleanBase.substring(0, apiProjectIdx);
+  const url = `${cleanBase}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+  const headers = { 'api-key': apiKey, 'Content-Type': 'application/json' };
+  const bodyObj = {
+    messages: [
+      { role: 'system', content: systemPrompt || 'You are a helpful assistant. Always respond in valid JSON.' },
+      { role: 'user', content: prompt + (jsonSchema ? '\n\nRespond in JSON matching this schema: ' + JSON.stringify(jsonSchema) : '') }
+    ],
+    max_completion_tokens: 2000,
+    response_format: { type: "json_object" }
+  };
+  console.log(`[azureLLM] URL: ${url}`);
+  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(bodyObj) });
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`[azureLLM] Error ${res.status}: ${errText}`);
+    throw new Error(`Azure OpenAI error: ${res.status} ${errText}`);
+  }
   const data = await res.json();
   return JSON.parse(data.choices[0].message.content);
 }

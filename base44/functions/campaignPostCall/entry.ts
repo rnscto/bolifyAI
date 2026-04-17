@@ -51,7 +51,10 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
   // Normalize: strip /openai/... or /api/projects/... from AI Foundry endpoints
   const oIdx = baseUrl.indexOf('/openai/'); if (oIdx > 0) baseUrl = baseUrl.substring(0, oIdx);
   const pIdx = baseUrl.indexOf('/api/projects'); if (pIdx > 0) baseUrl = baseUrl.substring(0, pIdx);
-  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+  let cleanBase = baseUrl;
+  const oIdx2 = cleanBase.indexOf('/openai'); if (oIdx2 > 0) cleanBase = cleanBase.substring(0, oIdx2);
+  const pIdx2 = cleanBase.indexOf('/api/projects'); if (pIdx2 > 0) cleanBase = cleanBase.substring(0, pIdx2);
+  const url = `${cleanBase}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },

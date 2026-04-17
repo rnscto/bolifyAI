@@ -30,8 +30,16 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, skipped: 'already_deducted' });
     }
 
-    const client = await base44.entities.Client.get(clientId);
+    let client = null;
+    try {
+      client = await base44.entities.Client.get(clientId);
+    } catch (e) {
+      console.warn(`[deductCallUsage] Client.get failed: ${e.message}, trying filter`);
+      const clients = await base44.entities.Client.filter({ id: clientId });
+      client = clients.length > 0 ? clients[0] : null;
+    }
     if (!client) {
+      console.log(`[deductCallUsage] Client ${clientId} not found, skipping`);
       return Response.json({ success: true, skipped: 'client_not_found' });
     }
 
