@@ -1,4 +1,4 @@
-import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 Deno.serve(async (req) => {
   try {
@@ -9,9 +9,9 @@ Deno.serve(async (req) => {
     const authKey = req.headers.get('x-auth-key');
     const apiKey = req.headers.get('x-api-key');
     
-    // Always create a service-role client for entity operations
-    const appId = Deno.env.get('BASE44_APP_ID');
-    const svc = createClient({ appId, asServiceRole: true });
+    // Create service-role client from request for entity operations
+    const base44 = createClientFromRequest(req);
+    const svc = base44.asServiceRole;
     let clients;
 
     if (authKey) {
@@ -32,8 +32,7 @@ Deno.serve(async (req) => {
       }
     } else {
       // Standard user session auth
-      const userBase44 = createClientFromRequest(req);
-      const user = await userBase44.auth.me();
+      const user = await base44.auth.me();
       if (!user) {
         return Response.json({ success: false, error: 'Unauthorized. Provide x-auth-key, x-api-key, or a valid session token.' }, { status: 401 });
       }
