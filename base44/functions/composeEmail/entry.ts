@@ -91,15 +91,17 @@ Deno.serve(async (req) => {
       const { lead_id, client_id, activity_id, template_type } = payload;
 
       let lead = null, client = null, activity = null, callLog = null;
-      if (lead_id) lead = await base44.entities.Lead.get(lead_id);
-      if (client_id) client = await base44.entities.Client.get(client_id);
-      if (activity_id) activity = await base44.entities.Activity.get(activity_id);
+      try { if (lead_id) lead = await base44.entities.Lead.get(lead_id); } catch (e) { console.log(`Lead fetch failed: ${e.message}`); }
+      try { if (client_id) client = await base44.entities.Client.get(client_id); } catch (e) { console.log(`Client fetch failed: ${e.message}`); }
+      try { if (activity_id) activity = await base44.entities.Activity.get(activity_id); } catch (e) { console.log(`Activity fetch failed: ${e.message}`); }
 
       // Get latest call for this lead
-      if (lead_id) {
-        const calls = await base44.entities.CallLog.filter({ lead_id, status: 'completed' }, '-created_date', 1);
-        if (calls.length > 0) callLog = calls[0];
-      }
+      try {
+        if (lead_id) {
+          const calls = await base44.entities.CallLog.filter({ lead_id, status: 'completed' }, '-created_date', 1);
+          if (calls.length > 0) callLog = calls[0];
+        }
+      } catch (e) { console.log(`CallLog fetch failed: ${e.message}`); }
 
       // Get knowledge base content
       let kbContent = '';
