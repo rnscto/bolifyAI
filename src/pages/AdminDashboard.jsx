@@ -21,13 +21,14 @@ export default function AdminDashboard() {
   }, []);
 
   const loadStats = async () => {
-    const [clients, dids, calls, subscriptions, payments] = await Promise.all([
-      base44.entities.Client.list('-created_date'),
+    const [clientsRes, dids, calls, subscriptions, payments] = await Promise.all([
+      base44.functions.invoke('adminListClients', { action: 'list' }),
       base44.entities.DID.list(),
       base44.entities.CallLog.list('-created_date', 100),
       base44.entities.Subscription.list('-created_date'),
       base44.entities.Payment.list('-created_date', 10),
     ]);
+    const clients = clientsRes.data.clients || [];
 
     const today = new Date().toISOString().split('T')[0];
     const callsToday = calls.filter(c => c.created_date?.startsWith(today)).length;

@@ -56,12 +56,9 @@ export default function AdminClients() {
 
   const loadClients = async () => {
     try {
-      const [clientsData, usersData] = await Promise.all([
-        base44.entities.Client.list('-created_date'),
-        base44.entities.User.list()
-      ]);
-      setClients(clientsData);
-      setUsers(usersData);
+      const res = await base44.functions.invoke('adminListClients', { action: 'list' });
+      setClients(res.data.clients || []);
+      setUsers(res.data.users || []);
     } catch (error) {
       console.error('Error loading clients:', error);
       toast.error('Failed to load clients');
@@ -85,10 +82,10 @@ export default function AdminClients() {
       };
 
       if (editingClient) {
-        await base44.entities.Client.update(editingClient.id, clientData);
+        await base44.functions.invoke('adminListClients', { action: 'update', client_id: editingClient.id, data: clientData });
         toast.success('Client updated successfully');
       } else {
-        await base44.entities.Client.create(clientData);
+        await base44.functions.invoke('adminListClients', { action: 'create', data: clientData });
         toast.success('Client created successfully');
       }
 
@@ -118,7 +115,7 @@ export default function AdminClients() {
     if (!confirm('Are you sure you want to delete this client?')) return;
     
     try {
-      await base44.entities.Client.delete(id);
+      await base44.functions.invoke('adminListClients', { action: 'delete', client_id: id });
       toast.success('Client deleted');
       loadClients();
     } catch (error) {
