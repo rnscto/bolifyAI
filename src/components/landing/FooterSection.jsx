@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../../utils';
-import { Mail, Phone, MapPin } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 
 const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg";
 
@@ -75,31 +75,7 @@ export default function FooterSection() {
             </ul>
           </div>
 
-          {/* Contact */}
-          <div>
-            <h4 className="text-[#0097a7] font-semibold mb-4">Contact Us</h4>
-            <ul className="space-y-3 text-sm">
-              <li>
-                <a href="tel:+919255522544" className="flex items-center gap-2 text-gray-500 hover:text-[#00bcd4] transition-colors">
-                  <Phone className="w-4 h-4 text-[#00bcd4]" />
-                  92555-22544
-                </a>
-              </li>
-              <li>
-                <a href="mailto:connect@getway.in" className="flex items-center gap-2 text-gray-500 hover:text-[#00bcd4] transition-colors">
-                  <Mail className="w-4 h-4 text-[#00bcd4]" />
-                  connect@getway.in
-                </a>
-              </li>
-            </ul>
 
-            <h4 className="text-[#0097a7] font-semibold mt-6 mb-3">Data Protection Officer</h4>
-            <div className="text-sm text-gray-500 space-y-1">
-              <p className="font-medium text-gray-700">Bijendra Saini</p>
-              <p>connect@getway.in</p>
-              <p>+91-9255522544</p>
-            </div>
-          </div>
         </div>
       </div>
 
