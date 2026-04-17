@@ -308,7 +308,7 @@ export default function APIDocs() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-emerald-800">
-            Use this key in the <code className="bg-white px-1.5 py-0.5 rounded border border-emerald-200 text-xs">x-auth-key</code> header when integrating Getway AI into your CRM or any third-party system.
+            Use this key in the <code className="bg-white px-1.5 py-0.5 rounded border border-emerald-200 text-xs">x-auth-key</code> header when integrating Bolify AI into your CRM or any third-party system.
           </p>
           {authKeyLoading ? (
             <div className="flex items-center gap-2">
@@ -418,7 +418,7 @@ export default function APIDocs() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <p className="text-sm text-gray-600">External CRM pushes leads, contacts, deals, or activities into your Getway AI platform.</p>
+          <p className="text-sm text-gray-600">External CRM pushes leads, contacts, deals, or activities into your Bolify AI platform.</p>
           
           <div>
             <h4 className="font-semibold text-sm mb-2">Supported Actions</h4>
@@ -648,7 +648,7 @@ Body:
         <CardContent className="space-y-3">
           <p className="text-sm text-gray-600">
             If your CRM uses different field names, configure field mapping in your CRM Integration settings. 
-            The mapping translates between your CRM's field names and Getway AI's internal fields.
+            The mapping translates between your CRM's field names and Bolify AI's internal fields.
           </p>
           <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
 {`// Example field_mapping in CRM Integration settings:

@@ -34,7 +34,7 @@ async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
   const client = new SMTPClient({
     user: smtpUser, password: smtpPass, host: smtpHost, port: smtpPort, tls: true, timeout: 15000
   });
-  const displayName = fromName || 'Getway AI';
+  const displayName = fromName || 'Bolify AI';
   await client.sendAsync({
     from: `${displayName} <${smtpFrom}>`,
     to, subject,
@@ -635,7 +635,7 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
           { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } } }
         );
         await sendLeadEmail({
-          to: lead.email, fromName: client?.company_name || 'VaaniAI',
+          to: lead.email, fromName: client?.company_name || 'Bolify AI',
           subject: emailContent.subject, clientId: campaign.client_id,
           html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${emailContent.body_html}</div>`
         });
@@ -836,7 +836,7 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
           { type: "object", properties: { subject: { type: "string" }, body_html: { type: "string" } } }
         );
         await sendLeadEmail({
-          to: lead.email, fromName: client?.company_name || 'VaaniAI',
+          to: lead.email, fromName: client?.company_name || 'Bolify AI',
           subject: emailContent.subject, clientId: campaign.client_id,
           html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">${emailContent.body_html}</div>`
         });

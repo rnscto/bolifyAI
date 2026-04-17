@@ -89,7 +89,7 @@ export default function FeaturesSection() {
           </div>
           <h2 className="text-4xl font-bold text-gray-900 mb-4">Business AI Features to Close More Deals</h2>
           <h3 className="text-lg text-gray-500 max-w-2xl mx-auto font-normal">
-            From AI voice calling to CRM pipeline automation — Getway AI is the all-in-one AI calling software for Indian businesses.
+            From AI voice calling to CRM pipeline automation — Bolify AI is the all-in-one AI calling software for Indian businesses.
           </h3>
         </div>
 

@@ -102,7 +102,7 @@ export default function PartnerReferral() {
             <CardContent className="pt-8 pb-8">
               <CheckCircle2 className="w-16 h-16 mx-auto mb-4" style={{ color: brandColor }} />
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Thank You!</h2>
-              <p className="text-gray-600 mb-4">Your interest has been recorded. Our team will contact you shortly to set up your Getway AI account.</p>
+              <p className="text-gray-600 mb-4">Your interest has been recorded. Our team will contact you shortly to set up your Bolify AI account.</p>
               <Badge style={{ backgroundColor: `${brandColor}20`, color: brandColor }}>Referred by {partner.company_name || partner.name}</Badge>
             </CardContent>
           </Card>
@@ -141,7 +141,7 @@ export default function PartnerReferral() {
         {/* Signup Form */}
         <Card className="max-w-xl mx-auto mb-16">
           <CardHeader>
-            <CardTitle>Get Started with Getway AI</CardTitle>
+            <CardTitle>Get Started with Bolify AI</CardTitle>
             <CardDescription>Fill in your details and our team will set you up within 24 hours.</CardDescription>
           </CardHeader>
           <CardContent>
@@ -172,7 +172,7 @@ export default function PartnerReferral() {
               </Button>
 
               <p className="text-xs text-gray-400 text-center">
-                Referred by <strong>{partner.company_name || partner.name}</strong> • Powered by Getway AI
+                Referred by <strong>{partner.company_name || partner.name}</strong> • Powered by Bolify AI
               </p>
             </form>
           </CardContent>

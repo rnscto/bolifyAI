@@ -10,40 +10,40 @@ import {
 
 const faqs = [
   {
-    q: "What is Getway AI?",
-    a: "Getway AI is India's Business Automation Platform with two products: (1) Business AI Agent — automates outbound sales calls, qualifies leads, and manages your CRM 24/7; (2) Personal AI Assistant — answers your incoming calls, screens spam, takes messages, and keeps you in control via WhatsApp. Both work in Hindi and English."
+    q: "What is Bolify AI?",
+    a: "Bolify AI is India's Business Automation Platform with two products: (1) Business AI Agent — automates outbound sales calls, qualifies leads, and manages your CRM 24/7; (2) Personal AI Assistant — answers your incoming calls, screens spam, takes messages, and keeps you in control via WhatsApp. Both work in Hindi and English."
   },
   {
     q: "How does the Personal AI Call Assistant work?",
-    a: "Simply forward your calls to your Getway AI number. The AI answers on your behalf, identifies who's calling and why, classifies calls (Family/Business/Promotional/Spam), and sends you real-time WhatsApp alerts. You can reply with instructions like 'tell them I'm busy' or 'transfer to me' — all while staying private."
+    a: "Simply forward your calls to your Bolify AI number. The AI answers on your behalf, identifies who's calling and why, classifies calls (Family/Business/Promotional/Spam), and sends you real-time WhatsApp alerts. You can reply with instructions like 'tell them I'm busy' or 'transfer to me' — all while staying private."
   },
   {
     q: "Can I control what my AI assistant says during a live call?",
-    a: "Yes! Getway AI's owner-in-the-loop feature sends you real-time updates during calls via WhatsApp. You can instruct the AI mid-call — 'tell them to call back at 5 PM', 'schedule a meeting for tomorrow', or 'transfer the call to me'. The AI follows your instructions instantly."
+    a: "Yes! Bolify AI's owner-in-the-loop feature sends you real-time updates during calls via WhatsApp. You can instruct the AI mid-call — 'tell them to call back at 5 PM', 'schedule a meeting for tomorrow', or 'transfer the call to me'. The AI follows your instructions instantly."
   },
   {
     q: "How much does the Personal AI Assistant cost?",
     a: "The Personal AI Assistant is ₹1,999/month + GST with a 7-day free trial. The Business AI Agent starts at ₹14,999/month per channel + GST, and the Business + CRM plan is ₹19,999/month per channel + GST. No credit card required for the free trial."
   },
   {
-    q: "Which languages does Getway AI support?",
-    a: "Getway AI supports English, Hindi, and bilingual (Hinglish) conversations. The AI automatically adapts to the language preferred by the caller."
+    q: "Which languages does Bolify AI support?",
+    a: "Bolify AI supports English, Hindi, and bilingual (Hinglish) conversations. The AI automatically adapts to the language preferred by the caller."
   },
   {
     q: "Does the AI disclose that it's not a real person?",
-    a: "Yes, Getway AI complies with TRAI and DPDP regulations. The AI identifies itself appropriately as an AI assistant at the start of conversations. For personal accounts, it introduces itself as your personal assistant without revealing your personal details."
+    a: "Yes, Bolify AI complies with TRAI and DPDP regulations. The AI identifies itself appropriately as an AI assistant at the start of conversations. For personal accounts, it introduces itself as your personal assistant without revealing your personal details."
   },
   {
     q: "Which industries does the Business AI Agent support?",
-    a: "Getway AI supports 23+ industries including Real Estate, Healthcare, Education, Insurance, SaaS, Automobile, E-Commerce, and more. Each gets pre-built CRM templates and AI-trained voice agents."
+    a: "Bolify AI supports 23+ industries including Real Estate, Healthcare, Education, Insurance, SaaS, Automobile, E-Commerce, and more. Each gets pre-built CRM templates and AI-trained voice agents."
   },
   {
-    q: "Can Getway AI schedule meetings from my calls?",
+    q: "Can Bolify AI schedule meetings from my calls?",
     a: "Yes! Both the Personal and Business products can detect meeting requests during calls and schedule them. The Personal AI Assistant will confirm with you via WhatsApp before scheduling."
   },
   {
     q: "Is there a free trial?",
-    a: "Yes, Getway AI offers a 7-day free trial for both Personal and Business plans with full access to all features. No credit card required."
+    a: "Yes, Bolify AI offers a 7-day free trial for both Personal and Business plans with full access to all features. No credit card required."
   },
   {
     q: "How is my privacy protected with the Personal AI Assistant?",
@@ -63,7 +63,7 @@ export default function FAQSection() {
             Frequently Asked Questions About AI Voice Agents
           </h2>
           <p className="text-lg text-gray-500 max-w-xl mx-auto">
-            Everything you need to know about AI calling software, voice bots, and how Getway AI automates sales in India.
+            Everything you need to know about AI calling software, voice bots, and how Bolify AI automates sales in India.
           </p>
         </div>
 

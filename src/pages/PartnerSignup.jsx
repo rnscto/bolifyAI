@@ -58,7 +58,7 @@ export default function PartnerSignup() {
             <CardContent className="pt-8 pb-8">
               <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
               <h2 className="text-2xl font-bold text-gray-900 mb-2">Application Submitted!</h2>
-              <p className="text-gray-600 mb-4">Thank you for your interest in the Getway AI Partner Program. Our team will review your application and get back to you within 24-48 hours.</p>
+              <p className="text-gray-600 mb-4">Thank you for your interest in the Bolify AI Partner Program. Our team will review your application and get back to you within 24-48 hours.</p>
               <Badge className="bg-yellow-100 text-yellow-800">Pending Approval</Badge>
             </CardContent>
           </Card>
@@ -72,8 +72,8 @@ export default function PartnerSignup() {
       {/* Header */}
       <div className="bg-gradient-to-r from-[#1a365d] to-[#2563eb] text-white py-16 px-4">
         <div className="max-w-4xl mx-auto text-center">
-          <img src={LOGO_URL} alt="Getway AI" className="h-16 mx-auto mb-6 rounded-md" />
-          <h1 className="text-3xl md:text-4xl font-bold mb-3">Getway AI Partner Program</h1>
+          <img src={LOGO_URL} alt="Bolify AI" className="h-16 mx-auto mb-6 rounded-md" />
+          <h1 className="text-3xl md:text-4xl font-bold mb-3">Bolify AI Partner Program</h1>
           <p className="text-lg text-blue-100 max-w-2xl mx-auto">Earn 20% recurring revenue by referring businesses to India's #1 AI Voice Agent platform</p>
         </div>
       </div>
@@ -154,7 +154,7 @@ export default function PartnerSignup() {
                 {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Submit Application'}
               </Button>
 
-              <p className="text-xs text-gray-400 text-center">By applying, you agree to Getway AI's partner terms and conditions.</p>
+              <p className="text-xs text-gray-400 text-center">By applying, you agree to Bolify AI's partner terms and conditions.</p>
             </form>
           </CardContent>
         </Card>

@@ -47,7 +47,7 @@ export default function LeadCaptureForm({ conversationTranscript, visitorInfo, o
 
       try {
         const analysis = await base44.integrations.Core.InvokeLLM({
-          prompt: `Analyze this conversation between a website visitor and VaaniAI's voice assistant. Extract:
+          prompt: `Analyze this conversation between a website visitor and Bolify AI's voice assistant. Extract:
 1. Intent: Is the visitor "exploring" (just learning), "comparing" (evaluating options), "ready_to_buy" (wants to purchase), or "curious" (casual interest)?
 2. Sentiment: Is the visitor "positive", "neutral", "skeptical", or "negative"?
 3. Summary: A 2-3 sentence summary of the conversation and visitor's needs.

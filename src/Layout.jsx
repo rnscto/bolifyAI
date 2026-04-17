@@ -230,7 +230,7 @@ export default function Layout({ children, currentPageName }) {
           {/* Logo */}
           <div className="flex items-center justify-between p-6 border-b">
             <div className="flex items-center gap-2">
-              <img src="https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/8e9cbc9d4_Getway_Logojpg.jpeg" alt="Getway AI" className="h-[56px] object-contain rounded-md" />
+              <img src="https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg" alt="Bolify AI" className="h-[56px] object-contain rounded-md" />
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -326,7 +326,7 @@ export default function Layout({ children, currentPageName }) {
             <div className="flex-1 lg:flex lg:justify-end">
               <div className="text-sm text-gray-600">
                 {isAdmin ? (
-                  <span className="font-medium text-[#0097a7]">Admin Panel — Getway AI</span>
+                  <span className="font-medium text-[#0097a7]">Admin Panel — Bolify AI</span>
                 ) : (
                   <span>
                     {client?.billing_type === 'unlimited' ? (

@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '../../utils';
 
-const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/8e9cbc9d4_Getway_Logojpg.jpeg";
+const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);
@@ -46,7 +46,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-18 py-2">
           <a href="#" className="flex items-center gap-2 shrink-0">
-            <img src={LOGO_URL} alt="Getway AI" className="h-[60px] object-contain rounded-md" />
+            <img src={LOGO_URL} alt="Bolify AI" className="h-[60px] object-contain rounded-md" />
           </a>
 
           {/* Desktop nav */}

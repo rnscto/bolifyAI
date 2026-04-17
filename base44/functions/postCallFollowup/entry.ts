@@ -35,7 +35,7 @@ async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
   const client = new SMTPClient({
     user: smtpUser, password: smtpPass, host: smtpHost, port: smtpPort, tls: true, timeout: 15000
   });
-  const displayName = fromName || 'Getway AI';
+  const displayName = fromName || 'Bolify AI';
   await client.sendAsync({
     from: `${displayName} <${smtpFrom}>`,
     to, subject,
@@ -225,7 +225,7 @@ Generate the subject line and HTML body.`,
     ${aiContent.body_html}
     <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 24px 0;" />
     <p style="color: #94a3b8; font-size: 12px; text-align: center;">
-      Sent by ${client.company_name} powered by Getway AI
+      Sent by ${client.company_name} powered by Bolify AI
     </p>
   </div>
 </div>`;
@@ -440,7 +440,7 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
       console.log(`[postCallFollowup] Retention outreach for expired client: ${client.company_name}`);
 
       const retentionEmail = await azureLLM(
-        `You are Getway AI's retention email specialist. Write a personalized retention email for a platform client who hasn't subscribed.
+        `You are Bolify AI's retention email specialist. Write a personalized retention email for a platform client who hasn't subscribed.
 
 CLIENT CONTEXT:
 - Company: ${client.company_name}
@@ -480,13 +480,13 @@ INSTRUCTIONS:
       try {
         await sendLeadEmail({
           to: client.email,
-          fromName: 'Getway AI',
+          fromName: 'Bolify AI',
           subject: retentionEmail.subject,
           clientId: clientId,
           html: `
 <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
   <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 24px 30px; border-radius: 12px 12px 0 0; text-align: center;">
-    <h2 style="color: white; margin: 0;">Getway AI</h2>
+    <h2 style="color: white; margin: 0;">Bolify AI</h2>
     <p style="color: #a0aec0; margin: 4px 0 0 0; font-size: 13px;">AI Voice Calling Platform</p>
   </div>
   <div style="padding: 30px; background: white; border: 1px solid #e2e8f0; border-top: none;">
@@ -497,7 +497,7 @@ INSTRUCTIONS:
     <p style="margin: 0; font-weight: bold; color: #744210;">🎉 ${retentionConfig.active_offer}${retentionConfig.offer_code ? ' — Use code: ' + retentionConfig.offer_code : ''}</p>
   </div>` : ''}
   <div style="padding: 20px 30px; background: #f7fafc; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px; text-align: center;">
-    <a href="https://getway.ai" style="display: inline-block; background: linear-gradient(135deg, #e67e22, #d35400); color: white; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Subscribe Now — ₹6,500/mo</a>
+    <a href="https://bolify.ai" style="display: inline-block; background: linear-gradient(135deg, #e67e22, #d35400); color: white; padding: 14px 40px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Subscribe Now — ₹6,500/mo</a>
     <p style="color: #a0aec0; font-size: 12px; margin-top: 12px;">Questions? Reply to this email or call us.</p>
   </div>
 </div>`
@@ -544,7 +544,7 @@ INSTRUCTIONS:
       if (client.phone) {
         try {
           const retentionRCS = await azureLLM(
-            `Write a short retention RCS/SMS (max 160 chars) for ${client.company_name}. Account expired. ${retentionConfig.active_offer ? 'Offer: ' + retentionConfig.active_offer : ''} Mention Getway AI. Include urgency.`,
+            `Write a short retention RCS/SMS (max 160 chars) for ${client.company_name}. Account expired. ${retentionConfig.active_offer ? 'Offer: ' + retentionConfig.active_offer : ''} Mention Bolify AI. Include urgency.`,
             'You are an SMS copywriter. Always respond in valid JSON.',
             { type: "object", properties: { message: { type: "string" } } }
           );

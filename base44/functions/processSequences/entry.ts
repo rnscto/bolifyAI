@@ -34,7 +34,7 @@ async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
   const client = new SMTPClient({
     user: smtpUser, password: smtpPass, host: smtpHost, port: smtpPort, tls: true, timeout: 15000
   });
-  const displayName = fromName || 'Getway AI';
+  const displayName = fromName || 'Bolify AI';
   await client.sendAsync({
     from: `${displayName} <${smtpFrom}>`,
     to, subject,
@@ -250,7 +250,7 @@ Return the adapted subject and body_html.`,
       bodyHtml = bodyHtml.replace(/\{\{name\}\}/g, enrollment.recipient_name || 'there');
 
       // Determine sender from pre-fetched cache
-      let fromName = 'Getway AI';
+      let fromName = 'Bolify AI';
       if (enrollment.client_id && clientMap[enrollment.client_id]?.company_name) {
         fromName = clientMap[enrollment.client_id].company_name;
       }

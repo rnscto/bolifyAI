@@ -25,10 +25,10 @@ export default function PrivacyPolicy() {
         <section className="mb-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">1. Introduction</h2>
           <p className="text-gray-600 leading-relaxed">
-            Getway Technology ("Company," "we," "us," or "our"), operating the brand <strong>Getway AI</strong>, 
+            Bolify AI Technology ("Company," "we," "us," or "our"), operating the brand <strong>Bolify AI</strong>, 
             is committed to protecting the privacy of its users ("you," "your"). 
             This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our 
-            AI-powered business automation platform and CRM services available at getway.in (the "Service").
+            AI-powered business automation platform and CRM services available at bolify.ai (the "Service").
           </p>
           <p className="text-gray-600 leading-relaxed mt-3">
             <strong>Registered Office:</strong> SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, Gurugram (HR) - 122001.
@@ -65,7 +65,7 @@ export default function PrivacyPolicy() {
           <h2 className="text-2xl font-bold text-gray-900 mb-4">3. How We Use Your Information</h2>
           <p className="text-gray-600 leading-relaxed">We use the collected information to:</p>
           <ul className="list-disc pl-6 text-gray-600 space-y-1 mt-2">
-            <li>Provide, operate, and maintain the Getway AI platform</li>
+            <li>Provide, operate, and maintain the Bolify AI platform</li>
             <li>Process transactions and send billing-related communications</li>
             <li>Enable AI voice agent functionality including call placement, transcription, and analysis</li>
             <li>Manage your CRM data and provide industry-specific features</li>
@@ -116,7 +116,7 @@ export default function PrivacyPolicy() {
             <li>Object to processing of your personal data</li>
           </ul>
           <p className="text-gray-600 leading-relaxed mt-3">
-            To exercise any of these rights, contact us at <a href="mailto:connect@getway.in" className="text-blue-600 hover:underline">connect@getway.in</a>.
+            To exercise any of these rights, contact us at <a href="mailto:connect@bolify.ai" className="text-blue-600 hover:underline">connect@bolify.ai</a>.
           </p>
         </section>
 
@@ -161,9 +161,9 @@ export default function PrivacyPolicy() {
           </p>
           <div className="bg-slate-50 rounded-lg p-4 mt-3 text-gray-600 text-sm">
             <p><strong>Bijendra Saini</strong> — Data Protection Officer</p>
-            <p><strong>Getway Technology</strong></p>
+            <p><strong>Bolify AI Technology</strong></p>
             <p>SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, Gurugram (HR) - 122001</p>
-            <p>Email: <a href="mailto:connect@getway.in" className="text-blue-600 hover:underline">connect@getway.in</a></p>
+            <p>Email: <a href="mailto:connect@bolify.ai" className="text-blue-600 hover:underline">connect@bolify.ai</a></p>
             <p>Phone: <a href="tel:+919255522544" className="text-blue-600 hover:underline">92555-22544</a></p>
           </div>
         </section>
@@ -174,9 +174,9 @@ export default function PrivacyPolicy() {
             If you have questions or concerns about this Privacy Policy, please contact us at:
           </p>
           <div className="bg-slate-50 rounded-lg p-4 mt-3 text-gray-600 text-sm">
-            <p><strong>Getway Technology</strong></p>
+            <p><strong>Bolify AI Technology</strong></p>
             <p>SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, Gurugram (HR) - 122001</p>
-            <p>Email: <a href="mailto:connect@getway.in" className="text-blue-600 hover:underline">connect@getway.in</a></p>
+            <p>Email: <a href="mailto:connect@bolify.ai" className="text-blue-600 hover:underline">connect@bolify.ai</a></p>
             <p>Phone: <a href="tel:+919255522544" className="text-blue-600 hover:underline">92555-22544</a></p>
           </div>
         </section>

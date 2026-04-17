@@ -313,7 +313,7 @@ FOR SPAM/TELEMARKETING:
             <div className="flex items-center justify-between mb-3">
               <img
                 src="https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/8e9cbc9d4_Getway_Logojpg.jpeg"
-                alt="Getway AI"
+                alt="Bolify AI"
                 className="h-10 object-contain"
               />
               <span className="text-sm text-gray-500">Step {step + 1} of {totalSteps}</span>

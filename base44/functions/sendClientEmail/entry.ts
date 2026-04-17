@@ -36,7 +36,7 @@ async function sendViaPlatformSMTP({ to, subject, html, fromName }) {
     tls: true,
     timeout: 15000
   });
-  const displayName = fromName || 'Getway AI';
+  const displayName = fromName || 'Bolify AI';
   const message = await client.sendAsync({
     from: `${displayName} <${smtpFrom}>`,
     to,
@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
       client = await base44.entities.Client.get(client_id);
     } catch (_) {}
 
-    const displayName = from_name || msgConfig?.email_from_name || client?.company_name || 'Getway AI';
+    const displayName = from_name || msgConfig?.email_from_name || client?.company_name || 'Bolify AI';
 
     // Check if client has a connected email provider
     if (msgConfig && msgConfig.email_provider && msgConfig.email_provider !== 'none' && msgConfig.email_status === 'connected') {

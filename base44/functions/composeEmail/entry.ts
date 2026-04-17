@@ -34,7 +34,7 @@ async function sendEmail({ to, subject, html, displayName, clientId }) {
   const client = new SMTPClient({
     user: smtpUser, password: smtpPass, host: smtpHost, port: smtpPort, tls: true, timeout: 15000
   });
-  const name = displayName || 'Getway AI';
+  const name = displayName || 'Bolify AI';
   await client.sendAsync({
     from: `${name} <${smtpFrom}>`,
     to, subject,
@@ -175,7 +175,7 @@ RULES:
 
       // Wrap in a nice template
       const brandColor = '#1e3a5f';
-      const companyName = from_name || 'VaaniAI';
+      const companyName = from_name || 'Bolify AI';
       const wrappedHtml = `
 <!DOCTYPE html>
 <html>
@@ -188,7 +188,7 @@ RULES:
       ${body_html}
     </div>
     <div style="background:#1f2937;border-radius:0 0 16px 16px;padding:20px 32px;text-align:center;">
-      <p style="color:#9ca3af;font-size:12px;margin:0;">Sent by <strong style="color:#d1d5db;">${companyName}</strong> • Powered by Getway AI</p>
+      <p style="color:#9ca3af;font-size:12px;margin:0;">Sent by <strong style="color:#d1d5db;">${companyName}</strong> • Powered by Bolify AI</p>
     </div>
   </div>
 </body>

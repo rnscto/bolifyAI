@@ -26,7 +26,7 @@ export default function CTABanner() {
             AI For Your Business. AI For You.
           </h2>
           <p className="text-cyan-100 mb-6 max-w-lg mx-auto">
-            Use code <span className="text-[#00e5ff] font-bold">GETWAY20</span> for 20% off. Start your 7-day free trial — no credit card required.
+            Use code <span className="text-[#00e5ff] font-bold">BOLIFY20</span> for 20% off. Start your 7-day free trial — no credit card required.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button

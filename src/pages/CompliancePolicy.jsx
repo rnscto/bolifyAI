@@ -15,7 +15,7 @@ export default function CompliancePolicy() {
             <ArrowLeft className="w-4 h-4 mr-1" /> Back to Home
           </Link>
           <div className="flex items-center gap-3 mb-4">
-            <img src={LOGO_URL} alt="Getway AI" className="h-12 object-contain rounded-md" />
+            <img src={LOGO_URL} alt="Bolify AI" className="h-12 object-contain rounded-md" />
           </div>
           <h1 className="text-3xl font-bold mb-2">Platform Data Retention & Compliance Policy</h1>
           <p className="text-blue-200">Version 2.1 — Effective March 2026</p>
@@ -37,7 +37,7 @@ export default function CompliancePolicy() {
               <Shield className="w-6 h-6 text-blue-600" /> 1. Introduction & Scope
             </h2>
             <p className="text-gray-600 mt-3">
-              Getway AI ("Platform"), operated by Getway Technology, 
+              Bolify AI ("Platform"), operated by Bolify AI Technology, 
               is an AI-powered business automation platform. This policy governs how we collect, process, store, and 
               delete personal data in compliance with Indian regulatory frameworks.
             </p>
@@ -192,9 +192,9 @@ export default function CompliancePolicy() {
               <p className="font-bold text-blue-900 text-lg">Satish Saini</p>
               <p className="text-blue-800 mt-1">Data Protection Officer</p>
               <div className="mt-3 space-y-1 text-sm text-blue-700">
-                <p>📧 Email: <a href="mailto:connect@getway.in" className="underline">connect@getway.in</a></p>
+                <p>📧 Email: <a href="mailto:connect@bolify.ai" className="underline">connect@bolify.ai</a></p>
                 <p>📞 Phone: <a href="tel:+919255522544" className="underline">92555-22544</a></p>
-                <p>🏢 Getway Technology</p>
+                <p>🏢 Bolify AI Technology</p>
                 <p>📍 SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, Gurugram (HR) - 122001</p>
               </div>
               <p className="text-xs text-blue-600 mt-3">
@@ -229,7 +229,7 @@ export default function CompliancePolicy() {
           </section>
 
           <p className="text-xs text-gray-400 text-center mt-8">
-            Last updated: March 2026 | Version 2.1 | © {new Date().getFullYear()} Getway Technology
+            Last updated: March 2026 | Version 2.1 | © {new Date().getFullYear()} Bolify AI Technology
           </p>
         </div>
       </div>

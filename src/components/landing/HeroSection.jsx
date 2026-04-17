@@ -7,7 +7,7 @@ import { createPageUrl } from '../../utils';
 import AnimatedWaveform from './AnimatedWaveform';
 import PulseRings from './PulseRings';
 
-const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/8e9cbc9d4_Getway_Logojpg.jpeg";
+const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg";
 
 export default function HeroSection() {
   return (
@@ -39,7 +39,7 @@ export default function HeroSection() {
             {/* Badge */}
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-[#00e5ff]/40 bg-[#00bcd4]/15 text-[#b2ebf2] text-sm font-medium mb-8">
               <Mic className="w-4 h-4" />
-              Business Automation Platform — Digital Way to Grow
+              Business Automation Platform — Speak · Connect · Automate
             </div>
 
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
@@ -105,7 +105,7 @@ export default function HeroSection() {
               
               {/* Logo display */}
               <div className="relative bg-white/10 backdrop-blur-sm border border-white/20 rounded-3xl p-8">
-                <img src={LOGO_URL} alt="Getway AI" className="w-80 h-auto drop-shadow-2xl rounded-xl" />
+                <img src={LOGO_URL} alt="Bolify AI" className="w-80 h-auto drop-shadow-2xl rounded-xl" />
                 
                 {/* Voice waveform overlay */}
                 <div className="absolute bottom-2 left-1/2 -translate-x-1/2">

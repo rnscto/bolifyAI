@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { createPageUrl } from '../../utils';
 import { Mail, Phone, MapPin } from 'lucide-react';
 
-const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/8e9cbc9d4_Getway_Logojpg.jpeg";
+const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg";
 
 export default function FooterSection() {
   return (
@@ -14,16 +14,16 @@ export default function FooterSection() {
           {/* Company Info */}
           <div className="md:col-span-2">
             <div className="mb-5">
-              <img src={LOGO_URL} alt="Getway AI" className="h-[64px] object-contain rounded-md" />
+              <img src={LOGO_URL} alt="Bolify AI" className="h-[64px] object-contain rounded-md" />
             </div>
-            <p className="text-xs text-[#00bcd4] font-bold tracking-wider uppercase mb-1">Digital Way to Grow</p>
+            <p className="text-xs text-[#00bcd4] font-bold tracking-wider uppercase mb-1">Speak · Connect · Automate</p>
             <p className="text-sm leading-relaxed max-w-sm mb-6 text-gray-500">
-              India's leading Business Automation Platform — AI CRM, AI Agent, IVR & WhatsApp automation for 23+ industries in Hindi & English.
+            India's leading Business Automation Platform — AI CRM, AI Agent, IVR & WhatsApp automation for 23+ industries in Hindi & English.
             </p>
             <div className="space-y-2 text-sm">
-              <p className="text-[#0097a7] font-semibold text-xs uppercase tracking-wider mb-3">
-                GETWAY TECHNOLOGY
-              </p>
+            <p className="text-[#0097a7] font-semibold text-xs uppercase tracking-wider mb-3">
+              BOLIFY AI TECHNOLOGY
+            </p>
               <div className="flex items-start gap-2 text-gray-600">
                 <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-[#00bcd4]" />
                 <span>SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, GURUGRAM (HR) - 122001</span>
@@ -109,7 +109,7 @@ export default function FooterSection() {
         <div className="h-1 bg-gradient-to-r from-[#00bcd4] via-[#00e5ff] to-[#00bcd4]" />
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-xs text-cyan-100">
-            © {new Date().getFullYear()} Getway AI — Business Automation Platform. All rights reserved.
+            © {new Date().getFullYear()} Bolify AI — Business Automation Platform. All rights reserved.
           </p>
           <div className="flex gap-6 text-xs">
             <Link to={createPageUrl('PrivacyPolicy')} className="text-cyan-200 hover:text-white transition-colors">

@@ -448,7 +448,7 @@ Deno.serve(async (req) => {
         }
 
         // ═══════════════════════════════════════════════════════════════
-        // PATH C: Platform client calling VaaniAI's own DID (support/billing)
+        // PATH C: Platform client calling Bolify AI's own DID (support/billing)
         // Original logic for identified platform clients.
         // ═══════════════════════════════════════════════════════════════
         if (matchedPlatformClient) {
@@ -469,7 +469,7 @@ Deno.serve(async (req) => {
           const pendingActivities = clientActivities.filter(a => a.status === 'scheduled');
 
           const aiAnalysis = await azureLLM(
-            `You are VaaniAI's intelligent call routing assistant. An incoming call has been received from a KNOWN registered client on VaaniAI's platform DID.
+            `You are Bolify AI's intelligent call routing assistant. An incoming call has been received from a KNOWN registered client on Bolify AI's platform DID.
 
 CALLER CONTEXT:
 - Company: ${matchedPlatformClient.company_name}
@@ -491,7 +491,7 @@ ${retentionConfig.custom_instructions ? `CUSTOM INSTRUCTIONS: ${retentionConfig.
 
 Determine: intent, routing, greeting, agent_context, talking_points, priority, follow_up_needed, follow_up_reason.
 Respond with JSON.`,
-            'You are VaaniAI call routing AI. Always respond in valid JSON.',
+            'You are Bolify AI call routing AI. Always respond in valid JSON.',
             {
               type: "object",
               properties: {
@@ -561,11 +561,11 @@ Respond with JSON.`,
         console.log('[smartfloWebhook] UNKNOWN caller on DID:', calledDID);
 
         const unknownAnalysis = await azureLLM(
-          `You are VaaniAI's call routing assistant. Unknown caller on number ${incomingNumber}.
+          `You are Bolify AI's call routing assistant. Unknown caller on number ${incomingNumber}.
 ${retentionConfig.active_offer ? `Active Offer: ${retentionConfig.active_offer}` : ''}
-VaaniAI is an AI voice calling platform for Indian businesses. Pricing starts at ₹6,500/month.
+Bolify AI is an AI voice calling platform for Indian businesses. Pricing starts at ₹6,500/month.
 Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_lead, suggested_response.`,
-          'You are VaaniAI call routing AI. Always respond in valid JSON.',
+          'You are Bolify AI call routing AI. Always respond in valid JSON.',
           {
             type: "object",
             properties: {

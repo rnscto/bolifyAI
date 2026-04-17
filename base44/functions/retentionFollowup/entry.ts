@@ -1,20 +1,16 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
-import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
-
-const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
-const emailClient = new EmailClient(connStr);
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 async function sendEmail({ to, subject, html, displayName }) {
-  const message = {
-    senderAddress: 'DoNotReply@vaaniai.io',
-    displayName: displayName || 'Getway AI',
-    content: { subject, html },
-    recipients: { to: [{ address: to }] }
-  };
-  const poller = await emailClient.beginSend(message);
-  const result = await poller.pollUntilDone();
-  if (result.status !== 'Succeeded') throw new Error(`ACS Email error: ${result.error?.message || result.status}`);
-  return result;
+  const { SMTPClient } = await import('npm:emailjs@4.0.3');
+  const smtpHost = Deno.env.get('PLATFORM_SMTP_HOST');
+  const smtpUser = Deno.env.get('PLATFORM_SMTP_USER');
+  const smtpPass = Deno.env.get('PLATFORM_SMTP_PASS');
+  const smtpFrom = Deno.env.get('PLATFORM_SMTP_FROM') || smtpUser;
+  const smtpPort = parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587');
+  if (!smtpHost || !smtpUser || !smtpPass) throw new Error('Platform SMTP not configured');
+  const client = new SMTPClient({ user: smtpUser, password: smtpPass, host: smtpHost, port: smtpPort, tls: true, timeout: 15000 });
+  await client.sendAsync({ from: `${displayName || 'Bolify AI'} <${smtpFrom}>`, to, subject, attachment: [{ data: html, alternative: true }] });
+  return { provider: 'platform_smtp', status: 'sent' };
 }
 
 Deno.serve(async (req) => {
@@ -42,18 +38,18 @@ Deno.serve(async (req) => {
       if (daysSinceExpiry === 3) {
         await sendEmail({
           to: client.email,
-          subject: `We miss you at Getway AI — your agent is waiting`,
+          subject: `We miss you at Bolify AI — your agent is waiting`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
-                <h1 style="color: white; margin: 0;">Getway AI</h1>
+                <h1 style="color: white; margin: 0;">Bolify AI</h1>
               </div>
               <div style="padding: 30px; background: white; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
                 <h2 style="color: #1a365d;">Hi ${client.company_name},</h2>
                 <p style="color: #4a5568; line-height: 1.6;">It's been 3 days since your trial ended. Your AI agent and all your training data are still saved.</p>
                 <p style="color: #4a5568; line-height: 1.6;">Reactivate now and pick up right where you left off — no setup needed.</p>
                 <div style="text-align: center; margin: 30px 0;">
-                  <a href="https://getway.ai" style="background: linear-gradient(135deg, #e67e22, #f39c12); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Reactivate My Account</a>
+                  <a href="https://bolify.ai" style="background: linear-gradient(135deg, #e67e22, #f39c12); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Reactivate My Account</a>
                 </div>
                 <p style="color: #718096; font-size: 13px; text-align: center;">Need help? Just reply to this email.</p>
               </div>
@@ -67,11 +63,11 @@ Deno.serve(async (req) => {
       if (daysSinceExpiry === 7) {
         await sendEmail({
           to: client.email,
-          subject: `Last chance: Your Getway AI data will be archived soon`,
+          subject: `Last chance: Your Bolify AI data will be archived soon`,
           html: `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
               <div style="background: linear-gradient(135deg, #1a365d, #2d3748); padding: 30px; text-align: center; border-radius: 12px 12px 0 0;">
-                <h1 style="color: white; margin: 0;">Getway AI</h1>
+                <h1 style="color: white; margin: 0;">Bolify AI</h1>
               </div>
               <div style="padding: 30px; background: white; border: 1px solid #e2e8f0; border-top: none; border-radius: 0 0 12px 12px;">
                 <h2 style="color: #1a365d;">Hi ${client.company_name},</h2>
@@ -81,7 +77,7 @@ Deno.serve(async (req) => {
                   <p style="margin: 0; color: #c53030;"><strong>Your data will be archived after 14 days.</strong> Subscribe to keep everything.</p>
                 </div>
                 <div style="text-align: center; margin: 30px 0;">
-                  <a href="https://getway.ai" style="background: #c53030; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Subscribe & Keep My Data</a>
+                  <a href="https://bolify.ai" style="background: #c53030; color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Subscribe & Keep My Data</a>
                 </div>
               </div>
             </div>

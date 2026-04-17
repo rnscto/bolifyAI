@@ -32,7 +32,7 @@ export default function PreChatForm({ onStart }) {
         <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-blue-50 flex items-center justify-center">
           <Mic className="w-7 h-7 text-blue-500" />
         </div>
-        <p className="text-sm font-semibold text-gray-800">Talk to VaaniAI</p>
+        <p className="text-sm font-semibold text-gray-800">Talk to Bolify AI</p>
         <p className="text-xs text-gray-500 mt-1 max-w-[260px] mx-auto">
           Share your details to get a personalized experience
         </p>

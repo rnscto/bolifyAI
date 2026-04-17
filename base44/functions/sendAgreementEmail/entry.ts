@@ -1,19 +1,15 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
-import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
-
-const ACS_ENDPOINT = Deno.env.get('AZURE_COMM_ENDPOINT');
-const ACS_KEY = Deno.env.get('AZURE_COMM_KEY');
-const SENDER = 'DoNotReply@vaaniai.io';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 
 async function sendEmail(to, subject, htmlBody) {
-  const client = new EmailClient(`endpoint=${ACS_ENDPOINT};accesskey=${ACS_KEY}`);
-  const message = {
-    senderAddress: SENDER,
-    content: { subject, html: htmlBody },
-    recipients: { to: [{ address: to }] },
-  };
-  const poller = await client.beginSend(message);
-  return await poller.pollUntilDone();
+  const { SMTPClient } = await import('npm:emailjs@4.0.3');
+  const smtpHost = Deno.env.get('PLATFORM_SMTP_HOST');
+  const smtpUser = Deno.env.get('PLATFORM_SMTP_USER');
+  const smtpPass = Deno.env.get('PLATFORM_SMTP_PASS');
+  const smtpFrom = Deno.env.get('PLATFORM_SMTP_FROM') || smtpUser;
+  const smtpPort = parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587');
+  if (!smtpHost || !smtpUser || !smtpPass) throw new Error('Platform SMTP not configured');
+  const client = new SMTPClient({ user: smtpUser, password: smtpPass, host: smtpHost, port: smtpPort, tls: true, timeout: 15000 });
+  await client.sendAsync({ from: `Bolify AI <${smtpFrom}>`, to, subject, attachment: [{ data: htmlBody, alternative: true }] });
 }
 
 Deno.serve(async (req) => {
@@ -57,7 +53,7 @@ Deno.serve(async (req) => {
             <p>You can view and download your signed agreement anytime from your Partner Dashboard.</p>
             <p style="color:#666;font-size:13px;margin-top:20px;">This is a legally binding digital agreement under the Information Technology Act, 2000.</p>
             <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />
-            <p style="color:#999;font-size:12px;">TECH BRAINBUCKS INFOSOFT PVT LTD | Getway AI</p>
+            <p style="color:#999;font-size:12px;">TECH BRAINBUCKS INFOSOFT PVT LTD | Bolify AI</p>
           </div>
         </div>`
       );
