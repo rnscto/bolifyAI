@@ -52,14 +52,23 @@ export default function Layout({ children, currentPageName }) {
       setUser(currentUser);
       
       if (currentUser.role !== 'admin') {
-        let clients = await base44.entities.Client.filter({ user_id: currentUser.id });
+        let clients = [];
+        try {
+          clients = await base44.entities.Client.filter({ user_id: currentUser.id });
+        } catch (e) {
+          console.log('Client filter by user_id failed:', e.message);
+        }
         // Fallback: match by email if no user_id-linked client found (e.g. admin-created accounts)
         if (clients.length === 0) {
-          const byEmail = await base44.entities.Client.filter({ email: currentUser.email });
-          if (byEmail.length > 0) {
-            // Link user_id for future lookups
-            await base44.entities.Client.update(byEmail[0].id, { user_id: currentUser.id });
-            clients = byEmail;
+          try {
+            const byEmail = await base44.entities.Client.filter({ email: currentUser.email });
+            if (byEmail.length > 0) {
+              // Link user_id for future lookups
+              try { await base44.entities.Client.update(byEmail[0].id, { user_id: currentUser.id }); } catch (_) {}
+              clients = byEmail;
+            }
+          } catch (e) {
+            console.log('Client filter by email failed:', e.message);
           }
         }
         if (clients.length > 0) {
@@ -97,9 +106,26 @@ export default function Layout({ children, currentPageName }) {
             }
           }
         } else {
-          // No client record - redirect to onboarding
-          window.location.href = createPageUrl('Onboarding');
-          return;
+          // No client record found — try broader search using created_by
+          try {
+            const byCreator = await base44.entities.Client.filter({ created_by: currentUser.email });
+            if (byCreator.length > 0) {
+              try { await base44.entities.Client.update(byCreator[0].id, { user_id: currentUser.id }); } catch (_) {}
+              setClient(byCreator[0]);
+              if (!byCreator[0].onboarding_completed) {
+                window.location.href = createPageUrl('Onboarding');
+                return;
+              }
+            } else {
+              console.log('No client found for user:', currentUser.email, currentUser.id);
+              window.location.href = createPageUrl('Onboarding');
+              return;
+            }
+          } catch (e) {
+            console.log('Client filter by created_by failed:', e.message);
+            window.location.href = createPageUrl('Onboarding');
+            return;
+          }
         }
       }
     } catch (error) {
