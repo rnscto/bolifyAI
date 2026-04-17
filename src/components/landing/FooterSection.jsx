@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../../utils';
-import { MapPin } from 'lucide-react';
+
 
 const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg";
 
@@ -20,15 +20,7 @@ export default function FooterSection() {
             <p className="text-sm leading-relaxed max-w-sm mb-6 text-gray-500">
             India's leading Business Automation Platform — AI CRM, AI Agent, IVR & WhatsApp automation for 23+ industries in Hindi & English.
             </p>
-            <div className="space-y-2 text-sm">
-            <p className="text-[#0097a7] font-semibold text-xs uppercase tracking-wider mb-3">
-              BOLIFY AI TECHNOLOGY
-            </p>
-              <div className="flex items-start gap-2 text-gray-600">
-                <MapPin className="w-4 h-4 mt-0.5 shrink-0 text-[#00bcd4]" />
-                <span>SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, GURUGRAM (HR) - 122001</span>
-              </div>
-            </div>
+
           </div>
 
           {/* Product Links */}
