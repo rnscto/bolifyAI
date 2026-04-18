@@ -138,9 +138,9 @@ async function saveCallRecord(session, reqId, duration) {
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    const { createClient } = await import('npm:@base44/sdk@0.8.23');
+    const sdkMod = session._sdkModule || await import('npm:@base44/sdk@0.8.23');
     const appId = Deno.env.get('BASE44_APP_ID');
-    const serviceClient = createClient({ appId, asServiceRole: true });
+    const serviceClient = sdkMod.createClient({ appId, asServiceRole: true });
 
     const rawEndpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT') || '';
     const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
@@ -1389,90 +1389,37 @@ Deno.serve(async (req) => {
   }
 
   // ─── Load agent config from CallLog cache ───
-  // Finds the matching CallLog for this WebSocket stream, extracts the cached agent config
+  // Uses pre-warmed SDK + CallLog data from smartfloSocket.onopen for speed
   async function loadAgentConfig() {
-    try {
-      const { createClient } = await import('npm:@base44/sdk@0.8.23');
-      const appId = Deno.env.get('BASE44_APP_ID');
-      const svc = createClient({ appId, asServiceRole: true });
-
+   const t0 = Date.now();
+   try {
+      // Re-use pre-warmed service client, or create fresh
+      if (!session._sdkModule) session._sdkModule = await import('npm:@base44/sdk@0.8.23');
+      const svc = session._warmSvc || session._sdkModule.createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
       let callLog = null;
-      const cutoff = new Date(Date.now() - 120000).toISOString(); // 2 minute window
+      const cutoff = new Date(Date.now() - 120000).toISOString();
+      const cleanCallee = session.calleeNumber ? session.calleeNumber.replace(/[^0-9]/g, '') : '';
+      const matchPhone = (list) => { const uc = list.filter(l => !l.stream_sid && l.created_date >= cutoff); if (!uc.length) return null; if (cleanCallee) { const pm = uc.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10)); if (pm) return pm; } return uc[0]; };
 
-      // ── Strategy 1: call_sid match (most reliable when formats align) ──
-      if (!callLog && session.callSid) {
-        const variants = [session.callSid];
-        // Smartflo WebSocket callSid may differ from API call_id — try numeric core
-        const numericCore = session.callSid.replace(/^[^-]*-/, '').replace(/\.[^.]*$/, '');
-        if (numericCore && numericCore !== session.callSid) variants.push(numericCore);
-        // Also try just digits
-        const digitsOnly = session.callSid.replace(/\D/g, '');
-        if (digitsOnly && digitsOnly.length > 5) variants.push(digitsOnly);
-
-        for (const sid of variants) {
-          if (callLog) break;
-          try {
-            const logs = await svc.entities.CallLog.filter({ call_sid: sid });
-            if (logs.length > 0) {
-              callLog = logs[0];
-              console.log(`[${reqId}] 🔍 call_sid match (${sid}): ${callLog.id}`);
-            }
-          } catch (e) {}
-        }
-      }
-
-      // ── Strategy 2: Recent unclaimed ringing/initiated calls (PARALLEL) ──
+      // ── PARALLEL: Fire ALL matching strategies at once ──
+      const sidV = [];
+      if (session.callSid) { sidV.push(session.callSid); const nc = session.callSid.replace(/^[^-]*-/, '').replace(/\.[^.]*$/, ''); if (nc && nc !== session.callSid) sidV.push(nc); const dg = session.callSid.replace(/\D/g, ''); if (dg && dg.length > 5) sidV.push(dg); }
+      const wd = session._warmCallLogs; // pre-fetched on smartfloSocket.onopen
+      const [sidRes, ringRaw, initRaw, broadRaw] = await Promise.all([
+        sidV.length > 0 ? Promise.all(sidV.map(sid => svc.entities.CallLog.filter({ call_sid: sid }).catch(() => []))) : [],
+        wd?.ringing ?? svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
+        wd?.initiated ?? svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => []),
+        wd?.recent ?? svc.entities.CallLog.list('-created_date', 15).catch(() => [])
+      ]);
+      // Evaluate in priority order
+      for (let i = 0; i < sidRes.length && !callLog; i++) { const l = Array.isArray(sidRes[i]) ? sidRes[i] : []; if (l.length > 0) { callLog = l[0]; console.log(`[${reqId}] 🔍 call_sid match (${sidV[i]}): ${callLog.id}`); } }
+      if (!callLog) { callLog = matchPhone(Array.isArray(ringRaw) ? ringRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Ringing match: ${callLog.id}`); }
+      if (!callLog) { callLog = matchPhone(Array.isArray(initRaw) ? initRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Initiated match: ${callLog.id}`); }
       if (!callLog) {
-        const cleanCallee = session.calleeNumber ? session.calleeNumber.replace(/[^0-9]/g, '') : '';
-        const matchPhone = (list) => {
-          const unclaimed = list.filter(l => !l.stream_sid && l.created_date >= cutoff);
-          if (unclaimed.length === 0) return null;
-          if (cleanCallee) {
-            const pm = unclaimed.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10));
-            if (pm) return pm;
-          }
-          return unclaimed[0];
-        };
-        try {
-          // Fire ringing + initiated queries in parallel
-          const [ringingRaw, initRaw] = await Promise.all([
-            svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
-            svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => [])
-          ]);
-          callLog = matchPhone(Array.isArray(ringingRaw) ? ringingRaw : []);
-          if (callLog) console.log(`[${reqId}] ⚡ Ringing match: ${callLog.id}`);
-          if (!callLog) { callLog = matchPhone(Array.isArray(initRaw) ? initRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Initiated match: ${callLog.id}`); }
-        } catch (e) { console.log(`[${reqId}] ⚠️ Strategy 2 failed: ${e.message}`); }
+        const cands = (Array.isArray(broadRaw) ? broadRaw : []).filter(l => !l.stream_sid && l.created_date >= cutoff && l.agent_config_cache?.system_prompt && ['initiated', 'ringing', 'answered'].includes(l.status));
+        if (cands.length > 0) { if (cleanCallee) { const pm = cands.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10)); if (pm) callLog = pm; } if (!callLog) callLog = cands[0]; if (callLog) console.log(`[${reqId}] 🔍 Broad match: ${callLog.id}`); }
       }
-
-      // ── Strategy 3: Broadest fallback ──
-      if (!callLog) {
-        try {
-          const allRecentRaw = await svc.entities.CallLog.list('-created_date', 15);
-          const allRecent = Array.isArray(allRecentRaw) ? allRecentRaw : [];
-          const candidates = allRecent.filter(l => !l.stream_sid && l.created_date >= cutoff && l.agent_config_cache?.system_prompt && ['initiated', 'ringing', 'answered'].includes(l.status));
-          if (candidates.length > 0) {
-            // Try phone match first
-            if (session.calleeNumber) {
-              const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '');
-              const phoneMatch = candidates.find(l => {
-                const logPhone = (l.callee_number || '').replace(/[^0-9]/g, '');
-                return logPhone.slice(-10) === cleanCallee.slice(-10);
-              });
-              if (phoneMatch) {
-                callLog = phoneMatch;
-                console.log(`[${reqId}] 🔍 Broad phone match: ${callLog.id} (${callLog.callee_number})`);
-              }
-            }
-            if (!callLog) {
-              callLog = candidates[0];
-              console.log(`[${reqId}] 🔍 Broad fallback match: ${callLog.id} (status=${callLog.status})`);
-            }
-          }
-        } catch (e) {
-          console.log(`[${reqId}] ⚠️ Broad fallback failed: ${e.message}`);
-        }
-      }
+      console.log(`[${reqId}] ⏱️ CallLog match: ${Date.now() - t0}ms`);
 
       // ── Strategy 4: INBOUND CALL — DID → Agent direct resolution ──
       // For inbound calls, the WebSocket connects BEFORE smartfloWebhook creates a CallLog.
@@ -1827,15 +1774,30 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
     }
   }
 
-  // ─── PRE-WARM: Connect to Azure Realtime immediately (before Smartflo sends 'start') ───
-  // This saves ~2-3 seconds by establishing the Realtime WebSocket during the ring phase
+  // ─── PRE-WARM: Connect to Azure Realtime + pre-import SDK immediately ───
   connectRealtime();
-  console.log(`[${reqId}] 🚀 Pre-warming Azure Realtime connection...`);
+  import('npm:@base44/sdk@0.8.23').then(mod => { session._sdkModule = mod; }).catch(() => {});
+  console.log(`[${reqId}] 🚀 Pre-warming Azure Realtime + SDK import...`);
 
   // ─── Smartflo WebSocket Handlers ───
 
   smartfloSocket.onopen = () => {
-    console.log(`[${reqId}] 🟢 Smartflo socket opened`);
+    console.log(`[${reqId}] 🟢 Smartflo socket opened — pre-fetching CallLogs`);
+    // Pre-warm: create service client and fetch ringing/initiated CallLogs BEFORE 'start' event
+    if (session._sdkModule) {
+      try {
+        const svc = session._sdkModule.createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+        session._warmSvc = svc;
+        Promise.all([
+          svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
+          svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => []),
+          svc.entities.CallLog.list('-created_date', 15).catch(() => [])
+        ]).then(([ringing, initiated, recent]) => {
+          session._warmCallLogs = { ringing, initiated, recent };
+          console.log(`[${reqId}] 🔥 Warm CallLogs ready: ${(Array.isArray(ringing)?ringing:[]).length}R/${(Array.isArray(initiated)?initiated:[]).length}I/${(Array.isArray(recent)?recent:[]).length}A`);
+        }).catch(() => {});
+      } catch (_) {}
+    }
   };
 
   smartfloSocket.onmessage = async (event) => {
