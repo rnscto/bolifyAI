@@ -1,21 +1,23 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
-import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
+import nodemailer from 'npm:nodemailer@6.9.14';
 
-const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
-const emailClient = new EmailClient(connStr);
-
-// ─── Send email via Azure Communication Services ───
+// ─── Send email via platform SMTP ───
 async function sendEmailViaACS({ to, fromName, subject, html }) {
-  const message = {
-    senderAddress: 'DoNotReply@vaaniai.io',
-    displayName: fromName || 'Getway AI',
-    content: { subject, html },
-    recipients: { to: [{ address: to }] }
-  };
-  const poller = await emailClient.beginSend(message);
-  const result = await poller.pollUntilDone();
-  if (result.status !== 'Succeeded') throw new Error(`ACS Email error: ${result.error?.message || result.status}`);
-  return result;
+  const host = Deno.env.get('PLATFORM_SMTP_HOST');
+  const port = parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587', 10);
+  const user = Deno.env.get('PLATFORM_SMTP_USER');
+  const pass = Deno.env.get('PLATFORM_SMTP_PASS');
+  const from = Deno.env.get('PLATFORM_SMTP_FROM') || user;
+  if (!host || !user || !pass) throw new Error('Platform SMTP not configured');
+
+  const transporter = nodemailer.createTransport({
+    host, port, secure: port === 465, auth: { user, pass }
+  });
+  const info = await transporter.sendMail({
+    from: `"${fromName || 'Bolify AI'}" <${from}>`,
+    to, subject, html
+  });
+  return info;
 }
 
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
