@@ -138,9 +138,9 @@ async function saveCallRecord(session, reqId, duration) {
       .map(t => `${t.speaker}: ${t.text}`)
       .join('\n');
 
-    const sdkMod = session._sdkModule || await import('npm:@base44/sdk@0.8.23');
+    const { createClient } = await import('npm:@base44/sdk@0.8.23');
     const appId = Deno.env.get('BASE44_APP_ID');
-    const serviceClient = sdkMod.createClient({ appId, asServiceRole: true });
+    const serviceClient = createClient({ appId, asServiceRole: true });
 
     const rawEndpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT') || '';
     const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
@@ -886,73 +886,59 @@ Deno.serve(async (req) => {
     return { order_number:o.name||`#${o.order_number}`, date:o.created_at?.substring(0,10), status:o.cancelled_at?'cancelled':(o.fulfillment_status||'unfulfilled'), payment:o.financial_status, total:`${o.currency} ${o.total_price}`, items:(o.line_items||[]).map(li=>`${li.title} x${li.quantity}`).join(', '), tracking:t.length>0?t:'no tracking yet', shipping_city:o.shipping_address?.city||'' };
   }
 
+  // ─── PHASE 1: Speak greeting IMMEDIATELY with minimal prompt (saves ~2-3s) ───
+  function triggerPhase1Greeting() {
+    if (session._greetingSent || session._phase1Applied) return;
+    const greeting = session.greetingMessage || '';
+    if (!greeting) { console.log(`[${reqId}] ⚡ No custom greeting — skipping Phase 1`); applySessionConfig(); return; }
+    session._phase1Applied = true;
+    session._greetingSent = true;
+    session.transcript.push({ speaker: 'AI', text: greeting });
+    const isHybrid = session.voiceEngine === 'azure_speech';
+    if (isHybrid) {
+      console.log(`[${reqId}] ⚡ P1 hybrid greeting: "${greeting.substring(0, 60)}"`);
+      session.chatHistory = [{ role: 'system', content: 'You are a helpful AI voice assistant.' }, { role: 'assistant', content: greeting }];
+      synthesizeWithAzureSpeech(greeting);
+      applySessionConfig(); // Phase 2 immediately (hybrid doesn't need delay)
+    } else {
+      console.log(`[${reqId}] ⚡ P1 realtime greeting: "${greeting.substring(0, 60)}"`);
+      sendToRealtime({ type: 'session.update', session: { input_audio_format: 'pcm16', output_audio_format: 'pcm16', modalities: ['text', 'audio'], voice: session.voiceType, instructions: 'Say exactly what the user asks. Do not add anything.', turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 }, input_audio_transcription: { model: 'whisper-1', language: 'hi' } }});
+      sendToRealtime({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '[SYSTEM: Say this exact greeting: "' + greeting + '"]' }] } });
+      sendToRealtime({ type: 'response.create' });
+      setTimeout(() => applySessionConfig(), 200); // Phase 2 after greeting starts generating
+    }
+  }
+
+  // ─── PHASE 2 / Full config: Apply complete system prompt, KB, tools ───
   function applySessionConfig() {
     const isHybrid = session.voiceEngine === 'azure_speech';
     const tools = buildToolDefinitions();
-    const sessionConfig = {
-      input_audio_format: 'pcm16',
-      input_audio_transcription: { model: 'whisper-1', language: 'hi' },
-      turn_detection: {
-        type: 'server_vad',
-        threshold: 0.7,
-        prefix_padding_ms: 300,
-        silence_duration_ms: 700
-      }
-    };
-
-    // Inject live IST timestamp + background noise handling instructions
     const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
     const timeInjection = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}. Use this to compute relative times.\n`;
-    const noiseHandling = `\n[AUDIO RULES] CRITICAL NOISE HANDLING FOR PHONE CALLS:
-(1) You are on a PHONE CALL in India where callers may be outdoors, in traffic, or in crowded places.
-(2) ONLY respond to CLEAR, DIRECTED human speech. If you receive garbled, unclear, or very short utterances (single syllables, repeated nonsense), DO NOT respond to them. Instead STAY SILENT and wait for the caller to speak clearly.
-(3) If you hear what sounds like background noise being transcribed as words (e.g., random syllables, repeated "bye-bye", wind sounds), IGNORE it completely. Do NOT say goodbye or end the call based on noise.
-(4) Only respond when you hear a COMPLETE, MEANINGFUL sentence or question from the caller.
-(5) If audio quality is consistently poor, say ONCE: "Aapki awaaz thodi unclear aa rahi hai, kya aap zara clearly bol sakte hain?" then wait.
-(6) Keep responses SHORT (1-2 sentences) to minimize interruption.
-(7) NEVER end the call based on a single unclear word. Only use end_call when there has been a clear, mutual goodbye exchange with 2+ clear sentences from the caller.\n`;
-
-    // Build transfer instructions if enabled
+    const noiseHandling = `\n[AUDIO RULES] CRITICAL NOISE HANDLING FOR PHONE CALLS:\n(1) You are on a PHONE CALL in India where callers may be outdoors, in traffic, or in crowded places.\n(2) ONLY respond to CLEAR, DIRECTED human speech. If you receive garbled, unclear, or very short utterances (single syllables, repeated nonsense), DO NOT respond to them. Instead STAY SILENT and wait for the caller to speak clearly.\n(3) If you hear what sounds like background noise being transcribed as words (e.g., random syllables, repeated "bye-bye", wind sounds), IGNORE it completely. Do NOT say goodbye or end the call based on noise.\n(4) Only respond when you hear a COMPLETE, MEANINGFUL sentence or question from the caller.\n(5) If audio quality is consistently poor, say ONCE: "Aapki awaaz thodi unclear aa rahi hai, kya aap zara clearly bol sakte hain?" then wait.\n(6) Keep responses SHORT (1-2 sentences) to minimize interruption.\n(7) NEVER end the call based on a single unclear word. Only use end_call when there has been a clear, mutual goodbye exchange with 2+ clear sentences from the caller.\n`;
     let transferInstructions = '';
     if (session.humanTransferNumber && session.enableAutoTransfer) {
-      transferInstructions = `\n\n--- HUMAN AGENT TRANSFER (AVAILABLE) ---
-You can transfer this call to a human agent using the transfer_to_human tool.
-WHEN TO TRANSFER:
-- Customer EXPLICITLY asks to speak to a human/real person/manager ("mujhe kisi insaan se baat karni hai", "connect me to your manager", "I want to talk to a real person")
-- Customer is clearly very frustrated and you cannot resolve their issue after 2+ attempts
-- The query requires actions you cannot perform (account changes, payments, etc.)
-WHEN NOT TO TRANSFER:
-- Customer is just asking questions you can answer
-- Customer is mildly confused — try to help first
-- Never transfer without telling the customer first
-BEFORE TRANSFERRING: Always say something like "Let me connect you to a human agent who can help you better. Please hold for a moment."`;
+      transferInstructions = `\n\n--- HUMAN AGENT TRANSFER (AVAILABLE) ---\nYou can transfer this call to a human agent using the transfer_to_human tool.\nWHEN TO TRANSFER:\n- Customer EXPLICITLY asks to speak to a human/real person/manager\n- Customer is clearly very frustrated and you cannot resolve their issue after 2+ attempts\n- The query requires actions you cannot perform (account changes, payments, etc.)\nWHEN NOT TO TRANSFER:\n- Customer is just asking questions you can answer\n- Customer is mildly confused — try to help first\n- Never transfer without telling the customer first\nBEFORE TRANSFERRING: Always say something like "Let me connect you to a human agent who can help you better. Please hold for a moment."`;
     }
-
+    // Prevent double greeting after Phase 2 upgrade
+    const greetingGuard = session._greetingSent ? '\n\nIMPORTANT: You have ALREADY greeted the customer. Do NOT greet again. Wait for the customer to speak next.' : '';
+    const sessionConfig = { input_audio_format: 'pcm16', input_audio_transcription: { model: 'whisper-1', language: 'hi' }, turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } };
     if (isHybrid) {
       sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
-      sessionConfig.modalities = ['text'];
-      sessionConfig.voice = 'alloy';
-      session.chatHistory = [{ role: 'system', content: timeInjection + noiseHandling + session.systemPrompt + transferInstructions }];
-      console.log(`[${reqId}] 🔀 Hybrid mode: Realtime STT → LLM → Azure Speech TTS (${session.voiceType})`);
+      sessionConfig.modalities = ['text']; sessionConfig.voice = 'alloy';
+      session.chatHistory = [{ role: 'system', content: timeInjection + noiseHandling + session.systemPrompt + transferInstructions + greetingGuard }];
+      if (session._greetingSent && session.greetingMessage) session.chatHistory.push({ role: 'assistant', content: session.greetingMessage });
+      console.log(`[${reqId}] 🔀 ${session._phase1Applied ? 'P2' : 'Full'} hybrid: STT → LLM → TTS (${session.voiceType})`);
     } else {
       sessionConfig.modalities = ['text', 'audio'];
-      sessionConfig.instructions = timeInjection + noiseHandling + session.systemPrompt + transferInstructions;
-      sessionConfig.voice = session.voiceType;
-      sessionConfig.output_audio_format = 'pcm16';
+      sessionConfig.instructions = timeInjection + noiseHandling + session.systemPrompt + transferInstructions + greetingGuard;
+      sessionConfig.voice = session.voiceType; sessionConfig.output_audio_format = 'pcm16';
     }
-
-    // Add tools if any are registered
-    if (tools.length > 0) {
-      sessionConfig.tools = tools;
-      sessionConfig.tool_choice = 'auto';
-      console.log(`[${reqId}] 🔧 ${tools.length} tool(s) registered with Realtime session`);
-    }
-
+    if (tools.length > 0) { sessionConfig.tools = tools; sessionConfig.tool_choice = 'auto'; console.log(`[${reqId}] 🔧 ${tools.length} tool(s) registered`); }
     sendToRealtime({ type: 'session.update', session: sessionConfig });
-    console.log(`[${reqId}] 📤 Session configured: engine=${session.voiceEngine}, voice=${session.voiceType}, tools=${tools.length}`);
-
-    // ─── TRIGGER INITIAL GREETING so the agent speaks first ───
-    triggerGreeting();
+    console.log(`[${reqId}] 📤 ${session._phase1Applied ? 'P2' : 'Full'} config: engine=${session.voiceEngine}, voice=${session.voiceType}, greetingSent=${session._greetingSent}`);
+    // Trigger greeting only if Phase 1 didn't already send it
+    if (!session._greetingSent) triggerGreeting();
   }
 
   // ─── Handle messages FROM Azure Realtime API ───
@@ -989,9 +975,9 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
         if (tools.length > 0) { sessionConfig.tools = tools; sessionConfig.tool_choice = 'auto'; }
         sendToRealtime({ type: 'session.update', session: sessionConfig });
       } else if (session._agentConfigReady) {
-        // First connection, agent config already loaded
-        console.log(`[${reqId}] ⚡ Agent config was ready before Realtime — applying immediately`);
-        applySessionConfig();
+        // First connection, agent config already loaded — try Phase 1 fast greeting
+        console.log(`[${reqId}] ⚡ Agent config was ready before Realtime — triggering Phase 1 greeting`);
+        triggerPhase1Greeting();
       } else {
         // Realtime connected first — send minimal config so audio can flow
         sendToRealtime({ type: 'session.update', session: {
@@ -1184,8 +1170,10 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
     else { sendToRealtime({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: inst }] } }); sendToRealtime({ type: 'response.create' }); }
   }
 
-  // ─── Trigger initial greeting so the AI speaks first ───
+  // ─── Trigger initial greeting so the AI speaks first (guarded against double-fire) ───
   function triggerGreeting() {
+    if (session._greetingSent) { console.log(`[${reqId}] 🛡️ Greeting already sent — skipping`); return; }
+    session._greetingSent = true;
     const isHybrid = session.voiceEngine === 'azure_speech';
     const greeting = session.greetingMessage || '';
 
@@ -1401,36 +1389,90 @@ BEFORE TRANSFERRING: Always say something like "Let me connect you to a human ag
   }
 
   // ─── Load agent config from CallLog cache ───
+  // Finds the matching CallLog for this WebSocket stream, extracts the cached agent config
   async function loadAgentConfig() {
-   const t0 = Date.now();
-   try {
-     // Re-use pre-warmed service client, or create fresh
-     if (!session._sdkModule) session._sdkModule = await import('npm:@base44/sdk@0.8.23');
-     const svc = session._warmSvc || session._sdkModule.createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
-     let callLog = null;
-     const cutoff = new Date(Date.now() - 120000).toISOString();
-     const cleanCallee = session.calleeNumber ? session.calleeNumber.replace(/[^0-9]/g, '') : '';
-     const matchPhone = (list) => { const uc = list.filter(l => !l.stream_sid && l.created_date >= cutoff); if (!uc.length) return null; if (cleanCallee) { const pm = uc.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10)); if (pm) return pm; } return uc[0]; };
+    try {
+      const { createClient } = await import('npm:@base44/sdk@0.8.23');
+      const appId = Deno.env.get('BASE44_APP_ID');
+      const svc = createClient({ appId, asServiceRole: true });
 
-     // ── PARALLEL: Fire ALL matching strategies at once ──
-     const sidV = [];
-     if (session.callSid) { sidV.push(session.callSid); const nc = session.callSid.replace(/^[^-]*-/, '').replace(/\.[^.]*$/, ''); if (nc && nc !== session.callSid) sidV.push(nc); const dg = session.callSid.replace(/\D/g, ''); if (dg && dg.length > 5) sidV.push(dg); }
-     const wd = session._warmCallLogs; // pre-fetched on smartfloSocket.onopen
-     const [sidRes, ringRaw, initRaw, broadRaw] = await Promise.all([
-       sidV.length > 0 ? Promise.all(sidV.map(sid => svc.entities.CallLog.filter({ call_sid: sid }).catch(() => []))) : [],
-       wd?.ringing ?? svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
-       wd?.initiated ?? svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => []),
-       wd?.recent ?? svc.entities.CallLog.list('-created_date', 15).catch(() => [])
-     ]);
-     // Evaluate in priority order
-     for (let i = 0; i < sidRes.length && !callLog; i++) { const l = Array.isArray(sidRes[i]) ? sidRes[i] : []; if (l.length > 0) { callLog = l[0]; console.log(`[${reqId}] 🔍 call_sid match (${sidV[i]}): ${callLog.id}`); } }
-     if (!callLog) { callLog = matchPhone(Array.isArray(ringRaw) ? ringRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Ringing match: ${callLog.id}`); }
-     if (!callLog) { callLog = matchPhone(Array.isArray(initRaw) ? initRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Initiated match: ${callLog.id}`); }
-     if (!callLog) {
-       const cands = (Array.isArray(broadRaw) ? broadRaw : []).filter(l => !l.stream_sid && l.created_date >= cutoff && l.agent_config_cache?.system_prompt && ['initiated', 'ringing', 'answered'].includes(l.status));
-       if (cands.length > 0) { if (cleanCallee) { const pm = cands.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10)); if (pm) callLog = pm; } if (!callLog) callLog = cands[0]; if (callLog) console.log(`[${reqId}] 🔍 Broad match: ${callLog.id}`); }
-     }
-     console.log(`[${reqId}] ⏱️ CallLog match: ${Date.now() - t0}ms`);
+      let callLog = null;
+      const cutoff = new Date(Date.now() - 120000).toISOString(); // 2 minute window
+
+      // ── Strategy 1: call_sid match (most reliable when formats align) ──
+      if (!callLog && session.callSid) {
+        const variants = [session.callSid];
+        // Smartflo WebSocket callSid may differ from API call_id — try numeric core
+        const numericCore = session.callSid.replace(/^[^-]*-/, '').replace(/\.[^.]*$/, '');
+        if (numericCore && numericCore !== session.callSid) variants.push(numericCore);
+        // Also try just digits
+        const digitsOnly = session.callSid.replace(/\D/g, '');
+        if (digitsOnly && digitsOnly.length > 5) variants.push(digitsOnly);
+
+        for (const sid of variants) {
+          if (callLog) break;
+          try {
+            const logs = await svc.entities.CallLog.filter({ call_sid: sid });
+            if (logs.length > 0) {
+              callLog = logs[0];
+              console.log(`[${reqId}] 🔍 call_sid match (${sid}): ${callLog.id}`);
+            }
+          } catch (e) {}
+        }
+      }
+
+      // ── Strategy 2: Recent unclaimed ringing/initiated calls (PARALLEL) ──
+      if (!callLog) {
+        const cleanCallee = session.calleeNumber ? session.calleeNumber.replace(/[^0-9]/g, '') : '';
+        const matchPhone = (list) => {
+          const unclaimed = list.filter(l => !l.stream_sid && l.created_date >= cutoff);
+          if (unclaimed.length === 0) return null;
+          if (cleanCallee) {
+            const pm = unclaimed.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10));
+            if (pm) return pm;
+          }
+          return unclaimed[0];
+        };
+        try {
+          // Fire ringing + initiated queries in parallel
+          const [ringingRaw, initRaw] = await Promise.all([
+            svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
+            svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => [])
+          ]);
+          callLog = matchPhone(Array.isArray(ringingRaw) ? ringingRaw : []);
+          if (callLog) console.log(`[${reqId}] ⚡ Ringing match: ${callLog.id}`);
+          if (!callLog) { callLog = matchPhone(Array.isArray(initRaw) ? initRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Initiated match: ${callLog.id}`); }
+        } catch (e) { console.log(`[${reqId}] ⚠️ Strategy 2 failed: ${e.message}`); }
+      }
+
+      // ── Strategy 3: Broadest fallback ──
+      if (!callLog) {
+        try {
+          const allRecentRaw = await svc.entities.CallLog.list('-created_date', 15);
+          const allRecent = Array.isArray(allRecentRaw) ? allRecentRaw : [];
+          const candidates = allRecent.filter(l => !l.stream_sid && l.created_date >= cutoff && l.agent_config_cache?.system_prompt && ['initiated', 'ringing', 'answered'].includes(l.status));
+          if (candidates.length > 0) {
+            // Try phone match first
+            if (session.calleeNumber) {
+              const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '');
+              const phoneMatch = candidates.find(l => {
+                const logPhone = (l.callee_number || '').replace(/[^0-9]/g, '');
+                return logPhone.slice(-10) === cleanCallee.slice(-10);
+              });
+              if (phoneMatch) {
+                callLog = phoneMatch;
+                console.log(`[${reqId}] 🔍 Broad phone match: ${callLog.id} (${callLog.callee_number})`);
+              }
+            }
+            if (!callLog) {
+              callLog = candidates[0];
+              console.log(`[${reqId}] 🔍 Broad fallback match: ${callLog.id} (status=${callLog.status})`);
+            }
+          }
+        } catch (e) {
+          console.log(`[${reqId}] ⚠️ Broad fallback failed: ${e.message}`);
+        }
+      }
 
       // ── Strategy 4: INBOUND CALL — DID → Agent direct resolution ──
       // For inbound calls, the WebSocket connects BEFORE smartfloWebhook creates a CallLog.
@@ -1785,31 +1827,15 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
     }
   }
 
-  // ─── PRE-WARM: Connect to Azure Realtime + pre-import SDK immediately ───
+  // ─── PRE-WARM: Connect to Azure Realtime immediately (before Smartflo sends 'start') ───
+  // This saves ~2-3 seconds by establishing the Realtime WebSocket during the ring phase
   connectRealtime();
-  import('npm:@base44/sdk@0.8.23').then(mod => { session._sdkModule = mod; }).catch(() => {});
-  console.log(`[${reqId}] 🚀 Pre-warming Azure Realtime + SDK import...`);
+  console.log(`[${reqId}] 🚀 Pre-warming Azure Realtime connection...`);
 
   // ─── Smartflo WebSocket Handlers ───
 
   smartfloSocket.onopen = () => {
-    console.log(`[${reqId}] 🟢 Smartflo socket opened — pre-fetching CallLogs`);
-    // Pre-warm: create service client and fetch ringing/initiated CallLogs BEFORE 'start' event
-    // This overlaps with the Smartflo handshake, saving ~400-600ms
-    if (session._sdkModule) {
-      try {
-        const svc = session._sdkModule.createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
-        session._warmSvc = svc;
-        Promise.all([
-          svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
-          svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => []),
-          svc.entities.CallLog.list('-created_date', 15).catch(() => [])
-        ]).then(([ringing, initiated, recent]) => {
-          session._warmCallLogs = { ringing, initiated, recent };
-          console.log(`[${reqId}] 🔥 Warm CallLogs ready: ${(Array.isArray(ringing)?ringing:[]).length}R/${(Array.isArray(initiated)?initiated:[]).length}I/${(Array.isArray(recent)?recent:[]).length}A`);
-        }).catch(() => {});
-      } catch (_) {}
-    }
+    console.log(`[${reqId}] 🟢 Smartflo socket opened`);
   };
 
   smartfloSocket.onmessage = async (event) => {
@@ -1871,9 +1897,9 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
         loadAgentConfig().then(() => {
           session._agentConfigReady = true;
           console.log(`[${reqId}] 🚀 Agent config ready: engine=${session.voiceEngine}, voice=${session.voiceType}`);
-          // If Realtime is already connected, apply config now
+          // If Realtime is already connected, trigger Phase 1 fast greeting
           if (session.realtimeReady) {
-            applySessionConfig();
+            triggerPhase1Greeting();
           }
         });
         return;
