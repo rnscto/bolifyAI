@@ -1,20 +1,22 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
-import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
-
-const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
-const emailClient = new EmailClient(connStr);
+import nodemailer from 'npm:nodemailer@6.9.14';
 
 async function sendEmail({ to, subject, html }) {
-  const message = {
-    senderAddress: 'DoNotReply@vaaniai.io',
-    displayName: 'Getway AI Tasks',
-    content: { subject, html },
-    recipients: { to: [{ address: to }] }
-  };
-  const poller = await emailClient.beginSend(message);
-  const result = await poller.pollUntilDone();
-  if (result.status !== 'Succeeded') throw new Error(`Email error: ${result.error?.message || result.status}`);
-  return result;
+  const host = Deno.env.get('PLATFORM_SMTP_HOST');
+  const port = parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587', 10);
+  const user = Deno.env.get('PLATFORM_SMTP_USER');
+  const pass = Deno.env.get('PLATFORM_SMTP_PASS');
+  const from = Deno.env.get('PLATFORM_SMTP_FROM') || user;
+  if (!host || !user || !pass) throw new Error('Platform SMTP not configured');
+
+  const transporter = nodemailer.createTransport({
+    host, port, secure: port === 465, auth: { user, pass }
+  });
+  const info = await transporter.sendMail({
+    from: `"Bolify AI Tasks" <${from}>`,
+    to, subject, html
+  });
+  return info;
 }
 
 // Daily digest: emails each client admin about pending tasks requiring human attention
