@@ -485,7 +485,8 @@ Deno.serve(async (req) => {
     _ownerDecisionExecuted: false,  // Owner decision already applied
     _ownerName: '',                 // Owner's display name for AI instructions
     _greetingSent: false,           // Prevents double greeting (Phase 1 vs Phase 2)
-    _phase1Applied: false           // Whether Phase 1 minimal greeting config was sent
+    _phase1Applied: false,          // Whether Phase 1 minimal greeting config was sent
+    _fastConfigReady: false         // Greeting + voice extracted from cache (before slow KB/Shopify fetches)
   };
 
   // ─── Connect to Azure Realtime API ───
@@ -974,9 +975,9 @@ Deno.serve(async (req) => {
         }
         if (tools.length > 0) { sessionConfig.tools = tools; sessionConfig.tool_choice = 'auto'; }
         sendToRealtime({ type: 'session.update', session: sessionConfig });
-      } else if (session._agentConfigReady) {
-        // First connection, agent config already loaded — try Phase 1 fast greeting
-        console.log(`[${reqId}] ⚡ Agent config was ready before Realtime — triggering Phase 1 greeting`);
+      } else if (session._fastConfigReady) {
+        // Fast config ready (greeting + voice extracted) — fire greeting immediately
+        console.log(`[${reqId}] ⚡ Fast config ready before Realtime — triggering Phase 1 greeting`);
         triggerPhase1Greeting();
       } else {
         // Realtime connected first — send minimal config so audio can flow
@@ -1634,34 +1635,61 @@ Deno.serve(async (req) => {
         return;
       }
 
-      // ── IMMEDIATELY extract config and apply to session (before any DB writes) ──
+      // ── IMMEDIATELY extract FAST config (greeting + voice) so greeting can fire ASAP ──
       session.callLogId = callLog.id;
       session.clientId = callLog.client_id;
-      // Capture the Smartflo REST API call_id (may differ from SIP session callSid)
       if (callLog.call_sid && callLog.call_sid !== session.callSid) {
         session.smartfloCallId = callLog.call_sid;
         console.log(`[${reqId}] 📞 Smartflo call_id from CallLog: ${session.smartfloCallId}`);
       }
       const cache = callLog.agent_config_cache;
 
+      // ── PHASE A: Extract greeting + voice + base prompt SYNCHRONOUSLY (no awaits) ──
+      if (cache) {
+        if (cache.persona) {
+          if (cache.persona.voice_engine) session.voiceEngine = cache.persona.voice_engine;
+          if (cache.persona.voice_type) {
+            if (session.voiceEngine === 'realtime') {
+              const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
+              const deprecatedMap = { 'nova': 'shimmer', 'onyx': 'ash', 'fable': 'ballad' };
+              let voice = cache.persona.voice_type.toLowerCase();
+              if (deprecatedMap[voice]) voice = deprecatedMap[voice];
+              if (validVoices.includes(voice)) session.voiceType = voice;
+            } else {
+              session.voiceType = cache.persona.voice_type;
+            }
+          }
+        }
+        if (cache.greeting_message) session.greetingMessage = cache.greeting_message;
+        if (cache.system_prompt) session.systemPrompt = cache.system_prompt;
+        if (cache.human_transfer_number) session.humanTransferNumber = cache.human_transfer_number;
+        if (cache.enable_auto_transfer === false) session.enableAutoTransfer = false;
+        // Apply inline KB content immediately (no fetch needed)
+        if (cache.knowledge_base_content) session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
+      }
+      console.log(`[${reqId}] 🎙️ FAST config: engine=${session.voiceEngine}, voice=${session.voiceType}, greeting=${!!session.greetingMessage}`);
+
+      // ── Signal that greeting can fire NOW (before slow KB/Shopify/personal fetches) ──
+      session._fastConfigReady = true;
+      if (session.realtimeReady) {
+        triggerPhase1Greeting();
+      }
+
+      // ── PHASE B: Slow enrichment (KB URL fetch, Shopify, personal mode) — runs AFTER greeting fires ──
       if (cache && cache.system_prompt) {
-        session.systemPrompt = cache.system_prompt;
-        // Load KB content: try inline first, then fetch from URL if stored externally
-        let kbText = cache.knowledge_base_content || '';
-        if (!kbText && cache.knowledge_base_url) {
+        // KB URL fetch (can take 500-1500ms)
+        if (!cache.knowledge_base_content && cache.knowledge_base_url) {
           try {
             const kbResp = await fetch(cache.knowledge_base_url);
             if (kbResp.ok) {
-              kbText = await kbResp.text();
+              const kbText = await kbResp.text();
+              session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${kbText}`;
               console.log(`[${reqId}] 📚 KB fetched from URL: ${kbText.length} chars`);
             }
           } catch (kbErr) {
             console.log(`[${reqId}] ⚠️ KB URL fetch failed: ${kbErr.message}`);
           }
         }
-        if (kbText) session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${kbText}`;
-        if (cache.human_transfer_number) session.humanTransferNumber = cache.human_transfer_number;
-        if (cache.enable_auto_transfer === false) session.enableAutoTransfer = false;
 
         // Parallel: Shopify check + Client fetch for personal mode
         if (callLog.client_id) {
@@ -1677,8 +1705,6 @@ Deno.serve(async (req) => {
               const dndEnabled = ownerClient.dnd_enabled || false;
               const callerNum = callLog.caller_id || session.callerNumber || '';
               const cleanCaller = callerNum.replace(/\D/g, '').slice(-10);
-
-              // Parallel: TrustedContact + OwnerStatus
               let isTrusted = false, trustedName = '';
               const [tc2Raw, os2Raw] = await Promise.all([
                 cleanCaller ? svc.entities.TrustedContact.filter({ client_id: callLog.client_id }).catch(()=>[]) : [],
@@ -1695,7 +1721,6 @@ Deno.serve(async (req) => {
               personalInstructions+='\nAFTER EVERY CALL: Classify as family/business/promotional/spam/unknown.';
               const os2=Array.isArray(os2Raw)?os2Raw:[];
               if(os2.length>0){const _s2=os2[0];personalInstructions+=`\n\n--- OWNER STATUS: ${_s2.icon} ${_s2.title}${_s2.start_time?' ('+_s2.start_time+(_s2.end_time?' to '+_s2.end_time:'')+')':''} ---\nCRITICAL: Tell callers in Hindi: "${_s2.caller_message_hindi}"`;console.log(`[${reqId}] 🎯 OwnerStatus: ${_s2.title}`);}
-
               session.systemPrompt += personalInstructions;
               session._personalMode = aiMode;
               session._isTrustedCaller = isTrusted;
@@ -1733,32 +1758,10 @@ WHEN TO USE:
 IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, NEVER make up statuses.`;
           console.log(`[${reqId}] 🛒 Shopify tool instructions injected into system prompt`);
         }
-        if (cache.greeting_message) {
-          session.greetingMessage = cache.greeting_message;
-        }
         console.log(`[${reqId}] ✅ Agent config from CallLog ${callLog.id} (${session.systemPrompt.length}ch, transfer=${session.humanTransferNumber || 'none'})`);
-      } else {
+      } else if (!cache?.system_prompt) {
         console.log(`[${reqId}] ⚠️ CallLog ${callLog.id} found but has NO agent_config_cache — using default prompt`);
       }
-
-      if (cache && cache.persona) {
-        if (cache.persona.voice_engine) session.voiceEngine = cache.persona.voice_engine;
-        if (cache.persona.voice_type) {
-          if (session.voiceEngine === 'realtime') {
-            const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
-            const deprecatedMap = { 'nova': 'shimmer', 'onyx': 'ash', 'fable': 'ballad' };
-            let voice = cache.persona.voice_type.toLowerCase();
-            if (deprecatedMap[voice]) {
-              console.log(`[${reqId}] ⚠️ Voice "${voice}" deprecated, using "${deprecatedMap[voice]}" instead`);
-              voice = deprecatedMap[voice];
-            }
-            if (validVoices.includes(voice)) session.voiceType = voice;
-          } else {
-            session.voiceType = cache.persona.voice_type;
-          }
-        }
-      }
-      console.log(`[${reqId}] 🎙️ engine=${session.voiceEngine}, voice=${session.voiceType}`);
 
       // ── BACKGROUND: Claim CallLog with stream_sid (fire-and-forget, don't block) ──
       const updateFields = {};
@@ -1858,11 +1861,12 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
         // Now load agent config — when ready, apply session config + greeting.
         loadAgentConfig().then(() => {
           session._agentConfigReady = true;
-          console.log(`[${reqId}] 🚀 Agent config ready: engine=${session.voiceEngine}, voice=${session.voiceType}`);
-          // If Realtime is already connected, trigger Phase 1 fast greeting
-          if (session.realtimeReady) {
-            triggerPhase1Greeting();
+          console.log(`[${reqId}] 🚀 Agent config fully loaded: engine=${session.voiceEngine}, voice=${session.voiceType}`);
+          // Apply Phase 2 full config if greeting was already sent via _fastConfigReady
+          if (session._greetingSent && session.realtimeReady) {
+            applySessionConfig();
           }
+          // If fast config triggered greeting but Realtime wasn't ready yet, it'll fire from session.created
         });
         return;
       }
