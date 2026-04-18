@@ -1624,6 +1624,12 @@ Deno.serve(async (req) => {
             }
 
             console.log(`[${reqId}] ✅ INBOUND agent config loaded: engine=${session.voiceEngine}, voice=${session.voiceType}, prompt=${session.systemPrompt.length} chars`);
+
+            // ── Signal that greeting can fire NOW (mirrors outbound path) ──
+            session._fastConfigReady = true;
+            if (session.realtimeReady) {
+              triggerPhase1Greeting();
+            }
             return; // Config loaded successfully via DID→Agent
           }
         }
