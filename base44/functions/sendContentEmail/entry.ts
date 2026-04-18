@@ -1,22 +1,13 @@
 import { createClient } from 'npm:@base44/sdk@0.8.20';
-import nodemailer from 'npm:nodemailer@6.9.14';
 
+// Platform's native email integration — sends from noreply@bolifyai.com
 async function sendLeadEmail({ to, fromName, subject, html }) {
-  const host = Deno.env.get('PLATFORM_SMTP_HOST');
-  const port = parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587', 10);
-  const user = Deno.env.get('PLATFORM_SMTP_USER');
-  const pass = Deno.env.get('PLATFORM_SMTP_PASS');
-  const from = Deno.env.get('PLATFORM_SMTP_FROM') || user;
-  if (!host || !user || !pass) throw new Error('Platform SMTP not configured');
-
-  const transporter = nodemailer.createTransport({
-    host, port, secure: port === 465, auth: { user, pass }
+  const appId = Deno.env.get('BASE44_APP_ID');
+  const svc = createClient({ appId, asServiceRole: true });
+  return await svc.integrations.Core.SendEmail({
+    from_name: fromName || 'Bolify AI',
+    to, subject, body: html
   });
-  const info = await transporter.sendMail({
-    from: `"${fromName || 'Bolify AI'}" <${from}>`,
-    to, subject, html
-  });
-  return info;
 }
 
 // Azure OpenAI helper

@@ -20,41 +20,12 @@ async function sendEmail({ to, subject, html, displayName, clientId }) {
       console.warn(`[composeEmail] sendClientEmail failed, falling back to platform SMTP: ${e.message}`);
     }
   }
-  // Fallback: platform SMTP
-  const { SMTPClient } = await import('npm:emailjs@4.0.3');
-  const smtpHost = Deno.env.get('PLATFORM_SMTP_HOST');
-  const smtpUser = Deno.env.get('PLATFORM_SMTP_USER');
-  const smtpPass = Deno.env.get('PLATFORM_SMTP_PASS');
-  const smtpFrom = Deno.env.get('PLATFORM_SMTP_FROM') || smtpUser;
-  const smtpPort = parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587');
-
-  if (!smtpHost || !smtpUser || !smtpPass) {
-    throw new Error('Platform SMTP not configured');
-  }
-  try {
-    const client = new SMTPClient({
-      user: smtpUser, password: smtpPass, host: smtpHost, port: smtpPort, tls: true, timeout: 15000
-    });
-    const name = displayName || 'Bolify AI';
-    await client.sendAsync({
-      from: `${name} <${smtpFrom}>`,
-      to, subject,
-      attachment: [{ data: html, alternative: true }]
-    });
-    return { provider: 'platform_smtp', status: 'sent' };
-  } catch (smtpErr) {
-    console.warn(`[composeEmail] Platform SMTP failed: ${smtpErr.message}, trying Base44 SendEmail`);
-    try {
-      const base44_fb = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
-      await base44_fb.integrations.Core.SendEmail({
-        to, subject, body: html, from_name: displayName || 'Bolify AI'
-      });
-      return { provider: 'base44_integration', status: 'sent' };
-    } catch (b44Err) {
-      console.error(`[composeEmail] Base44 SendEmail also failed: ${b44Err.message}`);
-      throw new Error(`Email delivery failed. SMTP connection refused and recipient is not an app user. Please configure an HTTP-based email provider (Resend, SendGrid) in Integrations settings.`);
-    }
-  }
+  // Fallback: platform's native email integration (noreply@bolifyai.com)
+  const base44_fb = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+  await base44_fb.integrations.Core.SendEmail({
+    to, subject, body: html, from_name: displayName || 'Bolify AI'
+  });
+  return { provider: 'platform_integration', status: 'sent' };
 }
 
 // Azure OpenAI helper

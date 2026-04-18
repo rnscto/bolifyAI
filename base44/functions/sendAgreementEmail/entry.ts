@@ -1,15 +1,13 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
 
+// Platform's native email integration — sends from noreply@bolifyai.com
 async function sendEmail(to, subject, htmlBody) {
-  const { SMTPClient } = await import('npm:emailjs@4.0.3');
-  const smtpHost = Deno.env.get('PLATFORM_SMTP_HOST');
-  const smtpUser = Deno.env.get('PLATFORM_SMTP_USER');
-  const smtpPass = Deno.env.get('PLATFORM_SMTP_PASS');
-  const smtpFrom = Deno.env.get('PLATFORM_SMTP_FROM') || smtpUser;
-  const smtpPort = parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587');
-  if (!smtpHost || !smtpUser || !smtpPass) throw new Error('Platform SMTP not configured');
-  const client = new SMTPClient({ user: smtpUser, password: smtpPass, host: smtpHost, port: smtpPort, tls: true, timeout: 15000 });
-  await client.sendAsync({ from: `Bolify AI <${smtpFrom}>`, to, subject, attachment: [{ data: htmlBody, alternative: true }] });
+  const appId = Deno.env.get('BASE44_APP_ID');
+  const svc = createClient({ appId, asServiceRole: true });
+  await svc.integrations.Core.SendEmail({
+    from_name: 'Bolify AI',
+    to, subject, body: htmlBody
+  });
 }
 
 Deno.serve(async (req) => {

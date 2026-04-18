@@ -15,48 +15,16 @@ import { createClient, createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
  * }
  */
 
-// ─── Platform default: SMTP via custom domain ───
+// ─── Platform default: native email integration (noreply@bolifyai.com) ───
 async function sendViaPlatformSMTP({ to, subject, html, fromName }) {
-  const { SMTPClient } = await import('npm:emailjs@4.0.3');
-  const smtpHost = Deno.env.get('PLATFORM_SMTP_HOST');
-  const smtpPort = parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587');
-  const smtpUser = Deno.env.get('PLATFORM_SMTP_USER');
-  const smtpPass = Deno.env.get('PLATFORM_SMTP_PASS');
-  const smtpFrom = Deno.env.get('PLATFORM_SMTP_FROM') || smtpUser;
-
-  if (!smtpHost || !smtpUser || !smtpPass) {
-    throw new Error('Platform SMTP not configured. Set PLATFORM_SMTP_HOST, PLATFORM_SMTP_USER, PLATFORM_SMTP_PASS secrets.');
-  }
-
   const displayName = fromName || 'Bolify AI';
-  try {
-    const client = new SMTPClient({
-      user: smtpUser,
-      password: smtpPass,
-      host: smtpHost,
-      port: smtpPort,
-      tls: true,
-      timeout: 15000
-    });
-    const message = await client.sendAsync({
-      from: `${displayName} <${smtpFrom}>`,
-      to,
-      subject,
-      attachment: [{ data: html, alternative: true }]
-    });
-    return { provider: 'platform_smtp', status: 'sent', from: smtpFrom, message_id: message?.header?.['message-id'] || null };
-  } catch (smtpErr) {
-    console.warn(`[sendClientEmail] Platform SMTP connection failed: ${smtpErr.message}, trying Base44 SendEmail`);
-    try {
-      const appId = Deno.env.get('BASE44_APP_ID');
-      const svc = createClient({ appId, asServiceRole: true });
-      await svc.integrations.Core.SendEmail({ to, subject, body: html, from_name: displayName });
-      return { provider: 'base44_integration', status: 'sent', from: 'base44', fallback: true };
-    } catch (b44Err) {
-      console.error(`[sendClientEmail] Base44 SendEmail also failed: ${b44Err.message}`);
-      throw new Error(`Email delivery failed. SMTP: ${smtpErr.message}. Configure an HTTP email provider (Resend/SendGrid) in your messaging settings.`);
-    }
-  }
+  const appId = Deno.env.get('BASE44_APP_ID');
+  const svc = createClient({ appId, asServiceRole: true });
+  await svc.integrations.Core.SendEmail({
+    from_name: displayName,
+    to, subject, body: html
+  });
+  return { provider: 'platform_integration', status: 'sent', from: 'noreply@bolifyai.com' };
 }
 
 // ─── Client provider: SMTP ───

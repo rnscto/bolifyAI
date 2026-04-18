@@ -21,27 +21,14 @@ async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
       console.warn(`[postCallFollowup] sendClientEmail failed, falling back to platform SMTP: ${e.message}`);
     }
   }
-  // Fallback: platform SMTP
-  const { SMTPClient } = await import('npm:emailjs@4.0.3');
-  const smtpHost = Deno.env.get('PLATFORM_SMTP_HOST');
-  const smtpUser = Deno.env.get('PLATFORM_SMTP_USER');
-  const smtpPass = Deno.env.get('PLATFORM_SMTP_PASS');
-  const smtpFrom = Deno.env.get('PLATFORM_SMTP_FROM') || smtpUser;
-  const smtpPort = parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587');
-
-  if (!smtpHost || !smtpUser || !smtpPass) {
-    throw new Error('Platform SMTP not configured');
-  }
-  const client = new SMTPClient({
-    user: smtpUser, password: smtpPass, host: smtpHost, port: smtpPort, tls: true, timeout: 15000
+  // Fallback: platform's native email integration (noreply@bolifyai.com)
+  const appId = Deno.env.get('BASE44_APP_ID');
+  const svcBase44 = createClient({ appId, asServiceRole: true });
+  await svcBase44.integrations.Core.SendEmail({
+    from_name: fromName || 'Bolify AI',
+    to, subject, body: html
   });
-  const displayName = fromName || 'Bolify AI';
-  await client.sendAsync({
-    from: `${displayName} <${smtpFrom}>`,
-    to, subject,
-    attachment: [{ data: html, alternative: true }]
-  });
-  return { provider: 'platform_smtp', status: 'sent' };
+  return { provider: 'platform_integration', status: 'sent' };
 }
 
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
