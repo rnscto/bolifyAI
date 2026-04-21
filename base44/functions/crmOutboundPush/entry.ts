@@ -69,7 +69,7 @@ Deno.serve(async (req) => {
       const webhookPayload = {
         event: event_type,
         timestamp: new Date().toISOString(),
-        source: 'getway_ai',
+        source: 'bolify_ai',
         entity_id: entity_id || null,
         data: mappedData
       };

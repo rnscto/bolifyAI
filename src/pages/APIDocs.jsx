@@ -619,7 +619,7 @@ Body:
 {`{
   "event": "call_completed",
   "timestamp": "2026-04-07T12:00:00.000Z",
-  "source": "getway_ai",
+  "source": "bolify_ai",
   "entity_id": "calllog_xyz",
   "data": {
     "caller_id": "918065489191",

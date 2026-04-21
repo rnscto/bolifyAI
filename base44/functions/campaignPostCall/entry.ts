@@ -687,14 +687,14 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
   });
 
   // ============================================================
-  // GETWAY CRM — WhatsApp/RCS via Getway CRM automation
+  // Bolify AI CRM — WhatsApp/RCS via CRM automation
   // ============================================================
   if (lead && (lead.phone || lead.email) && outcome !== 'not_answered') {
     try {
-      const getwayCrmToken = Deno.env.get('GETWAY_CRM_API_TOKEN');
-      if (getwayCrmToken) {
+      const bolifyCrmToken = Deno.env.get('GETWAY_CRM_API_TOKEN');
+      if (bolifyCrmToken) {
         const crmParams = new URLSearchParams();
-        crmParams.set('api_token', getwayCrmToken);
+        crmParams.set('api_token', bolifyCrmToken);
         crmParams.set('contact_name', lead.name || campaignLead.lead_name || 'Unknown');
         if (lead.email) crmParams.set('contact_email', lead.email);
         if (lead.phone) crmParams.set('contact_phone', lead.phone);
@@ -714,10 +714,10 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
         });
         const crmResult = await crmResp.json();
-        console.log(`[campaignPostCall] Getway CRM sent for ${lead.phone || lead.email}: ${crmResult.status}`);
+        console.log(`[campaignPostCall] Bolify CRM sent for ${lead.phone || lead.email}: ${crmResult.status}`);
       }
-    } catch (getwayErr) {
-      console.error(`[campaignPostCall] Getway CRM failed: ${getwayErr.message}`);
+    } catch (bolifyErr) {
+      console.error(`[campaignPostCall] Bolify CRM failed: ${bolifyErr.message}`);
     }
   }
 
@@ -864,14 +864,14 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
   });
 
   // ============================================================
-  // GETWAY CRM — WhatsApp/RCS via Getway CRM automation (doFollowUpActions)
+  // Bolify AI CRM — WhatsApp/RCS via CRM automation (doFollowUpActions)
   // ============================================================
   if (lead && (lead.phone || lead.email) && outcome !== 'not_answered') {
     try {
-      const getwayCrmToken = Deno.env.get('GETWAY_CRM_API_TOKEN');
-      if (getwayCrmToken) {
+      const bolifyCrmToken = Deno.env.get('GETWAY_CRM_API_TOKEN');
+      if (bolifyCrmToken) {
         const crmParams = new URLSearchParams();
-        crmParams.set('api_token', getwayCrmToken);
+        crmParams.set('api_token', bolifyCrmToken);
         crmParams.set('contact_name', lead.name || campaignLead.lead_name || 'Unknown');
         if (lead.email) crmParams.set('contact_email', lead.email);
         if (lead.phone) crmParams.set('contact_phone', lead.phone);
@@ -889,10 +889,10 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
         });
         const crmResult = await crmResp.json();
-        console.log(`[campaignPostCall:doFollowUp] Getway CRM sent: ${crmResult.status}`);
+        console.log(`[campaignPostCall:doFollowUp] Bolify CRM sent: ${crmResult.status}`);
       }
-    } catch (getwayErr) {
-      console.error(`[campaignPostCall:doFollowUp] Getway CRM failed: ${getwayErr.message}`);
+    } catch (bolifyErr) {
+      console.error(`[campaignPostCall:doFollowUp] Bolify CRM failed: ${bolifyErr.message}`);
     }
   }
 

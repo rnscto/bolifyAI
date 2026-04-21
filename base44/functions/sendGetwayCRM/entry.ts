@@ -1,9 +1,9 @@
 import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.23';
 
-const GETWAY_CRM_URL = 'https://login.getwaycrm.com/api/automations/69cb6ef8707f8/execute';
+const BOLIFY_CRM_URL = 'https://login.getwaycrm.com/api/automations/69cb6ef8707f8/execute';
 
 /**
- * Sends a contact to Getway CRM for WhatsApp/RCS automation.
+ * Sends a contact to Bolify AI CRM for WhatsApp/RCS automation.
  * Can be called from frontend (user auth) or from other backend functions (service role via _service_call flag).
  * 
  * Payload:
@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
     if (payload.lead_score) params.set('lead_score', String(payload.lead_score));
     if (payload.qualification_tier) params.set('qualification_tier', payload.qualification_tier);
 
-    const response = await fetch(`${GETWAY_CRM_URL}?${params.toString()}`, {
+    const response = await fetch(`${BOLIFY_CRM_URL}?${params.toString()}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
     });
 
     const result = await response.json();
-    console.log(`[sendGetwayCRM] Response for ${contactPhone || contactEmail}:`, JSON.stringify(result));
+    console.log(`[sendBolifyCRM] Response for ${contactPhone || contactEmail}:`, JSON.stringify(result));
 
     if (result.status === 'success') {
       return Response.json({ success: true, data: result.data });
@@ -91,7 +91,7 @@ Deno.serve(async (req) => {
       return Response.json({ success: false, error: result.message || 'Unknown error', raw: result });
     }
   } catch (error) {
-    console.error('[sendGetwayCRM] Error:', error.message);
+    console.error('[sendBolifyCRM] Error:', error.message);
     return Response.json({ error: error.message }, { status: 500 });
   }
 });

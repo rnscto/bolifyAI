@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
                   <li>Ensure AI disclosure is present in the first 15 seconds</li>
                   <li>Contact our DPO at nand@brainbucks.in for assistance</li>
                 </ul>
-                <p>— VaaniAI Compliance Team</p>
+                <p>— Bolify AI Compliance Team</p>
               `
             });
           }

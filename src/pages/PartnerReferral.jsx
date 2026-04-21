@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, Loader2, Users, IndianRupee, TrendingUp, Handshake, Phone, Cpu, BarChart3 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const DEFAULT_LOGO = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/8e9cbc9d4_Getway_Logojpg.jpeg";
+const DEFAULT_LOGO = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg";
 
 const FEATURES = [
   { icon: Phone, title: 'AI Voice Calls', desc: 'Automated outbound & inbound calls in Hindi/English' },

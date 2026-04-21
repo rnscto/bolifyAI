@@ -342,14 +342,14 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
     }
 
     // ===================================================================
-    // PART 1.2: GETWAY CRM — WhatsApp/RCS via Getway CRM automation
+    // PART 1.2: Bolify AI CRM — WhatsApp/RCS via CRM automation
     // ===================================================================
     if (lead && (lead.phone || lead.email)) {
       try {
-        const getwayCrmToken = Deno.env.get('GETWAY_CRM_API_TOKEN');
-        if (getwayCrmToken) {
+        const bolifyCrmToken = Deno.env.get('GETWAY_CRM_API_TOKEN');
+        if (bolifyCrmToken) {
           const crmParams = new URLSearchParams();
-          crmParams.set('api_token', getwayCrmToken);
+          crmParams.set('api_token', bolifyCrmToken);
           crmParams.set('contact_name', lead.name || 'Unknown');
           if (lead.email) crmParams.set('contact_email', lead.email);
           if (lead.phone) crmParams.set('contact_phone', lead.phone);
@@ -367,12 +367,12 @@ Keep it personal, mention key point from the call, include CTA. No links.`,
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }
           });
           const crmResult = await crmResp.json();
-          console.log(`[postCallFollowup] Getway CRM sent for ${lead.phone || lead.email}: ${crmResult.status}`);
-          results.getway_crm = { status: crmResult.status, phone: lead.phone };
+          console.log(`[postCallFollowup] Bolify CRM sent for ${lead.phone || lead.email}: ${crmResult.status}`);
+          results.bolify_crm = { status: crmResult.status, phone: lead.phone };
         }
-      } catch (getwayErr) {
-        console.error(`[postCallFollowup] Getway CRM failed: ${getwayErr.message}`);
-        results.errors.push({ channel: 'getway_crm', error: getwayErr.message });
+      } catch (bolifyErr) {
+        console.error(`[postCallFollowup] Bolify CRM failed: ${bolifyErr.message}`);
+        results.errors.push({ channel: 'bolify_crm', error: bolifyErr.message });
       }
     }
 
