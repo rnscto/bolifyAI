@@ -37,7 +37,7 @@ export default function AgreementGate({ client, user, onSigned }) {
     const now = new Date();
     const formatted = now.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
     let html = tmpl.body_html
-      .replace(/\{\{agreement_number\}\}/g, 'GETWAY-CSA-XXXX-XXX')
+      .replace(/\{\{agreement_number\}\}/g, 'BOLIFY-CSA-XXXX-XXX')
       .replace(/\{\{effective_date_formatted\}\}/g, formatted)
       .replace(/\{\{client_name\}\}/g, client?.company_name || '')
       .replace(/\{\{signatory_name\}\}/g, user?.full_name || '')
@@ -67,7 +67,7 @@ export default function AgreementGate({ client, user, onSigned }) {
     const signedTimestamp = signedDate.toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'medium', timeZone: 'Asia/Kolkata' }) + ' IST';
 
     const allAgr = await base44.entities.ClientAgreement.list();
-    const agrNum = `GETWAY-CSA-${signedDate.getFullYear()}-${String(allAgr.length + 1).padStart(3, '0')}`;
+    const agrNum = `BOLIFY-CSA-${signedDate.getFullYear()}-${String(allAgr.length + 1).padStart(3, '0')}`;
     const effectiveDate = signedDate.toISOString().split('T')[0];
     const expiryDate = new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0];
     const formattedEffective = signedDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -142,7 +142,7 @@ export default function AgreementGate({ client, user, onSigned }) {
           <div>
             <h2 className="font-bold text-amber-900 text-lg">Action Required: Sign Service Agreement</h2>
             <p className="text-amber-700 text-sm mt-1">
-              To continue using the Getway AI platform, you must review and sign the updated Client Service Agreement.
+              To continue using the Bolify AI platform, you must review and sign the updated Client Service Agreement.
               This is a one-time requirement for regulatory compliance.
             </p>
           </div>
