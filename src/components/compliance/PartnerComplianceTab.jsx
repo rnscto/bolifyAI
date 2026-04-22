@@ -154,7 +154,7 @@ export default function PartnerComplianceTab({ partner, referrals }) {
             <Shield className="w-5 h-5 text-blue-600 mt-0.5" />
             <div>
               <p className="font-medium text-gray-900">Data Protection Officer</p>
-              <p className="text-sm text-gray-600 mt-1">Nand K. Yadav — nand@brainbucks.in — +91-7020609101</p>
+              <p className="text-sm text-gray-600 mt-1">Bijendra Saini — connect@bolify.ai — +91-9255522544</p>
               <p className="text-xs text-gray-400 mt-1">For compliance queries regarding your referred clients</p>
             </div>
           </div>

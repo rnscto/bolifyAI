@@ -131,7 +131,7 @@ export default function ClientIntegrations() {
 
       <div className="bg-gray-50 rounded-xl p-5 text-center text-sm text-gray-500">
         <p>Your API credentials are stored securely and only used for sending messages on your behalf.</p>
-        <p className="mt-1">Need help? Contact <a href="mailto:support@bolifyai.com" className="text-blue-600 underline">support@bolifyai.com</a></p>
+        <p className="mt-1">Need help? Contact <a href="mailto:connect@bolify.ai" className="text-blue-600 underline">connect@bolify.ai</a></p>
       </div>
     </div>
   );

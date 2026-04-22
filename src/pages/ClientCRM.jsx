@@ -138,7 +138,7 @@ export default function ClientCRM() {
                 <div className="flex gap-2">
                   <Input type="password" value={formData.api_key} onChange={e => setFormData({...formData, api_key: e.target.value})} placeholder="Enter or generate a key" />
                   <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={() => {
-                    const key = 'gw_' + crypto.randomUUID().replace(/-/g, '').substring(0, 32);
+                    const key = 'bf_' + crypto.randomUUID().replace(/-/g, '').substring(0, 32);
                     setFormData({...formData, api_key: key});
                     toast.success('API key generated!');
                   }}>
