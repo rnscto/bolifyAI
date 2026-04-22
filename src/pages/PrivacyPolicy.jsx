@@ -157,10 +157,9 @@ export default function PrivacyPolicy() {
             the purpose of this Privacy Policy is:
           </p>
           <div className="bg-slate-50 rounded-lg p-4 mt-3 text-gray-600 text-sm">
-            <p><strong>Bijendra Saini</strong> — Data Protection Officer</p>
+            <p><strong>BolifyAI Sales Team</strong> — Data Protection Officer</p>
             <p><strong>Bolify AI Technology</strong></p>
             <p>Email: <a href="mailto:connect@bolify.ai" className="text-blue-600 hover:underline">connect@bolify.ai</a></p>
-            <p>Phone: <a href="tel:+919255522544" className="text-blue-600 hover:underline">92555-22544</a></p>
           </div>
         </section>
 
@@ -172,7 +171,6 @@ export default function PrivacyPolicy() {
           <div className="bg-slate-50 rounded-lg p-4 mt-3 text-gray-600 text-sm">
             <p><strong>Bolify AI Technology</strong></p>
             <p>Email: <a href="mailto:connect@bolify.ai" className="text-blue-600 hover:underline">connect@bolify.ai</a></p>
-            <p>Phone: <a href="tel:+919255522544" className="text-blue-600 hover:underline">92555-22544</a></p>
           </div>
         </section>
       </div>

@@ -189,11 +189,10 @@ export default function CompliancePolicy() {
               <UserCheck className="w-6 h-6 text-teal-600" /> 7. Data Protection Officer
             </h2>
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mt-4">
-              <p className="font-bold text-blue-900 text-lg">Satish Saini</p>
+              <p className="font-bold text-blue-900 text-lg">BolifyAI Sales Team</p>
               <p className="text-blue-800 mt-1">Data Protection Officer</p>
               <div className="mt-3 space-y-1 text-sm text-blue-700">
                 <p>📧 Email: <a href="mailto:connect@bolify.ai" className="underline">connect@bolify.ai</a></p>
-                <p>📞 Phone: <a href="tel:+919255522544" className="underline">92555-22544</a></p>
                 <p>🏢 Bolify AI Technology</p>
               </div>
               <p className="text-xs text-blue-600 mt-3">

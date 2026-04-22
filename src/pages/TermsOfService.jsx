@@ -248,7 +248,6 @@ export default function TermsOfService() {
           <div className="bg-slate-50 rounded-lg p-4 mt-3 text-gray-600 text-sm">
             <p><strong>Bolify AI Technology</strong></p>
             <p>Email: <a href="mailto:connect@bolify.ai" className="text-blue-600 hover:underline">connect@bolify.ai</a></p>
-            <p>Phone: <a href="tel:+919255522544" className="text-blue-600 hover:underline">92555-22544</a></p>
           </div>
         </section>
       </div>
