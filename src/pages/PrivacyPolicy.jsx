@@ -30,9 +30,6 @@ export default function PrivacyPolicy() {
             This Privacy Policy explains how we collect, use, disclose, and safeguard your information when you use our 
             AI-powered business automation platform and CRM services available at bolify.ai (the "Service").
           </p>
-          <p className="text-gray-600 leading-relaxed mt-3">
-            <strong>Registered Office:</strong> SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, Gurugram (HR) - 122001.
-          </p>
         </section>
 
         <section className="mb-8">
@@ -162,7 +159,6 @@ export default function PrivacyPolicy() {
           <div className="bg-slate-50 rounded-lg p-4 mt-3 text-gray-600 text-sm">
             <p><strong>Bijendra Saini</strong> — Data Protection Officer</p>
             <p><strong>Bolify AI Technology</strong></p>
-            <p>SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, Gurugram (HR) - 122001</p>
             <p>Email: <a href="mailto:connect@bolify.ai" className="text-blue-600 hover:underline">connect@bolify.ai</a></p>
             <p>Phone: <a href="tel:+919255522544" className="text-blue-600 hover:underline">92555-22544</a></p>
           </div>
@@ -175,7 +171,6 @@ export default function PrivacyPolicy() {
           </p>
           <div className="bg-slate-50 rounded-lg p-4 mt-3 text-gray-600 text-sm">
             <p><strong>Bolify AI Technology</strong></p>
-            <p>SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, Gurugram (HR) - 122001</p>
             <p>Email: <a href="mailto:connect@bolify.ai" className="text-blue-600 hover:underline">connect@bolify.ai</a></p>
             <p>Phone: <a href="tel:+919255522544" className="text-blue-600 hover:underline">92555-22544</a></p>
           </div>

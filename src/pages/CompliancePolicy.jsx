@@ -195,7 +195,6 @@ export default function CompliancePolicy() {
                 <p>📧 Email: <a href="mailto:connect@bolify.ai" className="underline">connect@bolify.ai</a></p>
                 <p>📞 Phone: <a href="tel:+919255522544" className="underline">92555-22544</a></p>
                 <p>🏢 Bolify AI Technology</p>
-                <p>📍 SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, Gurugram (HR) - 122001</p>
               </div>
               <p className="text-xs text-blue-600 mt-3">
                 For data access, correction, erasure, or portability requests, please contact the DPO. 

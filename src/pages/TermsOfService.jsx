@@ -26,8 +26,7 @@ export default function TermsOfService() {
           <h2 className="text-2xl font-bold text-gray-900 mb-4">1. Acceptance of Terms</h2>
           <p className="text-gray-600 leading-relaxed">
             These Terms of Service ("Terms") constitute a legally binding agreement between you ("User," "you," "your") 
-            and <strong>Bolify AI Technology</strong>, operating the brand <strong>Bolify AI</strong> ("Company," "we," "us," "our"), 
-            with its registered office at SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, Gurugram (HR) - 122001.
+            and <strong>Bolify AI Technology</strong>, operating the brand <strong>Bolify AI</strong> ("Company," "we," "us," "our").
           </p>
           <p className="text-gray-600 leading-relaxed mt-3">
             By accessing or using our AI-powered business automation platform and CRM services at bolify.ai (the "Service"), 
@@ -248,7 +247,6 @@ export default function TermsOfService() {
           </p>
           <div className="bg-slate-50 rounded-lg p-4 mt-3 text-gray-600 text-sm">
             <p><strong>Bolify AI Technology</strong></p>
-            <p>SCO: 24, 2nd Floor, Above Om Sweets, Huda Market, Sector-10A, Gurugram (HR) - 122001</p>
             <p>Email: <a href="mailto:connect@bolify.ai" className="text-blue-600 hover:underline">connect@bolify.ai</a></p>
             <p>Phone: <a href="tel:+919255522544" className="text-blue-600 hover:underline">92555-22544</a></p>
           </div>
