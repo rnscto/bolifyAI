@@ -268,13 +268,30 @@ Deno.serve(async (req) => {
                   console.log(`[campaignPoller] Using campaign opening as greeting for ${cl.lead_name}`);
                 }
 
+                // If KB content is large, upload to storage and store URL instead
+                let cacheKbContent = kbContent;
+                let cacheKbUrl = '';
+                if (kbContent && kbContent.length > 50000) {
+                  try {
+                    const blob = new Blob([kbContent], { type: 'text/plain' });
+                    const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
+                    const up = await svc.integrations.Core.UploadFile({ file });
+                    cacheKbUrl = up.file_url;
+                    cacheKbContent = '';
+                    console.log(`[campaignPoller] KB uploaded: ${kbContent.length} chars → URL`);
+                  } catch (_) {
+                    cacheKbContent = kbContent.substring(0, 50000);
+                  }
+                }
+
                 const callLog = await svc.entities.CallLog.create({
                   client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
                   call_sid: callSid, caller_id: selectedDID, callee_number: cleanPhone,
                   direction: 'outbound', status: 'initiated', call_start_time: new Date().toISOString(),
                   agent_config_cache: {
                     agent_name: agent.name, system_prompt: personalizedPrompt,
-                    persona: agent.persona || {}, knowledge_base_content: kbContent,
+                    persona: agent.persona || {}, knowledge_base_content: cacheKbContent,
+                    knowledge_base_url: cacheKbUrl,
                     lead_context: leadContext,
                     greeting_message: campaignGreeting
                   }

@@ -307,6 +307,23 @@ Deno.serve(async (req) => {
           console.log(`[campaign] Using campaign opening as greeting for ${cl.lead_name}: "${campaignGreeting.substring(0, 80)}"`);
         }
 
+        // If KB content is large, upload to storage and store URL instead (prevents field size limit)
+        let cacheKbContent = kbContent;
+        let cacheKbUrl = '';
+        if (kbContent && kbContent.length > 50000) {
+          try {
+            const blob = new Blob([kbContent], { type: 'text/plain' });
+            const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
+            const up = await svc.integrations.Core.UploadFile({ file });
+            cacheKbUrl = up.file_url;
+            cacheKbContent = '';
+            console.log(`[campaign] KB uploaded: ${kbContent.length} chars → URL`);
+          } catch (upErr) {
+            console.log(`[campaign] KB upload failed, truncating: ${upErr.message}`);
+            cacheKbContent = kbContent.substring(0, 50000);
+          }
+        }
+
         const callLog = await svc.entities.CallLog.create({
           client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
           call_sid: callSid, caller_id: selectedDID, callee_number: cleanPhone,
@@ -314,7 +331,8 @@ Deno.serve(async (req) => {
           conversation_summary: leadContext ? `[LEAD CONTEXT] ${cl.lead_name}\n${leadContext}` : '',
           agent_config_cache: {
             agent_name: agent.name, system_prompt: personalizedPrompt,
-            persona: agent.persona || {}, knowledge_base_content: kbContent,
+            persona: agent.persona || {}, knowledge_base_content: cacheKbContent,
+            knowledge_base_url: cacheKbUrl,
             lead_context: leadContext,
             greeting_message: campaignGreeting,
             human_transfer_number: agent.human_transfer_number || '',
