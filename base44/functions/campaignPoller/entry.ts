@@ -23,11 +23,29 @@ Deno.serve(async (req) => {
 
     const base44 = createClientFromRequest(req);
     const svc = base44.asServiceRole;
-    const results = { campaigns_processed: 0, stuck_fixed: 0, batches_triggered: 0, completed: 0, errors: [] };
+    const results = { campaigns_processed: 0, stuck_fixed: 0, batches_triggered: 0, completed: 0, scheduled_started: 0, errors: [] };
 
-    // Find all running campaigns
+    // Auto-start any scheduled campaigns whose time has arrived
+    const scheduledCampaigns = await svc.entities.Campaign.filter({ status: 'scheduled' }, 'created_date', 200);
+    const nowMs = Date.now();
+    let autoStarted = 0;
+    for (const sc of scheduledCampaigns) {
+      if (!sc.scheduled_date) continue;
+      const schedMs = new Date(sc.scheduled_date).getTime();
+      if (isNaN(schedMs)) continue;
+      if (schedMs <= nowMs) {
+        await svc.entities.Campaign.update(sc.id, {
+          status: 'running',
+          started_at: new Date().toISOString()
+        });
+        autoStarted++;
+        console.log(`[campaignPoller] Auto-started scheduled campaign "${sc.name}" (scheduled ${sc.scheduled_date})`);
+      }
+    }
+
+    // Find all running campaigns (includes the ones just auto-started)
     const runningCampaigns = await svc.entities.Campaign.filter({ status: 'running' });
-    console.log(`[campaignPoller] Found ${runningCampaigns.length} running campaigns`);
+    console.log(`[campaignPoller] Found ${runningCampaigns.length} running campaigns (${autoStarted} just auto-started)`);
 
     for (const campaign of runningCampaigns) {
       try {
@@ -312,6 +330,7 @@ Deno.serve(async (req) => {
       }
     }
 
+    results.scheduled_started = autoStarted;
     return Response.json({ success: true, ...results });
   } catch (error) {
     console.error('[campaignPoller] Error:', error);

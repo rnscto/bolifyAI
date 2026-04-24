@@ -16,9 +16,13 @@ import CallScriptEditor from './CallScriptEditor';
 export default function CreateCampaignDialog({ open, onOpenChange, client, onCreated }) {
   const [agents, setAgents] = useState([]);
   const [leads, setLeads] = useState([]);
+  const [leadGroups, setLeadGroups] = useState([]);
   const [selectedLeads, setSelectedLeads] = useState([]);
   const [leadFilter, setLeadFilter] = useState('all');
+  const [groupFilter, setGroupFilter] = useState('all');
   const [loading, setLoading] = useState(false);
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState('');
   const [form, setForm] = useState({
     name: '',
     type: 'cold_call',
@@ -42,17 +46,21 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
   }, [open, client]);
 
   const loadData = async () => {
-    const [agentsData, leadsData] = await Promise.all([
+    const [agentsData, leadsData, groupsData] = await Promise.all([
       base44.entities.Agent.filter({ client_id: client.id }),
-      base44.entities.Lead.filter({ client_id: client.id }, '-created_date', 500)
+      base44.entities.Lead.filter({ client_id: client.id }, '-created_date', 500),
+      base44.entities.LeadGroup.filter({ client_id: client.id }, '-created_date', 100)
     ]);
     setAgents(agentsData.filter(a => a.status === 'active'));
     setLeads(leadsData);
+    setLeadGroups(groupsData);
   };
 
   const filteredLeads = leads.filter(l => {
-    if (leadFilter === 'all') return true;
-    return l.status === leadFilter;
+    if (leadFilter !== 'all' && l.status !== leadFilter) return false;
+    if (groupFilter === 'ungrouped' && l.group_id) return false;
+    if (groupFilter !== 'all' && groupFilter !== 'ungrouped' && l.group_id !== groupFilter) return false;
+    return true;
   });
 
   const toggleLead = (id) => {
@@ -74,6 +82,15 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
     if (!form.agent_id) return toast.error('Select an agent');
     if (selectedLeads.length === 0) return toast.error('Select at least one lead');
 
+    let scheduledISO = null;
+    if (scheduleEnabled) {
+      if (!scheduledDate) return toast.error('Pick a schedule date/time');
+      const dt = new Date(scheduledDate);
+      if (isNaN(dt.getTime())) return toast.error('Invalid schedule date');
+      if (dt.getTime() <= Date.now()) return toast.error('Schedule time must be in the future');
+      scheduledISO = dt.toISOString();
+    }
+
     setLoading(true);
     try {
       // Only include call_script if any section has content
@@ -87,6 +104,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
         max_concurrent_calls: form.max_concurrent_calls,
         total_leads: selectedLeads.length,
         ...(hasScript ? { call_script: form.call_script } : {}),
+        ...(scheduledISO ? { scheduled_date: scheduledISO } : {}),
         followup_rules: {
           interested_email: form.interested_email,
           interested_ai_email: form.interested_ai_email,
@@ -99,7 +117,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
           no_answer_retry_hours: form.no_answer_retry_hours,
           no_answer_max_retries: form.no_answer_max_retries,
         },
-        status: 'draft'
+        status: scheduledISO ? 'scheduled' : 'draft'
       });
 
       // Create campaign leads
@@ -116,7 +134,11 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
       });
 
       await base44.entities.CampaignLead.bulkCreate(campaignLeads);
-      toast.success(`Campaign created with ${selectedLeads.length} leads`);
+      if (scheduledISO) {
+        toast.success(`Campaign scheduled for ${new Date(scheduledISO).toLocaleString()}`);
+      } else {
+        toast.success(`Campaign created with ${selectedLeads.length} leads`);
+      }
       onCreated?.();
       onOpenChange(false);
     } catch (err) {
@@ -168,6 +190,28 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
               <Input type="number" min={1} max={10} value={form.max_concurrent_calls}
                 onChange={e => setForm({...form, max_concurrent_calls: parseInt(e.target.value) || 5})} />
             </div>
+          </div>
+
+          {/* Schedule */}
+          <div className="border rounded-lg p-4 space-y-3 bg-blue-50/30">
+            <div className="flex items-center gap-2">
+              <Checkbox checked={scheduleEnabled} onCheckedChange={v => setScheduleEnabled(!!v)} id="schedule-toggle" />
+              <label htmlFor="schedule-toggle" className="font-semibold text-sm text-gray-700 cursor-pointer">
+                Schedule for later
+              </label>
+            </div>
+            {scheduleEnabled && (
+              <div>
+                <Label>Start Date & Time</Label>
+                <Input
+                  type="datetime-local"
+                  value={scheduledDate}
+                  onChange={e => setScheduledDate(e.target.value)}
+                  min={new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16)}
+                />
+                <p className="text-xs text-gray-500 mt-1">Campaign will auto-start at this time (checked every 5 min).</p>
+              </div>
+            )}
           </div>
 
           {/* Call Script */}
@@ -245,9 +289,19 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
 
           {/* Lead Selection */}
           <div className="border rounded-lg p-4 space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between flex-wrap gap-2">
               <p className="font-semibold text-sm text-gray-700">Select Leads ({selectedLeads.length} selected)</p>
-              <div className="flex gap-2">
+              <div className="flex gap-2 flex-wrap">
+                <Select value={groupFilter} onValueChange={setGroupFilter}>
+                  <SelectTrigger className="w-40 h-8"><SelectValue placeholder="Group" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Groups</SelectItem>
+                    <SelectItem value="ungrouped">Ungrouped</SelectItem>
+                    {leadGroups.map(g => (
+                      <SelectItem key={g.id} value={g.id}>{g.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
                 <Select value={leadFilter} onValueChange={setLeadFilter}>
                   <SelectTrigger className="w-36 h-8"><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -284,7 +338,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
           <div className="flex justify-end gap-3">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
             <Button type="submit" disabled={loading} className="bg-blue-600 hover:bg-blue-700">
-              {loading ? 'Creating...' : 'Create Campaign'}
+              {loading ? 'Creating...' : (scheduleEnabled ? 'Schedule Campaign' : 'Create Campaign')}
             </Button>
           </div>
         </form>

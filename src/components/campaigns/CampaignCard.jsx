@@ -101,6 +101,11 @@ export default function CampaignCard({ campaign, onStart, onPause }) {
           )}
         </div>
 
+        {campaign.status === 'scheduled' && campaign.scheduled_date && (
+          <p className="text-xs text-blue-600 mt-3 font-medium">
+            ⏰ Starts {new Date(campaign.scheduled_date).toLocaleString()}
+          </p>
+        )}
         {campaign.created_date && (
           <p className="text-xs text-gray-400 mt-3">
             Created {new Date(campaign.created_date).toLocaleDateString()}
