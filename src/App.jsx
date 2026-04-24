@@ -15,6 +15,7 @@ import SocialMediaCalendar from './pages/SocialMediaCalendar';
 import ClientBrandSettings from './pages/ClientBrandSettings';
 import PersonalDashboard from './pages/PersonalDashboard';
 import PersonalAIAssistant from './pages/PersonalAIAssistant';
+import AdminTopups from './pages/AdminTopups';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -104,6 +105,11 @@ const AuthenticatedApp = () => {
       <Route path="/PersonalAIAssistant" element={
         <LayoutWrapper currentPageName="PersonalAIAssistant">
           <PersonalAIAssistant />
+        </LayoutWrapper>
+      } />
+      <Route path="/AdminTopups" element={
+        <LayoutWrapper currentPageName="AdminTopups">
+          <AdminTopups />
         </LayoutWrapper>
       } />
       <Route path="*" element={<PageNotFound />} />

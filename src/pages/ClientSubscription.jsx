@@ -8,6 +8,7 @@ import ActiveSubscription from '../components/subscription/ActiveSubscription';
 import PaymentHistory from '../components/subscription/PaymentHistory';
 import WalletCard from '../components/subscription/WalletCard';
 import TopupSection from '../components/subscription/TopupSection';
+import TopupHistory from '../components/subscription/TopupHistory';
 import UsageHistory from '../components/subscription/UsageHistory';
 
 export default function ClientSubscription() {
@@ -216,6 +217,11 @@ export default function ClientSubscription() {
             loading={paying}
           />
         </>
+      )}
+
+      {/* Top-Up History & Billing (per-minute users) */}
+      {isPerMinute && (
+        <TopupHistory payments={payments} rate={client?.per_minute_rate || 4} />
       )}
 
       {/* Usage history (for per-minute) */}
