@@ -256,6 +256,18 @@ Deno.serve(async (req) => {
                   leadContext ? `\n\n--- LEAD CONTEXT ---\n${leadContext}` : ''
                 ].filter(Boolean).join('\n');
 
+                // Use campaign script's "opening" as greeting if present (overrides agent default)
+                let campaignGreeting = agent.greeting_message || '';
+                if (campaign.call_script?.opening && campaign.call_script.opening.trim()) {
+                  let leadCompany = '';
+                  if (cl.lead_id) { try { leadCompany = (await svc.entities.Lead.get(cl.lead_id))?.company || ''; } catch (_) {} }
+                  campaignGreeting = campaign.call_script.opening
+                    .replace(/\{\{name\}\}/gi, cl.lead_name || 'Sir/Madam')
+                    .replace(/\{\{company\}\}/gi, leadCompany)
+                    .trim();
+                  console.log(`[campaignPoller] Using campaign opening as greeting for ${cl.lead_name}`);
+                }
+
                 const callLog = await svc.entities.CallLog.create({
                   client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
                   call_sid: callSid, caller_id: selectedDID, callee_number: cleanPhone,
@@ -264,7 +276,7 @@ Deno.serve(async (req) => {
                     agent_name: agent.name, system_prompt: personalizedPrompt,
                     persona: agent.persona || {}, knowledge_base_content: kbContent,
                     lead_context: leadContext,
-                    greeting_message: agent.greeting_message || ''
+                    greeting_message: campaignGreeting
                   }
                 });
 

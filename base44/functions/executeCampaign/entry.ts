@@ -296,6 +296,17 @@ Deno.serve(async (req) => {
           `\n\n--- LEAD CONTEXT (YOU MUST USE THIS DATA IN THE CONVERSATION) ---\n${leadContext}`
         ].filter(Boolean).join('\n');
 
+        // Use campaign script's "opening" as greeting if present (overrides agent default)
+        // Personalize {{name}} placeholder if used
+        let campaignGreeting = agent.greeting_message || '';
+        if (campaign.call_script?.opening && campaign.call_script.opening.trim()) {
+          campaignGreeting = campaign.call_script.opening
+            .replace(/\{\{name\}\}/gi, cl.lead_name || 'Sir/Madam')
+            .replace(/\{\{company\}\}/gi, (await (async () => { try { return (await svc.entities.Lead.get(cl.lead_id))?.company || ''; } catch (_) { return ''; } })()))
+            .trim();
+          console.log(`[campaign] Using campaign opening as greeting for ${cl.lead_name}: "${campaignGreeting.substring(0, 80)}"`);
+        }
+
         const callLog = await svc.entities.CallLog.create({
           client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
           call_sid: callSid, caller_id: selectedDID, callee_number: cleanPhone,
@@ -305,7 +316,7 @@ Deno.serve(async (req) => {
             agent_name: agent.name, system_prompt: personalizedPrompt,
             persona: agent.persona || {}, knowledge_base_content: kbContent,
             lead_context: leadContext,
-            greeting_message: agent.greeting_message || '',
+            greeting_message: campaignGreeting,
             human_transfer_number: agent.human_transfer_number || '',
             enable_auto_transfer: agent.enable_auto_transfer !== false
           }
