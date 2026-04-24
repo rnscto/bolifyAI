@@ -48,7 +48,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
   const loadData = async () => {
     const [agentsData, leadsData, groupsData] = await Promise.all([
       base44.entities.Agent.filter({ client_id: client.id }),
-      base44.entities.Lead.filter({ client_id: client.id }, '-created_date', 500),
+      base44.entities.Lead.filter({ client_id: client.id }, '-created_date', 2000),
       base44.entities.LeadGroup.filter({ client_id: client.id }, '-created_date', 100)
     ]);
     setAgents(agentsData.filter(a => a.status === 'active'));
