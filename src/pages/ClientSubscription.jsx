@@ -44,7 +44,7 @@ export default function ClientSubscription() {
 
       const [subs, pays] = await Promise.all([
         base44.entities.Subscription.filter({ client_id: clientData.id }, '-created_date', 10),
-        base44.entities.Payment.filter({ client_id: clientData.id }, '-created_date', 20),
+        base44.entities.Payment.filter({ client_id: clientData.id }, '-created_date', 500),
       ]);
 
       const activeSub = subs.find(s => s.status === 'active') || subs[0];
