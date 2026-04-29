@@ -10,6 +10,7 @@ import TrialBanner from '../components/TrialBanner';
 export default function ClientDashboard() {
   const [user, setUser] = useState(null);
   const [client, setClient] = useState(null);
+  const [subscription, setSubscription] = useState(null);
   const [stats, setStats] = useState({
     totalAgents: 0,
     activeAgents: 0,
@@ -36,12 +37,14 @@ export default function ClientDashboard() {
         const clientData = clients[0];
         setClient(clientData);
 
-        const [agents, leads, calls, activities] = await Promise.all([
+        const [agents, leads, calls, activities, subs] = await Promise.all([
           base44.entities.Agent.filter({ client_id: clientData.id }),
           base44.entities.Lead.filter({ client_id: clientData.id }),
           base44.entities.CallLog.filter({ client_id: clientData.id }, '-created_date', 100),
-          base44.entities.Activity.filter({ client_id: clientData.id })
+          base44.entities.Activity.filter({ client_id: clientData.id }),
+          base44.entities.Subscription.filter({ client_id: clientData.id, status: 'active' }, '-created_date', 1)
         ]);
+        setSubscription(subs[0] || null);
 
         const today = new Date().toISOString().split('T')[0];
         const callsToday = calls.filter(call => 
@@ -215,7 +218,11 @@ export default function ClientDashboard() {
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">Monthly Rate</span>
                     <span className="text-sm font-medium">
-                      ₹{((client?.total_channels || 1) * (client?.monthly_rate_per_channel || 14999)).toLocaleString()}
+                      ₹{(
+                        subscription?.rate_per_channel
+                          ? subscription.rate_per_channel * (subscription.channels || client?.total_channels || 1)
+                          : (client?.total_channels || 1) * (client?.monthly_rate_per_channel || 14999)
+                      ).toLocaleString()}
                     </span>
                   </div>
                 </>
