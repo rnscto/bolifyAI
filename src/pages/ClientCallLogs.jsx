@@ -50,7 +50,7 @@ export default function ClientCallLogs() {
         const callsData = await base44.entities.CallLog.filter(
           { client_id: clientData.id },
           '-created_date',
-          100
+          5000
         );
         setCall(callsData);
       }
