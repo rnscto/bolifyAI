@@ -230,7 +230,7 @@ export default function AdminClients() {
                   required
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  ₹{(formData.total_channels * 6500).toLocaleString()}/month
+                  ₹{(formData.total_channels * 14999).toLocaleString()}/month
                 </p>
               </div>
               <div className="flex gap-3 justify-end">
@@ -281,7 +281,7 @@ export default function AdminClients() {
                     <TableCell>{client.phone || '-'}</TableCell>
                     <TableCell>
                       <Badge className={client.billing_type === 'unlimited' ? 'bg-purple-100 text-purple-800' : 'bg-cyan-100 text-cyan-800'}>
-                        {client.billing_type === 'unlimited' ? `Unlimited ×${client.total_channels || 1}` : '₹4/min'}
+                        {client.billing_type === 'unlimited' ? `Unlimited ×${client.total_channels || 1}` : `₹${client.per_minute_rate || 4}/min`}
                       </Badge>
                     </TableCell>
                     <TableCell>

@@ -24,7 +24,7 @@ export default function AdminDashboard() {
     const [clientsRes, dids, calls, subscriptions, payments] = await Promise.all([
       base44.functions.invoke('adminListClients', { action: 'list' }),
       base44.entities.DID.list(),
-      base44.entities.CallLog.list('-created_date', 100),
+      base44.entities.CallLog.list('-created_date', 5000),
       base44.entities.Subscription.list('-created_date'),
       base44.entities.Payment.list('-created_date', 10),
     ]);
@@ -40,7 +40,7 @@ export default function AdminDashboard() {
 
     const totalMRR = clients
       .filter(c => c.account_status === 'active')
-      .reduce((sum, c) => sum + ((c.total_channels || 1) * 6500) + (c.has_custom_crm ? 1999 : 0), 0);
+      .reduce((sum, c) => sum + ((c.total_channels || 1) * (c.monthly_rate_per_channel || 14999)) + (c.has_custom_crm ? 1999 : 0), 0);
 
     const activeSubs = subscriptions.filter(s => s.status === 'active');
     const totalQRevenue = activeSubs.reduce((sum, s) => sum + (s.total_amount || 0), 0);
