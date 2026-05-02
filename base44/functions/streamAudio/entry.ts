@@ -1400,25 +1400,45 @@ Deno.serve(async (req) => {
       let callLog = null;
       const cutoff = new Date(Date.now() - 120000).toISOString();
       const cleanCallee = session.calleeNumber ? session.calleeNumber.replace(/[^0-9]/g, '') : '';
-      const matchPhone = (list) => { const uc = list.filter(l => !l.stream_sid && l.created_date >= cutoff); if (!uc.length) return null; if (cleanCallee) { const pm = uc.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10)); if (pm) return pm; } return uc[0]; };
+      const cleanCaller = session.callerNumber ? session.callerNumber.replace(/[^0-9]/g, '') : '';
+      // STRICT phone-match: ONLY return a CallLog whose callee_number actually matches.
+      // This prevents picking up a stranger's recent CallLog and using their agent config.
+      const matchPhoneStrict = (list) => {
+        if (!cleanCallee) return null;
+        const uc = list.filter(l => !l.stream_sid && l.created_date >= cutoff);
+        return uc.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10)) || null;
+      };
 
-      // ── PARALLEL: Fire ALL matching strategies at once ──
-      const sidV = [];
-      if (session.callSid) { sidV.push(session.callSid); const nc = session.callSid.replace(/^[^-]*-/, '').replace(/\.[^.]*$/, ''); if (nc && nc !== session.callSid) sidV.push(nc); const dg = session.callSid.replace(/\D/g, ''); if (dg && dg.length > 5) sidV.push(dg); }
-      const wd = session._warmCallLogs; // pre-fetched on smartfloSocket.onopen
-      const [sidRes, ringRaw, initRaw, broadRaw] = await Promise.all([
-        sidV.length > 0 ? Promise.all(sidV.map(sid => svc.entities.CallLog.filter({ call_sid: sid }).catch(() => []))) : [],
-        wd?.ringing ?? svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
-        wd?.initiated ?? svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => []),
-        wd?.recent ?? svc.entities.CallLog.list('-created_date', 15).catch(() => [])
-      ]);
-      // Evaluate in priority order
-      for (let i = 0; i < sidRes.length && !callLog; i++) { const l = Array.isArray(sidRes[i]) ? sidRes[i] : []; if (l.length > 0) { callLog = l[0]; console.log(`[${reqId}] 🔍 call_sid match (${sidV[i]}): ${callLog.id}`); } }
-      if (!callLog) { callLog = matchPhone(Array.isArray(ringRaw) ? ringRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Ringing match: ${callLog.id}`); }
-      if (!callLog) { callLog = matchPhone(Array.isArray(initRaw) ? initRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Initiated match: ${callLog.id}`); }
-      if (!callLog) {
-        const cands = (Array.isArray(broadRaw) ? broadRaw : []).filter(l => !l.stream_sid && l.created_date >= cutoff && l.agent_config_cache?.system_prompt && ['initiated', 'ringing', 'answered'].includes(l.status));
-        if (cands.length > 0) { if (cleanCallee) { const pm = cands.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10)); if (pm) callLog = pm; } if (!callLog) callLog = cands[0]; if (callLog) console.log(`[${reqId}] 🔍 Broad match: ${callLog.id}`); }
+      // ── Detect inbound: customer_number param is missing (set in 'start' handler) OR caller is an external number ──
+      // For inbound calls, skip CallLog matching entirely and go straight to DID→Agent resolution below.
+      // The DID is the authoritative source of which agent/client owns the call.
+      const isInbound = !!session._isInboundCall;
+
+      if (!isInbound) {
+        // ── OUTBOUND: Match by call_sid (most reliable for outbound click-to-call) ──
+        const sidV = [];
+        if (session.callSid) { sidV.push(session.callSid); const nc = session.callSid.replace(/^[^-]*-/, '').replace(/\.[^.]*$/, ''); if (nc && nc !== session.callSid) sidV.push(nc); const dg = session.callSid.replace(/\D/g, ''); if (dg && dg.length > 5) sidV.push(dg); }
+        const wd = session._warmCallLogs; // pre-fetched on smartfloSocket.onopen
+        const [sidRes, ringRaw, initRaw, broadRaw] = await Promise.all([
+          sidV.length > 0 ? Promise.all(sidV.map(sid => svc.entities.CallLog.filter({ call_sid: sid }).catch(() => []))) : [],
+          wd?.ringing ?? svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
+          wd?.initiated ?? svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => []),
+          wd?.recent ?? svc.entities.CallLog.list('-created_date', 15).catch(() => [])
+        ]);
+        // Evaluate in priority order — STRICT phone match (no fallback to first-uncategorized)
+        for (let i = 0; i < sidRes.length && !callLog; i++) { const l = Array.isArray(sidRes[i]) ? sidRes[i] : []; if (l.length > 0) { callLog = l[0]; console.log(`[${reqId}] 🔍 call_sid match (${sidV[i]}): ${callLog.id}`); } }
+        if (!callLog) { callLog = matchPhoneStrict(Array.isArray(ringRaw) ? ringRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Ringing match (strict): ${callLog.id}`); }
+        if (!callLog) { callLog = matchPhoneStrict(Array.isArray(initRaw) ? initRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Initiated match (strict): ${callLog.id}`); }
+        if (!callLog) {
+          // Broad match must ALSO be strict on callee_number — never pick "first available" outbound log
+          const cands = (Array.isArray(broadRaw) ? broadRaw : []).filter(l => !l.stream_sid && l.created_date >= cutoff && l.agent_config_cache?.system_prompt && ['initiated', 'ringing', 'answered'].includes(l.status));
+          if (cands.length > 0 && cleanCallee) {
+            callLog = cands.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10)) || null;
+            if (callLog) console.log(`[${reqId}] 🔍 Broad match (strict): ${callLog.id}`);
+          }
+        }
+      } else {
+        console.log(`[${reqId}] 📥 INBOUND call detected — skipping CallLog match, resolving via DID→Agent`);
       }
       console.log(`[${reqId}] ⏱️ CallLog match: ${Date.now() - t0}ms`);
 
@@ -1855,6 +1875,7 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
           console.log(`[${reqId}] 📞 No customer_number param — likely INBOUND. to=${toNum}, from=${fromNum}`);
           session.calleeNumber = startData.to || '';  // DID that was called
           session.callerNumber = startData.from || ''; // External caller
+          session._isInboundCall = true;
         }
 
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}, call=${session.callSid}, calleeNumber=${session.calleeNumber}, callerNumber=${session.callerNumber}`);
