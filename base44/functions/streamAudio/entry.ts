@@ -30,15 +30,11 @@ function encodeMulaw(sample) {
   return ~(sign | (exponent << 4) | mantissa) & 0xFF;
 }
 
-// Realtime API uses 24kHz PCM16, Smartflo uses 8kHz mu-law
-// We need to upsample 8k→24k on input, downsample 24k→8k on output
-
-// ─── Persistent state for cross-chunk continuity (avoids clicks at boundaries) ───
-let _lastUpsampleValue = 0;  // Last sample from previous upsampling chunk
-let _lastDownsampleRemainder = []; // Leftover samples from previous downsampling chunk
+// Realtime API uses 24kHz PCM16, Smartflo uses 8kHz mu-law (upsample 8k→24k input, downsample 24k→8k output).
+// Per-session audio state is passed in to avoid cross-call corruption.
 
 // Convert mu-law 8kHz → PCM16 24kHz LE base64 (upsample 3x for Realtime API)
-function mulawToBase64PCM16_24k(mulawBytes) {
+function mulawToBase64PCM16_24k(mulawBytes, audioState) {
   // Decode mu-law to PCM16 at 8kHz
   const pcm8k = new Int16Array(mulawBytes.length);
   for (let i = 0; i < mulawBytes.length; i++) {
@@ -48,7 +44,7 @@ function mulawToBase64PCM16_24k(mulawBytes) {
   // Upsample 8kHz → 24kHz using cubic-style interpolation with cross-chunk continuity
   const pcm24k = new Int16Array(pcm8k.length * 3);
   for (let i = 0; i < pcm8k.length; i++) {
-    const s0 = i === 0 ? _lastUpsampleValue : pcm8k[i - 1];
+    const s0 = i === 0 ? audioState.lastUpsampleValue : pcm8k[i - 1];
     const s1 = pcm8k[i];
     const s2 = i < pcm8k.length - 1 ? pcm8k[i + 1] : s1;
 
@@ -58,7 +54,7 @@ function mulawToBase64PCM16_24k(mulawBytes) {
     pcm24k[i * 3 + 2] = Math.round(s1 + (s2 - s0) / 3);
   }
   if (pcm8k.length > 0) {
-    _lastUpsampleValue = pcm8k[pcm8k.length - 1];
+    audioState.lastUpsampleValue = pcm8k[pcm8k.length - 1];
   }
 
   // Convert to base64 (little-endian bytes)
@@ -76,7 +72,7 @@ function mulawToBase64PCM16_24k(mulawBytes) {
 
 // Convert PCM16 24kHz LE base64 (from Realtime API) → mu-law 8kHz bytes (downsample 3x)
 // Uses a 3-tap averaging low-pass filter before decimation to prevent aliasing
-function base64PCM16_24kToMulaw(base64Pcm16) {
+function base64PCM16_24kToMulaw(base64Pcm16, audioState) {
   const raw = atob(base64Pcm16);
   const bytes = new Uint8Array(raw.length);
   for (let i = 0; i < raw.length; i++) {
@@ -88,12 +84,13 @@ function base64PCM16_24kToMulaw(base64Pcm16) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
   // Prepend leftover samples from previous chunk for continuity
-  const allSamples = new Int16Array(_lastDownsampleRemainder.length + numSamples);
-  for (let i = 0; i < _lastDownsampleRemainder.length; i++) {
-    allSamples[i] = _lastDownsampleRemainder[i];
+  const remainder = audioState.lastDownsampleRemainder;
+  const allSamples = new Int16Array(remainder.length + numSamples);
+  for (let i = 0; i < remainder.length; i++) {
+    allSamples[i] = remainder[i];
   }
   for (let i = 0; i < numSamples; i++) {
-    allSamples[_lastDownsampleRemainder.length + i] = view.getInt16(i * 2, true);
+    allSamples[remainder.length + i] = view.getInt16(i * 2, true);
   }
 
   const totalSamples = allSamples.length;
@@ -115,10 +112,11 @@ function base64PCM16_24kToMulaw(base64Pcm16) {
 
   // Save leftover samples for next chunk
   const consumed = downsampledLen * 3;
-  _lastDownsampleRemainder = [];
+  const newRemainder = [];
   for (let i = consumed; i < totalSamples; i++) {
-    _lastDownsampleRemainder.push(allSamples[i]);
+    newRemainder.push(allSamples[i]);
   }
+  audioState.lastDownsampleRemainder = newRemainder;
 
   return mulaw;
 }
@@ -134,24 +132,17 @@ async function saveCallRecord(session, reqId, duration) {
   session._saved = true;
 
   try {
-    const transcript = session.transcript
-      .map(t => `${t.speaker}: ${t.text}`)
-      .join('\n');
-
+    const transcript = session.transcript.map(t => `${t.speaker}: ${t.text}`).join('\n');
     const sdkMod = session._sdkModule || await import('npm:@base44/sdk@0.8.23');
     const appId = Deno.env.get('BASE44_APP_ID');
     const serviceClient = sdkMod.createClient({ appId, asServiceRole: true });
-
     const rawEndpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT') || '';
     const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
     const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-
-    // Normalize Azure endpoint: strip trailing slash and any /openai/... suffix to get just the base
+    // Normalize Azure endpoint (strip trailing slash and /openai/... or /api/projects/... suffix)
     let baseUrl = rawEndpoint.replace(/\/+$/, '');
-    // If endpoint already contains /openai/ path (e.g. from Azure AI Foundry), strip it
     const openaiIdx = baseUrl.indexOf('/openai/');
     if (openaiIdx > 0) baseUrl = baseUrl.substring(0, openaiIdx);
-    // Also strip /api/projects/... paths from AI Foundry endpoints
     const apiProjIdx = baseUrl.indexOf('/api/projects');
     if (apiProjIdx > 0) baseUrl = baseUrl.substring(0, apiProjIdx);
 
@@ -389,9 +380,7 @@ async function saveCallRecord(session, reqId, duration) {
       }
     }
 
-    // NOTE: Auto-enroll in email sequence is handled EXCLUSIVELY by campaignPostCall.
-    // streamAudio only owns: CallLog (transcript/summary/AI) + Lead (scoring/status).
-
+    // NOTE: Auto-enroll handled by campaignPostCall. streamAudio only owns CallLog + Lead updates.
     // ===== STEP 6: Trigger post-call action extraction (fire-and-forget) =====
     if (transcript.length > 50) {
       serviceClient.functions.invoke('postCallActionExtractor', {
@@ -400,12 +389,7 @@ async function saveCallRecord(session, reqId, duration) {
         .catch(e => console.error(`[${reqId}] ⚠️ Action extraction failed: ${e.message}`));
     }
 
-    // NOTE: CampaignLead updates and next-batch triggering are handled EXCLUSIVELY
-    // by the campaignPostCall entity automation (triggers on CallLog update).
-    // streamAudio only owns: CallLog transcript/summary/AI-analysis + Lead scoring.
-    // This avoids race conditions where both streamAudio and campaignPostCall
-    // were updating the same CampaignLead record simultaneously.
-
+    // NOTE: CampaignLead updates handled by campaignPostCall automation (avoids race conditions).
     try { serviceClient.cleanup(); } catch (_) { /* ignore */ }
   } catch (err) {
     console.error(`[${reqId}] ❌ Save failed:`, err.message);
@@ -481,6 +465,17 @@ Deno.serve(async (req) => {
     enableAutoTransfer: true, // Whether AI can auto-offer transfers
     _realtimeReconnectAttempts: 0,
     _callEnded: false,
+    // Per-session audio conversion state (prevents cross-call corruption)
+    _audioState: {
+      lastUpsampleValue: 0,
+      lastDownsampleRemainder: []
+    },
+    // Buffer for incoming caller media packets while Azure Realtime is initializing
+    // (prevents audio loss in the first 1-3 seconds of the call)
+    _mediaBuffer: [],
+    _mediaBufferMaxBytes: 256 * 1024, // ~16s of mu-law audio at 8kHz, prevents memory bloat
+    _mediaBufferBytes: 0,
+    _mediaBufferFlushed: false,
     _awaitingOwnerDecision: false,  // Waiting for owner's Telegram button press
     _ownerDecisionExecuted: false,  // Owner decision already applied
     _ownerName: '',                 // Owner's display name for AI instructions
@@ -519,6 +514,9 @@ Deno.serve(async (req) => {
       console.log(`[${reqId}] ✅ Azure Realtime WebSocket connected (attempt ${session._realtimeReconnectAttempts})`);
       // Reset reconnect counter on successful connection
       session._realtimeReconnectAttempts = 0;
+      // Track when we last had a stable connection — used to fully reset backoff
+      // for very long-running calls that experience a transient blip after minutes of stability
+      session._lastRealtimeOpenTs = Date.now();
     };
 
     ws.onmessage = (event) => {
@@ -534,19 +532,24 @@ Deno.serve(async (req) => {
       console.log(`[${reqId}] 🔴 Azure Realtime closed: code=${event.code} reason=${event.reason}`);
       session.realtimeReady = false;
 
-      // Auto-reconnect if call is still active and we haven't exhausted retries
-      const MAX_RECONNECT = 3;
+      // If we had a stable connection for >30s, reset the counter so a transient blip
+      // late in the call doesn't immediately exhaust the retry budget.
+      const stableMs = session._lastRealtimeOpenTs ? (Date.now() - session._lastRealtimeOpenTs) : 0;
+      if (stableMs > 30000 && session._realtimeReconnectAttempts > 0) {
+        console.log(`[${reqId}] 🔄 Was stable ${Math.round(stableMs/1000)}s — resetting reconnect counter`);
+        session._realtimeReconnectAttempts = 0;
+      }
+
+      // Exponential backoff: 500ms, 1.5s, 3s, 6s, 10s, 15s (6 attempts, ~36s total budget)
+      const RECONNECT_DELAYS_MS = [500, 1500, 3000, 6000, 10000, 15000];
+      const MAX_RECONNECT = RECONNECT_DELAYS_MS.length;
       if (!session._callEnded && session._realtimeReconnectAttempts < MAX_RECONNECT) {
+        const delay = RECONNECT_DELAYS_MS[session._realtimeReconnectAttempts];
         session._realtimeReconnectAttempts++;
-        const delay = session._realtimeReconnectAttempts * 1000; // 1s, 2s, 3s backoff
-        console.log(`[${reqId}] 🔄 Reconnecting Azure Realtime (attempt ${session._realtimeReconnectAttempts}/${MAX_RECONNECT}) in ${delay}ms...`);
-        setTimeout(() => {
-          if (!session._callEnded) {
-            connectRealtime();
-          }
-        }, delay);
+        console.log(`[${reqId}] 🔄 Reconnecting (${session._realtimeReconnectAttempts}/${MAX_RECONNECT}) in ${delay}ms...`);
+        setTimeout(() => { if (!session._callEnded) connectRealtime(); }, delay);
       } else if (!session._callEnded) {
-        console.error(`[${reqId}] ❌ Azure Realtime reconnect exhausted (${MAX_RECONNECT} attempts). Call voice is dead.`);
+        console.error(`[${reqId}] ❌ Azure Realtime reconnect exhausted (${MAX_RECONNECT} attempts). Voice is dead.`);
       }
     };
 
@@ -1009,7 +1012,7 @@ Deno.serve(async (req) => {
       }
       session.isSpeaking = true;
       // Convert PCM16 24kHz base64 from Realtime API → mu-law 8kHz for Smartflo
-      const mulawBytes = base64PCM16_24kToMulaw(msg.delta);
+      const mulawBytes = base64PCM16_24kToMulaw(msg.delta, session._audioState);
 
       if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
         sendMulawToSmartflo(mulawBytes);
@@ -1880,9 +1883,7 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
 
         console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}, call=${session.callSid}, calleeNumber=${session.calleeNumber}, callerNumber=${session.callerNumber}`);
 
-        // Reset audio conversion state for new call (prevents cross-call artifacts)
-        _lastUpsampleValue = 0;
-        _lastDownsampleRemainder = [];
+        // Audio conversion state lives on session._audioState (already initialized) — no globals.
 
         // Azure Realtime was already pre-warmed on WebSocket upgrade.
         // Now load agent config — when ready, apply session config + greeting.
@@ -1899,31 +1900,40 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
       }
 
       if (msg.event === 'media' && msg.media?.payload) {
-        // Forward caller audio → Azure Realtime API
+        const raw = atob(msg.media.payload);
+        const mulawBytes = new Uint8Array(raw.length);
+        for (let i = 0; i < raw.length; i++) mulawBytes[i] = raw.charCodeAt(i);
+
+        // Buffer caller audio while Realtime is initializing (rolling window, capped)
         if (!session.realtimeReady) {
-          // Buffer or drop — log first few drops
-          if (!session._mediaDropCount) session._mediaDropCount = 0;
-          session._mediaDropCount++;
-          if (session._mediaDropCount <= 3) {
-            console.log(`[${reqId}] ⏳ Realtime not ready yet, dropping media packet #${session._mediaDropCount}`);
+          while (session._mediaBuffer.length > 0 &&
+                 session._mediaBufferBytes + mulawBytes.length > session._mediaBufferMaxBytes) {
+            const dropped = session._mediaBuffer.shift();
+            session._mediaBufferBytes -= dropped.length;
+          }
+          session._mediaBuffer.push(mulawBytes);
+          session._mediaBufferBytes += mulawBytes.length;
+          if (!session._mediaBufferLogged) {
+            session._mediaBufferLogged = true;
+            console.log(`[${reqId}] ⏳ Realtime not ready — buffering caller audio`);
           }
           return;
         }
-        if (true) {
-          const raw = atob(msg.media.payload);
-          const mulawBytes = new Uint8Array(raw.length);
-          for (let i = 0; i < raw.length; i++) {
-            mulawBytes[i] = raw.charCodeAt(i);
+
+        // Realtime ready — flush buffered audio first (one-time)
+        if (!session._mediaBufferFlushed && session._mediaBuffer.length > 0) {
+          session._mediaBufferFlushed = true;
+          console.log(`[${reqId}] 🚀 Flushing ${session._mediaBuffer.length} buffered packets (${session._mediaBufferBytes}B)`);
+          for (const buffered of session._mediaBuffer) {
+            const pcmBuf = mulawToBase64PCM16_24k(buffered, session._audioState);
+            sendToRealtime({ type: 'input_audio_buffer.append', audio: pcmBuf });
           }
-
-          // Convert mu-law 8kHz → PCM16 24kHz base64 for Realtime API
-          const pcm16Base64 = mulawToBase64PCM16_24k(mulawBytes);
-
-          sendToRealtime({
-            type: 'input_audio_buffer.append',
-            audio: pcm16Base64
-          });
+          session._mediaBuffer = [];
+          session._mediaBufferBytes = 0;
         }
+
+        const pcm16Base64 = mulawToBase64PCM16_24k(mulawBytes, session._audioState);
+        sendToRealtime({ type: 'input_audio_buffer.append', audio: pcm16Base64 });
         return;
       }
 
