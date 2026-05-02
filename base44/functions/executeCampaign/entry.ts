@@ -45,6 +45,27 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, status: 'cancelled' });
     }
 
+    // === TRAI COMPLIANCE: 9 AM – 9 PM IST window enforcement ===
+    // Block manual start/resume of dialing outside the permitted window
+    const istMs = Date.now() + (5 * 60 + 30) * 60 * 1000;
+    const istDate = new Date(istMs);
+    const istHour = istDate.getUTCHours();
+    const istMin = istDate.getUTCMinutes();
+    const istString = `${String(istHour).padStart(2, '0')}:${String(istMin).padStart(2, '0')} IST`;
+    const inTRAIWindow = istHour >= 9 && istHour < 21;
+    if (!inTRAIWindow && !_internal) {
+      // Mark campaign as paused so the poller will auto-resume it at 9 AM IST
+      await svc.entities.Campaign.update(campaign_id, {
+        status: 'paused',
+        notes: `${campaign.notes || ''}\n[${new Date().toISOString()}] Auto-paused: outside TRAI 9AM-9PM IST window (attempted at ${istString}). Will auto-resume next morning.`.trim()
+      });
+      return Response.json({
+        error: 'trai_window_closed',
+        message: `Calling is allowed only between 9 AM – 9 PM IST per TRAI guidelines. Current time: ${istString}. Campaign saved as paused — it will auto-resume at 9 AM IST.`,
+        current_ist: istString
+      }, { status: 423 });
+    }
+
     // Guard: don't restart a completed/cancelled campaign via internal trigger
     if (_internal && ['completed', 'cancelled'].includes(campaign.status)) {
       return Response.json({ success: true, skipped: `campaign_${campaign.status}` });

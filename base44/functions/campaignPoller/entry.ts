@@ -5,6 +5,21 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 // 2. Automatically trigger next batch of calls for running campaigns
 // 3. Auto-complete campaigns when all leads are processed
 
+// TRAI Compliance: promotional/transactional voice calls allowed only between 9 AM and 9 PM IST
+// Returns { inWindow, istHour, istString }
+function getISTWindowStatus() {
+  const now = new Date();
+  // IST = UTC+5:30 — derive IST hour without relying on server tz
+  const istMs = now.getTime() + (5 * 60 + 30) * 60 * 1000;
+  const ist = new Date(istMs);
+  const istHour = ist.getUTCHours();
+  const istMin = ist.getUTCMinutes();
+  // Window: 09:00 (inclusive) to 21:00 (exclusive)
+  const inWindow = istHour >= 9 && istHour < 21;
+  const istString = `${String(istHour).padStart(2, '0')}:${String(istMin).padStart(2, '0')} IST`;
+  return { inWindow, istHour, istString };
+}
+
 Deno.serve(async (req) => {
   try {
     // Support external cron: allow GET requests with shared secret or CRON_API_KEY
@@ -23,29 +38,74 @@ Deno.serve(async (req) => {
 
     const base44 = createClientFromRequest(req);
     const svc = base44.asServiceRole;
-    const results = { campaigns_processed: 0, stuck_fixed: 0, batches_triggered: 0, completed: 0, scheduled_started: 0, errors: [] };
+    const results = { campaigns_processed: 0, stuck_fixed: 0, batches_triggered: 0, completed: 0, scheduled_started: 0, auto_paused: 0, auto_resumed: 0, errors: [] };
 
-    // Auto-start any scheduled campaigns whose time has arrived
-    const scheduledCampaigns = await svc.entities.Campaign.filter({ status: 'scheduled' }, 'created_date', 200);
-    const nowMs = Date.now();
-    let autoStarted = 0;
-    for (const sc of scheduledCampaigns) {
-      if (!sc.scheduled_date) continue;
-      const schedMs = new Date(sc.scheduled_date).getTime();
-      if (isNaN(schedMs)) continue;
-      if (schedMs <= nowMs) {
-        await svc.entities.Campaign.update(sc.id, {
-          status: 'running',
-          started_at: new Date().toISOString()
+    // === TRAI WINDOW CHECK (9 AM – 9 PM IST) ===
+    const { inWindow, istString } = getISTWindowStatus();
+    console.log(`[campaignPoller] Current time: ${istString} — TRAI window ${inWindow ? 'OPEN' : 'CLOSED'}`);
+
+    // === AUTO-PAUSE running campaigns outside window ===
+    if (!inWindow) {
+      const activeCampaigns = await svc.entities.Campaign.filter({ status: 'running' }, 'created_date', 500);
+      for (const c of activeCampaigns) {
+        await svc.entities.Campaign.update(c.id, {
+          status: 'paused',
+          notes: `${c.notes || ''}\n[${new Date().toISOString()}] Auto-paused: outside TRAI 9AM-9PM IST window (paused at ${istString}).`.trim()
         });
-        autoStarted++;
-        console.log(`[campaignPoller] Auto-started scheduled campaign "${sc.name}" (scheduled ${sc.scheduled_date})`);
+        results.auto_paused++;
+        console.log(`[campaignPoller] TRAI auto-pause: "${c.name}" paused at ${istString}`);
       }
     }
 
-    // Find all running campaigns (includes the ones just auto-started)
+    // === AUTO-RESUME paused (auto-paused) campaigns when window opens ===
+    let autoResumed = 0;
+    if (inWindow) {
+      const pausedCampaigns = await svc.entities.Campaign.filter({ status: 'paused' }, 'created_date', 500);
+      for (const c of pausedCampaigns) {
+        // Only auto-resume campaigns that were auto-paused by TRAI window check
+        if (c.notes && c.notes.includes('Auto-paused: outside TRAI')) {
+          await svc.entities.Campaign.update(c.id, {
+            status: 'running',
+            notes: `${c.notes}\n[${new Date().toISOString()}] Auto-resumed: TRAI window opened (resumed at ${istString}).`
+          });
+          autoResumed++;
+          results.auto_resumed++;
+          console.log(`[campaignPoller] TRAI auto-resume: "${c.name}" resumed at ${istString}`);
+        }
+      }
+    }
+
+    // Auto-start any scheduled campaigns whose time has arrived (only if window is open)
+    const nowMs = Date.now();
+    let autoStarted = 0;
+    if (inWindow) {
+      const scheduledCampaigns = await svc.entities.Campaign.filter({ status: 'scheduled' }, 'created_date', 200);
+      for (const sc of scheduledCampaigns) {
+        if (!sc.scheduled_date) continue;
+        const schedMs = new Date(sc.scheduled_date).getTime();
+        if (isNaN(schedMs)) continue;
+        if (schedMs <= nowMs) {
+          await svc.entities.Campaign.update(sc.id, {
+            status: 'running',
+            started_at: new Date().toISOString()
+          });
+          autoStarted++;
+          console.log(`[campaignPoller] Auto-started scheduled campaign "${sc.name}" (scheduled ${sc.scheduled_date})`);
+        }
+      }
+    } else {
+      console.log('[campaignPoller] TRAI window closed — skipping scheduled campaign auto-start');
+    }
+
+    // If outside window, skip the dialing loop entirely (campaigns already paused above)
+    if (!inWindow) {
+      console.log(`[campaignPoller] Outside TRAI window — paused ${results.auto_paused} campaign(s), skipping dialing.`);
+      return Response.json({ success: true, trai_window_open: false, current_ist: istString, ...results });
+    }
+
+    // Find all running campaigns (includes the ones just auto-started/resumed)
     const runningCampaigns = await svc.entities.Campaign.filter({ status: 'running' });
-    console.log(`[campaignPoller] Found ${runningCampaigns.length} running campaigns (${autoStarted} just auto-started)`);
+    console.log(`[campaignPoller] Found ${runningCampaigns.length} running campaigns (${autoStarted} just auto-started, ${autoResumed} auto-resumed)`);
 
     for (const campaign of runningCampaigns) {
       try {
@@ -360,7 +420,7 @@ Deno.serve(async (req) => {
     }
 
     results.scheduled_started = autoStarted;
-    return Response.json({ success: true, ...results });
+    return Response.json({ success: true, trai_window_open: true, current_ist: istString, ...results });
   } catch (error) {
     console.error('[campaignPoller] Error:', error);
     return Response.json({ error: error.message }, { status: 500 });
