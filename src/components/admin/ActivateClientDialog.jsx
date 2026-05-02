@@ -68,6 +68,35 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
 
     await base44.entities.Client.update(client.id, updateData);
 
+    // If admin increased the wallet balance, log it as an admin top-up Payment + UsageLog
+    const oldBalance = parseFloat(client.wallet_balance) || 0;
+    const newBalance = parseFloat(form.wallet_balance) || 0;
+    const credited = newBalance - oldBalance;
+    if (credited > 0) {
+      const payment = await base44.entities.Payment.create({
+        client_id: client.id,
+        amount: credited,
+        currency: 'INR',
+        status: 'paid',
+        payment_method: 'admin_manual',
+        cashfree_order_id: `admin_${client.id.slice(-8)}_${Date.now()}`,
+        description: JSON.stringify({ type: 'wallet_topup', amount: credited, gst: 0, total: credited, source: 'admin_manual' }),
+        paid_at: new Date().toISOString(),
+      });
+      try {
+        await base44.entities.UsageLog.create({
+          client_id: client.id,
+          type: 'topup',
+          direction: 'credit',
+          amount: credited,
+          balance_before: oldBalance,
+          balance_after: newBalance,
+          description: `Admin manual top-up ₹${credited}`,
+          payment_id: payment.id,
+        });
+      } catch (_) { /* UsageLog optional */ }
+    }
+
     // Also create/update a subscription record when activating with unlimited billing
     if (form.account_status === 'active' && form.billing_type === 'unlimited' && form.next_billing_date) {
       const channels = parseInt(form.total_channels) || 1;
