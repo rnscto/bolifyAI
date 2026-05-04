@@ -9,6 +9,7 @@
     "billing_cycle": {
       "type": "string",
       "enum": [
+        "monthly",
         "quarterly"
       ],
       "default": "quarterly",

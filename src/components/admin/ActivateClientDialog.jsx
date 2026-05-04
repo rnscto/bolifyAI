@@ -260,6 +260,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
+                      <SelectItem value="monthly">Monthly</SelectItem>
                       <SelectItem value="quarterly">Quarterly</SelectItem>
                     </SelectContent>
                   </Select>
@@ -296,10 +297,17 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
                 </div>
               </div>
 
-              <div className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
-                Total: <strong>₹{((parseInt(form.total_channels) || 1) * (parseFloat(form.monthly_rate_per_channel) || 6500) * 3).toLocaleString()}</strong> / quarter
-                ({form.total_channels} ch × ₹{parseFloat(form.monthly_rate_per_channel || 6500).toLocaleString()} × 3 months)
-              </div>
+              {(() => {
+                const months = form.subscription_plan === 'monthly' ? 1 : 3;
+                const cycleLabel = form.subscription_plan === 'monthly' ? 'month' : 'quarter';
+                const total = (parseInt(form.total_channels) || 1) * (parseFloat(form.monthly_rate_per_channel) || 6500) * months;
+                return (
+                  <div className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
+                    Total: <strong>₹{total.toLocaleString()}</strong> / {cycleLabel}
+                    ({form.total_channels} ch × ₹{parseFloat(form.monthly_rate_per_channel || 6500).toLocaleString()} × {months} month{months > 1 ? 's' : ''})
+                  </div>
+                );
+              })()}
             </>
           )}
 
