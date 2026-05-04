@@ -651,9 +651,40 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
     callbackScheduled = true;
   }
 
+  // CALLBACK → re-queue the lead at the customer-requested time
+  // Customer said "call back in X minutes/hours" → parse from transcript & schedule retry
   if (outcome === 'callback') {
     callbackScheduled = true;
-    console.log(`[campaignPostCall] Callback outcome — skipping Activity creation (campaign retry handles this)`);
+    let callbackAtMs = null;
+    try {
+      const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+      const cbResult = await azureLLM(
+        `Current IST: ${nowIST}\n\nThe customer asked to be called back. Extract the EXACT requested callback time from this transcript:\n\n${callLog.transcript || summary}\n\nReturn an ISO 8601 datetime in IST timezone (e.g. "2026-05-04T15:30:00+05:30"). If unclear, return minutes_from_now (number of minutes from now to call back, default 60 if completely unclear).`,
+        'You are a callback time extractor. Always respond in valid JSON.',
+        { type: "object", properties: { callback_iso: { type: "string" }, minutes_from_now: { type: "number" }, confidence: { type: "string" } } }
+      );
+      if (cbResult.callback_iso) {
+        const parsed = new Date(cbResult.callback_iso);
+        if (!isNaN(parsed.getTime()) && parsed.getTime() > Date.now()) callbackAtMs = parsed.getTime();
+      }
+      if (!callbackAtMs && cbResult.minutes_from_now && cbResult.minutes_from_now > 0) {
+        callbackAtMs = Date.now() + cbResult.minutes_from_now * 60000;
+      }
+      console.log(`[campaignPostCall] Parsed callback: iso=${cbResult.callback_iso}, mins=${cbResult.minutes_from_now}, scheduled=${callbackAtMs ? new Date(callbackAtMs).toISOString() : 'none'}`);
+    } catch (cbErr) {
+      console.error(`[campaignPostCall] Callback time parse failed: ${cbErr.message}`);
+    }
+    // Default: 1 hour from now if AI parse failed
+    if (!callbackAtMs) callbackAtMs = Date.now() + 60 * 60000;
+
+    // Re-queue this CampaignLead so the poller will retry the call at the requested time
+    await base44.entities.CampaignLead.update(campaignLead.id, {
+      status: 'pending',
+      call_log_id: null,
+      followup_call_date: new Date(callbackAtMs).toISOString(),
+      attempt_count: (campaignLead.attempt_count || 0)
+    });
+    console.log(`[campaignPostCall] ✅ Callback re-queued for ${new Date(callbackAtMs).toISOString()} (lead: ${campaignLead.lead_name})`);
   }
 
   if (campaignLead.lead_id && qualificationTier && outcome !== 'not_answered') {
@@ -680,10 +711,10 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
     });
   }
 
-  // Update campaign lead follow-up flags
+  // Update follow-up flags (don't overwrite followup_call_date — callback handler already set it correctly)
   await base44.entities.CampaignLead.update(campaignLead.id, {
-    followup_email_sent: emailSent, followup_scheduled: callbackScheduled,
-    ...(callbackScheduled ? { followup_call_date: new Date(Date.now() + 2 * 86400000).toISOString() } : {})
+    followup_email_sent: emailSent,
+    followup_scheduled: callbackScheduled
   });
 
   // ============================================================
@@ -852,16 +883,45 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
         callbackScheduled = true;
         }
 
-        if (outcome === 'callback') {
-        callbackScheduled = true;
-        console.log(`[campaignPostCall] doFollowUpActions: callback outcome — skipping Activity (no duplicate calls)`);
-        }
+  // CALLBACK → re-queue the lead at the customer-requested time
+  if (outcome === 'callback') {
+    callbackScheduled = true;
+    let callbackAtMs = null;
+    try {
+      const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+      const cbResult = await azureLLM(
+        `Current IST: ${nowIST}\n\nThe customer asked to be called back. Extract the EXACT requested callback time from this transcript:\n\n${callLog.transcript || summary}\n\nReturn an ISO 8601 datetime in IST timezone (e.g. "2026-05-04T15:30:00+05:30"). If unclear, return minutes_from_now (number of minutes from now to call back, default 60 if completely unclear).`,
+        'You are a callback time extractor. Always respond in valid JSON.',
+        { type: "object", properties: { callback_iso: { type: "string" }, minutes_from_now: { type: "number" }, confidence: { type: "string" } } }
+      );
+      if (cbResult.callback_iso) {
+        const parsed = new Date(cbResult.callback_iso);
+        if (!isNaN(parsed.getTime()) && parsed.getTime() > Date.now()) callbackAtMs = parsed.getTime();
+      }
+      if (!callbackAtMs && cbResult.minutes_from_now && cbResult.minutes_from_now > 0) {
+        callbackAtMs = Date.now() + cbResult.minutes_from_now * 60000;
+      }
+      console.log(`[doFollowUpActions] Parsed callback: scheduled=${callbackAtMs ? new Date(callbackAtMs).toISOString() : 'none'}`);
+    } catch (cbErr) {
+      console.error(`[doFollowUpActions] Callback time parse failed: ${cbErr.message}`);
+    }
+    if (!callbackAtMs) callbackAtMs = Date.now() + 60 * 60000;
 
-  // Update campaign lead follow-up flags
-  await base44.entities.CampaignLead.update(campaignLead.id, {
-    followup_email_sent: emailSent, followup_scheduled: callbackScheduled,
-    ...(callbackScheduled ? { followup_call_date: new Date(Date.now() + 2 * 86400000).toISOString() } : {})
-  });
+    await base44.entities.CampaignLead.update(campaignLead.id, {
+      status: 'pending',
+      call_log_id: null,
+      followup_call_date: new Date(callbackAtMs).toISOString(),
+      followup_email_sent: emailSent,
+      followup_scheduled: true
+    });
+    console.log(`[doFollowUpActions] ✅ Callback re-queued for ${new Date(callbackAtMs).toISOString()}`);
+  } else {
+    // Non-callback outcomes: just update flags (don't override followup_call_date)
+    await base44.entities.CampaignLead.update(campaignLead.id, {
+      followup_email_sent: emailSent,
+      followup_scheduled: callbackScheduled
+    });
+  }
 
   // ============================================================
   // Bolify AI CRM — WhatsApp/RCS via CRM automation (doFollowUpActions)
