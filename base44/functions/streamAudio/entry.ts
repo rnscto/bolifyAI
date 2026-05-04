@@ -900,6 +900,8 @@ Deno.serve(async (req) => {
   // ─── PHASE 1: Speak greeting IMMEDIATELY with minimal prompt (saves ~2-3s) ───
   function triggerPhase1Greeting() {
     if (session._greetingSent || session._phase1Applied) return;
+    // Guard: skip if Realtime API already has an active response (caller spoke first triggering VAD)
+    if (session._responseInFlight) { console.log(`[${reqId}] 🛡️ P1: response already in flight — skipping`); session._greetingSent = true; session._phase1Applied = true; applySessionConfig(); return; }
     const greeting = session.greetingMessage || '';
     if (!greeting) { console.log(`[${reqId}] ⚡ No custom greeting — skipping Phase 1`); applySessionConfig(); return; }
     session._phase1Applied = true;
@@ -1028,6 +1030,8 @@ Deno.serve(async (req) => {
     }
 
     if (type === 'response.audio.done') { session.isSpeaking = false; return; }
+    if (type === 'response.created') { session._responseInFlight = true; return; }
+    if (type === 'response.done') { session._responseInFlight = false; return; }
 
     // ─── Transcription of user's speech ───
     if (type === 'conversation.item.input_audio_transcription.failed') { console.error(`[${reqId}] ❌ STT fail`); return; }
@@ -1178,12 +1182,21 @@ Deno.serve(async (req) => {
     if (!inst) return;
     console.log(`[${reqId}] 🎯 Executing: ${dec.decision} (owner: ${ownerName})`);
     if (session.voiceEngine === 'azure_speech') { generateGpt5NanoResponse(inst); }
-    else { sendToRealtime({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: inst }] } }); sendToRealtime({ type: 'response.create' }); }
+    else {
+      sendToRealtime({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: inst }] } });
+      // Guard: only send response.create if no response is currently in flight
+      if (!session._responseInFlight) sendToRealtime({ type: 'response.create' });
+      else console.log(`[${reqId}] 🛡️ Owner decision queued — response in flight, waiting`);
+    }
   }
 
   // ─── Trigger initial greeting so the AI speaks first (guarded against double-fire) ───
   function triggerGreeting() {
     if (session._greetingSent) { console.log(`[${reqId}] 🛡️ Greeting already sent — skipping`); return; }
+    // Guard: if a response is already in flight (e.g. caller spoke before agent config loaded
+    // and triggered an auto-response from VAD), don't queue another — that would cause
+    // "conversation_already_has_active_response" error from the Realtime API.
+    if (session._responseInFlight) { console.log(`[${reqId}] 🛡️ Response already in flight — skipping greeting trigger`); session._greetingSent = true; return; }
     session._greetingSent = true;
     const isHybrid = session.voiceEngine === 'azure_speech';
     const greeting = session.greetingMessage || '';
