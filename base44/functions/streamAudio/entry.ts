@@ -417,16 +417,23 @@ Deno.serve(async (req) => {
   }
   const base44 = createClientFromRequest(base44Req);
 
-  // Non-WebSocket: Smartflo Dynamic endpoint or status check
+  // Non-WebSocket: Smartflo Dynamic endpoint. Echo call_log_id (custom_identifier) into wss_url
+  // so streamAudio can do EXACT CallLog lookup — prevents agent config mixing across concurrent calls.
   if (!isWebSocket) {
     const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
-    const wssUrl = `wss://${host}/functions/streamAudio`;
+    let cid = '';
     if (req.method === 'POST') {
-      try { const bd = await req.json(); console.log(`[${reqId}] 📨 Dynamic POST:`, JSON.stringify(bd)); } catch (_) {}
+      try { const bd = await req.json(); console.log(`[${reqId}] 📨 Dyn POST:`, JSON.stringify(bd)); cid = bd.call_log_id || bd.custom_identifier || bd.callLogId || ''; } catch (_) {}
+    } else if (req.method === 'GET') {
+      const u = new URL(req.url); cid = u.searchParams.get('call_log_id') || u.searchParams.get('custom_identifier') || '';
     }
-    // Smartflo Dynamic endpoint requires exactly {"sucess": true, "wss_url": "wss://..."} — note: "sucess" with one 's' is Smartflo's spec
+    const wssUrl = `wss://${host}/functions/streamAudio${cid ? '?call_log_id=' + encodeURIComponent(cid) : ''}`;
+    if (cid) console.log(`[${reqId}] 🔗 wss_url with call_log_id=${cid}`);
     return new Response(JSON.stringify({ sucess: true, wss_url: wssUrl }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
+  // Extract call_log_id from WebSocket connection URL (set by Dynamic endpoint above)
+  const _wsUrl = new URL(req.url);
+  const _wsCallLogId = _wsUrl.searchParams.get('call_log_id') || '';
 
   // ─── Upgrade Smartflo WebSocket ───
   let smartfloSocket, response;
@@ -479,10 +486,10 @@ Deno.serve(async (req) => {
     _awaitingOwnerDecision: false,  // Waiting for owner's Telegram button press
     _ownerDecisionExecuted: false,  // Owner decision already applied
     _ownerName: '',                 // Owner's display name for AI instructions
-    _greetingSent: false,           // Prevents double greeting (Phase 1 vs Phase 2)
-    _phase1Applied: false,          // Whether Phase 1 minimal greeting config was sent
-    _fastConfigReady: false         // Greeting + voice extracted from cache (before slow KB/Shopify fetches)
+    _greetingSent: false, _phase1Applied: false, _fastConfigReady: false,
+    _explicitCallLogId: _wsCallLogId || null  // EXACT call_log_id from wss URL — prevents config mixing across concurrent calls
   };
+  if (session._explicitCallLogId) console.log(`[${reqId}] 🔒 Explicit call_log_id: ${session._explicitCallLogId}`);
 
   // ─── Connect to Azure Realtime API ───
   function connectRealtime() {
@@ -1401,20 +1408,28 @@ Deno.serve(async (req) => {
       if (!session._sdkModule) session._sdkModule = await import('npm:@base44/sdk@0.8.23');
       const svc = session._warmSvc || session._sdkModule.createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
       let callLog = null;
+      // ═══ EXACT LOOKUP — prevents agent config mixing across concurrent calls ═══
+      const explicitId = session._explicitCallLogId || session._smartfloCustomIdentifier || null;
+      if (explicitId) {
+        try {
+          const direct = session._warmExplicitCallLog || await svc.entities.CallLog.get(explicitId);
+          if (direct?.client_id) {
+            if (direct.stream_sid && session.streamSid && direct.stream_sid !== session.streamSid) { console.error(`[${reqId}] 🚨 CallLog ${explicitId} claimed by ${direct.stream_sid} — refusing to mix`); return; }
+            callLog = direct; console.log(`[${reqId}] ✅ EXACT id=${explicitId} client=${direct.client_id}`);
+          }
+        } catch (e) { console.error(`[${reqId}] ⚠️ Exact fetch failed: ${e.message}`); }
+      }
       const cutoff = new Date(Date.now() - 120000).toISOString();
       const cleanCallee = session.calleeNumber ? session.calleeNumber.replace(/[^0-9]/g, '') : '';
       const cleanCaller = session.callerNumber ? session.callerNumber.replace(/[^0-9]/g, '') : '';
-      // STRICT phone-match: ONLY return a CallLog whose callee_number actually matches.
-      // This prevents picking up a stranger's recent CallLog and using their agent config.
+      // STRICT phone-match: only matches CallLog with same callee
       const matchPhoneStrict = (list) => {
         if (!cleanCallee) return null;
         const uc = list.filter(l => !l.stream_sid && l.created_date >= cutoff);
         return uc.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10)) || null;
       };
 
-      // ── Detect inbound: customer_number param is missing (set in 'start' handler) OR caller is an external number ──
-      // For inbound calls, skip CallLog matching entirely and go straight to DID→Agent resolution below.
-      // The DID is the authoritative source of which agent/client owns the call.
+      // For inbound calls, skip CallLog matching — DID→Agent below is authoritative
       const isInbound = !!session._isInboundCall;
 
       if (!isInbound) {
@@ -1443,11 +1458,9 @@ Deno.serve(async (req) => {
       } else {
         console.log(`[${reqId}] 📥 INBOUND call detected — skipping CallLog match, resolving via DID→Agent`);
       }
-      console.log(`[${reqId}] ⏱️ CallLog match: ${Date.now() - t0}ms`);
+      console.log(`[${reqId}] ⏱️ Match: ${Date.now() - t0}ms`);
 
-      // ── Strategy 4: INBOUND CALL — DID → Agent direct resolution ──
-      // For inbound calls, the WebSocket connects BEFORE smartfloWebhook creates a CallLog.
-      // Resolve the agent directly from the DID that was called.
+      // ── INBOUND: Resolve agent directly from DID (WebSocket connects BEFORE smartfloWebhook creates CallLog)
       if (!callLog && (session.calleeNumber || session.callerNumber)) {
         const callerDID = (session.callerNumber || '').replace(/[^0-9]/g, '').slice(-10);
         console.log(`[${reqId}] 🔍 DID→Agent: callee=${(session.calleeNumber||'').replace(/\D/g,'').slice(-10)}, caller=${callerDID}`);
@@ -1484,7 +1497,7 @@ Deno.serve(async (req) => {
           }
 
           if (didAgent) {
-            // Fix Smartflo swap: if callerNumber is the DID, swap so callerNumber = external person
+            // Fix Smartflo swap: if callerNumber is DID, swap
             const agentDids = (didAgent.assigned_dids||[]).concat(didAgent.assigned_did?[didAgent.assigned_did]:[]);
             if (agentDids.some(d=>(d||'').replace(/\D/g,'').slice(-10)===callerDID) && session.callerNumber && session.calleeNumber) {
               const tmp=session.callerNumber; session.callerNumber=session.calleeNumber; session.calleeNumber=tmp;
@@ -1814,20 +1827,21 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
   // ─── Smartflo WebSocket Handlers ───
 
   smartfloSocket.onopen = () => {
-    console.log(`[${reqId}] 🟢 Smartflo socket opened — pre-fetching CallLogs`);
-    // Pre-warm: create service client and fetch ringing/initiated CallLogs BEFORE 'start' event
+    console.log(`[${reqId}] 🟢 Smartflo socket opened${session._explicitCallLogId ? ` (id=${session._explicitCallLogId})` : ''}`);
     if (session._sdkModule) {
       try {
         const svc = session._sdkModule.createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
         session._warmSvc = svc;
-        Promise.all([
-          svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
-          svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => []),
-          svc.entities.CallLog.list('-created_date', 15).catch(() => [])
-        ]).then(([ringing, initiated, recent]) => {
-          session._warmCallLogs = { ringing, initiated, recent };
-          console.log(`[${reqId}] 🔥 Warm CallLogs ready: ${(Array.isArray(ringing)?ringing:[]).length}R/${(Array.isArray(initiated)?initiated:[]).length}I/${(Array.isArray(recent)?recent:[]).length}A`);
-        }).catch(() => {});
+        // If we have explicit call_log_id, pre-fetch it directly. Else fall back to fuzzy warm-up.
+        if (session._explicitCallLogId) {
+          svc.entities.CallLog.get(session._explicitCallLogId).then(cl => { session._warmExplicitCallLog = cl; console.log(`[${reqId}] 🔥 Warm exact CallLog ready: ${cl?.id}`); }).catch(() => {});
+        } else {
+          Promise.all([
+            svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
+            svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => []),
+            svc.entities.CallLog.list('-created_date', 15).catch(() => [])
+          ]).then(([ringing, initiated, recent]) => { session._warmCallLogs = { ringing, initiated, recent }; }).catch(() => {});
+        }
       } catch (_) {}
     }
   };
@@ -1843,37 +1857,19 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
 
       if (msg.event === 'start') {
         const startData = msg.start || {};
-        session.streamSid = startData.streamSid;
-        session.callSid = startData.callSid;
+        session.streamSid = startData.streamSid; session.callSid = startData.callSid;
+        const cp = startData.customParameters || {};
+        if (!session._explicitCallLogId) {
+          session._smartfloCustomIdentifier = cp.custom_identifier || cp.call_log_id || cp.callLogId || null;
+          if (session._smartfloCustomIdentifier) console.log(`[${reqId}] 🔒 call_log_id from customParameters: ${session._smartfloCustomIdentifier}`);
+        }
+        console.log(`[${reqId}] 📞 START: to=${startData.to}, from=${startData.from}, params=${JSON.stringify(cp)}`);
+        session.calleeNumber = cp.customer_number || cp.called_number || cp.to || startData.to || startData.callee || cp.did || '';
+        session.callerNumber = startData.from || startData.caller || cp.caller_number || cp.from || cp.caller_id || '';
 
-        console.log(`[${reqId}] 📞 START: to=${startData.to}, from=${startData.from}, params=${JSON.stringify(startData.customParameters || {})}`);
-        // Extract callee number (the DID that was called)
-        session.calleeNumber = startData.customParameters?.customer_number
-          || startData.customParameters?.called_number
-          || startData.customParameters?.to
-          || startData.to
-          || startData.callee
-          || startData.customParameters?.did
-          || '';
-
-        // Extract caller number (who is calling) — try ALL possible fields
-        session.callerNumber = startData.from
-          || startData.caller
-          || startData.customParameters?.caller_number
-          || startData.customParameters?.from
-          || startData.customParameters?.caller_id
-          || '';
-
-        // For inbound calls, Smartflo may swap to/from — detect this:
-        // If 'to' matches one of our DID patterns and 'from' is a mobile number, it's inbound
-        // The 'to' field is the DID being called, 'from' is the caller
+        // Inbound detection: outbound has customer_number param; inbound doesn't
         const toNum = (startData.to || '').replace(/\D/g, '');
         const fromNum = (startData.from || '').replace(/\D/g, '');
-        
-        // For outbound (click-to-call): customer_number = the lead being called (callee)
-        // For inbound: 'to' = the DID, 'from' = the external caller
-        // Detect: if customParameters.customer_number is empty but 'to' and 'from' exist,
-        // this is likely an inbound call where 'to' is the DID
         if (!startData.customParameters?.customer_number && toNum && fromNum) {
           console.log(`[${reqId}] 📞 No customer_number param — likely INBOUND. to=${toNum}, from=${fromNum}`);
           session.calleeNumber = startData.to || '';  // DID that was called

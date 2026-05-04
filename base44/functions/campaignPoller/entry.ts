@@ -370,6 +370,7 @@ Deno.serve(async (req) => {
                 let cleanCallerID = selectedDID.replace(/[^0-9]/g, '');
                 if (cleanCallerID.length === 10) cleanCallerID = '91' + cleanCallerID;
 
+                // Pass call_log_id via custom_identifier — Smartflo echoes it back to streamAudio for EXACT match
                 const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
@@ -377,6 +378,7 @@ Deno.serve(async (req) => {
                     api_key: smartfloApiKey,
                     customer_number: cleanPhone,
                     caller_id: cleanCallerID,
+                    custom_identifier: callLog.id,
                     async: 1
                   })
                 });

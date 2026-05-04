@@ -378,15 +378,16 @@ IMPORTANT RULES:
     }
 
     // Initiate call via Smartflo Click-to-Call Support API
+    // CRITICAL: pass call_log_id as custom_identifier — Smartflo echoes it back to streamAudio
+    // (via WebSocket customParameters or Dynamic Endpoint) for EXACT agent config matching.
     const smartfloResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         api_key: smartfloApiKey,
         customer_number: cleanPhoneNumber,
         caller_id: cleanCallerID,
+        custom_identifier: callLog.id,
         async: 1
       })
     });
