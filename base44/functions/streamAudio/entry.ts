@@ -1442,247 +1442,27 @@ Deno.serve(async (req) => {
         return uc.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10)) || null;
       };
 
-      // For inbound calls, skip CallLog matching — DID→Agent below is authoritative
-      const isInbound = !!session._isInboundCall;
-
-      if (!isInbound) {
-        // ── OUTBOUND: Match by call_sid (most reliable for outbound click-to-call) ──
-        const sidV = [];
-        if (session.callSid) { sidV.push(session.callSid); const nc = session.callSid.replace(/^[^-]*-/, '').replace(/\.[^.]*$/, ''); if (nc && nc !== session.callSid) sidV.push(nc); const dg = session.callSid.replace(/\D/g, ''); if (dg && dg.length > 5) sidV.push(dg); }
-        const wd = session._warmCallLogs; // pre-fetched on smartfloSocket.onopen
-        const [sidRes, ringRaw, initRaw, broadRaw] = await Promise.all([
-          sidV.length > 0 ? Promise.all(sidV.map(sid => svc.entities.CallLog.filter({ call_sid: sid }).catch(() => []))) : [],
-          wd?.ringing ?? svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
-          wd?.initiated ?? svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => []),
-          wd?.recent ?? svc.entities.CallLog.list('-created_date', 15).catch(() => [])
-        ]);
-        // Evaluate in priority order — STRICT phone match (no fallback to first-uncategorized)
-        for (let i = 0; i < sidRes.length && !callLog; i++) { const l = Array.isArray(sidRes[i]) ? sidRes[i] : []; if (l.length > 0) { callLog = l[0]; console.log(`[${reqId}] 🔍 call_sid match (${sidV[i]}): ${callLog.id}`); } }
-        if (!callLog) { callLog = matchPhoneStrict(Array.isArray(ringRaw) ? ringRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Ringing match (strict): ${callLog.id}`); }
-        if (!callLog) { callLog = matchPhoneStrict(Array.isArray(initRaw) ? initRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Initiated match (strict): ${callLog.id}`); }
-        if (!callLog) {
-          // Broad match must ALSO be strict on callee_number — never pick "first available" outbound log
-          const cands = (Array.isArray(broadRaw) ? broadRaw : []).filter(l => !l.stream_sid && l.created_date >= cutoff && l.agent_config_cache?.system_prompt && ['initiated', 'ringing', 'answered'].includes(l.status));
-          if (cands.length > 0 && cleanCallee) {
-            callLog = cands.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10)) || null;
-            if (callLog) console.log(`[${reqId}] 🔍 Broad match (strict): ${callLog.id}`);
-          }
+      // ── OUTBOUND: Match by call_sid (most reliable for click-to-call) ──
+      const sidV = [];
+      if (session.callSid) { sidV.push(session.callSid); const nc = session.callSid.replace(/^[^-]*-/, '').replace(/\.[^.]*$/, ''); if (nc && nc !== session.callSid) sidV.push(nc); const dg = session.callSid.replace(/\D/g, ''); if (dg && dg.length > 5) sidV.push(dg); }
+      const wd = session._warmCallLogs;
+      const [sidRes, ringRaw, initRaw, broadRaw] = await Promise.all([
+        sidV.length > 0 ? Promise.all(sidV.map(sid => svc.entities.CallLog.filter({ call_sid: sid }).catch(() => []))) : [],
+        wd?.ringing ?? svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
+        wd?.initiated ?? svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => []),
+        wd?.recent ?? svc.entities.CallLog.list('-created_date', 15).catch(() => [])
+      ]);
+      for (let i = 0; i < sidRes.length && !callLog; i++) { const l = Array.isArray(sidRes[i]) ? sidRes[i] : []; if (l.length > 0) { callLog = l[0]; console.log(`[${reqId}] 🔍 call_sid match (${sidV[i]}): ${callLog.id}`); } }
+      if (!callLog) { callLog = matchPhoneStrict(Array.isArray(ringRaw) ? ringRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Ringing match: ${callLog.id}`); }
+      if (!callLog) { callLog = matchPhoneStrict(Array.isArray(initRaw) ? initRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Initiated match: ${callLog.id}`); }
+      if (!callLog) {
+        const cands = (Array.isArray(broadRaw) ? broadRaw : []).filter(l => !l.stream_sid && l.created_date >= cutoff && l.agent_config_cache?.system_prompt && ['initiated', 'ringing', 'answered'].includes(l.status));
+        if (cands.length > 0 && cleanCallee) {
+          callLog = cands.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10)) || null;
+          if (callLog) console.log(`[${reqId}] 🔍 Broad match: ${callLog.id}`);
         }
-      } else {
-        console.log(`[${reqId}] 📥 INBOUND call detected — skipping CallLog match, resolving via DID→Agent`);
       }
       console.log(`[${reqId}] ⏱️ Match: ${Date.now() - t0}ms`);
-
-      // ── INBOUND: Resolve agent directly from DID (WebSocket connects BEFORE smartfloWebhook creates CallLog)
-      if (!callLog && (session.calleeNumber || session.callerNumber)) {
-        const callerDID = (session.callerNumber || '').replace(/[^0-9]/g, '').slice(-10);
-        console.log(`[${reqId}] 🔍 DID→Agent: callee=${(session.calleeNumber||'').replace(/\D/g,'').slice(-10)}, caller=${callerDID}`);
-        const cleanCalleeDID = (session.calleeNumber || '').replace(/[^0-9]/g, '').slice(-10);
-
-        if (cleanCalleeDID) {
-          // Try DID entity first
-          const allDIDsRaw = await svc.entities.DID.list('-created_date', 200);
-          const allDIDs = Array.isArray(allDIDsRaw) ? allDIDsRaw : [];
-          const matchedDID = allDIDs.find(d => { const n = (d.number||'').replace(/\D/g,'').slice(-10); return n === cleanCalleeDID || n === callerDID; });
-          let didAgent = null;
-          let didClient = null;
-
-          // Parallel fetch agent + client
-          if (matchedDID?.agent_id || matchedDID?.client_id) {
-            const [_a, _c] = await Promise.all([
-              matchedDID.agent_id ? svc.entities.Agent.get(matchedDID.agent_id).catch(()=>null) : null,
-              matchedDID.client_id ? svc.entities.Client.get(matchedDID.client_id).catch(()=>null) : null
-            ]);
-            didAgent = _a; didClient = _c;
-          }
-
-          // Fallback: search agents' assigned_dids arrays
-          if (!didAgent) {
-            const allAgentsRaw = await svc.entities.Agent.list('-created_date', 100);
-            const allAgents = Array.isArray(allAgentsRaw) ? allAgentsRaw : [];
-            didAgent = allAgents.find(a => {
-              const dids = a.assigned_dids || (a.assigned_did ? [a.assigned_did] : []);
-              return dids.some(d => { const n = (d||'').replace(/\D/g,'').slice(-10); return n === cleanCalleeDID || n === callerDID; });
-            });
-            if (didAgent && !didClient && didAgent.client_id) {
-              try { didClient = await svc.entities.Client.get(didAgent.client_id); } catch (_) {}
-            }
-          }
-
-          if (didAgent) {
-            // Fix Smartflo swap: if callerNumber is DID, swap
-            const agentDids = (didAgent.assigned_dids||[]).concat(didAgent.assigned_did?[didAgent.assigned_did]:[]);
-            if (agentDids.some(d=>(d||'').replace(/\D/g,'').slice(-10)===callerDID) && session.callerNumber && session.calleeNumber) {
-              const tmp=session.callerNumber; session.callerNumber=session.calleeNumber; session.calleeNumber=tmp;
-              console.log(`[${reqId}] 🔄 Swapped: caller=${session.callerNumber}, callee(DID)=${session.calleeNumber}`);
-            }
-            console.log(`[${reqId}] ✅ INBOUND: Agent="${didAgent.name}", client=${didClient?.company_name||'?'}`);
-            session.clientId = didClient?.id || didAgent.client_id;
-
-            // Parallel: fetch KB docs + leads simultaneously
-            let kbContent = '';
-            let callerContext = '';
-            const cleanCaller = session.callerNumber ? session.callerNumber.replace(/\D/g, '').slice(-10) : '';
-            const kbIds = didAgent.knowledge_base_ids || [];
-            const [kbDocs, leadsRaw] = await Promise.all([
-              kbIds.length > 0 ? Promise.all(kbIds.map(id => svc.entities.KnowledgeBase.get(id).catch(()=>null))) : [],
-              (cleanCaller && didClient) ? svc.entities.Lead.filter({ client_id: didClient.id }).catch(()=>[]) : []
-            ]);
-            kbDocs.filter(Boolean).forEach(doc => { if (doc.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`; });
-            if (cleanCaller && didClient) {
-              const leads = Array.isArray(leadsRaw) ? leadsRaw : [];
-              const matchedLead = leads.find(l => l.phone && l.phone.replace(/\D/g,'').slice(-10) === cleanCaller);
-              if (matchedLead) {
-                console.log(`[${reqId}] 🎯 Lead: "${matchedLead.name}" (score: ${matchedLead.score})`);
-                callerContext = [`\n\n--- INBOUND CALL - RETURNING LEAD ---`,`- Name: ${matchedLead.name||'Unknown'}`,`- Phone: ${matchedLead.phone}`,matchedLead.email?`- Email: ${matchedLead.email}`:null,matchedLead.company?`- Company: ${matchedLead.company}`:null,`- Status: ${matchedLead.status||'new'}`,`- Score: ${matchedLead.score||0}/100`,matchedLead.qualification_tier?`- Tier: ${matchedLead.qualification_tier}`:null,matchedLead.notes?`- Notes: ${matchedLead.notes.substring(0,300)}`:null,'',`CRITICAL: This is an INBOUND callback. Address them by name "${matchedLead.name||'Sir/Madam'}".`].filter(Boolean).join('\n');
-                try { const lcRaw=await svc.entities.CallLog.filter({lead_id:matchedLead.id});const rc=(Array.isArray(lcRaw)?lcRaw:[]).sort((a,b)=>new Date(b.call_start_time||b.created_date)-new Date(a.call_start_time||a.created_date)).slice(0,3);if(rc.length>0){callerContext+='\n\nLAST CALL HISTORY:';rc.forEach(c=>{callerContext+=`\n- ${c.direction} | ${c.status} | ${(c.conversation_summary||'No summary').substring(0,150)}`;});} } catch(_){}
-                session._inboundLeadId = matchedLead.id;
-              }
-            }
-
-            session.systemPrompt = (didAgent.system_prompt || 'You are a helpful AI voice assistant.') + callerContext;
-            if (kbContent) session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${kbContent}`;
-            if (didAgent.greeting_message) session.greetingMessage = didAgent.greeting_message;
-            // For personal accounts, fall back to owner's phone number for transfers
-            if (didAgent.human_transfer_number) { session.humanTransferNumber = didAgent.human_transfer_number; }
-            else if (didClient?.account_type === 'personal' && didClient?.phone) { session.humanTransferNumber = didClient.phone; console.log(`[${reqId}] 📞 Personal transfer fallback to owner phone: ${didClient.phone}`); }
-            if (didAgent.enable_auto_transfer === false) session.enableAutoTransfer = false;
-            if (didAgent.persona) {
-              if (didAgent.persona.voice_engine) session.voiceEngine = didAgent.persona.voice_engine;
-              if (didAgent.persona.voice_type) {
-                if (session.voiceEngine === 'realtime') {
-                  const validVoices = ['alloy', 'ash', 'ballad', 'coral', 'echo', 'sage', 'shimmer', 'verse', 'marin', 'cedar'];
-                  const deprecatedMap = { 'nova': 'shimmer', 'onyx': 'ash', 'fable': 'ballad' };
-                  let voice = didAgent.persona.voice_type.toLowerCase();
-                  if (deprecatedMap[voice]) voice = deprecatedMap[voice];
-                  if (validVoices.includes(voice)) session.voiceType = voice;
-                } else {
-                  session.voiceType = didAgent.persona.voice_type;
-                }
-              }
-            }
-
-            // Upload KB content if too large for entity field
-            let inboundKbContent = kbContent;
-            let inboundKbUrl = '';
-            if (kbContent.length > 2000) {
-              try {
-                const blob = new Blob([kbContent], { type: 'text/plain' });
-                const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
-                const uploadResult = await svc.integrations.Core.UploadFile({ file });
-                inboundKbUrl = uploadResult.file_url;
-                inboundKbContent = '';
-                console.log(`[${reqId}] 📚 KB uploaded for inbound: ${kbContent.length} chars → URL`);
-              } catch (upErr) {
-                console.log(`[${reqId}] ⚠️ KB upload failed, truncating: ${upErr.message}`);
-                inboundKbContent = kbContent.substring(0, 2000) + '\n\n[TRUNCATED]';
-              }
-            }
-
-            // Create an inbound CallLog so saveCallRecord can persist transcript later
-            try {
-              const newInboundLog = await svc.entities.CallLog.create({
-                client_id: session.clientId,
-                agent_id: didAgent.id,
-                lead_id: session._inboundLeadId || null,
-                call_sid: session.callSid || `inbound_${Date.now()}`,
-                stream_sid: session.streamSid || null,
-                caller_id: session.callerNumber || '',
-                callee_number: session.calleeNumber,
-                direction: 'inbound',
-                status: 'answered',
-                call_start_time: new Date().toISOString(),
-                agent_config_cache: {
-                  agent_name: didAgent.name,
-                  system_prompt: session.systemPrompt,
-                  persona: didAgent.persona || {},
-                  knowledge_base_content: inboundKbContent,
-                  knowledge_base_url: inboundKbUrl,
-                  lead_context: callerContext,
-                  greeting_message: didAgent.greeting_message || '',
-                  human_transfer_number: didAgent.human_transfer_number || '',
-                  enable_auto_transfer: didAgent.enable_auto_transfer !== false
-                }
-              });
-              session.callLogId = newInboundLog.id;
-              console.log(`[${reqId}] ✅ Inbound CallLog created: ${newInboundLog.id} (Agent: ${didAgent.name})`);
-            } catch (clErr) {
-              console.error(`[${reqId}] ⚠️ Failed to create inbound CallLog: ${clErr.message}`);
-            }
-
-            // ═══ Check personal account mode for DID→Agent inbound path ═══
-            if (didClient && didClient.account_type === 'personal') {
-              const aiMode = didClient.ai_response_mode || 'screen_all';
-              const dndEnabled = didClient.dnd_enabled || false;
-              const callerClean = (session.callerNumber || '').replace(/\D/g, '').slice(-10);
-
-              // Parallel: TrustedContact + OwnerStatus
-              let isTrusted = false, trustedName = '';
-              const [tcRaw, osRaw] = await Promise.all([
-                callerClean ? svc.entities.TrustedContact.filter({ client_id: didClient.id }).catch(()=>[]) : [],
-                svc.entities.OwnerStatus.filter({ client_id: didClient.id, is_active: true }).catch(()=>[])
-              ]);
-              if (callerClean) { const tcs=Array.isArray(tcRaw)?tcRaw:[]; const m=tcs.find(tc=>tc.phone&&tc.phone.replace(/\D/g,'').slice(-10)===callerClean); if(m){isTrusted=true;trustedName=m.name||'';} }
-              let personalInstructions = '\n\n--- PERSONAL AI ASSISTANT MODE ---';
-              if (aiMode==='block_all') personalInstructions+='\nMODE: BLOCK ALL. Politely tell the caller the owner is unavailable. Do NOT take messages. End quickly.';
-              else if (aiMode==='take_messages') personalInstructions+='\nMODE: TAKE MESSAGES. Take a message from every caller. Ask who is calling, their purpose, and collect their message.';
-              else if (aiMode==='allow_contacts'&&isTrusted) personalInstructions+=`\nMODE: ALLOW CONTACTS. Caller "${trustedName}" is TRUSTED. Be warm and transfer if possible.`;
-              else if (aiMode==='allow_contacts'&&!isTrusted) personalInstructions+='\nMODE: ALLOW CONTACTS (unknown). Screen this unknown caller. Take a message if legitimate.';
-              else personalInstructions+='\nMODE: SCREEN ALL. Screen every call. Classify as family/business/promotional/spam. Take messages for legitimate callers.';
-              if (dndEnabled) personalInstructions+='\nDND IS ON: Handle everything silently. Do not mention transferring.';
-              personalInstructions+='\nAFTER EVERY CALL: Classify as family/business/promotional/spam/unknown in your summary.';
-              const _osList=Array.isArray(osRaw)?osRaw:[];
-              if(_osList.length>0){const _s=_osList[0];personalInstructions+=`\n\n--- OWNER STATUS: ${_s.icon} ${_s.title}${_s.start_time?' ('+_s.start_time+(_s.end_time?' to '+_s.end_time:'')+')':''} ---\nCRITICAL: Tell callers in Hindi: "${_s.caller_message_hindi}"`;console.log(`[${reqId}] 🎯 OwnerStatus: ${_s.title}`);}
-
-              session.systemPrompt += personalInstructions;
-              session._personalMode = aiMode;
-              session._isTrustedCaller = isTrusted;
-              session._trustedContactName = trustedName;
-              session._personalClientId = didClient.id;
-              session._ownerName = didClient.company_name || '';
-              console.log(`[${reqId}] 🛡️ Personal inbound: mode=${aiMode}, dnd=${dndEnabled}, trusted=${isTrusted}${trustedName ? ', name=' + trustedName : ''}, owner=${session._ownerName}`);
-
-              // Send live Telegram notification for personal inbound calls (non-blocking)
-              if (didClient.telegram_connected && didClient.telegram_chat_id && !dndEnabled && didClient.owner_notification_channel === 'telegram') {
-                const tgToken = Deno.env.get('TELEGRAM_BOT_TOKEN');
-                if (tgToken) {
-                  // Identify caller: check trusted contacts first, then leads
-                  let callerDisplayName = '';
-                  let callerType = '';
-                  if (isTrusted && trustedName) {
-                    callerDisplayName = trustedName;
-                    callerType = '👤 Saved Contact';
-                  } else {
-                    const leadName = session._inboundLeadId ? (callerContext.match(/Name: ([^\n]+)/) || [])[1] || '' : '';
-                    if (leadName) {
-                      callerDisplayName = leadName;
-                      callerType = '📋 Known Lead';
-                    }
-                  }
-                  const nameDisplay = callerDisplayName || session.callerNumber || 'Unknown';
-                  const typeLine = callerType ? `\n🏷️ ${callerType}` : '\n🏷️ Unknown Caller';
-                  const numberLine = callerDisplayName && session.callerNumber ? `\n📞 ${session.callerNumber}` : '';
-                  const tgMsg = `📞 <b>Incoming Call</b>\n\n📱 From: <b>${nameDisplay}</b>${numberLine}${typeLine}\n\n💬 AI is screening this call now...`;
-                  fetch(`https://api.telegram.org/bot${tgToken}/sendMessage`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: didClient.telegram_chat_id, text: tgMsg, parse_mode: 'HTML' })
-                  }).then(r => r.json()).then(r => console.log(`[${reqId}] 📱 Telegram live notification: ok=${r.ok}, caller=${nameDisplay}`))
-                    .catch(e => console.error(`[${reqId}] 📱 Telegram failed: ${e.message}`));
-                }
-              }
-            }
-
-            console.log(`[${reqId}] ✅ INBOUND agent config loaded: engine=${session.voiceEngine}, voice=${session.voiceType}, prompt=${session.systemPrompt.length} chars`);
-
-            // ── Signal that greeting can fire NOW (mirrors outbound path) ──
-            session._fastConfigReady = true;
-            if (session.realtimeReady) {
-              triggerPhase1Greeting();
-            }
-            return; // Config loaded successfully via DID→Agent
-          }
-        }
-      }
 
       if (!callLog) {
         console.log(`[${reqId}] ⚠️ No call log found after all strategies. callSid=${session.callSid}, streamSid=${session.streamSid}, calleeNumber=${session.calleeNumber}`);
@@ -1746,59 +1526,13 @@ Deno.serve(async (req) => {
           }
         }
 
-        // Parallel: Shopify check + Client fetch for personal mode
+        // Shopify check (outbound calls may have Shopify integration for context)
         if (callLog.client_id) {
-          const [siRaw, ownerClient] = await Promise.all([
-            svc.entities.MarketplaceIntegration.filter({ client_id: callLog.client_id, platform: 'shopify', status: 'active' }).catch(()=>[]),
-            svc.entities.Client.get(callLog.client_id).catch(()=>null)
-          ]);
-          const si = Array.isArray(siRaw) ? siRaw : [];
-          if (si.length > 0) { session.hasShopify = true; console.log(`[${reqId}] 🛒 Shopify found`); }
           try {
-            if (ownerClient && ownerClient.account_type === 'personal') {
-              const aiMode = ownerClient.ai_response_mode || 'screen_all';
-              const dndEnabled = ownerClient.dnd_enabled || false;
-              const callerNum = callLog.caller_id || session.callerNumber || '';
-              const cleanCaller = callerNum.replace(/\D/g, '').slice(-10);
-              let isTrusted = false, trustedName = '';
-              const [tc2Raw, os2Raw] = await Promise.all([
-                cleanCaller ? svc.entities.TrustedContact.filter({ client_id: callLog.client_id }).catch(()=>[]) : [],
-                svc.entities.OwnerStatus.filter({ client_id: callLog.client_id, is_active: true }).catch(()=>[])
-              ]);
-              if(cleanCaller){const tc2=Array.isArray(tc2Raw)?tc2Raw:[];const m=tc2.find(tc=>tc.phone&&tc.phone.replace(/\D/g,'').slice(-10)===cleanCaller);if(m){isTrusted=true;trustedName=m.name||'';console.log(`[${reqId}] 👤 TRUSTED: "${trustedName}"`);}  }
-              let personalInstructions = '\n\n--- PERSONAL AI ASSISTANT MODE ---';
-              if(aiMode==='block_all') personalInstructions+='\nMODE: BLOCK ALL. Politely tell the caller the owner is unavailable. Do NOT take messages. End quickly.';
-              else if(aiMode==='take_messages') personalInstructions+=`\nMODE: TAKE MESSAGES. Take a message from every caller.${isTrusted?` NOTE: "${trustedName}" is known. Be extra warm.`:''}`;
-              else if(aiMode==='allow_contacts'&&isTrusted){personalInstructions+=`\nMODE: ALLOW CONTACTS. "${trustedName}" is TRUSTED.${ownerClient.human_transfer_number?' Transfer immediately.':' Be friendly.'}`;if(ownerClient.human_transfer_number){session.humanTransferNumber=ownerClient.human_transfer_number;session.enableAutoTransfer=true;}}
-              else if(aiMode==='allow_contacts'&&!isTrusted) personalInstructions+='\nMODE: ALLOW CONTACTS (unknown). Screen this caller. Take message if legitimate.';
-              else personalInstructions+=`\nMODE: SCREEN ALL. Screen every call. Classify as family/business/promotional/spam.${isTrusted?` NOTE: "${trustedName}" is known.`:''}`;
-              if(dndEnabled) personalInstructions+='\nDND IS ON: Handle everything silently.';
-              personalInstructions+='\nAFTER EVERY CALL: Classify as family/business/promotional/spam/unknown.';
-              const os2=Array.isArray(os2Raw)?os2Raw:[];
-              if(os2.length>0){const _s2=os2[0];personalInstructions+=`\n\n--- OWNER STATUS: ${_s2.icon} ${_s2.title}${_s2.start_time?' ('+_s2.start_time+(_s2.end_time?' to '+_s2.end_time:'')+')':''} ---\nCRITICAL: Tell callers in Hindi: "${_s2.caller_message_hindi}"`;console.log(`[${reqId}] 🎯 OwnerStatus: ${_s2.title}`);}
-              session.systemPrompt += personalInstructions;
-              session._personalMode = aiMode;
-              session._isTrustedCaller = isTrusted;
-              session._trustedContactName = trustedName;
-              session._personalClientId = callLog.client_id;
-              session._ownerName = ownerClient.company_name || '';
-              console.log(`[${reqId}] 🛡️ Personal mode: ${aiMode}, DND=${dndEnabled}, trusted=${isTrusted}${trustedName ? ', name=' + trustedName : ''}, owner=${session._ownerName}`);
-              if (ownerClient.telegram_connected && ownerClient.telegram_chat_id && !dndEnabled && ownerClient.owner_notification_channel === 'telegram') {
-                const tgT = Deno.env.get('TELEGRAM_BOT_TOKEN');
-                if (tgT) {
-                  let cDisplayName = '';
-                  let cType = '';
-                  if (isTrusted && trustedName) { cDisplayName = trustedName; cType = '👤 Saved Contact'; }
-                  const cName = cDisplayName || callLog.caller_id || session.callerNumber || 'Unknown';
-                  const cTypeLine = cType ? `\n🏷️ ${cType}` : '\n🏷️ Unknown Caller';
-                  const cNumLine = cDisplayName && (callLog.caller_id || session.callerNumber) ? `\n📞 ${callLog.caller_id || session.callerNumber}` : '';
-                  fetch(`https://api.telegram.org/bot${tgT}/sendMessage`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ chat_id: ownerClient.telegram_chat_id, text: `📞 <b>Incoming Call</b>\n\n📱 From: <b>${cName}</b>${cNumLine}${cTypeLine}\n\n💬 AI is screening this call...`, parse_mode: 'HTML' }) }).then(r => r.json()).then(r => console.log(`[${reqId}] 📱 Telegram: ok=${r.ok}, caller=${cName}`)).catch(() => {});
-                }
-              }
-            }
-          } catch (pErr) {
-            console.log(`[${reqId}] ⚠️ Personal mode check failed: ${pErr.message}`);
-          }
+            const siRaw = await svc.entities.MarketplaceIntegration.filter({ client_id: callLog.client_id, platform: 'shopify', status: 'active' });
+            const si = Array.isArray(siRaw) ? siRaw : [];
+            if (si.length > 0) { session.hasShopify = true; console.log(`[${reqId}] 🛒 Shopify found`); }
+          } catch (_) {}
         }
         // Inject Shopify tool instructions if integration is active
         if (session.hasShopify && !session.systemPrompt.includes('SHOPIFY STORE INTEGRATION')) {
@@ -1880,17 +1614,15 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
         session.calleeNumber = cp.customer_number || cp.called_number || cp.to || startData.to || startData.callee || cp.did || '';
         session.callerNumber = startData.from || startData.caller || cp.caller_number || cp.from || cp.caller_id || '';
 
-        // Inbound detection: outbound has customer_number param; inbound doesn't
-        const toNum = (startData.to || '').replace(/\D/g, '');
-        const fromNum = (startData.from || '').replace(/\D/g, '');
-        if (!startData.customParameters?.customer_number && toNum && fromNum) {
-          console.log(`[${reqId}] 📞 No customer_number param — likely INBOUND. to=${toNum}, from=${fromNum}`);
-          session.calleeNumber = startData.to || '';  // DID that was called
-          session.callerNumber = startData.from || ''; // External caller
-          session._isInboundCall = true;
+        // OUTBOUND-ONLY: reject inbound calls (they should go to streamAudioInbound)
+        if (!startData.customParameters?.customer_number) {
+          console.error(`[${reqId}] ❌ INBOUND call routed to outbound function — rejecting. Configure DID to use /functions/streamAudioInbound`);
+          smartfloSocket.close();
+          session._callEnded = true;
+          return;
         }
 
-        console.log(`[${reqId}] 📞 Call start: stream=${session.streamSid}, call=${session.callSid}, calleeNumber=${session.calleeNumber}, callerNumber=${session.callerNumber}`);
+        console.log(`[${reqId}] 📞 OUTBOUND start: stream=${session.streamSid}, call=${session.callSid}, callee=${session.calleeNumber}, caller=${session.callerNumber}`);
 
         // Audio conversion state lives on session._audioState (already initialized) — no globals.
 
