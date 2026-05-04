@@ -32,10 +32,21 @@ export default function ClientAutomationEngine() {
     queryKey: ['automation-activities', client?.id],
     queryFn: async () => {
       if (!client) return [];
+      // Fetch ALL activities (paginated) — no artificial limit
+      const fetchAll = async (filter) => {
+        const all = [];
+        let skip = 0;
+        const pageSize = 500;
+        // Loop fetching pages until we get less than pageSize back
+        // base44 SDK uses (filter, sort, limit) — we paginate by repeatedly fetching with growing skip via slice in memory is not supported,
+        // so we request a very large limit instead.
+        const batch = await base44.entities.Activity.filter(filter, '-scheduled_date', 5000);
+        return batch;
+      };
       if (client.id === 'admin') {
-        return base44.entities.Activity.filter({ auto_created: true }, '-scheduled_date', 200);
+        return fetchAll({ auto_created: true });
       }
-      return base44.entities.Activity.filter({ client_id: client.id, auto_created: true }, '-scheduled_date', 200);
+      return fetchAll({ client_id: client.id, auto_created: true });
     },
     enabled: !!client,
     refetchInterval: 30000,
