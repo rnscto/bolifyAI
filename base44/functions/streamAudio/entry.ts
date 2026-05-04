@@ -1614,8 +1614,10 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
         session.calleeNumber = cp.customer_number || cp.called_number || cp.to || startData.to || startData.callee || cp.did || '';
         session.callerNumber = startData.from || startData.caller || cp.caller_number || cp.from || cp.caller_id || '';
 
-        // OUTBOUND-ONLY: reject inbound calls (they should go to streamAudioInbound)
-        if (!startData.customParameters?.customer_number) {
+        // OUTBOUND-ONLY: outbound click-to-call always carries a call_log_id in customParameters.
+        // Inbound calls have no such identifier — reject them so they go to streamAudioInbound.
+        const hasOutboundId = !!(cp.custom_identifier || cp.call_log_id || cp.callLogId);
+        if (!hasOutboundId) {
           console.error(`[${reqId}] ❌ INBOUND call routed to outbound function — rejecting. Configure DID to use /functions/streamAudioInbound`);
           smartfloSocket.close();
           session._callEnded = true;
