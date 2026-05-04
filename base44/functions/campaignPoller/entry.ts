@@ -94,7 +94,23 @@ Deno.serve(async (req) => {
         }
       }
     } else {
-      console.log('[campaignPoller] TRAI window closed — skipping scheduled campaign auto-start');
+      // TRAI window closed — auto-pause any scheduled campaigns whose start time has arrived,
+      // so they're visible as paused (not stuck "scheduled") and will auto-resume at 9 AM IST.
+      const dueScheduled = await svc.entities.Campaign.filter({ status: 'scheduled' }, 'created_date', 200);
+      let scheduledPaused = 0;
+      for (const sc of dueScheduled) {
+        if (!sc.scheduled_date) continue;
+        const schedMs = new Date(sc.scheduled_date).getTime();
+        if (isNaN(schedMs) || schedMs > nowMs) continue;
+        await svc.entities.Campaign.update(sc.id, {
+          status: 'paused',
+          notes: `${sc.notes || ''}\n[${new Date().toISOString()}] Auto-paused: scheduled start fell outside TRAI 9AM-9PM IST window (paused at ${istString}). Will auto-resume at 9 AM IST.`.trim()
+        });
+        scheduledPaused++;
+        console.log(`[campaignPoller] TRAI auto-pause (scheduled): "${sc.name}" — start time was outside window`);
+      }
+      results.auto_paused += scheduledPaused;
+      console.log(`[campaignPoller] TRAI window closed — auto-paused ${scheduledPaused} due scheduled campaign(s)`);
     }
 
     // If outside window, skip the dialing loop entirely (campaigns already paused above)
