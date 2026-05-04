@@ -85,10 +85,21 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
     let scheduledISO = null;
     if (scheduleEnabled) {
       if (!scheduledDate) return toast.error('Pick a schedule date/time');
-      const dt = new Date(scheduledDate);
-      if (isNaN(dt.getTime())) return toast.error('Invalid schedule date');
-      if (dt.getTime() <= Date.now()) return toast.error('Schedule time must be in the future');
-      scheduledISO = dt.toISOString();
+      // Treat the datetime-local input as IST regardless of browser timezone.
+      // datetime-local format: "YYYY-MM-DDTHH:MM" — we parse the parts and build a UTC
+      // timestamp that represents that exact wall-clock time in IST (UTC+5:30).
+      const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(scheduledDate);
+      if (!m) return toast.error('Invalid schedule date');
+      const [, y, mo, d, hh, mm] = m;
+      const istHour = parseInt(hh, 10);
+      // TRAI: only between 9 AM (inclusive) and 9 PM (exclusive) IST
+      if (istHour < 9 || istHour >= 21) {
+        return toast.error('TRAI rule: campaigns can only be scheduled between 9:00 AM and 9:00 PM IST');
+      }
+      // IST = UTC+05:30 → subtract 5h30m to get the equivalent UTC instant
+      const utcMs = Date.UTC(+y, +mo - 1, +d, istHour, +mm) - (5 * 60 + 30) * 60 * 1000;
+      if (isNaN(utcMs) || utcMs <= Date.now()) return toast.error('Schedule time must be in the future (IST)');
+      scheduledISO = new Date(utcMs).toISOString();
     }
 
     setLoading(true);
@@ -135,7 +146,8 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
 
       await base44.entities.CampaignLead.bulkCreate(campaignLeads);
       if (scheduledISO) {
-        toast.success(`Campaign scheduled for ${new Date(scheduledISO).toLocaleString()}`);
+        const istLabel = new Date(scheduledISO).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
+        toast.success(`Campaign scheduled for ${istLabel} IST`);
       } else {
         toast.success(`Campaign created with ${selectedLeads.length} leads`);
       }
@@ -202,14 +214,18 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
             </div>
             {scheduleEnabled && (
               <div>
-                <Label>Start Date & Time</Label>
+                <Label>Start Date & Time (IST)</Label>
                 <Input
                   type="datetime-local"
                   value={scheduledDate}
                   onChange={e => setScheduledDate(e.target.value)}
-                  min={new Date(Date.now() + 5 * 60 * 1000).toISOString().slice(0, 16)}
                 />
-                <p className="text-xs text-gray-500 mt-1">Campaign will auto-start at this time (checked every 5 min).</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Time is in <strong>IST (Indian Standard Time)</strong>. Campaign auto-starts at this time (checked every 5 min).
+                </p>
+                <p className="text-xs text-amber-700 mt-1">
+                  ⚖️ TRAI compliance: campaigns can only run between <strong>9:00 AM – 9:00 PM IST</strong>.
+                </p>
               </div>
             )}
           </div>

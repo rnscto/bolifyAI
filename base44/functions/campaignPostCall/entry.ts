@@ -281,6 +281,19 @@ async function triggerNextBatch(base44, campaignId) {
       return { skipped: `campaign_${campaign?.status || 'missing'}` };
     }
 
+    // === TRAI COMPLIANCE: 9 AM – 9 PM IST window enforcement ===
+    const istMs = Date.now() + (5 * 60 + 30) * 60 * 1000;
+    const istHour = new Date(istMs).getUTCHours();
+    if (istHour < 9 || istHour >= 21) {
+      const istLabel = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
+      await base44.entities.Campaign.update(campaignId, {
+        status: 'paused',
+        notes: `${campaign.notes || ''}\n[${new Date().toISOString()}] Auto-paused: outside TRAI 9AM-9PM IST window (attempted at ${istLabel}).`.trim()
+      });
+      console.log(`[campaignPostCall] TRAI window closed (${istLabel}) — campaign paused, will auto-resume at 9 AM IST`);
+      return { skipped: 'trai_window_closed', current_ist: istLabel };
+    }
+
     const now = new Date();
     const allLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId }, 'created_date', 1000);
     const pendingLeads = allLeads.filter(l => l.status === 'pending');
@@ -393,6 +406,17 @@ async function triggerNextBatch(base44, campaignId) {
         `\n\n--- LEAD CONTEXT (YOU MUST USE THIS DATA IN THE CONVERSATION) ---\n${leadContext}`
       ].filter(Boolean).join('\n');
 
+      // Use campaign script's "opening" as greeting if present (consistent with executeCampaign/campaignPoller)
+      let campaignGreeting = agent.greeting_message || '';
+      if (campaign.call_script?.opening && campaign.call_script.opening.trim()) {
+        let leadCompany = '';
+        if (cl.lead_id) { try { leadCompany = (await base44.entities.Lead.get(cl.lead_id))?.company || ''; } catch (_) {} }
+        campaignGreeting = campaign.call_script.opening
+          .replace(/\{\{name\}\}/gi, cl.lead_name || 'Sir/Madam')
+          .replace(/\{\{company\}\}/gi, leadCompany)
+          .trim();
+      }
+
       const newCallLog = await base44.entities.CallLog.create({
         client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
         call_sid: callSid, caller_id: selectedDID, callee_number: cl.lead_phone,
@@ -400,7 +424,10 @@ async function triggerNextBatch(base44, campaignId) {
         conversation_summary: '',
         agent_config_cache: {
           agent_name: agent.name, system_prompt: personalizedPrompt,
-          persona: agent.persona || {}, knowledge_base_content: kbContent, lead_context: leadContext
+          persona: agent.persona || {}, knowledge_base_content: kbContent, lead_context: leadContext,
+          greeting_message: campaignGreeting,
+          human_transfer_number: agent.human_transfer_number || '',
+          enable_auto_transfer: agent.enable_auto_transfer !== false
         }
       });
 
@@ -415,13 +442,17 @@ async function triggerNextBatch(base44, campaignId) {
         }
       } catch (_) {}
 
+      // Pass call_log_id via custom_identifier — Smartflo echoes it back to streamAudio for EXACT match
+      let cleanCallerID = selectedDID.replace(/[^0-9]/g, '');
+      if (cleanCallerID.length === 10) cleanCallerID = '91' + cleanCallerID;
       const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           api_key: smartfloApiKey,
           customer_number: cleanPhone,
-          caller_id: selectedDID.replace(/^\+/, ''),
+          caller_id: cleanCallerID,
+          custom_identifier: newCallLog.id,
           async: 1
         })
       });

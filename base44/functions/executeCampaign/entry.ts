@@ -53,8 +53,9 @@ Deno.serve(async (req) => {
     const istMin = istDate.getUTCMinutes();
     const istString = `${String(istHour).padStart(2, '0')}:${String(istMin).padStart(2, '0')} IST`;
     const inTRAIWindow = istHour >= 9 && istHour < 21;
-    if (!inTRAIWindow && !_internal) {
-      // Mark campaign as paused so the poller will auto-resume it at 9 AM IST
+    if (!inTRAIWindow) {
+      // Block ALL dialing outside TRAI window — including internal/poller calls.
+      // Mark campaign as paused so the poller will auto-resume it at 9 AM IST.
       await svc.entities.Campaign.update(campaign_id, {
         status: 'paused',
         notes: `${campaign.notes || ''}\n[${new Date().toISOString()}] Auto-paused: outside TRAI 9AM-9PM IST window (attempted at ${istString}). Will auto-resume next morning.`.trim()

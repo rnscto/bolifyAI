@@ -208,10 +208,29 @@ export default function CampaignDetail() {
           </div>
           {campaign.started_at && (
             <p className="text-xs text-gray-400 mt-2">
-              Started: {new Date(campaign.started_at).toLocaleString()}
-              {campaign.completed_at && ` • Completed: ${new Date(campaign.completed_at).toLocaleString()}`}
+              Started: {new Date(campaign.started_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })} IST
+              {campaign.completed_at && ` • Completed: ${new Date(campaign.completed_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })} IST`}
             </p>
           )}
+          {campaign.status === 'scheduled' && campaign.scheduled_date && (
+            <p className="text-xs text-blue-600 mt-2 font-medium">
+              ⏰ Scheduled to start: {new Date(campaign.scheduled_date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })} IST
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* TRAI compliance banner */}
+      <Card className="border-blue-200 bg-blue-50">
+        <CardContent className="pt-4 pb-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5 flex-shrink-0" />
+          <div className="text-sm">
+            <p className="font-medium text-blue-900">TRAI Compliance — Calling Window: 9:00 AM – 9:00 PM IST</p>
+            <p className="text-xs text-blue-700 mt-1">
+              Per TRAI guidelines, all outbound campaigns automatically pause outside this window and resume at 9:00 AM IST.
+              Ensure phone numbers are not on the National DND registry. Always identify your caller and offer an opt-out.
+            </p>
+          </div>
         </CardContent>
       </Card>
 
