@@ -16,6 +16,7 @@ import ClientBrandSettings from './pages/ClientBrandSettings';
 import PersonalDashboard from './pages/PersonalDashboard';
 import PersonalAIAssistant from './pages/PersonalAIAssistant';
 import AdminTopups from './pages/AdminTopups';
+import ClientWhatsAppTemplates from './pages/ClientWhatsAppTemplates';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -110,6 +111,11 @@ const AuthenticatedApp = () => {
       <Route path="/AdminTopups" element={
         <LayoutWrapper currentPageName="AdminTopups">
           <AdminTopups />
+        </LayoutWrapper>
+      } />
+      <Route path="/ClientWhatsAppTemplates" element={
+        <LayoutWrapper currentPageName="ClientWhatsAppTemplates">
+          <ClientWhatsAppTemplates />
         </LayoutWrapper>
       } />
       <Route path="*" element={<PageNotFound />} />

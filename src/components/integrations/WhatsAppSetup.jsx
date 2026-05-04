@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -39,15 +39,32 @@ export default function WhatsAppSetup({ config, onSave }) {
   const [testing, setTesting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [showKey, setShowKey] = useState(false);
+  const [templates, setTemplates] = useState([]);
+  const [selectedTemplate, setSelectedTemplate] = useState('');
+  const [loadingTemplates, setLoadingTemplates] = useState(false);
 
   const currentProvider = PROVIDERS.find(p => p.value === provider);
   const fields = currentProvider?.fields || [];
 
+  // Load approved templates when Meta Cloud is selected and credentials exist
+  useEffect(() => {
+    if (provider === 'meta_cloud' && config?.client_id) {
+      setLoadingTemplates(true);
+      base44.entities.WhatsAppTemplate.filter({ client_id: config.client_id, status: 'APPROVED' }, '-created_date', 100)
+        .then(setTemplates)
+        .catch(() => setTemplates([]))
+        .finally(() => setLoadingTemplates(false));
+    }
+  }, [provider, config?.client_id]);
+
   const handleTest = async () => {
     setTesting(true);
+    const tmpl = templates.find(t => t.id === selectedTemplate);
     const res = await base44.functions.invoke('testMessagingConnection', {
       channel: 'whatsapp',
       test_recipient: testRecipient,
+      template_name: tmpl?.name || '',
+      template_language: tmpl?.language || 'en_US',
       config: { whatsapp_provider: provider, whatsapp_api_key: apiKey, whatsapp_phone_number_id: phoneNumberId, whatsapp_business_id: businessId, whatsapp_api_endpoint: apiEndpoint }
     });
     if (res.data.success) {
@@ -131,10 +148,41 @@ export default function WhatsAppSetup({ config, onSave }) {
                 <Label className="text-xs text-gray-500">Test Recipient Phone (with country code)</Label>
                 <Input value={testRecipient} onChange={e => setTestRecipient(e.target.value)} placeholder="e.g. 919876543210" />
               </div>
+
+              {provider === 'meta_cloud' && (
+                <div>
+                  <Label className="text-xs text-gray-500">
+                    Pick a template to test
+                    {loadingTemplates && <span className="ml-2 text-gray-400">(loading...)</span>}
+                  </Label>
+                  <Select value={selectedTemplate} onValueChange={setSelectedTemplate}>
+                    <SelectTrigger>
+                      <SelectValue placeholder={templates.length === 0 ? 'No approved templates — will validate credentials only' : 'Select a template'} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {templates.length === 0 ? (
+                        <div className="px-2 py-3 text-xs text-gray-500">
+                          No approved templates yet. Sync from the WhatsApp Templates page.
+                        </div>
+                      ) : (
+                        templates.map(t => (
+                          <SelectItem key={t.id} value={t.id}>
+                            {t.name} ({t.language})
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-400 mt-1">
+                    Meta requires a pre-approved template for the first message. Without one, we only validate your credentials.
+                  </p>
+                </div>
+              )}
+
               <div className="flex gap-2">
                 <Button variant="outline" onClick={handleTest} disabled={testing || !apiKey} className="gap-2 flex-1">
                   {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  Send Test Message
+                  {provider === 'meta_cloud' && !selectedTemplate ? 'Validate Credentials' : 'Send Test Message'}
                 </Button>
                 <Button onClick={handleSave} disabled={saving} className="gap-2 flex-1">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}

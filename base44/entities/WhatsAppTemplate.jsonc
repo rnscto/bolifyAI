@@ -1,0 +1,200 @@
+{
+  "name": "WhatsAppTemplate",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "meta_template_id": {
+      "type": "string",
+      "description": "Template ID returned by Meta"
+    },
+    "name": {
+      "type": "string",
+      "description": "Template name (lowercase, no spaces, used by Meta API)"
+    },
+    "language": {
+      "type": "string",
+      "default": "en",
+      "description": "Language code (e.g. en, en_US, hi, hi_IN)"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "MARKETING",
+        "UTILITY",
+        "AUTHENTICATION"
+      ],
+      "description": "Meta template category"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "PENDING",
+        "APPROVED",
+        "REJECTED",
+        "PAUSED",
+        "DISABLED"
+      ],
+      "default": "draft",
+      "description": "Approval status from Meta"
+    },
+    "rejected_reason": {
+      "type": "string",
+      "description": "Reason for rejection from Meta"
+    },
+    "header_type": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "TEXT",
+        "IMAGE",
+        "VIDEO",
+        "DOCUMENT"
+      ],
+      "default": "NONE",
+      "description": "Header format type"
+    },
+    "header_text": {
+      "type": "string",
+      "description": "Header text (if TEXT type)"
+    },
+    "header_media_url": {
+      "type": "string",
+      "description": "Header media sample URL (for IMAGE/VIDEO/DOCUMENT)"
+    },
+    "body_text": {
+      "type": "string",
+      "description": "Body text with {{1}}, {{2}} placeholders"
+    },
+    "body_examples": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Sample values for body placeholders (required by Meta)"
+    },
+    "footer_text": {
+      "type": "string",
+      "description": "Optional footer text"
+    },
+    "buttons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "QUICK_REPLY",
+              "URL",
+              "PHONE_NUMBER"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "phone_number": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Optional CTA / quick reply buttons"
+    },
+    "linked_actions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "campaign_interested_followup",
+          "campaign_callback_confirmation",
+          "campaign_no_answer_retry",
+          "lead_welcome",
+          "retention_offer",
+          "trial_expiry_reminder",
+          "kyc_pending_reminder",
+          "appointment_confirmation",
+          "appointment_reminder",
+          "payment_receipt",
+          "otp_verification",
+          "manual_only"
+        ]
+      },
+      "description": "Platform actions linked to this template \u2014 sent automatically when these events occur"
+    },
+    "last_synced": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last time this template was synced from Meta"
+    },
+    "send_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of times this template has been sent"
+    }
+  },
+  "required": [
+    "client_id",
+    "name"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.client_id": "{{user.data.client_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "$or": [
+        {
+          "data.client_id": "{{user.data.client_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "user"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.client_id": "{{user.data.client_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.client_id": "{{user.data.client_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

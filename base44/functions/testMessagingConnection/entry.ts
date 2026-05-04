@@ -28,23 +28,44 @@ Deno.serve(async (req) => {
       if (!apiKey) return Response.json({ success: false, error: 'API key is required' });
 
       if (provider === 'meta_cloud') {
-        // Meta Cloud API — send a test template message
+        // Meta Cloud API requires templates for first-time recipient outside 24h window.
+        // If template_name is provided, send via template; otherwise validate creds via /me.
         const testPhone = test_recipient || phoneNumberId;
-        const res = await fetch(`https://graph.facebook.com/v18.0/${phoneNumberId}/messages`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            messaging_product: 'whatsapp',
-            to: testPhone,
-            type: 'text',
-            text: { body: '✅ VaaniAI WhatsApp connection test successful!' }
-          })
-        });
-        const data = await res.json();
-        if (res.ok && data.messages) {
-          return Response.json({ success: true, message: 'WhatsApp (Meta Cloud) connected! Test message sent.', details: data });
+        const templateName = body.template_name;
+        const templateLang = body.template_language || 'en_US';
+
+        if (templateName) {
+          const res = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}/messages`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              to: testPhone,
+              type: 'template',
+              template: { name: templateName, language: { code: templateLang } }
+            })
+          });
+          const data = await res.json();
+          if (res.ok && data.messages) {
+            return Response.json({ success: true, message: `WhatsApp (Meta Cloud) connected! Template "${templateName}" sent.`, details: data });
+          }
+          return Response.json({ success: false, error: data.error?.error_user_msg || data.error?.message || JSON.stringify(data) });
         }
-        return Response.json({ success: false, error: data.error?.message || JSON.stringify(data) });
+
+        // No template selected — validate credentials by hitting the WABA endpoint
+        const validateRes = await fetch(`https://graph.facebook.com/v20.0/${phoneNumberId}?fields=verified_name,display_phone_number,quality_rating`, {
+          headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        const validateData = await validateRes.json();
+        if (validateRes.ok && validateData.id) {
+          return Response.json({
+            success: true,
+            message: `Credentials valid — verified phone: ${validateData.display_phone_number || phoneNumberId} (${validateData.verified_name || 'unverified'})`,
+            details: validateData,
+            requires_template: true
+          });
+        }
+        return Response.json({ success: false, error: validateData.error?.message || 'Invalid credentials. Check Access Token and Phone Number ID.' });
       }
 
       if (provider === 'gupshup') {
