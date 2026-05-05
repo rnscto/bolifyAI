@@ -146,31 +146,7 @@ Deno.serve(async (req) => {
         // 1. CALL / FOLLOWUP → Auto-initiate call with SAME agent
         // ============================================================
         if (activityType === 'call' || activityType === 'followup') {
-          // ── DEDUP CHECK 1: Lead-level cooldown (skip if called within last 2 hours) ──
-          if (lead?.id) {
-            try {
-              const recentCallsCheck = await svc.entities.CallLog.filter(
-                { lead_id: lead.id, direction: 'outbound' }, '-created_date', 1
-              );
-              if (recentCallsCheck.length > 0) {
-                const lastCallTime = new Date(recentCallsCheck[0].call_start_time || recentCallsCheck[0].created_date);
-                const hoursSinceLastCall = (now - lastCallTime) / (1000 * 60 * 60);
-                if (hoursSinceLastCall < 2) {
-                  console.log(`[FollowupEngine] Skipped ${activity.id}: lead ${lead.name} was called ${hoursSinceLastCall.toFixed(1)}h ago (cooldown)`);
-                  await svc.entities.Activity.update(activity.id, {
-                    reminder_sent: true,
-                    notes: (activity.notes || '') + `\n[Engine] Skipped: lead called ${hoursSinceLastCall.toFixed(1)}h ago (2h cooldown)`
-                  });
-                  results.skipped++;
-                  continue;
-                }
-              }
-            } catch (e) {
-              console.warn(`[FollowupEngine] Cooldown check failed: ${e.message}`);
-            }
-          }
-
-          // ── DEDUP CHECK 2: Skip if lead is in an active/running campaign ──
+          // ── DEDUP CHECK: Skip if lead is in an active/running campaign ──
           if (lead?.id) {
             try {
               const activeCampaignLeads = await svc.entities.CampaignLead.filter({ lead_id: lead.id });
