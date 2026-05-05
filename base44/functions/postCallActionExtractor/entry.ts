@@ -290,19 +290,44 @@ If the transcript shows ONLY the AI agent speaking with NO customer responses:
         }
 
         // ── DEDUP CHECK 2: Skip if similar activity already exists for this lead ──
+        // BUT: if customer explicitly requested a new specific time (action has scheduled_date AND
+        // confirmed=true), update the existing activity instead of skipping. This handles cases like
+        // "actually call me at 2:15 instead of 1:30" — the new time should override the old one.
         const hasSimilar = existingActivities.some(ea =>
           ea.type === activityType &&
-          ea.title?.toLowerCase().includes(action.title?.toLowerCase().substring(0, 20) || '') 
+          ea.title?.toLowerCase().includes(action.title?.toLowerCase().substring(0, 20) || '')
         );
-        // Also check for same-type activity created from a recent call (within last 4 hours)
-        const hasRecentSameType = existingActivities.some(ea => {
+        const recentSameType = existingActivities.find(ea => {
           if (ea.type !== activityType) return false;
           const created = new Date(ea.created_date);
           const hoursAgo = (now - created) / (1000 * 60 * 60);
           return hoursAgo < 4;
         });
 
-        if (hasSimilar || hasRecentSameType) {
+        // If customer confirmed a new specific time and a recent same-type activity exists,
+        // UPDATE that activity's scheduled_date instead of creating a duplicate.
+        if (recentSameType && isConfirmed && action.scheduled_date) {
+          const existingTime = new Date(recentSameType.scheduled_date).getTime();
+          const newTime = new Date(action.scheduled_date).getTime();
+          if (Math.abs(existingTime - newTime) > 5 * 60 * 1000) {
+            try {
+              await svc.entities.Activity.update(recentSameType.id, {
+                scheduled_date: action.scheduled_date,
+                description: `✅ CONFIRMED by customer (RESCHEDULED)\n\n${action.description || ''}\n\n[Trigger: "${action.trigger || ''}"]`,
+                reminder_sent: false,
+                notes: `[Auto-extracted from call ${callLogId}] [confirmed, rescheduled]`
+              });
+              console.log(`[ActionExtractor] Rescheduled ${activityType} "${recentSameType.title}" from ${recentSameType.scheduled_date} → ${action.scheduled_date}`);
+              results.activities_created++;
+              results.details.push({ type: activityType, title: action.title, scheduled: action.scheduled_date, rescheduled: true });
+              continue;
+            } catch (e) {
+              console.error(`[ActionExtractor] Reschedule failed: ${e.message}`);
+            }
+          }
+        }
+
+        if (hasSimilar || recentSameType) {
           console.log(`[ActionExtractor] Skipped duplicate ${activityType} "${action.title}": similar activity exists`);
           results.skipped_duplicates++;
           continue;

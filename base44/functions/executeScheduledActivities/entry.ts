@@ -68,9 +68,16 @@ Deno.serve(async (req) => {
       errors: []
     };
 
-    // Fetch all scheduled activities
-    const activities = await svc.entities.Activity.filter({ status: 'scheduled' }, 'scheduled_date', 100);
-    console.log(`[FollowupEngine] Processing ${activities.length} scheduled activities`);
+    // Fetch DUE scheduled activities only (scheduled_date <= now), sorted earliest-first.
+    // Then prioritize call/followup (real auto-calls) over email/task (admin alerts only).
+    // Cap at 50 per run to stay within function timeout (180s).
+    const allScheduled = await svc.entities.Activity.filter({ status: 'scheduled' }, 'scheduled_date', 500);
+    const dueNow = allScheduled.filter(a => new Date(a.scheduled_date) <= now);
+    const callPriority = ['call', 'followup'];
+    const calls = dueNow.filter(a => callPriority.includes(a.type));
+    const others = dueNow.filter(a => !callPriority.includes(a.type));
+    const activities = [...calls, ...others].slice(0, 50);
+    console.log(`[FollowupEngine] Fetched ${allScheduled.length} scheduled, ${dueNow.length} due, processing ${activities.length} (calls=${calls.length})`);
 
     for (const activity of activities) {
       // ── Per-activity try/catch so one failure doesn't kill the whole run ──
