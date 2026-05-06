@@ -257,6 +257,34 @@ Deno.serve(async (req) => {
     // Update campaign stats
     await updateCampaignStats(base44, campaignId);
 
+    // ============================================================
+    // AUTO-WHATSAPP: Silently send template if AI detects intent in transcript
+    // (fire-and-forget — don't block response)
+    // ============================================================
+    if (callLog.transcript && callLog.transcript.length > 30 && outcome !== 'not_answered') {
+      try {
+        const appId = Deno.env.get('BASE44_APP_ID');
+        const cronKey = Deno.env.get('CRON_API_KEY');
+        fetch(`https://app.base44.com/api/apps/${appId}/functions/autoWhatsAppFromTranscript`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-Secret': cronKey || '',
+            'Base44-App-Id': appId || ''
+          },
+          body: JSON.stringify({
+            campaign_id: campaignId,
+            call_log_id: callLogId,
+            lead_id: campaignLead.lead_id,
+            transcript: callLog.transcript,
+            summary: aiResult.outcome ? (aiResult.summary || summary) : summary
+          })
+        }).catch(err => console.error(`[campaignPostCall] auto-whatsapp dispatch failed: ${err.message}`));
+      } catch (waErr) {
+        console.error(`[campaignPostCall] auto-whatsapp setup failed: ${waErr.message}`);
+      }
+    }
+
     return Response.json({
       success: true, outcome: aiResult.outcome || outcome,
       email_sent: aiResult.emailSent || false,

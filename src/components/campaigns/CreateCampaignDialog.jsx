@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/select';
 import { toast } from 'sonner';
 import CallScriptEditor from './CallScriptEditor';
+import CampaignWhatsAppRules from './CampaignWhatsAppRules';
 
 export default function CreateCampaignDialog({ open, onOpenChange, client, onCreated }) {
   const [agents, setAgents] = useState([]);
@@ -39,6 +40,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
     no_answer_retry_hours: 4,
     no_answer_max_retries: 3,
     call_script: { opening: '', pitch: '', objection_handling: '', closing: '' },
+    whatsapp_auto_send: { enabled: false, intent_template_map: {} },
   });
 
   useEffect(() => {
@@ -116,6 +118,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
         total_leads: selectedLeads.length,
         ...(hasScript ? { call_script: form.call_script } : {}),
         ...(scheduledISO ? { scheduled_date: scheduledISO } : {}),
+        whatsapp_auto_send: form.whatsapp_auto_send,
         followup_rules: {
           interested_email: form.interested_email,
           interested_ai_email: form.interested_ai_email,
@@ -236,6 +239,13 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
             onChange={(script) => setForm({ ...form, call_script: script })}
             agentName={agents.find(a => a.id === form.agent_id)?.name}
             campaignType={form.type}
+          />
+
+          {/* Auto-WhatsApp Rules */}
+          <CampaignWhatsAppRules
+            clientId={client?.id}
+            value={form.whatsapp_auto_send}
+            onChange={(v) => setForm({ ...form, whatsapp_auto_send: v })}
           />
 
           {/* Follow-up Rules */}

@@ -149,6 +149,44 @@
       },
       "description": "AI-driven automated follow-up rules"
     },
+    "whatsapp_auto_send": {
+      "type": "object",
+      "description": "Auto-send WhatsApp templates after call when AI detects intent in transcript",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Master toggle for auto-WhatsApp after call"
+        },
+        "intent_template_map": {
+          "type": "object",
+          "description": "Map of intent \u2192 WhatsAppTemplate ID to send when that intent is detected",
+          "properties": {
+            "pricing_details": {
+              "type": "string"
+            },
+            "brochure_request": {
+              "type": "string"
+            },
+            "demo_booking": {
+              "type": "string"
+            },
+            "callback_confirmation": {
+              "type": "string"
+            },
+            "location_address": {
+              "type": "string"
+            },
+            "payment_link": {
+              "type": "string"
+            },
+            "general_details": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
     "outcomes_summary": {
       "type": "object",
       "properties": {
