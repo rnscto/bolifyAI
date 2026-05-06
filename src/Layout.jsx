@@ -62,12 +62,13 @@ export default function Layout({ children, currentPageName }) {
         }
         // Fallback: match by email if no user_id-linked client found (e.g. admin-created accounts)
         if (clients.length === 0) {
-          try {
-            const byEmail = await base44.entities.Client.filter({ email: currentUser.email });
-            if (byEmail.length > 0) {
-              // Link user_id for future lookups
-              try { await base44.entities.Client.update(byEmail[0].id, { user_id: currentUser.id }); } catch (_) {}
-              clients = byEmail;
+        try {
+          const byEmail = await base44.entities.Client.filter({ email: currentUser.email });
+          if (byEmail.length > 0) {
+            // Link user_id for future lookups
+            try { await base44.entities.Client.update(byEmail[0].id, { user_id: currentUser.id }); } catch (_) {}
+            try { await base44.auth.updateMe({ client_id: byEmail[0].id }); } catch (_) {}
+            clients = byEmail;
             }
           } catch (e) {
             console.log('Client filter by email failed:', e.message);
@@ -75,6 +76,10 @@ export default function Layout({ children, currentPageName }) {
         }
         if (clients.length > 0) {
           setClient(clients[0]);
+          // Ensure client_id is stored on the user for RLS matching
+          if (!currentUser.client_id || currentUser.client_id !== clients[0].id) {
+            try { await base44.auth.updateMe({ client_id: clients[0].id }); } catch (_) {}
+          }
           // If onboarding not completed, redirect
           if (!clients[0].onboarding_completed) {
             window.location.href = createPageUrl('Onboarding');
@@ -113,6 +118,7 @@ export default function Layout({ children, currentPageName }) {
             const byCreator = await base44.entities.Client.filter({ created_by: currentUser.email });
             if (byCreator.length > 0) {
               try { await base44.entities.Client.update(byCreator[0].id, { user_id: currentUser.id }); } catch (_) {}
+              try { await base44.auth.updateMe({ client_id: byCreator[0].id }); } catch (_) {}
               setClient(byCreator[0]);
               if (!byCreator[0].onboarding_completed) {
                 window.location.href = createPageUrl('Onboarding');
