@@ -68,16 +68,15 @@ Deno.serve(async (req) => {
       errors: []
     };
 
-    // Fetch DUE scheduled activities only (scheduled_date <= now), sorted earliest-first.
-    // Then prioritize call/followup (real auto-calls) over email/task (admin alerts only).
-    // Cap at 50 per run to stay within function timeout (180s).
-    const allScheduled = await svc.entities.Activity.filter({ status: 'scheduled' }, 'scheduled_date', 500);
+    // Fetch DUE scheduled activities that haven't been processed yet (reminder_sent !== true),
+    // sorted earliest-first. Prioritize call/followup over email/task. Cap at 50 per run.
+    const allScheduled = await svc.entities.Activity.filter({ status: 'scheduled', reminder_sent: false }, 'scheduled_date', 500);
     const dueNow = allScheduled.filter(a => new Date(a.scheduled_date) <= now);
     const callPriority = ['call', 'followup'];
     const calls = dueNow.filter(a => callPriority.includes(a.type));
     const others = dueNow.filter(a => !callPriority.includes(a.type));
     const activities = [...calls, ...others].slice(0, 50);
-    console.log(`[FollowupEngine] Fetched ${allScheduled.length} scheduled, ${dueNow.length} due, processing ${activities.length} (calls=${calls.length})`);
+    console.log(`[FollowupEngine] Fetched ${allScheduled.length} unprocessed scheduled, ${dueNow.length} due, processing ${activities.length} (calls=${calls.length})`);
 
     for (const activity of activities) {
       // ── Per-activity try/catch so one failure doesn't kill the whole run ──
@@ -164,6 +163,40 @@ Deno.serve(async (req) => {
               }
             } catch (e) {
               console.warn(`[FollowupEngine] Campaign check failed: ${e.message}`);
+            }
+          }
+
+          // ── Fallback: if no lead/phone but activity has call_log_id, derive phone from CallLog ──
+          if (!lead?.phone && activity.call_log_id) {
+            try {
+              const origCall = await svc.entities.CallLog.get(activity.call_log_id);
+              const fallbackPhone = origCall?.direction === 'inbound' ? (origCall.caller_id || origCall.callee_number) : (origCall.callee_number || origCall.caller_id);
+              const cleanFallback = (fallbackPhone || '').replace(/\D/g, '');
+              if (cleanFallback.length >= 10) {
+                // Try to find matching lead first; otherwise create one so future activities have a lead
+                let resolvedLead = null;
+                try {
+                  const candidates = await svc.entities.Lead.filter({ client_id: activity.client_id });
+                  resolvedLead = candidates.find(l => {
+                    const lp = (l.phone || '').replace(/\D/g, '');
+                    return lp && (lp === cleanFallback || lp.endsWith(cleanFallback.slice(-10)) || cleanFallback.endsWith(lp.slice(-10)));
+                  });
+                } catch (_) {}
+                if (!resolvedLead) {
+                  resolvedLead = await svc.entities.Lead.create({
+                    client_id: activity.client_id,
+                    name: `Lead ${cleanFallback.slice(-10)}`,
+                    phone: cleanFallback,
+                    status: 'contacted',
+                    source: 'auto_created_from_activity'
+                  });
+                  console.log(`[FollowupEngine] Created fallback lead ${resolvedLead.id} for activity ${activity.id}`);
+                }
+                lead = resolvedLead;
+                await svc.entities.Activity.update(activity.id, { lead_id: resolvedLead.id });
+              }
+            } catch (e) {
+              console.warn(`[FollowupEngine] Phone fallback failed: ${e.message}`);
             }
           }
 

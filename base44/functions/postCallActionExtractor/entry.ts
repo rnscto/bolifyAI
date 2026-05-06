@@ -50,9 +50,10 @@ Deno.serve(async (req) => {
     }
 
     // ── AUTO-RESOLVE lead_id if missing ──
-    // For inbound calls or calls where lead wasn't linked, try to find lead by phone number
+    // For inbound calls or calls where lead wasn't linked, try to find lead by phone number.
+    // If no match exists, create a new Lead so callback activities have a phone to dial.
     if (!callLog.lead_id && callLog.client_id) {
-      const phoneToSearch = callLog.callee_number || callLog.caller_id;
+      const phoneToSearch = callLog.direction === 'inbound' ? (callLog.caller_id || callLog.callee_number) : (callLog.callee_number || callLog.caller_id);
       if (phoneToSearch) {
         try {
           const cleanPhone = phoneToSearch.replace(/\D/g, '');
@@ -63,12 +64,25 @@ Deno.serve(async (req) => {
           });
           if (matchedLead) {
             callLog.lead_id = matchedLead.id;
-            // Also update the CallLog record so future references have the lead linked
             await svc.entities.CallLog.update(callLogId, { lead_id: matchedLead.id });
             console.log(`[ActionExtractor] Auto-linked lead ${matchedLead.name} (${matchedLead.id}) to call ${callLogId} via phone match`);
+          } else if (cleanPhone.length >= 10) {
+            // No matching lead — create a new one so callback activities are actionable
+            const newLead = await svc.entities.Lead.create({
+              client_id: callLog.client_id,
+              name: callLog.direction === 'inbound' ? `Inbound caller ${cleanPhone.slice(-10)}` : `Lead ${cleanPhone.slice(-10)}`,
+              phone: cleanPhone,
+              status: 'contacted',
+              source: callLog.direction === 'inbound' ? 'inbound_call' : 'auto_created',
+              last_call_date: new Date().toISOString(),
+              notes: `Auto-created from call ${callLogId} (${callLog.direction || 'unknown'} direction)`
+            });
+            callLog.lead_id = newLead.id;
+            await svc.entities.CallLog.update(callLogId, { lead_id: newLead.id });
+            console.log(`[ActionExtractor] Auto-created lead ${newLead.id} (phone=${cleanPhone}) for call ${callLogId}`);
           }
         } catch (e) {
-          console.warn(`[ActionExtractor] Lead phone lookup failed: ${e.message}`);
+          console.warn(`[ActionExtractor] Lead resolve/create failed: ${e.message}`);
         }
       }
     }
