@@ -20,10 +20,21 @@ Deno.serve(async (req) => {
       ? 'https://rcsdigital.in/v23.0'
       : 'https://graph.facebook.com/v20.0';
 
-    const res = await fetch(`${baseHost}/${phone_number_id}?fields=verified_name,display_phone_number`, {
+    const fullUrl = `${baseHost}/${phone_number_id}?fields=verified_name,display_phone_number`;
+    const tokenPreview = api_key.length > 12 ? `${api_key.slice(0, 6)}...${api_key.slice(-4)} (len=${api_key.length})` : `(len=${api_key.length})`;
+    console.log(`[testPlatformWhatsAppConnection] → GET ${fullUrl}`);
+    console.log(`[testPlatformWhatsAppConnection] → Provider: ${provider}, Phone Number ID: "${phone_number_id}", WABA: "${business_id || '(empty)'}", Token: ${tokenPreview}`);
+
+    const res = await fetch(fullUrl, {
       headers: { 'Authorization': `Bearer ${api_key}` }
     });
-    const data = await res.json();
+    const rawText = await res.text();
+    let data;
+    try { data = JSON.parse(rawText); } catch (_) { data = { raw: rawText }; }
+
+    console.log(`[testPlatformWhatsAppConnection] ← HTTP ${res.status} ${res.statusText}`);
+    console.log(`[testPlatformWhatsAppConnection] ← Response headers: ${JSON.stringify(Object.fromEntries(res.headers))}`);
+    console.log(`[testPlatformWhatsAppConnection] ← Response body: ${rawText.substring(0, 2000)}`);
 
     // Persist status
     const cfgs = await svc.entities.PlatformMessagingConfig.list('-created_date', 1);
