@@ -69,16 +69,25 @@ Deno.serve(async (req) => {
     };
 
     // Fetch DUE scheduled activities that haven't been processed yet (reminder_sent !== true),
-    // sorted earliest-first. Prioritize call/followup over email/task. Cap at 50 per run.
+    // sorted earliest-first. Prioritize call/followup over email/task. Cap at 15 per run to fit cron timeout.
     const allScheduled = await svc.entities.Activity.filter({ status: 'scheduled', reminder_sent: false }, 'scheduled_date', 500);
     const dueNow = allScheduled.filter(a => new Date(a.scheduled_date) <= now);
     const callPriority = ['call', 'followup'];
     const calls = dueNow.filter(a => callPriority.includes(a.type));
     const others = dueNow.filter(a => !callPriority.includes(a.type));
-    const activities = [...calls, ...others].slice(0, 50);
+    const activities = [...calls, ...others].slice(0, 15);
     console.log(`[FollowupEngine] Fetched ${allScheduled.length} unprocessed scheduled, ${dueNow.length} due, processing ${activities.length} (calls=${calls.length})`);
 
+    // Hard time guard — return gracefully before HTTP timeout (cron-job.org default ~30s, we use 50s for safety)
+    const RUN_DEADLINE_MS = 50 * 1000;
+    const runStart = Date.now();
+
     for (const activity of activities) {
+      // Stop processing if we're close to the deadline — remaining activities will be picked up next run
+      if (Date.now() - runStart > RUN_DEADLINE_MS) {
+        console.log(`[FollowupEngine] Deadline reached (${Math.round((Date.now()-runStart)/1000)}s) — stopping early; remaining activities will run next cycle`);
+        break;
+      }
       // ── Per-activity try/catch so one failure doesn't kill the whole run ──
       try {
         const scheduledDate = new Date(activity.scheduled_date);
