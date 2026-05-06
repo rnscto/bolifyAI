@@ -10,6 +10,7 @@
       "type": "string",
       "enum": [
         "none",
+        "rcs_digital",
         "meta_cloud",
         "gupshup",
         "aisensy",
@@ -23,7 +24,7 @@
     },
     "whatsapp_api_key": {
       "type": "string",
-      "description": "WhatsApp API key / access token"
+      "description": "WhatsApp API key / access token (Bearer)"
     },
     "whatsapp_api_endpoint": {
       "type": "string",
@@ -31,11 +32,11 @@
     },
     "whatsapp_phone_number_id": {
       "type": "string",
-      "description": "WhatsApp phone number ID (Meta) or sender number"
+      "description": "Phone Number ID (Meta / RCS Digital) or sender number"
     },
     "whatsapp_business_id": {
       "type": "string",
-      "description": "WhatsApp Business Account ID (Meta) or App ID"
+      "description": "WABA ID (Meta / RCS Digital) or App ID"
     },
     "whatsapp_status": {
       "type": "string",
@@ -54,6 +55,7 @@
       "type": "string",
       "enum": [
         "none",
+        "rcs_digital",
         "gupshup",
         "smartflo",
         "kaleyra",
@@ -65,11 +67,23 @@
     },
     "rcs_api_key": {
       "type": "string",
-      "description": "RCS/SMS API key"
+      "description": "RCS/SMS API key (Bearer)"
     },
     "rcs_api_endpoint": {
       "type": "string",
       "description": "RCS/SMS API base URL"
+    },
+    "rcs_bot_id": {
+      "type": "string",
+      "description": "RCS Digital Bot ID"
+    },
+    "rcs_pe_id": {
+      "type": "string",
+      "description": "DLT Principal Entity ID"
+    },
+    "rcs_chain_value": {
+      "type": "string",
+      "description": "DLT chain (comma-separated template IDs)"
     },
     "rcs_sender_id": {
       "type": "string",
@@ -99,40 +113,31 @@
         "ses",
         "postmark"
       ],
-      "default": "none",
-      "description": "Email provider"
+      "default": "none"
     },
     "email_api_key": {
-      "type": "string",
-      "description": "Email API key (for API providers)"
+      "type": "string"
     },
     "email_smtp_host": {
-      "type": "string",
-      "description": "SMTP host"
+      "type": "string"
     },
     "email_smtp_port": {
-      "type": "number",
-      "description": "SMTP port"
+      "type": "number"
     },
     "email_smtp_user": {
-      "type": "string",
-      "description": "SMTP username"
+      "type": "string"
     },
     "email_smtp_pass": {
-      "type": "string",
-      "description": "SMTP password"
+      "type": "string"
     },
     "email_from_address": {
-      "type": "string",
-      "description": "From email address"
+      "type": "string"
     },
     "email_from_name": {
-      "type": "string",
-      "description": "From display name"
+      "type": "string"
     },
     "email_domain": {
-      "type": "string",
-      "description": "Verified sending domain"
+      "type": "string"
     },
     "email_status": {
       "type": "string",

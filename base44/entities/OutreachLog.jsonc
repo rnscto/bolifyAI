@@ -4,40 +4,58 @@
   "properties": {
     "client_id": {
       "type": "string",
-      "description": "Owner client ID"
+      "description": "Owner client ID \u2014 use 'PLATFORM' for admin/platform-level sends"
     },
     "lead_id": {
-      "type": "string",
-      "description": "Associated lead ID"
+      "type": "string"
     },
     "call_log_id": {
-      "type": "string",
-      "description": "Triggering call log ID"
+      "type": "string"
     },
     "channel": {
       "type": "string",
       "enum": [
         "email",
         "rcs",
-        "sms"
+        "sms",
+        "whatsapp"
       ],
       "description": "Communication channel"
     },
-    "recipient_email": {
+    "direction": {
       "type": "string",
-      "description": "Recipient email address"
+      "enum": [
+        "outbound",
+        "inbound"
+      ],
+      "default": "outbound"
+    },
+    "vendor": {
+      "type": "string",
+      "description": "Provider used (rcs_digital, meta_cloud, etc.)"
+    },
+    "vendor_message_id": {
+      "type": "string",
+      "description": "Provider's message ID for status correlation"
+    },
+    "template_id": {
+      "type": "string",
+      "description": "WhatsAppTemplate ID used (if any)"
+    },
+    "template_name": {
+      "type": "string"
+    },
+    "recipient_email": {
+      "type": "string"
     },
     "recipient_phone": {
-      "type": "string",
-      "description": "Recipient phone number"
+      "type": "string"
     },
     "subject": {
-      "type": "string",
-      "description": "Email subject or message title"
+      "type": "string"
     },
     "body": {
-      "type": "string",
-      "description": "Message content (HTML for email)"
+      "type": "string"
     },
     "outreach_type": {
       "type": "string",
@@ -47,37 +65,41 @@
         "re_engagement",
         "thank_you",
         "proposal",
-        "callback_reminder"
-      ],
-      "description": "Type of outreach"
+        "callback_reminder",
+        "broadcast",
+        "lifecycle_welcome",
+        "lifecycle_onboarding",
+        "lifecycle_trial",
+        "lifecycle_payment",
+        "inbound_reply",
+        "manual_test"
+      ]
     },
     "call_outcome": {
-      "type": "string",
-      "description": "Call outcome that triggered this outreach"
+      "type": "string"
     },
     "ai_summary": {
-      "type": "string",
-      "description": "AI-generated summary used for personalization"
+      "type": "string"
     },
     "status": {
       "type": "string",
       "enum": [
         "sent",
+        "delivered",
+        "read",
+        "replied",
         "failed",
         "pending",
         "skipped"
       ],
-      "default": "pending",
-      "description": "Delivery status"
+      "default": "pending"
     },
     "error_message": {
-      "type": "string",
-      "description": "Error details if failed"
+      "type": "string"
     },
     "is_retention": {
       "type": "boolean",
-      "default": false,
-      "description": "Whether this is a platform retention outreach"
+      "default": false
     }
   },
   "required": [
