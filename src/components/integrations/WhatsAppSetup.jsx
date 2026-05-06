@@ -70,8 +70,27 @@ export default function WhatsAppSetup({ config, onSave }) {
     });
     if (res.data.success) {
       toast.success(res.data.message);
+      // Auto-save credentials + mark connected on successful test
+      await onSave({
+        whatsapp_provider: provider,
+        whatsapp_api_key: apiKey,
+        whatsapp_phone_number_id: phoneNumberId,
+        whatsapp_business_id: businessId,
+        whatsapp_api_endpoint: apiEndpoint,
+        whatsapp_status: 'connected',
+        whatsapp_last_tested: new Date().toISOString(),
+      });
     } else {
       toast.error(res.data.error || 'Connection failed');
+      await onSave({
+        whatsapp_provider: provider,
+        whatsapp_api_key: apiKey,
+        whatsapp_phone_number_id: phoneNumberId,
+        whatsapp_business_id: businessId,
+        whatsapp_api_endpoint: apiEndpoint,
+        whatsapp_status: 'error',
+        whatsapp_last_tested: new Date().toISOString(),
+      });
     }
     setTesting(false);
   };
@@ -84,7 +103,7 @@ export default function WhatsAppSetup({ config, onSave }) {
       whatsapp_phone_number_id: phoneNumberId,
       whatsapp_business_id: businessId,
       whatsapp_api_endpoint: apiEndpoint,
-      whatsapp_status: provider === 'none' ? 'disconnected' : config?.whatsapp_status || 'disconnected',
+      whatsapp_status: provider === 'none' ? 'disconnected' : (config?.whatsapp_status || 'disconnected'),
     });
     setSaving(false);
   };
