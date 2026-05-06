@@ -30,10 +30,18 @@ Deno.serve(async (req) => {
       if (provider === 'rcs_digital') {
         // RCS Digital is Meta-compatible at https://rcsdigital.in/v23.0
         if (!phoneNumberId) return Response.json({ success: false, error: 'Phone Number ID required' });
-        const validateRes = await fetch(`https://rcsdigital.in/v23.0/${phoneNumberId}?fields=verified_name,display_phone_number`, {
+        const tokenPreview = apiKey.length > 12 ? `${apiKey.slice(0, 6)}...${apiKey.slice(-4)} (len=${apiKey.length})` : `(len=${apiKey.length})`;
+        const fullUrl = `https://rcsdigital.in/v23.0/${phoneNumberId}?fields=verified_name,display_phone_number`;
+        console.log(`[testMessagingConnection/rcs_digital] → GET ${fullUrl}`);
+        console.log(`[testMessagingConnection/rcs_digital] → Phone Number ID: "${phoneNumberId}", Token: ${tokenPreview}`);
+        const validateRes = await fetch(fullUrl, {
           headers: { 'Authorization': `Bearer ${apiKey}` }
         });
-        const validateData = await validateRes.json();
+        const rawText = await validateRes.text();
+        let validateData;
+        try { validateData = JSON.parse(rawText); } catch (_) { validateData = { raw: rawText }; }
+        console.log(`[testMessagingConnection/rcs_digital] ← HTTP ${validateRes.status} ${validateRes.statusText}`);
+        console.log(`[testMessagingConnection/rcs_digital] ← Response body: ${rawText.substring(0, 1500)}`);
         if (validateRes.ok) {
           return Response.json({
             success: true,
