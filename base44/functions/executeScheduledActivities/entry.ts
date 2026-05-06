@@ -81,13 +81,17 @@ Deno.serve(async (req) => {
     // Hard time guard — return gracefully before HTTP timeout (cron-job.org default ~30s, we use 50s for safety)
     const RUN_DEADLINE_MS = 50 * 1000;
     const runStart = Date.now();
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-    for (const activity of activities) {
+    for (let i = 0; i < activities.length; i++) {
+      const activity = activities[i];
       // Stop processing if we're close to the deadline — remaining activities will be picked up next run
       if (Date.now() - runStart > RUN_DEADLINE_MS) {
         console.log(`[FollowupEngine] Deadline reached (${Math.round((Date.now()-runStart)/1000)}s) — stopping early; remaining activities will run next cycle`);
         break;
       }
+      // Throttle to stay under Base44 SDK rate limit (each activity makes ~10 entity calls)
+      if (i > 0) await sleep(800);
       // ── Per-activity try/catch so one failure doesn't kill the whole run ──
       try {
         const scheduledDate = new Date(activity.scheduled_date);
