@@ -23,6 +23,18 @@ export default function CampaignWhatsAppRules({ clientId, value, onChange }) {
 
   const enabled = value?.enabled || false;
   const intentMap = value?.intent_template_map || {};
+  const missedEnabled = value?.missed_call_enabled || false;
+  const missedWhen = value?.missed_call_when || 'after_final_retry';
+  const missedTemplateId = value?.missed_call_template_id || '';
+
+  const merge = (patch) => onChange({
+    enabled,
+    intent_template_map: intentMap,
+    missed_call_enabled: missedEnabled,
+    missed_call_when: missedWhen,
+    missed_call_template_id: missedTemplateId,
+    ...patch
+  });
 
   useEffect(() => {
     if (!clientId) return;
@@ -36,12 +48,12 @@ export default function CampaignWhatsAppRules({ clientId, value, onChange }) {
     })();
   }, [clientId]);
 
-  const setEnabled = (v) => onChange({ enabled: !!v, intent_template_map: intentMap });
+  const setEnabled = (v) => merge({ enabled: !!v });
   const setMapping = (intent, templateId) => {
     const next = { ...intentMap };
     if (templateId === '__none__') delete next[intent];
     else next[intent] = templateId;
-    onChange({ enabled, intent_template_map: next });
+    merge({ intent_template_map: next });
   };
 
   return (
@@ -101,6 +113,67 @@ export default function CampaignWhatsAppRules({ clientId, value, onChange }) {
           )}
         </div>
       )}
+
+      {/* === MISSED CALL section === */}
+      <div className="pt-3 mt-3 border-t border-emerald-200/60">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={missedEnabled}
+            onCheckedChange={(v) => merge({ missed_call_enabled: !!v })}
+            id="wa-missed-toggle"
+          />
+          <label htmlFor="wa-missed-toggle" className="font-semibold text-sm text-gray-700 cursor-pointer">
+            📵 Send WhatsApp when call is NOT answered
+          </label>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">
+          Sends a template silently to leads who didn't pick up.
+        </p>
+
+        {missedEnabled && (
+          <div className="space-y-3 mt-3 pl-6">
+            {templates.length === 0 ? (
+              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>No APPROVED WhatsApp templates found. Sync templates from the WhatsApp Templates page first.</span>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">When to send</Label>
+                  <Select value={missedWhen} onValueChange={(v) => merge({ missed_call_when: v })}>
+                    <SelectTrigger className="h-9 mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="after_final_retry">After final retry (recommended)</SelectItem>
+                      <SelectItem value="first_miss">On first miss only</SelectItem>
+                      <SelectItem value="every_miss">Every missed attempt</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Template to send</Label>
+                  <Select
+                    value={missedTemplateId || '__none__'}
+                    onValueChange={(v) => merge({ missed_call_template_id: v === '__none__' ? '' : v })}
+                  >
+                    <SelectTrigger className="h-9 mt-1">
+                      <SelectValue placeholder="-- select template --" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">— Select template —</SelectItem>
+                      {templates.map(t => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name} ({t.language})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -184,6 +184,25 @@
               "type": "string"
             }
           }
+        },
+        "missed_call_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Send WhatsApp template when call is not answered"
+        },
+        "missed_call_when": {
+          "type": "string",
+          "enum": [
+            "after_final_retry",
+            "first_miss",
+            "every_miss"
+          ],
+          "default": "after_final_retry",
+          "description": "When to send: after final retry, on first miss only, or every missed attempt"
+        },
+        "missed_call_template_id": {
+          "type": "string",
+          "description": "Approved WhatsAppTemplate ID to send for missed calls"
         }
       }
     },

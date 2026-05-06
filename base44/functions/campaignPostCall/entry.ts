@@ -182,12 +182,15 @@ Deno.serve(async (req) => {
     // STEP 3: FAST — Handle no-answer retry (before next batch)
     // =====================================================
     let retryScheduled = false;
+    let isFinalAttempt = true;
+    let attemptNumber = (campaignLead.attempt_count || 0) + 1;
     if (outcome === 'not_answered') {
       const campaign = await base44.entities.Campaign.get(campaignId);
       const rules = campaign?.followup_rules || {};
       if (rules.no_answer_retry !== false) {
         const maxRetries = rules.no_answer_max_retries || 3;
         const currentAttempts = (campaignLead.attempt_count || 0) + 1;
+        attemptNumber = currentAttempts;
         if (currentAttempts < maxRetries) {
           const retryHours = rules.no_answer_retry_hours || 4;
           await base44.entities.CampaignLead.update(campaignLead.id, {
@@ -197,7 +200,76 @@ Deno.serve(async (req) => {
           });
           console.log(`[campaignPostCall] Not-answered retry ${currentAttempts}/${maxRetries} queued`);
           retryScheduled = true;
+          isFinalAttempt = false;
         }
+      }
+
+      // === MISSED CALL WhatsApp send (silent, fire-and-forget) ===
+      try {
+        const wa = campaign?.whatsapp_auto_send || {};
+        if (wa.missed_call_enabled && wa.missed_call_template_id && campaignLead.lead_id) {
+          const when = wa.missed_call_when || 'after_final_retry';
+          const shouldSend =
+            when === 'every_miss' ||
+            (when === 'first_miss' && attemptNumber === 1) ||
+            (when === 'after_final_retry' && isFinalAttempt);
+          if (shouldSend) {
+            // Idempotency: don't re-send for same call_log_id
+            const existing = await base44.entities.OutreachLog.filter({
+              call_log_id: callLogId, channel: 'whatsapp', client_id: campaign.client_id
+            }, '-created_date', 5);
+            const alreadySent = existing.some(o => o.template_id === wa.missed_call_template_id && o.status === 'sent');
+            if (!alreadySent) {
+              const lead = await base44.entities.Lead.get(campaignLead.lead_id);
+              if (lead?.phone) {
+                const template = await base44.entities.WhatsAppTemplate.get(wa.missed_call_template_id);
+                if (template && template.status === 'APPROVED') {
+                  const placeholderCount = (template.body_text || '').match(/\{\{\d+\}\}/g)?.length || 0;
+                  const variables = [];
+                  for (let i = 0; i < placeholderCount; i++) {
+                    variables.push(i === 0 ? (lead.name || 'Sir/Madam') : '');
+                  }
+                  const configs = await base44.entities.ClientMessagingConfig.filter({ client_id: campaign.client_id });
+                  if (configs.length > 0 && ['meta_cloud', 'rcs_digital'].includes(configs[0].whatsapp_provider)) {
+                    const cfg = configs[0];
+                    let cleanPhone = String(lead.phone).replace(/[^0-9]/g, '');
+                    if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
+                    else if (cleanPhone.length === 11 && cleanPhone.startsWith('0')) cleanPhone = '91' + cleanPhone.slice(1);
+                    const components = variables.length > 0 ? [{ type: 'body', parameters: variables.map(v => ({ type: 'text', text: String(v || '') })) }] : [];
+                    const baseUrl = cfg.whatsapp_provider === 'rcs_digital'
+                      ? `https://rcsdigital.in/v23.0/${cfg.whatsapp_phone_number_id}/messages`
+                      : `https://graph.facebook.com/v20.0/${cfg.whatsapp_phone_number_id}/messages`;
+                    const waRes = await fetch(baseUrl, {
+                      method: 'POST',
+                      headers: { 'Authorization': `Bearer ${cfg.whatsapp_api_key}`, 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanPhone,
+                        type: 'template',
+                        template: { name: template.name, language: { code: template.language || 'en' }, ...(components.length > 0 ? { components } : {}) }
+                      })
+                    });
+                    const waData = await waRes.json();
+                    const messageId = waData.messages?.[0]?.id;
+                    await base44.entities.OutreachLog.create({
+                      client_id: campaign.client_id, lead_id: campaignLead.lead_id, call_log_id: callLogId,
+                      channel: 'whatsapp', direction: 'outbound', vendor: cfg.whatsapp_provider,
+                      vendor_message_id: messageId || null, template_id: template.id, template_name: template.name,
+                      recipient_phone: cleanPhone, body: template.body_text || '',
+                      outreach_type: 'lead_followup', status: waRes.ok ? 'sent' : 'failed',
+                      error_message: waRes.ok ? '' : (waData.error?.message || JSON.stringify(waData))
+                    });
+                    if (waRes.ok) {
+                      await base44.entities.WhatsAppTemplate.update(template.id, { send_count: (template.send_count || 0) + 1 });
+                    }
+                    console.log(`[campaignPostCall] 📵 Missed-call WhatsApp ${waRes.ok ? 'sent' : 'failed'} to ${cleanPhone} (when=${when}, attempt=${attemptNumber})`);
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (mcErr) {
+        console.error(`[campaignPostCall] missed-call WhatsApp failed: ${mcErr.message}`);
       }
     }
 
