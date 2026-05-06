@@ -35,14 +35,20 @@ export default function SendTemplateDialog({ template, open, onOpenChange }) {
         recipient: recipient.trim(),
         variables
       });
-      if (res.data.success) {
+      if (res.data?.success) {
         toast.success('Template sent successfully!');
         onOpenChange(false);
       } else {
-        toast.error(res.data.error || 'Send failed');
+        const errMsg = res.data?.error || 'Send failed';
+        const details = res.data?.details?.error;
+        const fullMsg = details ? `${errMsg} — ${details.error_user_msg || details.message || ''} (code ${details.code || '?'})` : errMsg;
+        console.error('[SendTemplateDialog] send failed:', res.data);
+        toast.error(fullMsg, { duration: 8000 });
       }
     } catch (e) {
-      toast.error(e.message);
+      const detail = e.response?.data?.error || e.response?.data?.details?.error?.message || e.message;
+      console.error('[SendTemplateDialog]', e);
+      toast.error(detail, { duration: 8000 });
     } finally {
       setSending(false);
     }
@@ -63,12 +69,13 @@ export default function SendTemplateDialog({ template, open, onOpenChange }) {
         </DialogHeader>
         <div className="space-y-4">
           <div>
-            <Label>Recipient Phone (with country code)</Label>
+            <Label>Recipient Phone</Label>
             <Input
               value={recipient}
               onChange={e => setRecipient(e.target.value)}
-              placeholder="e.g. 919876543210"
+              placeholder="e.g. 9876543210 or +919876543210"
             />
+            <p className="text-xs text-gray-500 mt-1">10-digit Indian numbers will auto-prefix with 91.</p>
           </div>
 
           {placeholderCount > 0 && (

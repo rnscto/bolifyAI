@@ -38,13 +38,30 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Only Meta Cloud / RCS Digital supported for template sends' }, { status: 400 });
     }
 
+    // Phone normalization helper — handles 10-digit Indian, leading-0, and already-prefixed formats
+    const normalizePhone = (p) => {
+      let n = String(p || '').replace(/[^0-9]/g, '');
+      if (n.length === 10) n = '91' + n;
+      else if (n.length === 11 && n.startsWith('0')) n = '91' + n.slice(1);
+      return n;
+    };
+
     // Build components with variables (interpolate {{name}} {{company}} {{phone}} {{email}} from lead if provided)
     let lead = null;
-    if (template.client_id && template.client_id !== 'PLATFORM') {
-      // recipient may be a lead phone — try to find lead for interpolation context
+    if (lead_id) {
+      try { lead = await svc.entities.Lead.get(lead_id); } catch (_) {}
+    }
+    if (!lead && template.client_id && template.client_id !== 'PLATFORM') {
+      // recipient may be a lead phone — try multiple formats since DB may store +91/91/raw 10-digit
+      const normalized = normalizePhone(recipient);
+      const last10 = normalized.slice(-10);
+      const candidates = [recipient, normalized, last10, '+' + normalized, '91' + last10];
       try {
-        const leads = await svc.entities.Lead.filter({ client_id: template.client_id, phone: String(recipient).replace(/[^0-9]/g, '') });
-        if (leads.length > 0) lead = leads[0];
+        const allLeads = await svc.entities.Lead.filter({ client_id: template.client_id });
+        lead = allLeads.find(l => {
+          const lp = String(l.phone || '').replace(/[^0-9]/g, '');
+          return candidates.some(c => String(c).replace(/[^0-9]/g, '') === lp || lp.endsWith(last10));
+        }) || null;
       } catch (_) {}
     }
     const interpolate = (val) => {
@@ -65,10 +82,11 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Phone normalization: strip non-digits, prepend 91 for India 10-digit
-    let cleanRecipient = String(recipient).replace(/[^0-9]/g, '');
-    if (cleanRecipient.length === 10) cleanRecipient = '91' + cleanRecipient;
-    else if (cleanRecipient.length === 11 && cleanRecipient.startsWith('0')) cleanRecipient = '91' + cleanRecipient.slice(1);
+    // Normalize the recipient to the actual number we'll send to
+    const cleanRecipient = normalizePhone(recipient);
+    if (cleanRecipient.length < 11 || cleanRecipient.length > 15) {
+      return Response.json({ error: `Invalid phone number after normalization: ${cleanRecipient}` }, { status: 400 });
+    }
 
     const baseUrl = cfg.whatsapp_provider === 'rcs_digital'
       ? `https://rcsdigital.in/v23.0/${cfg.whatsapp_phone_number_id}/messages`
