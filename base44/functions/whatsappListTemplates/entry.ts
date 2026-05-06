@@ -39,12 +39,17 @@ Deno.serve(async (req) => {
       ? `https://rcsdigital.in/v23.0`
       : `https://graph.facebook.com/v20.0`;
     const url = `${baseHost}/${cfg.whatsapp_business_id}/message_templates?limit=200`;
+    console.log(`[whatsappListTemplates] → GET ${url} (provider=${cfg.whatsapp_provider})`);
     const res = await fetch(url, {
       headers: { 'Authorization': `Bearer ${cfg.whatsapp_api_key}` }
     });
-    const data = await res.json();
+    const rawText = await res.text();
+    console.log(`[whatsappListTemplates] ← HTTP ${res.status} ${res.statusText}`);
+    console.log(`[whatsappListTemplates] ← Body: ${rawText.substring(0, 2000)}`);
+    let data;
+    try { data = JSON.parse(rawText); } catch (_) { data = { raw: rawText }; }
     if (!res.ok) {
-      return Response.json({ error: data.error?.message || 'Meta API error', details: data }, { status: 400 });
+      return Response.json({ error: data.error?.message || `HTTP ${res.status}: ${rawText.substring(0, 300)}`, details: data }, { status: 400 });
     }
 
     const metaTemplates = data.data || [];
