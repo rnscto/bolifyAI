@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 
 const PROVIDERS = [
   { value: 'none', label: 'Not Connected' },
+  { value: 'rcs_digital', label: 'RCS Digital (Meta-compatible)', fields: ['api_key', 'phone_number_id', 'business_id'] },
   { value: 'meta_cloud', label: 'Meta Cloud API (Official)', fields: ['api_key', 'phone_number_id', 'business_id'] },
   { value: 'gupshup', label: 'Gupshup', fields: ['api_key', 'phone_number_id', 'business_id'] },
   { value: 'aisensy', label: 'AiSensy', fields: ['api_key', 'phone_number_id', 'api_endpoint'] },
@@ -48,7 +49,7 @@ export default function WhatsAppSetup({ config, onSave }) {
 
   // Load approved templates when Meta Cloud is selected and credentials exist
   useEffect(() => {
-    if (provider === 'meta_cloud' && config?.client_id) {
+    if ((provider === 'meta_cloud' || provider === 'rcs_digital') && config?.client_id) {
       setLoadingTemplates(true);
       base44.entities.WhatsAppTemplate.filter({ client_id: config.client_id, status: 'APPROVED' }, '-created_date', 100)
         .then(setTemplates)
@@ -149,7 +150,7 @@ export default function WhatsAppSetup({ config, onSave }) {
                 <Input value={testRecipient} onChange={e => setTestRecipient(e.target.value)} placeholder="e.g. 919876543210" />
               </div>
 
-              {provider === 'meta_cloud' && (
+              {(provider === 'meta_cloud' || provider === 'rcs_digital') && (
                 <div>
                   <Label className="text-xs text-gray-500">
                     Pick a template to test
@@ -182,7 +183,7 @@ export default function WhatsAppSetup({ config, onSave }) {
               <div className="flex gap-2">
                 <Button variant="outline" onClick={handleTest} disabled={testing || !apiKey} className="gap-2 flex-1">
                   {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  {provider === 'meta_cloud' && !selectedTemplate ? 'Validate Credentials' : 'Send Test Message'}
+                  {(provider === 'meta_cloud' || provider === 'rcs_digital') && !selectedTemplate ? 'Validate Credentials' : 'Send Test Message'}
                 </Button>
                 <Button onClick={handleSave} disabled={saving} className="gap-2 flex-1">
                   {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}

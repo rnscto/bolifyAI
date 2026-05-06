@@ -4,20 +4,33 @@
   "properties": {
     "client_id": {
       "type": "string",
-      "description": "Owner client ID"
+      "description": "Owner client ID \u2014 use 'PLATFORM' for admin/platform-owned templates"
+    },
+    "vendor": {
+      "type": "string",
+      "enum": [
+        "meta_cloud",
+        "rcs_digital",
+        "gupshup",
+        "aisensy",
+        "wati",
+        "interakt",
+        "custom"
+      ],
+      "default": "meta_cloud",
+      "description": "Which provider this template lives on"
     },
     "meta_template_id": {
       "type": "string",
-      "description": "Template ID returned by Meta"
+      "description": "Template ID returned by Meta / RCS Digital"
     },
     "name": {
       "type": "string",
-      "description": "Template name (lowercase, no spaces, used by Meta API)"
+      "description": "Template name (lowercase, no spaces)"
     },
     "language": {
       "type": "string",
-      "default": "en",
-      "description": "Language code (e.g. en, en_US, hi, hi_IN)"
+      "default": "en"
     },
     "category": {
       "type": "string",
@@ -25,8 +38,7 @@
         "MARKETING",
         "UTILITY",
         "AUTHENTICATION"
-      ],
-      "description": "Meta template category"
+      ]
     },
     "status": {
       "type": "string",
@@ -38,12 +50,10 @@
         "PAUSED",
         "DISABLED"
       ],
-      "default": "draft",
-      "description": "Approval status from Meta"
+      "default": "draft"
     },
     "rejected_reason": {
-      "type": "string",
-      "description": "Reason for rejection from Meta"
+      "type": "string"
     },
     "header_type": {
       "type": "string",
@@ -54,31 +64,25 @@
         "VIDEO",
         "DOCUMENT"
       ],
-      "default": "NONE",
-      "description": "Header format type"
+      "default": "NONE"
     },
     "header_text": {
-      "type": "string",
-      "description": "Header text (if TEXT type)"
+      "type": "string"
     },
     "header_media_url": {
-      "type": "string",
-      "description": "Header media sample URL (for IMAGE/VIDEO/DOCUMENT)"
+      "type": "string"
     },
     "body_text": {
-      "type": "string",
-      "description": "Body text with {{1}}, {{2}} placeholders"
+      "type": "string"
     },
     "body_examples": {
       "type": "array",
       "items": {
         "type": "string"
-      },
-      "description": "Sample values for body placeholders (required by Meta)"
+      }
     },
     "footer_text": {
-      "type": "string",
-      "description": "Optional footer text"
+      "type": "string"
     },
     "buttons": {
       "type": "array",
@@ -90,7 +94,8 @@
             "enum": [
               "QUICK_REPLY",
               "URL",
-              "PHONE_NUMBER"
+              "PHONE_NUMBER",
+              "OTP"
             ]
           },
           "text": {
@@ -103,8 +108,7 @@
             "type": "string"
           }
         }
-      },
-      "description": "Optional CTA / quick reply buttons"
+      }
     },
     "linked_actions": {
       "type": "array",
@@ -124,18 +128,19 @@
           "otp_verification",
           "manual_only"
         ]
-      },
-      "description": "Platform actions linked to this template \u2014 sent automatically when these events occur"
+      }
+    },
+    "dlt_template_id": {
+      "type": "string",
+      "description": "DLT template ID for SMS/RCS compliance (India)"
     },
     "last_synced": {
       "type": "string",
-      "format": "date-time",
-      "description": "Last time this template was synced from Meta"
+      "format": "date-time"
     },
     "send_count": {
       "type": "number",
-      "default": 0,
-      "description": "Number of times this template has been sent"
+      "default": 0
     }
   },
   "required": [
@@ -147,6 +152,9 @@
       "$or": [
         {
           "data.client_id": "{{user.data.client_id}}"
+        },
+        {
+          "data.client_id": "PLATFORM"
         },
         {
           "user_condition": {

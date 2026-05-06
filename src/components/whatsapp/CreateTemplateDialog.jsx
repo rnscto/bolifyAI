@@ -6,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, Plus, Trash2 } from 'lucide-react';
+import { Loader2, Plus, Trash2, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 
 const LANGUAGES = [
@@ -35,6 +35,30 @@ export default function CreateTemplateDialog({ clientId, open, onOpenChange, onC
   const [examples, setExamples] = useState([]);
   const [buttons, setButtons] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [aiGoal, setAiGoal] = useState('');
+  const [aiDrafting, setAiDrafting] = useState(false);
+
+  const handleAiDraft = async () => {
+    if (!aiGoal.trim()) return toast.error('Describe what the message should achieve');
+    setAiDrafting(true);
+    try {
+      const res = await base44.functions.invoke('aiTemplateDraft', {
+        goal: aiGoal, language, category, tone: 'friendly'
+      });
+      if (res.data.success && res.data.draft) {
+        const d = res.data.draft;
+        setName(d.name || '');
+        setBodyText(d.body_text || '');
+        setExamples(d.body_examples || []);
+        setFooterText(d.footer_text || '');
+        setHeaderType(d.header_type || 'NONE');
+        setHeaderText(d.header_text || '');
+        setButtons((d.buttons || []).slice(0, 3).map(b => ({ type: b.type, text: b.text || '', url: b.url || '', phone_number: b.phone_number || '' })));
+        toast.success('AI draft loaded — review and edit before submitting');
+      } else toast.error(res.data.error || 'AI draft failed');
+    } catch (e) { toast.error(e.message); }
+    setAiDrafting(false);
+  };
 
   // Detect placeholders
   const placeholderCount = (bodyText.match(/\{\{\d+\}\}/g) || []).length;
@@ -111,6 +135,18 @@ export default function CreateTemplateDialog({ clientId, open, onOpenChange, onC
         </DialogHeader>
 
         <div className="space-y-4">
+          <div className="bg-gradient-to-br from-purple-50 to-blue-50 border border-purple-200 rounded-lg p-3 space-y-2">
+            <Label className="flex items-center gap-1.5 text-purple-900"><Sparkles className="w-4 h-4" /> AI Draft (optional)</Label>
+            <div className="flex gap-2">
+              <Input value={aiGoal} onChange={e => setAiGoal(e.target.value)} placeholder="e.g. Confirm a demo booking with date and time" />
+              <Button onClick={handleAiDraft} disabled={aiDrafting || !aiGoal.trim()} variant="outline" className="gap-1 whitespace-nowrap">
+                {aiDrafting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                Draft with AI
+              </Button>
+            </div>
+            <p className="text-xs text-purple-700">Generates a Meta-compliant draft body, sample values and buttons. You can still edit everything below.</p>
+          </div>
+
           <div className="grid grid-cols-2 gap-3">
             <div>
               <Label>Name (lowercase, no spaces)</Label>

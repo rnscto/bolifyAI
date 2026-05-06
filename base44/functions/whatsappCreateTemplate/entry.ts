@@ -32,12 +32,15 @@ Deno.serve(async (req) => {
     if (configs.length === 0) return Response.json({ error: 'No messaging config' }, { status: 404 });
     const cfg = configs[0];
 
-    if (cfg.whatsapp_provider !== 'meta_cloud') {
-      return Response.json({ error: 'Template creation is only supported for Meta Cloud API' }, { status: 400 });
+    if (!['meta_cloud', 'rcs_digital'].includes(cfg.whatsapp_provider)) {
+      return Response.json({ error: 'Template creation only supported for Meta Cloud / RCS Digital' }, { status: 400 });
     }
     if (!cfg.whatsapp_api_key || !cfg.whatsapp_business_id) {
-      return Response.json({ error: 'WhatsApp Business Account ID and Access Token are required' }, { status: 400 });
+      return Response.json({ error: 'WABA ID and Access Token are required' }, { status: 400 });
     }
+    const baseHost = cfg.whatsapp_provider === 'rcs_digital'
+      ? `https://rcsdigital.in/v23.0`
+      : `https://graph.facebook.com/v20.0`;
 
     // Build components for Meta API
     const components = [];
@@ -76,8 +79,8 @@ Deno.serve(async (req) => {
       components.push({ type: 'BUTTONS', buttons: btns });
     }
 
-    // Submit to Meta
-    const url = `https://graph.facebook.com/v20.0/${cfg.whatsapp_business_id}/message_templates`;
+    // Submit to vendor (Meta or RCS Digital — same shape)
+    const url = `${baseHost}/${cfg.whatsapp_business_id}/message_templates`;
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -103,6 +106,7 @@ Deno.serve(async (req) => {
     // Save locally
     const created = await svc.entities.WhatsAppTemplate.create({
       client_id,
+      vendor: cfg.whatsapp_provider,
       meta_template_id: data.id,
       name: name.toLowerCase().replace(/[^a-z0-9_]/g, '_'),
       language: language || 'en',

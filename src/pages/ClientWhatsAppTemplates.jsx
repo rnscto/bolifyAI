@@ -73,7 +73,7 @@ export default function ClientWhatsAppTemplates() {
     return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
   }
 
-  const isMetaCloud = config?.whatsapp_provider === 'meta_cloud';
+  const isMetaCloud = config?.whatsapp_provider === 'meta_cloud' || config?.whatsapp_provider === 'rcs_digital';
   const hasCredentials = config?.whatsapp_api_key && config?.whatsapp_business_id;
 
   return (

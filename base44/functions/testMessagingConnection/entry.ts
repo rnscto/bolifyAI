@@ -27,6 +27,23 @@ Deno.serve(async (req) => {
 
       if (!apiKey) return Response.json({ success: false, error: 'API key is required' });
 
+      if (provider === 'rcs_digital') {
+        // RCS Digital is Meta-compatible at https://rcsdigital.in/v23.0
+        if (!phoneNumberId) return Response.json({ success: false, error: 'Phone Number ID required' });
+        const validateRes = await fetch(`https://rcsdigital.in/v23.0/${phoneNumberId}?fields=verified_name,display_phone_number`, {
+          headers: { 'Authorization': `Bearer ${apiKey}` }
+        });
+        const validateData = await validateRes.json();
+        if (validateRes.ok) {
+          return Response.json({
+            success: true,
+            message: `RCS Digital connected — phone ${validateData.display_phone_number || phoneNumberId}`,
+            details: validateData
+          });
+        }
+        return Response.json({ success: false, error: validateData.error?.message || JSON.stringify(validateData) });
+      }
+
       if (provider === 'meta_cloud') {
         // Meta Cloud API requires templates for first-time recipient outside 24h window.
         // If template_name is provided, send via template; otherwise validate creds via /me.

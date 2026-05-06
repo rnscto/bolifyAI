@@ -163,6 +163,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Concept Note', path: 'ConceptNote', icon: FileText },
     { name: 'Trusted Logos', path: 'AdminTrustedClients', icon: Globe },
     { name: 'Complaints', path: 'AdminComplaints', icon: Megaphone },
+    { name: 'Platform Messaging', path: 'AdminPlatformMessaging', icon: MessageSquare },
     { name: 'Partners', path: 'AdminPartners', icon: Handshake },
     ];
 
