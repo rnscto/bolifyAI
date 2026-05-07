@@ -18,6 +18,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
   const [agents, setAgents] = useState([]);
   const [leads, setLeads] = useState([]);
   const [leadGroups, setLeadGroups] = useState([]);
+  const [notAnsweredIds, setNotAnsweredIds] = useState(new Set());
   const [selectedLeads, setSelectedLeads] = useState([]);
   const [leadFilter, setLeadFilter] = useState('all');
   const [groupFilter, setGroupFilter] = useState('all');
@@ -48,18 +49,24 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
   }, [open, client]);
 
   const loadData = async () => {
-    const [agentsData, leadsData, groupsData] = await Promise.all([
+    const [agentsData, leadsData, groupsData, notAnsweredCLs] = await Promise.all([
       base44.entities.Agent.filter({ client_id: client.id }),
       base44.entities.Lead.filter({ client_id: client.id }, '-created_date', 2000),
-      base44.entities.LeadGroup.filter({ client_id: client.id }, '-created_date', 100)
+      base44.entities.LeadGroup.filter({ client_id: client.id }, '-created_date', 100),
+      base44.entities.CampaignLead.filter({ client_id: client.id, call_status: 'not_answered' }, '-created_date', 5000)
     ]);
     setAgents(agentsData.filter(a => a.status === 'active'));
     setLeads(leadsData);
     setLeadGroups(groupsData);
+    setNotAnsweredIds(new Set(notAnsweredCLs.map(cl => cl.lead_id)));
   };
 
   const filteredLeads = leads.filter(l => {
-    if (leadFilter !== 'all' && l.status !== leadFilter) return false;
+    if (leadFilter === 'not_answered') {
+      if (!notAnsweredIds.has(l.id)) return false;
+    } else if (leadFilter !== 'all' && l.status !== leadFilter) {
+      return false;
+    }
     if (groupFilter === 'ungrouped' && l.group_id) return false;
     if (groupFilter !== 'all' && groupFilter !== 'ungrouped' && l.group_id !== groupFilter) return false;
     return true;
@@ -329,13 +336,14 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
                   </SelectContent>
                 </Select>
                 <Select value={leadFilter} onValueChange={setLeadFilter}>
-                  <SelectTrigger className="w-36 h-8"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-44 h-8"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Status</SelectItem>
                     <SelectItem value="new">New</SelectItem>
                     <SelectItem value="contacted">Contacted</SelectItem>
                     <SelectItem value="interested">Interested</SelectItem>
                     <SelectItem value="callback">Callback</SelectItem>
+                    <SelectItem value="not_answered">Not Answered ({notAnsweredIds.size})</SelectItem>
                   </SelectContent>
                 </Select>
                 <Button type="button" size="sm" variant="outline" onClick={selectAll}>

@@ -18,11 +18,13 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing, FileText, ExternalLink, Disc, Download, Loader2 } from 'lucide-react';
+import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing, FileText, ExternalLink, Disc, Download, Loader2, FileSpreadsheet } from 'lucide-react';
+import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import AudioPlayer from '../components/calls/AudioPlayer';
 import LiveCallActions from '../components/calls/LiveCallActions';
+import { exportToExcel, formatDateTime } from '../lib/exportToExcel';
 
 export default function ClientCallLogs() {
   const [calls, setCall] = useState([]);
@@ -112,7 +114,31 @@ export default function ClientCallLogs() {
         <h1 className="text-3xl font-bold text-gray-900">Call Logs</h1>
         <p className="text-gray-600 mt-1">View all your call history and transcripts</p>
       </div>
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={() => {
+          if (calls.length === 0) { toast.error('No call logs to export'); return; }
+          exportToExcel(
+            'CallLogs',
+            ['Date', 'Direction', 'Caller', 'Callee', 'Duration (s)', 'Status', 'Outcome', 'Has Recording', 'Has Transcript', 'Summary', 'Transferred To', 'Call SID'],
+            calls.map(c => [
+              formatDateTime(c.call_start_time || c.created_date),
+              c.direction || '',
+              c.direction === 'inbound' ? (c.caller_id || c.callee_number || '') : (c.caller_id || ''),
+              c.callee_number || '',
+              c.duration || 0,
+              c.status || '',
+              c.lead_status_updated || '',
+              c.recording_url ? 'Yes' : 'No',
+              c.transcript ? 'Yes' : 'No',
+              (c.conversation_summary || '').replace(/\n/g, ' ').slice(0, 500),
+              c.transferred_to || '',
+              c.call_sid || ''
+            ])
+          );
+          toast.success(`Exported ${calls.length} call logs`);
+        }} className="gap-2">
+          <FileSpreadsheet className="w-4 h-4" /> Export Excel
+        </Button>
         <Button variant="outline" size="sm" onClick={fetchBulkRecordings} disabled={fetchingBulk} className="gap-2">
           {fetchingBulk ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
           {fetchingBulk ? 'Fetching Recordings...' : 'Fetch All Recordings'}

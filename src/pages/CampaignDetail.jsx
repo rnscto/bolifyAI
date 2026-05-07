@@ -7,8 +7,9 @@ import CampaignLeadsTable from '../components/campaigns/CampaignLeadsTable';
 import CampaignOutcomeChart from '../components/campaigns/CampaignOutcomeChart';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
-import { ArrowLeft, Play, Pause, Square, RefreshCw, Users, Phone, Mail, Clock, AlertCircle, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Play, Pause, Square, RefreshCw, Users, Phone, Mail, Clock, AlertCircle, RotateCcw, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
+import { exportToExcel, formatDateTime } from '../lib/exportToExcel';
 
 const statusColors = {
   draft: 'bg-gray-100 text-gray-700',
@@ -177,6 +178,26 @@ export default function CampaignDetail() {
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={loadData}>
             <RefreshCw className="w-4 h-4 mr-1" /> Refresh
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => {
+            if (campaignLeads.length === 0) { toast.error('No campaign data to export'); return; }
+            exportToExcel(
+              `Campaign_${(campaign.name || '').replace(/\s+/g, '_')}`,
+              ['Lead Name', 'Phone', 'Status', 'Call Status', 'Outcome', 'Duration (s)', 'Attempts', 'Email Sent', 'Callback Scheduled', 'Followup Date', 'Summary', 'Transcript'],
+              campaignLeads.map(cl => [
+                cl.lead_name || '', cl.lead_phone || '',
+                cl.status || '', cl.call_status || '', cl.outcome || '',
+                cl.call_duration || 0, cl.attempt_count || 0,
+                cl.followup_email_sent ? 'Yes' : 'No',
+                cl.followup_scheduled ? 'Yes' : 'No',
+                formatDateTime(cl.followup_call_date),
+                (cl.conversation_summary || '').replace(/\n/g, ' ').slice(0, 500),
+                (cl.transcript || '').replace(/\n/g, ' ').slice(0, 2000)
+              ])
+            );
+            toast.success(`Exported ${campaignLeads.length} campaign records`);
+          }}>
+            <FileSpreadsheet className="w-4 h-4 mr-1" /> Export Excel
           </Button>
           {['draft', 'paused'].includes(campaign.status) && (
             <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => handleAction('start')}>

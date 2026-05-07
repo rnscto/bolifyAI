@@ -28,13 +28,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter, Loader2, PhoneCall, Eye, FolderOpen, Settings } from 'lucide-react';
+import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter, Loader2, PhoneCall, Eye, FolderOpen, Settings, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import CSVImportDialog from '../components/leads/CSVImportDialog';
 import LeadScoreBadge from '../components/leads/LeadScoreBadge';
 import LeadGroupManager from '../components/leads/LeadGroupManager';
+import { exportToExcel, formatDateTime } from '../lib/exportToExcel';
 
 export default function ClientLeads() {
   const [leads, setLeads] = useState([]);
@@ -217,12 +218,40 @@ export default function ClientLeads() {
           <h1 className="text-3xl font-bold text-gray-900">Leads</h1>
           <p className="text-gray-600 mt-1">Manage your lead database</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={() => setGroupManagerOpen(true)}>
             <FolderOpen className="w-4 h-4 mr-2" /> Groups
           </Button>
           <Button variant="outline" onClick={() => setCsvDialogOpen(true)}>
             <Upload className="w-4 h-4 mr-2" /> Import Leads
+          </Button>
+          <Button variant="outline" onClick={() => {
+            const filtered = leads
+              .filter(l => tierFilter === 'all' || l.qualification_tier === tierFilter)
+              .filter(l => statusFilter === 'all' || l.status === statusFilter)
+              .filter(l => sourceFilter === 'all' || l.source === sourceFilter)
+              .filter(l => groupFilter === 'all' || (groupFilter === '_ungrouped' ? !l.group_id : l.group_id === groupFilter))
+              .filter(l => {
+                if (!searchTerm) return true;
+                const s = searchTerm.toLowerCase();
+                return (l.name || '').toLowerCase().includes(s) || (l.phone || '').includes(s) || (l.company || '').toLowerCase().includes(s);
+              });
+            if (filtered.length === 0) { toast.error('No leads to export'); return; }
+            exportToExcel(
+              'Leads',
+              ['Name', 'Phone', 'Email', 'Company', 'Status', 'Tier', 'AI Score', 'Source', 'Group', 'Sentiment', 'Last Call', 'Next Follow-up', 'Notes', 'Created'],
+              filtered.map(l => [
+                l.name || '', l.phone || '', l.email || '', l.company || '',
+                l.status || '', l.qualification_tier || '', l.score || 0, l.source || '',
+                groups.find(g => g.id === l.group_id)?.name || '',
+                l.sentiment || '',
+                formatDateTime(l.last_call_date), formatDateTime(l.next_followup_date),
+                l.notes || '', formatDateTime(l.created_date)
+              ])
+            );
+            toast.success(`Exported ${filtered.length} leads`);
+          }}>
+            <Download className="w-4 h-4 mr-2" /> Export Excel
           </Button>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
