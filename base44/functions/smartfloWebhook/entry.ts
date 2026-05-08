@@ -981,6 +981,17 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
         }
       }
 
+      // 3.5 Score inbound calls — runs AI scoring on transcript and updates lead score/sentiment/intents
+      if (freshCallLog.direction === 'inbound' && freshCallLog.lead_id && effectiveStatus === 'completed') {
+        try {
+          console.log(`[smartfloWebhook] Direct-invoking scoreInboundCall for CallLog ${callLog.id}`);
+          base44.functions.invoke('scoreInboundCall', { call_log_id: callLog.id })
+            .catch(e => console.error(`[smartfloWebhook] scoreInboundCall failed: ${e.message}`));
+        } catch (sicErr) {
+          console.error(`[smartfloWebhook] scoreInboundCall invoke failed: ${sicErr.message}`);
+        }
+      }
+
       // 4. Invoke crmAutomation — creates follow-up tasks on call completion
       try {
         console.log(`[smartfloWebhook] Direct-invoking crmAutomation for CallLog ${callLog.id}`);
