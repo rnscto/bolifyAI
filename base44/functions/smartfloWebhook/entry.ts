@@ -619,25 +619,48 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
       console.warn('[smartfloWebhook] Unknown status:', status);
     }
 
-    // Find call log by call_sid — try multiple ID formats
-    let callLogs = await base44.entities.CallLog.filter({ call_sid: call_id });
+    // ═══════════════════════════════════════════════════════════════
+    // PRIMARY: Match by custom_identifier (CallLog.id) — set by executeCampaign
+    // This is RACE-FREE because we control this value when placing the call.
+    // ═══════════════════════════════════════════════════════════════
+    let callLogs = [];
+    const customIdentifier = payload.custom_identifier || payload.customIdentifier || '';
+    if (customIdentifier) {
+      try {
+        const directLog = await base44.entities.CallLog.get(customIdentifier);
+        if (directLog) {
+          callLogs = [directLog];
+          // Persist the Smartflo call_id for any future webhooks that may use it
+          if (directLog.call_sid !== call_id) {
+            await base44.entities.CallLog.update(directLog.id, { call_sid: call_id });
+          }
+          console.log(`[smartfloWebhook] ✅ Matched via custom_identifier=${customIdentifier} → CallLog ${directLog.id}`);
+        }
+      } catch (e) {
+        console.warn(`[smartfloWebhook] custom_identifier lookup failed: ${e.message}`);
+      }
+    }
 
-    // Fallback: if Smartflo sends a different ID format, try matching by phone number
+    // SECONDARY: Match by call_sid (for older calls, retries, or webhooks that drop custom_identifier)
     if (callLogs.length === 0) {
-      // Collect all phone numbers from webhook payload for matching
+      callLogs = await base44.entities.CallLog.filter({ call_sid: call_id });
+    }
+
+    // FALLBACK: Match by phone number for very recent ringing/initiated calls
+    if (callLogs.length === 0) {
       const phoneHints = [called_number, caller_number, customer_number, payload.customer_number].filter(Boolean);
       if (phoneHints.length > 0) {
         console.log(`[smartfloWebhook] No match for call_sid=${call_id}, trying phone fallback with: ${phoneHints.join(', ')}`);
-        
-        // Look for recent calls (last 5 min) across ringing, initiated, and answered statuses
+
+        // Widen lookup: 100 of each status (was 20) — campaigns can have many concurrent calls
         const [ringingLogs, initiatedLogs, answeredLogs] = await Promise.all([
-          base44.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20),
-          base44.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20),
-          base44.entities.CallLog.filter({ status: 'answered' }, '-created_date', 20)
+          base44.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 100),
+          base44.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 100),
+          base44.entities.CallLog.filter({ status: 'answered' }, '-created_date', 100)
         ]);
         const allRecent = [...ringingLogs, ...initiatedLogs, ...answeredLogs];
         const cutoff = Date.now() - 5 * 60 * 1000;
-        
+
         const match = allRecent.find(l => {
           if (new Date(l.created_date).getTime() < cutoff) return false;
           const logCallee = (l.callee_number || '').replace(/\D/g, '').slice(-10);
@@ -647,7 +670,7 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
             return hintClean && logCallee === hintClean;
           });
         });
-        
+
         if (match) {
           callLogs = [match];
           await base44.entities.CallLog.update(match.id, { call_sid: call_id });
