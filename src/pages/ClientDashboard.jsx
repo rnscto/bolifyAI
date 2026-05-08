@@ -37,19 +37,25 @@ export default function ClientDashboard() {
         const clientData = clients[0];
         setClient(clientData);
 
-        const [agents, leads, calls, activities, subs] = await Promise.all([
+        // Fetch today's calls directly via date filter (avoids 100-row cap on /list).
+        // For "total calls" we pull a large window (recent 5000) — good enough for dashboard display.
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const todayStartISO = todayStart.toISOString();
+
+        const [agents, leads, todaysCalls, recentCalls, activities, subs] = await Promise.all([
           base44.entities.Agent.filter({ client_id: clientData.id }),
           base44.entities.Lead.filter({ client_id: clientData.id }),
-          base44.entities.CallLog.filter({ client_id: clientData.id }, '-created_date', 100),
+          base44.entities.CallLog.filter(
+            { client_id: clientData.id, created_date: { $gte: todayStartISO } },
+            '-created_date',
+            5000
+          ),
+          base44.entities.CallLog.filter({ client_id: clientData.id }, '-created_date', 5000),
           base44.entities.Activity.filter({ client_id: clientData.id }),
           base44.entities.Subscription.filter({ client_id: clientData.id, status: 'active' }, '-created_date', 1)
         ]);
         setSubscription(subs[0] || null);
-
-        const today = new Date().toISOString().split('T')[0];
-        const callsToday = calls.filter(call => 
-          call.created_date?.startsWith(today)
-        ).length;
 
         const upcoming = activities.filter(a => 
           a.status === 'scheduled' && new Date(a.scheduled_date) > new Date()
@@ -59,8 +65,8 @@ export default function ClientDashboard() {
           totalAgents: agents.length,
           activeAgents: agents.filter(a => a.status === 'active').length,
           totalLeads: leads.length,
-          totalCalls: calls.length,
-          callsToday,
+          totalCalls: recentCalls.length,
+          callsToday: todaysCalls.length,
           upcomingActivities: upcoming
         });
       }
