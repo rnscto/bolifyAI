@@ -1199,13 +1199,20 @@ async function triggerNextCampaignCall(base44, campaignId) {
       }
     } catch (_) {}
 
+    // Normalize caller_id (10-digit → prefix 91, like executeCampaign)
+    let cleanCallerID = selectedDID.replace(/[^0-9]/g, '');
+    if (cleanCallerID.length === 10) cleanCallerID = '91' + cleanCallerID;
+
+    // Pass call_log_id via custom_identifier — Smartflo echoes it back in webhooks
+    // for race-free lookup (matches executeCampaign behavior).
     const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         api_key: smartfloApiKey,
         customer_number: cleanPhone,
-        caller_id: selectedDID.replace(/^\+/, ''),
+        caller_id: cleanCallerID,
+        custom_identifier: newCallLog.id,
         async: 1
       })
     });
