@@ -51,7 +51,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
   const loadData = async () => {
     const [agentsData, leadsData, groupsData, notAnsweredCLs] = await Promise.all([
       base44.entities.Agent.filter({ client_id: client.id }),
-      base44.entities.Lead.filter({ client_id: client.id }, '-created_date', 2000),
+      base44.entities.Lead.filter({ client_id: client.id }, '-created_date', 10000),
       base44.entities.LeadGroup.filter({ client_id: client.id }, '-created_date', 100),
       base44.entities.CampaignLead.filter({ client_id: client.id, call_status: 'not_answered' }, '-created_date', 5000)
     ]);
@@ -154,7 +154,12 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
         };
       });
 
-      await base44.entities.CampaignLead.bulkCreate(campaignLeads);
+      // bulkCreate caps at 500 records per call — chunk to insert ALL selected leads
+      const CHUNK_SIZE = 500;
+      for (let i = 0; i < campaignLeads.length; i += CHUNK_SIZE) {
+        const chunk = campaignLeads.slice(i, i + CHUNK_SIZE);
+        await base44.entities.CampaignLead.bulkCreate(chunk);
+      }
       if (scheduledISO) {
         const istLabel = new Date(scheduledISO).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });
         toast.success(`Campaign scheduled for ${istLabel} IST`);
