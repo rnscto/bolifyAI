@@ -28,7 +28,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter, Loader2, PhoneCall, Eye, FolderOpen, Settings, Download } from 'lucide-react';
+import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter, Loader2, PhoneCall, Eye, FolderOpen, Settings, Download, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
@@ -53,6 +53,26 @@ export default function ClientLeads() {
   const [callingLeadId, setCallingLeadId] = useState(null);
   const [groups, setGroups] = useState([]);
   const [groupManagerOpen, setGroupManagerOpen] = useState(false);
+  const [bulkRescoring, setBulkRescoring] = useState(false);
+
+  const handleBulkRescore = async () => {
+    if (!client) return;
+    if (!confirm('Re-score up to 50 leads with call history? This uses AI credits and may take 1-2 minutes.')) return;
+    setBulkRescoring(true);
+    try {
+      const res = await base44.functions.invoke('rescoreLeadFromHistory', { client_id: client.id, limit: 50 });
+      if (res.data?.success) {
+        toast.success(`Re-scored ${res.data.scored} leads (${res.data.skipped} skipped, ${res.data.errors} errors)`);
+        loadData();
+      } else {
+        toast.error(res.data?.error || 'Bulk re-score failed');
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.error || e.message);
+    } finally {
+      setBulkRescoring(false);
+    }
+  };
   const [formData, setFormData] = useState({
     name: '',
     phone: '',
@@ -224,6 +244,10 @@ export default function ClientLeads() {
           </Button>
           <Button variant="outline" onClick={() => setCsvDialogOpen(true)}>
             <Upload className="w-4 h-4 mr-2" /> Import Leads
+          </Button>
+          <Button variant="outline" onClick={handleBulkRescore} disabled={bulkRescoring} title="Re-score leads with call history using AI">
+            {bulkRescoring ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Sparkles className="w-4 h-4 mr-2" />}
+            {bulkRescoring ? 'Re-Scoring...' : 'AI Re-Score'}
           </Button>
           <Button variant="outline" onClick={() => {
             const filtered = leads

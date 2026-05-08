@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft, Phone, Mail, Building2, Edit, PhoneCall, Loader2,
-  Calendar, Clock, MessageSquare, Activity, ExternalLink, Send
+  Calendar, Clock, MessageSquare, Activity, ExternalLink, Send, Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 import LeadScoreBadge from '../components/leads/LeadScoreBadge';
@@ -27,6 +27,26 @@ export default function LeadDetail() {
   const [callingLead, setCallingLead] = useState(false);
   const [emailComposerOpen, setEmailComposerOpen] = useState(false);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+  const [rescoring, setRescoring] = useState(false);
+
+  const handleRescore = async () => {
+    setRescoring(true);
+    try {
+      const res = await base44.functions.invoke('rescoreLeadFromHistory', { lead_id: leadId });
+      if (res.data?.success) {
+        toast.success(`Score updated: ${res.data.previous_score} → ${res.data.new_score}`);
+        await loadAllData();
+      } else if (res.data?.skipped) {
+        toast.info('No call history with transcript found for this lead.');
+      } else {
+        toast.error(res.data?.error || 'Re-score failed');
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.error || e.message);
+    } finally {
+      setRescoring(false);
+    }
+  };
 
   const urlParams = new URLSearchParams(window.location.search);
   const leadId = urlParams.get('id');
@@ -181,6 +201,16 @@ export default function LeadDetail() {
               <Mail className="w-4 h-4" /> Email
             </Button>
           )}
+          <Button
+            size="sm" variant="outline"
+            onClick={handleRescore}
+            disabled={rescoring}
+            className="gap-1"
+            title="Re-score this lead using AI based on their most recent call"
+          >
+            {rescoring ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+            Re-Score
+          </Button>
           <Button
             size="sm"
             onClick={initiateCall}
