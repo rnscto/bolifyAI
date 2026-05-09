@@ -94,21 +94,30 @@ async function fetchRawText(agent) {
   return text;
 }
 
-// ─── Embed query via Azure OpenAI ───
-async function embedQuery(query) {
-  const endpoint = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+// ─── Embed query via dedicated Azure embedding endpoint (text-embedding-3-small, api-version=1) ───
+function buildEmbeddingUrl() {
+  const raw = (Deno.env.get('AZURE_EMBEDDING_ENDPOINT') || '').replace(/\/+$/, '');
   const deployment = Deno.env.get('AZURE_OPENAI_EMBEDDING_DEPLOYMENT');
-  if (!endpoint || !apiKey || !deployment) throw new Error('Embedding not configured');
-  let base = endpoint;
-  const oi = base.indexOf('/openai/'); if (oi > 0) base = base.substring(0, oi);
-  const url = `${base}/openai/deployments/${deployment}/embeddings?api-version=2024-02-01`;
+  if (!raw) return null;
+  if (raw.includes('/embeddings')) {
+    const u = new URL(raw);
+    u.searchParams.set('api-version', '1');
+    return u.toString();
+  }
+  if (!deployment) return null;
+  return `${raw}/openai/deployments/${deployment}/embeddings?api-version=1`;
+}
+
+async function embedQuery(query) {
+  const apiKey = Deno.env.get('AZURE_EMBEDDING_KEY');
+  const url = buildEmbeddingUrl();
+  if (!url || !apiKey) throw new Error('Embedding not configured');
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ input: query })
   });
-  if (!resp.ok) throw new Error(`Embed query ${resp.status}`);
+  if (!resp.ok) throw new Error(`Embed query ${resp.status}: ${(await resp.text()).substring(0, 200)}`);
   const data = await resp.json();
   return data.data[0].embedding;
 }
@@ -222,7 +231,7 @@ Deno.serve(async (req) => {
     const t0 = Date.now();
 
     // ─── SEMANTIC PATH (preferred) ───
-    if (agent.kb_index_uri && Deno.env.get('AZURE_OPENAI_EMBEDDING_DEPLOYMENT')) {
+    if (agent.kb_index_uri && Deno.env.get('AZURE_EMBEDDING_ENDPOINT') && Deno.env.get('AZURE_EMBEDDING_KEY')) {
       try {
         const [index, queryVec] = await Promise.all([fetchIndex(agent), embedQuery(query)]);
         if (!index?.chunks?.length) throw new Error('Index empty');

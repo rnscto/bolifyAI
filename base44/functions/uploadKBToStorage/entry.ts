@@ -82,18 +82,26 @@ function splitIntoChunks(content) {
   return chunks;
 }
 
-// ─── Embed chunks via Azure OpenAI (batches of 16) ───
-async function embedChunks(chunks) {
-  const endpoint = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+// ─── Embed chunks via dedicated Azure embedding endpoint (text-embedding-3-small, api-version=1) ───
+function buildEmbeddingUrl() {
+  const raw = (Deno.env.get('AZURE_EMBEDDING_ENDPOINT') || '').replace(/\/+$/, '');
   const deployment = Deno.env.get('AZURE_OPENAI_EMBEDDING_DEPLOYMENT');
-  if (!endpoint || !apiKey || !deployment) {
-    throw new Error('Embedding deployment not configured');
+  if (!raw) return null;
+  if (raw.includes('/embeddings')) {
+    const u = new URL(raw);
+    u.searchParams.set('api-version', '1');
+    return u.toString();
   }
-  // Strip any trailing path so we can build the deployments URL cleanly
-  let base = endpoint;
-  const oi = base.indexOf('/openai/'); if (oi > 0) base = base.substring(0, oi);
-  const url = `${base}/openai/deployments/${deployment}/embeddings?api-version=2024-02-01`;
+  if (!deployment) return null;
+  return `${raw}/openai/deployments/${deployment}/embeddings?api-version=1`;
+}
+
+async function embedChunks(chunks) {
+  const apiKey = Deno.env.get('AZURE_EMBEDDING_KEY');
+  const url = buildEmbeddingUrl();
+  if (!url || !apiKey) {
+    throw new Error('Embedding endpoint/key not configured');
+  }
 
   const all = [];
   const BATCH = 16;
