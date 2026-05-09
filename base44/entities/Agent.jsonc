@@ -58,6 +58,18 @@
       },
       "description": "Associated knowledge base document IDs"
     },
+    "kb_file_uri": {
+      "type": "string",
+      "description": "Azure Blob URI of the combined KB text file (private container)"
+    },
+    "kb_file_hash": {
+      "type": "string",
+      "description": "SHA-256 hash of the combined KB content used to skip re-uploads"
+    },
+    "kb_char_count": {
+      "type": "number",
+      "description": "Total characters in the combined KB blob"
+    },
     "status": {
       "type": "string",
       "enum": [
