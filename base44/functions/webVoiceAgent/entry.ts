@@ -153,13 +153,17 @@ Deno.serve(async (req) => {
 
   // ─── Connect to Azure Realtime API ───
   function connectRealtime() {
-    const realtimeUrl = Deno.env.get('AZURE_REALTIME_ENDPOINT');
-    const realtimeKey = Deno.env.get('AZURE_REALTIME_KEY');
+    // Prefer new gpt-realtime-whisper deployment (launched 2026-05-07).
+    // Falls back to legacy AZURE_REALTIME_ENDPOINT/KEY if new secrets aren't set.
+    const realtimeUrl = Deno.env.get('AZURE_REALTIME_WHISPER_ENDPOINT') || Deno.env.get('AZURE_REALTIME_ENDPOINT');
+    const realtimeKey = Deno.env.get('AZURE_REALTIME_WHISPER_KEY') || Deno.env.get('AZURE_REALTIME_KEY');
+    const useWhisper = !!(Deno.env.get('AZURE_REALTIME_WHISPER_ENDPOINT') && Deno.env.get('AZURE_REALTIME_WHISPER_KEY'));
+    const deploymentName = useWhisper ? 'gpt-realtime-whisper' : 'gpt-realtime-1.5';
 
-    log('info', `🔌 Azure config: endpoint=${realtimeUrl ? realtimeUrl.substring(0, 50) + '...' : 'MISSING'}, key=${realtimeKey ? 'SET (' + realtimeKey.length + ' chars)' : 'MISSING'}`);
+    log('info', `🔌 Azure config: endpoint=${realtimeUrl ? realtimeUrl.substring(0, 50) + '...' : 'MISSING'}, key=${realtimeKey ? 'SET (' + realtimeKey.length + ' chars)' : 'MISSING'}, model=${deploymentName}`);
 
     if (!realtimeUrl || !realtimeKey) {
-      log('error', '❌ Missing AZURE_REALTIME_ENDPOINT or AZURE_REALTIME_KEY');
+      log('error', '❌ Missing AZURE_REALTIME_WHISPER_ENDPOINT/KEY (or fallback AZURE_REALTIME_ENDPOINT/KEY)');
       session.stats.errors++;
       if (browserSocket.readyState === WebSocket.OPEN) {
         browserSocket.send(JSON.stringify({ type: 'error', message: 'Server misconfigured: missing Azure credentials' }));
@@ -168,9 +172,22 @@ Deno.serve(async (req) => {
     }
 
     let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
+    // Foundry GA endpoints (services.ai.azure.com) use /openai/v1/realtime?model=<deployment>
+    // Legacy Azure OpenAI endpoints (openai.azure.com) use /openai/realtime?api-version=...&deployment=<deployment>
+    const isFoundry = wsUrl.includes('services.ai.azure.com');
+    if (!wsUrl.includes('/openai/realtime') && !wsUrl.includes('/openai/v1/realtime')) {
+      if (isFoundry) {
+        wsUrl = wsUrl.replace(/\/+$/, '') + `/openai/v1/realtime?model=${deploymentName}`;
+      } else {
+        wsUrl = wsUrl.replace(/\/+$/, '') + `/openai/realtime?api-version=2025-04-01-preview&deployment=${deploymentName}`;
+      }
+    }
+    if (!isFoundry) {
+      wsUrl = wsUrl.replace('api-version=2025-04-01&', 'api-version=2025-04-01-preview&');
+    }
     const sep = wsUrl.includes('?') ? '&' : '?';
     wsUrl = `${wsUrl}${sep}api-key=${encodeURIComponent(realtimeKey)}`;
-    log('info', `🔌 Connecting to Azure Realtime: ${wsUrl.substring(0, 80)}...`);
+    log('info', `🔌 Connecting to Azure Realtime: ${wsUrl.substring(0, 80)}... | model=${deploymentName}`);
 
     const ws = new WebSocket(wsUrl);
 

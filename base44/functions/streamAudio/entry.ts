@@ -493,23 +493,35 @@ Deno.serve(async (req) => {
 
   // ─── Connect to Azure Realtime API ───
   function connectRealtime() {
-    const realtimeUrl = Deno.env.get('AZURE_REALTIME_ENDPOINT');
-    const realtimeKey = Deno.env.get('AZURE_REALTIME_KEY');
+    // Prefer new gpt-realtime-whisper deployment (launched 2026-05-07).
+    // Falls back to legacy gpt-realtime-1.5 if new secrets aren't set.
+    const realtimeUrl = Deno.env.get('AZURE_REALTIME_WHISPER_ENDPOINT') || Deno.env.get('AZURE_REALTIME_ENDPOINT');
+    const realtimeKey = Deno.env.get('AZURE_REALTIME_WHISPER_KEY') || Deno.env.get('AZURE_REALTIME_KEY');
+    const useWhisper = !!(Deno.env.get('AZURE_REALTIME_WHISPER_ENDPOINT') && Deno.env.get('AZURE_REALTIME_WHISPER_KEY'));
+    const deploymentName = useWhisper ? 'gpt-realtime-whisper' : 'gpt-realtime-1.5';
 
     if (!realtimeUrl || !realtimeKey) {
-      console.error(`[${reqId}] ❌ Missing AZURE_REALTIME_ENDPOINT or AZURE_REALTIME_KEY`);
+      console.error(`[${reqId}] ❌ Missing AZURE_REALTIME_WHISPER_ENDPOINT/KEY (or fallback AZURE_REALTIME_ENDPOINT/KEY)`);
       return;
     }
 
     // Convert https:// to wss:// for WebSocket
     let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
-    // Ensure the URL includes the /openai/realtime path and required query params
-    // If the endpoint is just a base URI (no /openai/realtime), append deployment path
-    if (!wsUrl.includes('/openai/realtime')) {
-      wsUrl = wsUrl.replace(/\/+$/, '') + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-1.5';
+    // Foundry GA endpoints (services.ai.azure.com) use /openai/v1/realtime?model=<deployment>
+    // Legacy Azure OpenAI endpoints (openai.azure.com) use /openai/realtime?api-version=...&deployment=<deployment>
+    const isFoundry = wsUrl.includes('services.ai.azure.com');
+    if (!wsUrl.includes('/openai/realtime') && !wsUrl.includes('/openai/v1/realtime')) {
+      if (isFoundry) {
+        wsUrl = wsUrl.replace(/\/+$/, '') + `/openai/v1/realtime?model=${deploymentName}`;
+      } else {
+        wsUrl = wsUrl.replace(/\/+$/, '') + `/openai/realtime?api-version=2025-04-01-preview&deployment=${deploymentName}`;
+      }
     }
-    // Ensure api-version uses preview (required for WebSocket realtime on Azure)
-    wsUrl = wsUrl.replace('api-version=2025-04-01&', 'api-version=2025-04-01-preview&');
+    // Legacy preview endpoint: ensure api-version uses preview suffix
+    if (!isFoundry) {
+      wsUrl = wsUrl.replace('api-version=2025-04-01&', 'api-version=2025-04-01-preview&');
+    }
+    console.log(`[${reqId}] 🎯 Realtime model: ${deploymentName}, foundry=${isFoundry}`);
     // Append api-key to URL since Deno WebSocket doesn't support custom headers
     const separator = wsUrl.includes('?') ? '&' : '?';
     wsUrl = `${wsUrl}${separator}api-key=${encodeURIComponent(realtimeKey)}`;
