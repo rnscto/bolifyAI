@@ -16,6 +16,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Upload, FileText, Trash2, Loader2, Type } from 'lucide-react';
 import { toast } from 'sonner';
 import FeatureGate from '../components/FeatureGate';
+import { uploadFile as azureUpload } from '@/lib/azureBlob';
 
 export default function ClientKnowledgeBase() {
   const [documents, setDocuments] = useState([]);
@@ -88,7 +89,7 @@ export default function ClientKnowledgeBase() {
         if (textContent.length > 100000) {
           const blob = new Blob([textContent], { type: 'text/plain' });
           const file = new File([blob], `${formData.title || 'content'}.txt`, { type: 'text/plain' });
-          const uploadResponse = await base44.integrations.Core.UploadFile({ file });
+          const uploadResponse = await azureUpload(file, 'kb');
           fileUrl = uploadResponse.file_url;
           textContent = textContent.substring(0, 100000) + '\n\n[Full content available in uploaded file]';
         }
@@ -102,8 +103,8 @@ export default function ClientKnowledgeBase() {
           status: 'ready'
         };
       } else {
-        const uploadResponse = await base44.integrations.Core.UploadFile({ file: formData.file });
-        
+        const uploadResponse = await azureUpload(formData.file, 'kb');
+
         docData = {
           client_id: client.id,
           title: formData.title,
