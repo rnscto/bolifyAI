@@ -11,7 +11,10 @@
 // Optional: pass a folder hint to organize blobs (e.g. 'kyc', 'logos', 'recordings').
 
 import { base44 } from '@/api/base44Client';
+import { appParams } from '@/lib/app-params';
 
+// Direct multipart upload — base44.functions.invoke serializes its body as JSON
+// and would corrupt FormData, so we POST straight to the function endpoint.
 async function invokeUpload({ file, visibility, folder }) {
   if (!file) throw new Error('file is required');
   const formData = new FormData();
@@ -19,12 +22,20 @@ async function invokeUpload({ file, visibility, folder }) {
   formData.append('visibility', visibility);
   if (folder) formData.append('folder', folder);
 
-  const resp = await base44.functions.invoke('azureBlobUpload', formData);
-  // base44.functions.invoke returns an Axios-like response { data, status }
-  if (!resp?.data?.success) {
-    throw new Error(resp?.data?.error || 'Azure upload failed');
+  const { appId, token, appBaseUrl } = appParams;
+  const baseUrl = (appBaseUrl || '').replace(/\/+$/, '');
+  const url = `${baseUrl}/api/apps/${appId}/functions/azureBlobUpload`;
+
+  const headers = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const resp = await fetch(url, { method: 'POST', headers, body: formData });
+  let data;
+  try { data = await resp.json(); } catch { data = {}; }
+  if (!resp.ok || !data?.success) {
+    throw new Error(data?.error || `Azure upload failed (${resp.status})`);
   }
-  return resp.data;
+  return data;
 }
 
 // Public uploads (logos, social images, recordings) — returns { file_url }
