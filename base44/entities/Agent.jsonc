@@ -70,6 +70,14 @@
       "type": "number",
       "description": "Total characters in the combined KB blob"
     },
+    "kb_index_uri": {
+      "type": "string",
+      "description": "Azure Blob URI of the semantic embeddings index (JSON sidecar with chunks + vectors)"
+    },
+    "kb_embedding_model": {
+      "type": "string",
+      "description": "Embedding model deployment used for the current index (for invalidation if model changes)"
+    },
     "status": {
       "type": "string",
       "enum": [
