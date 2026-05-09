@@ -44,6 +44,23 @@ Deno.serve(async (req) => {
         });
 
         console.log(`[extractKB] KB ${kbId} content extracted: ${content.length} chars`);
+
+        // ─── Auto-rebuild Azure Blob KB for any agent using this doc ───
+        try {
+          const clientId = data?.client_id;
+          if (clientId) {
+            const agents = await svc.entities.Agent.filter({ client_id: clientId });
+            const affected = agents.filter(a => (a.knowledge_base_ids || []).includes(kbId));
+            console.log(`[extractKB] Triggering uploadKBToStorage for ${affected.length} affected agent(s)`);
+            for (const a of affected) {
+              svc.functions.invoke('uploadKBToStorage', { agent_id: a.id, _internal: true })
+                .catch(e => console.error(`[extractKB] uploadKBToStorage(${a.id}) failed: ${e.message}`));
+            }
+          }
+        } catch (rebuildErr) {
+          console.error(`[extractKB] KB rebuild trigger failed: ${rebuildErr.message}`);
+        }
+
         return Response.json({ success: true, chars: content.length });
       } else {
         console.error(`[extractKB] Extraction failed for KB ${kbId}:`, extracted.details);
@@ -83,6 +100,19 @@ Deno.serve(async (req) => {
           content: content.substring(0, 50000),
           status: 'ready'
         });
+
+        // Auto-rebuild Azure Blob KB for affected agents
+        try {
+          if (kb.client_id) {
+            const agents = await svc.entities.Agent.filter({ client_id: kb.client_id });
+            const affected = agents.filter(a => (a.knowledge_base_ids || []).includes(payload.kb_id));
+            for (const a of affected) {
+              svc.functions.invoke('uploadKBToStorage', { agent_id: a.id, _internal: true }).catch(() => {});
+            }
+            console.log(`[extractKB] Triggered KB rebuild for ${affected.length} agent(s)`);
+          }
+        } catch (_) {}
+
         return Response.json({ success: true, chars: content.length });
       } else {
         await svc.entities.KnowledgeBase.update(payload.kb_id, {

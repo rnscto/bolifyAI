@@ -58,6 +58,8 @@ export default function ClientAgents() {
         knowledge_base_ids: selectedKnowledgeBases
       });
       toast.success('Knowledge base updated');
+      // Rebuild combined KB blob in Azure (fire-and-forget)
+      base44.functions.invoke('uploadKBToStorage', { agent_id: agent.id }).catch(() => {});
       loadData();
     } catch (error) {
       console.error('Error updating knowledge base:', error);
