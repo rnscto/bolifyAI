@@ -3,11 +3,14 @@
 // avoid cross-function service-role 403.
 //
 // Usage:
-//   POST { dry_run: true }   → reports what WOULD be processed
-//   POST {}                  → upload all
-//   POST { agent_id: "..." } → process a single agent
+//   POST { dry_run: true }       → reports what WOULD be processed
+//   POST {}                      → upload all agent KB blobs
+//   POST { agent_id: "..." }     → process a single agent
+//   POST { extract_stuck: true } → re-extract all KB docs with status=processing/failed
 
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { extractText, getDocumentProxy } from 'npm:unpdf@0.12.1';
+import mammoth from 'npm:mammoth@1.8.0';
 
 function parseConnectionString(cs) {
   const parts = {};
@@ -58,6 +61,56 @@ async function putBlob({ endpoint, accountName, accountKey, container, blobName,
   return url;
 }
 
+// ─── File content extraction (inline copy of extractKBContent logic) ───
+async function fetchFileBytes(fileUrl) {
+  const cs = Deno.env.get('AZURE_STORAGE_CONNECTION_STRING');
+  if (cs && fileUrl) {
+    const { accountName, accountKey, endpoint } = parseConnectionString(cs);
+    if (fileUrl.startsWith(endpoint)) {
+      const path = fileUrl.substring(endpoint.length);
+      const dateStr = new Date().toUTCString();
+      const canonicalizedHeaders = `x-ms-date:${dateStr}\nx-ms-version:2021-08-06`;
+      const canonicalizedResource = `/${accountName}${path.split('?')[0]}`;
+      const stringToSign = ['GET', '', '', '', '', '', '', '', '', '', '', '', canonicalizedHeaders, canonicalizedResource].join('\n');
+      const signature = await signSharedKey(stringToSign, accountKey);
+      const resp = await fetch(fileUrl, {
+        headers: {
+          'Authorization': `SharedKey ${accountName}:${signature}`,
+          'x-ms-date': dateStr,
+          'x-ms-version': '2021-08-06'
+        }
+      });
+      if (!resp.ok) throw new Error(`Azure GET ${resp.status}`);
+      return new Uint8Array(await resp.arrayBuffer());
+    }
+  }
+  const resp = await fetch(fileUrl);
+  if (!resp.ok) throw new Error(`Fetch failed ${resp.status}`);
+  return new Uint8Array(await resp.arrayBuffer());
+}
+
+async function extractFileContent(fileUrl, fileType) {
+  const bytes = await fetchFileBytes(fileUrl);
+  const lowerUrl = (fileUrl || '').toLowerCase();
+  const ft = (fileType || '').toLowerCase();
+
+  if (ft === 'txt' || ft === 'csv' || ft === 'json' || ft === 'html' || ft === 'md' ||
+      lowerUrl.endsWith('.txt') || lowerUrl.endsWith('.csv') || lowerUrl.endsWith('.json') ||
+      lowerUrl.endsWith('.html') || lowerUrl.endsWith('.md')) {
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+  if (ft === 'pdf' || lowerUrl.endsWith('.pdf')) {
+    const pdf = await getDocumentProxy(bytes);
+    const { text } = await extractText(pdf, { mergePages: true });
+    return text || '';
+  }
+  if (ft === 'docx' || lowerUrl.endsWith('.docx')) {
+    const result = await mammoth.extractRawText({ buffer: bytes });
+    return result.value || '';
+  }
+  return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+}
+
 async function rebuildAgentKB(svc, agent, azure) {
   const kbIds = agent.knowledge_base_ids || [];
   if (kbIds.length === 0) {
@@ -103,8 +156,61 @@ Deno.serve(async (req) => {
     if (user.role !== 'admin') return Response.json({ error: 'Forbidden: admin only' }, { status: 403 });
 
     const body = await req.json().catch(() => ({}));
-    const { dry_run, agent_id } = body;
+    const { dry_run, agent_id, extract_stuck } = body;
     const svc = base44.asServiceRole;
+
+    // Re-extract stuck KB docs (status=processing or failed) — inline extraction
+    if (extract_stuck) {
+      const stuckProcessing = await svc.entities.KnowledgeBase.filter({ status: 'processing' }, '-created_date', 200);
+      const stuckFailed = await svc.entities.KnowledgeBase.filter({ status: 'failed' }, '-created_date', 200);
+      const stuck = [...stuckProcessing, ...stuckFailed];
+      console.log(`[backfillKB] Re-extracting ${stuck.length} stuck KB docs`);
+      const results = [];
+      const affectedAgents = new Set();
+      for (const kb of stuck) {
+        try {
+          if (!kb.file_url) { results.push({ kb_id: kb.id, title: kb.title, error: 'no file_url' }); continue; }
+          const content = await extractFileContent(kb.file_url, kb.file_type);
+          if (!content || content.trim().length === 0) {
+            await svc.entities.KnowledgeBase.update(kb.id, { status: 'failed' });
+            results.push({ kb_id: kb.id, title: kb.title, error: 'empty content' });
+            continue;
+          }
+          const truncated = content.substring(0, 10000);
+          await svc.entities.KnowledgeBase.update(kb.id, { content: truncated, status: 'ready' });
+          results.push({ kb_id: kb.id, title: kb.title, success: true, chars: truncated.length });
+          // Track which agents need rebuilding
+          if (kb.client_id) {
+            const agents = await svc.entities.Agent.filter({ client_id: kb.client_id });
+            agents.filter(a => (a.knowledge_base_ids || []).includes(kb.id)).forEach(a => affectedAgents.add(a.id));
+          }
+        } catch (e) {
+          results.push({ kb_id: kb.id, title: kb.title, error: e.message });
+        }
+      }
+      const ok = results.filter(r => r.success).length;
+      const fail = results.length - ok;
+
+      // Rebuild affected agents' KB blobs
+      if (affectedAgents.size > 0) {
+        const cs = Deno.env.get('AZURE_STORAGE_CONNECTION_STRING');
+        const container = Deno.env.get('AZURE_STORAGE_CONTAINER_PRIVATE');
+        if (cs && container) {
+          const { accountName, accountKey, endpoint } = parseConnectionString(cs);
+          const azure = { accountName, accountKey, endpoint, container };
+          for (const agentId of affectedAgents) {
+            try {
+              const a = await svc.entities.Agent.get(agentId);
+              await rebuildAgentKB(svc, a, azure);
+            } catch (e) {
+              console.error(`[backfillKB] Rebuild ${agentId} failed: ${e.message}`);
+            }
+          }
+        }
+      }
+
+      return Response.json({ success: true, total: stuck.length, ok, fail, agents_rebuilt: affectedAgents.size, results });
+    }
 
     let agents;
     if (agent_id) {
