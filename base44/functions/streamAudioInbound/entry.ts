@@ -269,6 +269,7 @@ Deno.serve(async (req) => {
     realtimeWs: null, realtimeReady: false, isSpeaking: false,
     _ttsAbort: null, chatHistory: [], tools: [], hasShopify: false,
     humanTransferNumber: '', enableAutoTransfer: true,
+    agentId: null, kbFileUri: '',
     _realtimeReconnectAttempts: 0, _callEnded: false,
     _audioState: { lastUpsampleValue: 0, lastDownsampleRemainder: [] },
     _mediaBuffer: [], _mediaBufferMaxBytes: 256 * 1024, _mediaBufferBytes: 0, _mediaBufferFlushed: false,
@@ -363,6 +364,15 @@ Deno.serve(async (req) => {
     if (session.hasShopify) {
       tools.push({ type: 'function', name: 'shopify_lookup', description: 'Look up info from the customer\'s Shopify store (orders, products, refunds, tracking).', parameters: { type: 'object', properties: { lookup_type: { type: 'string', enum: ['order_by_number', 'order_by_phone', 'order_by_email', 'product_search', 'refund_status', 'tracking'] }, query: { type: 'string' } }, required: ['lookup_type', 'query'] } });
     }
+    if (session.kbFileUri && session.agentId) {
+      tools.push({
+        type: 'function',
+        name: 'search_knowledge_base',
+        description: 'Search the business knowledge base (products, pricing, policies, FAQs, services) by keyword. Call this BEFORE answering any specific question about the business. Pass concise keywords (e.g. "return policy", "pricing", "office hours").',
+        parameters: { type: 'object', properties: { query: { type: 'string', description: 'Concise keyword query.' } }, required: ['query'] }
+      });
+      console.log(`[${reqId}] 📚 KB search tool registered (agent=${session.agentId})`);
+    }
     session.tools = tools;
     return tools;
   }
@@ -406,6 +416,25 @@ Deno.serve(async (req) => {
           }
         }
       } catch (err) { result = { error: `Transfer failed: ${err.message}` }; }
+      sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } });
+      sendToRealtime({ type: 'response.create' });
+      return;
+    }
+
+    if (functionName === 'search_knowledge_base' && session.agentId && session.kbFileUri) {
+      try {
+        const args = JSON.parse(argsStr);
+        const { createClient } = await import('npm:@base44/sdk@0.8.23');
+        const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+        const kbResp = await svc.functions.invoke('kbSearch', { agent_id: session.agentId, query: args.query || '', top_k: 3, _internal: true });
+        const data = kbResp?.data || {};
+        if (data.success && Array.isArray(data.results) && data.results.length > 0) {
+          result = { passages: data.results.map((r, i) => `[Passage ${i + 1}]\n${r.content}`).join('\n\n'), count: data.results.length };
+        } else {
+          result = { passages: '', count: 0, message: 'No relevant information found.' };
+        }
+        console.log(`[${reqId}] 📚 KB "${(args.query || '').substring(0, 50)}" → ${data.results?.length || 0} passages`);
+      } catch (err) { result = { error: 'KB search failed', passages: '' }; }
       sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } });
       sendToRealtime({ type: 'response.create' });
       return;
@@ -817,6 +846,8 @@ Deno.serve(async (req) => {
       }
 
       if (!didAgent) { console.error(`[${reqId}] ❌ No agent found for DID ${cleanCalleeDID}/${callerDID}`); return; }
+      session.agentId = didAgent.id;
+      if (didAgent.kb_file_uri) session.kbFileUri = didAgent.kb_file_uri;
 
       // Fix Smartflo swap: if callerNumber is the DID, swap them
       const agentDids = (didAgent.assigned_dids || []).concat(didAgent.assigned_did ? [didAgent.assigned_did] : []);
@@ -827,15 +858,10 @@ Deno.serve(async (req) => {
       console.log(`[${reqId}] ✅ INBOUND: Agent="${didAgent.name}", client=${didClient?.company_name || '?'}`);
       session.clientId = didClient?.id || didAgent.client_id;
 
-      // Parallel: KB docs + leads
-      let kbContent = '', callerContext = '';
+      // Lead lookup (KB is now searched on-demand via tool — no inline content fetch)
+      let callerContext = '';
       const cleanCaller = session.callerNumber ? session.callerNumber.replace(/\D/g, '').slice(-10) : '';
-      const kbIds = didAgent.knowledge_base_ids || [];
-      const [kbDocs, leadsRaw] = await Promise.all([
-        kbIds.length > 0 ? Promise.all(kbIds.map(id => svc.entities.KnowledgeBase.get(id).catch(() => null))) : [],
-        (cleanCaller && didClient) ? svc.entities.Lead.filter({ client_id: didClient.id }).catch(() => []) : []
-      ]);
-      kbDocs.filter(Boolean).forEach(doc => { if (doc.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`; });
+      const leadsRaw = (cleanCaller && didClient) ? await svc.entities.Lead.filter({ client_id: didClient.id }).catch(() => []) : [];
 
       if (cleanCaller && didClient) {
         const leads = Array.isArray(leadsRaw) ? leadsRaw : [];
@@ -849,7 +875,9 @@ Deno.serve(async (req) => {
       }
 
       session.systemPrompt = (didAgent.system_prompt || 'You are a helpful AI voice assistant.') + callerContext;
-      if (kbContent) session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${kbContent}`;
+      if (session.kbFileUri) {
+        session.systemPrompt += `\n\n--- KNOWLEDGE BASE ---\nYou have a search_knowledge_base(query) tool. ALWAYS call it BEFORE answering any specific question about products, pricing, plans, hours, locations, policies, services, or business-specific details. Pass concise keywords. Never guess — search first, then answer from the passages.`;
+      }
       if (didAgent.greeting_message) session.greetingMessage = didAgent.greeting_message;
       if (didAgent.human_transfer_number) session.humanTransferNumber = didAgent.human_transfer_number;
       else if (didClient?.account_type === 'personal' && didClient?.phone) { session.humanTransferNumber = didClient.phone; }
@@ -867,14 +895,7 @@ Deno.serve(async (req) => {
         }
       }
 
-      // Upload KB content if too large
-      let inboundKbContent = kbContent, inboundKbUrl = '';
-      if (kbContent.length > 2000) {
-        try { const blob = new Blob([kbContent], { type: 'text/plain' }); const file = new File([blob], 'kb_content.txt', { type: 'text/plain' }); const ur = await svc.integrations.Core.UploadFile({ file }); inboundKbUrl = ur.file_url; inboundKbContent = ''; }
-        catch (_) { inboundKbContent = kbContent.substring(0, 2000) + '\n\n[TRUNCATED]'; }
-      }
-
-      // Create CallLog so saveCallRecord can persist transcript
+      // Create CallLog so saveCallRecord can persist transcript (no inline KB — searched on-demand)
       try {
         const newLog = await svc.entities.CallLog.create({
           client_id: session.clientId, agent_id: didAgent.id, lead_id: session._inboundLeadId || null,
@@ -883,8 +904,9 @@ Deno.serve(async (req) => {
           direction: 'inbound', status: 'answered', call_start_time: new Date().toISOString(),
           agent_config_cache: {
             agent_name: didAgent.name, system_prompt: session.systemPrompt,
-            persona: didAgent.persona || {}, knowledge_base_content: inboundKbContent,
-            knowledge_base_url: inboundKbUrl, lead_context: callerContext,
+            persona: didAgent.persona || {},
+            kb_file_uri: session.kbFileUri || '',
+            lead_context: callerContext,
             greeting_message: didAgent.greeting_message || '',
             human_transfer_number: didAgent.human_transfer_number || '',
             enable_auto_transfer: didAgent.enable_auto_transfer !== false

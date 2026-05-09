@@ -470,6 +470,8 @@ Deno.serve(async (req) => {
     hasShopify: false,        // Whether Shopify marketplace is connected
     humanTransferNumber: '',  // Intercom/extension for human transfer
     enableAutoTransfer: true, // Whether AI can auto-offer transfers
+    agentId: null,            // Resolved Agent.id (for kb_search tool)
+    kbFileUri: '',            // Azure Blob URI of agent's KB (signals KB tool availability)
     _realtimeReconnectAttempts: 0,
     _callEnded: false,
     // Per-session audio conversion state (prevents cross-call corruption)
@@ -684,6 +686,26 @@ Deno.serve(async (req) => {
       });
       console.log(`[${reqId}] 🛒 Shopify tool registered for client ${session.clientId}`);
     }
+
+    // ─── Knowledge base search tool (replaces inline KB injection) ───
+    if (session.kbFileUri && session.agentId) {
+      tools.push({
+        type: 'function',
+        name: 'search_knowledge_base',
+        description: 'Search the business knowledge base (products, pricing, policies, FAQs, services) by keyword. Call this BEFORE answering any specific question about the business — pricing, plans, hours, locations, refund/return policies, product details, packages, terms, processes. Always use this instead of guessing. Pass concise keywords (e.g. "return policy", "pricing diamond plan", "office address Mumbai").',
+        parameters: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Concise keyword query — what to search for. Examples: "pricing", "refund policy", "office hours", "delivery time".'
+            }
+          },
+          required: ['query']
+        }
+      });
+      console.log(`[${reqId}] 📚 KB search tool registered (agent=${session.agentId})`);
+    }
     session.tools = tools;
     return tools;
   }
@@ -777,6 +799,32 @@ Deno.serve(async (req) => {
         type: 'conversation.item.create',
         item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) }
       });
+      sendToRealtime({ type: 'response.create' });
+      return;
+    }
+
+    // ─── Knowledge base search ───
+    if (functionName === 'search_knowledge_base' && session.agentId && session.kbFileUri) {
+      try {
+        const args = JSON.parse(argsStr);
+        const { createClient } = await import('npm:@base44/sdk@0.8.23');
+        const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+        const kbResp = await svc.functions.invoke('kbSearch', {
+          agent_id: session.agentId, query: args.query || '', top_k: 3, _internal: true
+        });
+        const data = kbResp?.data || {};
+        if (data.success && Array.isArray(data.results) && data.results.length > 0) {
+          const passages = data.results.map((r, i) => `[Passage ${i + 1}]\n${r.content}`).join('\n\n');
+          result = { passages, count: data.results.length };
+        } else {
+          result = { passages: '', count: 0, message: 'No relevant information found in knowledge base.' };
+        }
+        console.log(`[${reqId}] 📚 KB search "${(args.query || '').substring(0, 50)}" → ${data.results?.length || 0} passages`);
+      } catch (err) {
+        console.error(`[${reqId}] ❌ KB search error: ${err.message}`);
+        result = { error: 'Knowledge base search failed', passages: '' };
+      }
+      sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } });
       sendToRealtime({ type: 'response.create' });
       return;
     }
@@ -1480,6 +1528,7 @@ Deno.serve(async (req) => {
       const cache = callLog.agent_config_cache;
 
       // ── PHASE A: Extract greeting + voice + base prompt SYNCHRONOUSLY (no awaits) ──
+      session.agentId = callLog.agent_id || null;
       if (cache) {
         if (cache.persona) {
           if (cache.persona.voice_engine) session.voiceEngine = cache.persona.voice_engine;
@@ -1499,10 +1548,13 @@ Deno.serve(async (req) => {
         if (cache.system_prompt) session.systemPrompt = cache.system_prompt;
         if (cache.human_transfer_number) session.humanTransferNumber = cache.human_transfer_number;
         if (cache.enable_auto_transfer === false) session.enableAutoTransfer = false;
-        // Apply inline KB content immediately (no fetch needed)
-        if (cache.knowledge_base_content) session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${cache.knowledge_base_content}`;
+        // KB is now searched on-demand via the search_knowledge_base tool — no inline injection.
+        if (cache.kb_file_uri) {
+          session.kbFileUri = cache.kb_file_uri;
+          session.systemPrompt += `\n\n--- KNOWLEDGE BASE ---\nYou have a search_knowledge_base(query) tool. ALWAYS call it BEFORE answering any specific question about products, pricing, plans, hours, locations, policies, services, or any business-specific detail. Pass concise keywords. Never guess or fabricate business info — search first, then answer based on the returned passages.`;
+        }
       }
-      console.log(`[${reqId}] 🎙️ FAST config: engine=${session.voiceEngine}, voice=${session.voiceType}, greeting=${!!session.greetingMessage}`);
+      console.log(`[${reqId}] 🎙️ FAST config: engine=${session.voiceEngine}, voice=${session.voiceType}, greeting=${!!session.greetingMessage}, kb=${!!session.kbFileUri}`);
 
       // ── Signal that greeting can fire NOW (before slow KB/Shopify/personal fetches) ──
       session._fastConfigReady = true;
@@ -1510,22 +1562,8 @@ Deno.serve(async (req) => {
         triggerPhase1Greeting();
       }
 
-      // ── PHASE B: Slow enrichment (KB URL fetch, Shopify, personal mode) — runs AFTER greeting fires ──
+      // ── PHASE B: Slow enrichment (Shopify, personal mode) — runs AFTER greeting fires ──
       if (cache && cache.system_prompt) {
-        // KB URL fetch (can take 500-1500ms)
-        if (!cache.knowledge_base_content && cache.knowledge_base_url) {
-          try {
-            const kbResp = await fetch(cache.knowledge_base_url);
-            if (kbResp.ok) {
-              const kbText = await kbResp.text();
-              session.systemPrompt += `\n\nKNOWLEDGE BASE:\n${kbText}`;
-              console.log(`[${reqId}] 📚 KB fetched from URL: ${kbText.length} chars`);
-            }
-          } catch (kbErr) {
-            console.log(`[${reqId}] ⚠️ KB URL fetch failed: ${kbErr.message}`);
-          }
-        }
-
         // Shopify check (outbound calls may have Shopify integration for context)
         if (callLog.client_id) {
           try {

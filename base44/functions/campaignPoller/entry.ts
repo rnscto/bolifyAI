@@ -265,15 +265,8 @@ Deno.serve(async (req) => {
               continue;
             }
 
-            let kbContent = '';
-            if (agent.knowledge_base_ids?.length > 0) {
-              for (const kbId of agent.knowledge_base_ids) {
-                try {
-                  const doc = await svc.entities.KnowledgeBase.get(kbId);
-                  if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
-                } catch (_) {}
-              }
-            }
+            // KB is searched on-demand via search_knowledge_base tool — store URI only
+            const kbFileUri = agent.kb_file_uri || '';
 
             const slotsAvailable = Math.max(0, maxConcurrent - callingCount);
             const pendingBatchRaw = await svc.entities.CampaignLead.filter(
@@ -344,30 +337,14 @@ Deno.serve(async (req) => {
                   console.log(`[campaignPoller] Using campaign opening as greeting for ${cl.lead_name}`);
                 }
 
-                // If KB content is large, upload to storage and store URL instead
-                let cacheKbContent = kbContent;
-                let cacheKbUrl = '';
-                if (kbContent && kbContent.length > 50000) {
-                  try {
-                    const blob = new Blob([kbContent], { type: 'text/plain' });
-                    const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
-                    const up = await svc.integrations.Core.UploadFile({ file });
-                    cacheKbUrl = up.file_url;
-                    cacheKbContent = '';
-                    console.log(`[campaignPoller] KB uploaded: ${kbContent.length} chars → URL`);
-                  } catch (_) {
-                    cacheKbContent = kbContent.substring(0, 50000);
-                  }
-                }
-
                 const callLog = await svc.entities.CallLog.create({
                   client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
                   call_sid: callSid, caller_id: selectedDID, callee_number: cleanPhone,
                   direction: 'outbound', status: 'initiated', call_start_time: new Date().toISOString(),
                   agent_config_cache: {
                     agent_name: agent.name, system_prompt: personalizedPrompt,
-                    persona: agent.persona || {}, knowledge_base_content: cacheKbContent,
-                    knowledge_base_url: cacheKbUrl,
+                    persona: agent.persona || {},
+                    kb_file_uri: kbFileUri,
                     lead_context: leadContext,
                     greeting_message: campaignGreeting
                   }

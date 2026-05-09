@@ -296,30 +296,10 @@ Deno.serve(async (req) => {
           personalizedPrompt += `\n\n--- INBOUND CALL - LEAD CONTEXT ---\n${leadContext}`;
           if (personalScreeningInstructions) personalizedPrompt += personalScreeningInstructions;
 
-          // Load knowledge base
-          let kbContent = '';
-          let kbContentUrl = '';
-          if (resolvedAgent.knowledge_base_ids?.length > 0) {
-            for (const kbId of resolvedAgent.knowledge_base_ids) {
-              try {
-                const doc = await base44.entities.KnowledgeBase.get(kbId);
-                if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
-              } catch (_) {}
-            }
-            // Upload KB content as file to avoid entity field size limits
-            if (kbContent.length > 2000) {
-              try {
-                const blob = new Blob([kbContent], { type: 'text/plain' });
-                const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
-                const uploadResult = await base44.integrations.Core.UploadFile({ file });
-                kbContentUrl = uploadResult.file_url;
-                kbContent = '';
-                console.log(`[smartfloWebhook] KB uploaded: ${kbContentUrl}`);
-              } catch (upErr) {
-                console.log(`[smartfloWebhook] KB upload failed, truncating: ${upErr.message}`);
-                kbContent = kbContent.substring(0, 2000) + '\n\n[TRUNCATED]';
-              }
-            }
+          // KB is searched on-demand via search_knowledge_base tool — store URI only
+          const kbFileUri = resolvedAgent.kb_file_uri || '';
+          if (kbFileUri) {
+            personalizedPrompt += `\n\n--- KNOWLEDGE BASE ---\nYou have a search_knowledge_base(query) tool. ALWAYS call it BEFORE answering business-specific questions (products, pricing, policies, hours, services). Pass concise keywords. Never guess — search first.`;
           }
 
           // Create CallLog with agent_config_cache so streamAudio picks up the right agent
@@ -337,8 +317,7 @@ Deno.serve(async (req) => {
               agent_name: resolvedAgent.name,
               system_prompt: personalizedPrompt,
               persona: resolvedAgent.persona || {},
-              knowledge_base_content: kbContent,
-              knowledge_base_url: kbContentUrl,
+              kb_file_uri: kbFileUri,
               lead_context: leadContext,
               greeting_message: resolvedAgent.greeting_message || '',
               human_transfer_number: resolvedAgent.human_transfer_number || '',
@@ -385,26 +364,9 @@ Deno.serve(async (req) => {
           personalizedPrompt += `\n\n--- INBOUND CALL - NEW CALLER ---\nThis is an INBOUND call from a NEW number (${incomingNumber}). This person is NOT in the lead database yet.\nIMPORTANT: Greet them professionally, identify their needs, and collect their name and contact details if possible.\nThis is the client's inbound line, so handle them as a potential customer for "${resolvedClient.company_name}".`;
           if (personalScreeningInstructions) personalizedPrompt += personalScreeningInstructions;
 
-          let kbContent2 = '';
-          let kbContentUrl2 = '';
-          if (resolvedAgent.knowledge_base_ids?.length > 0) {
-            for (const kbId of resolvedAgent.knowledge_base_ids) {
-              try {
-                const doc = await base44.entities.KnowledgeBase.get(kbId);
-                if (doc?.content) kbContent2 += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
-              } catch (_) {}
-            }
-            if (kbContent2.length > 2000) {
-              try {
-                const blob = new Blob([kbContent2], { type: 'text/plain' });
-                const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
-                const uploadResult = await base44.integrations.Core.UploadFile({ file });
-                kbContentUrl2 = uploadResult.file_url;
-                kbContent2 = '';
-              } catch (upErr) {
-                kbContent2 = kbContent2.substring(0, 2000) + '\n\n[TRUNCATED]';
-              }
-            }
+          const kbFileUri2 = resolvedAgent.kb_file_uri || '';
+          if (kbFileUri2) {
+            personalizedPrompt += `\n\n--- KNOWLEDGE BASE ---\nYou have a search_knowledge_base(query) tool. ALWAYS call it BEFORE answering business-specific questions. Pass concise keywords. Never guess — search first.`;
           }
 
           const inboundLog = await base44.entities.CallLog.create({
@@ -420,8 +382,7 @@ Deno.serve(async (req) => {
               agent_name: resolvedAgent.name,
               system_prompt: personalizedPrompt,
               persona: resolvedAgent.persona || {},
-              knowledge_base_content: kbContent2,
-              knowledge_base_url: kbContentUrl2,
+              kb_file_uri: kbFileUri2,
               greeting_message: resolvedAgent.greeting_message || '',
               human_transfer_number: resolvedAgent.human_transfer_number || '',
               enable_auto_transfer: resolvedAgent.enable_auto_transfer !== false
@@ -1107,28 +1068,8 @@ async function triggerNextCampaignCall(base44, campaignId) {
       return;
     }
 
-    // Knowledge base
-    let kbContent = '';
-    let kbContentUrl = '';
-    if (agent.knowledge_base_ids?.length > 0) {
-      for (const kbId of agent.knowledge_base_ids) {
-        try {
-          const doc = await base44.entities.KnowledgeBase.get(kbId);
-          if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
-        } catch (_) {}
-      }
-      if (kbContent.length > 2000) {
-        try {
-          const blob = new Blob([kbContent], { type: 'text/plain' });
-          const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
-          const uploadResult = await base44.integrations.Core.UploadFile({ file });
-          kbContentUrl = uploadResult.file_url;
-          kbContent = '';
-        } catch (upErr) {
-          kbContent = kbContent.substring(0, 2000) + '\n\n[TRUNCATED]';
-        }
-      }
-    }
+    // KB searched on-demand via search_knowledge_base tool — URI only
+    const kbFileUri = agent.kb_file_uri || '';
 
     // Pick the next lead
     const cl = readyPending[0];
@@ -1180,8 +1121,8 @@ async function triggerNextCampaignCall(base44, campaignId) {
       direction: 'outbound', status: 'initiated', call_start_time: now.toISOString(),
       agent_config_cache: {
         agent_name: agent.name, system_prompt: personalizedPrompt,
-        persona: agent.persona || {}, knowledge_base_content: kbContent,
-        knowledge_base_url: kbContentUrl,
+        persona: agent.persona || {},
+        kb_file_uri: kbFileUri,
         lead_context: leadContext, greeting_message: agent.greeting_message || '',
         human_transfer_number: agent.human_transfer_number || '',
         enable_auto_transfer: agent.enable_auto_transfer !== false

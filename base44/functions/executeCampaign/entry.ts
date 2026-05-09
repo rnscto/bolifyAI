@@ -114,18 +114,9 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Agent has no assigned DID' }, { status: 400 });
     }
 
-    // Pre-fetch knowledge base content
-    let kbContent = '';
-    if (agent.knowledge_base_ids && agent.knowledge_base_ids.length > 0) {
-      for (const kbId of agent.knowledge_base_ids) {
-        try {
-          const doc = await svc.entities.KnowledgeBase.get(kbId);
-          if (doc && doc.content) kbContent += `[${doc.title}]\n${doc.content}\n\n---\n\n`;
-        } catch (e) {
-          console.log(`KB doc ${kbId} fetch failed: ${e.message}`);
-        }
-      }
-    }
+    // KB is now stored as a single Azure Blob (agent.kb_file_uri) and searched on-demand
+    // by streamAudio via the search_knowledge_base tool. No inline KB injection here.
+    const kbFileUri = agent.kb_file_uri || '';
 
     const maxConcurrent = campaign.max_concurrent_calls || 5;
 
@@ -329,23 +320,6 @@ Deno.serve(async (req) => {
           console.log(`[campaign] Using campaign opening as greeting for ${cl.lead_name}: "${campaignGreeting.substring(0, 80)}"`);
         }
 
-        // If KB content is large, upload to storage and store URL instead (prevents field size limit)
-        let cacheKbContent = kbContent;
-        let cacheKbUrl = '';
-        if (kbContent && kbContent.length > 50000) {
-          try {
-            const blob = new Blob([kbContent], { type: 'text/plain' });
-            const file = new File([blob], 'kb_content.txt', { type: 'text/plain' });
-            const up = await svc.integrations.Core.UploadFile({ file });
-            cacheKbUrl = up.file_url;
-            cacheKbContent = '';
-            console.log(`[campaign] KB uploaded: ${kbContent.length} chars → URL`);
-          } catch (upErr) {
-            console.log(`[campaign] KB upload failed, truncating: ${upErr.message}`);
-            cacheKbContent = kbContent.substring(0, 50000);
-          }
-        }
-
         const callLog = await svc.entities.CallLog.create({
           client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
           call_sid: callSid, caller_id: selectedDID, callee_number: cleanPhone,
@@ -353,8 +327,8 @@ Deno.serve(async (req) => {
           conversation_summary: leadContext ? `[LEAD CONTEXT] ${cl.lead_name}\n${leadContext}` : '',
           agent_config_cache: {
             agent_name: agent.name, system_prompt: personalizedPrompt,
-            persona: agent.persona || {}, knowledge_base_content: cacheKbContent,
-            knowledge_base_url: cacheKbUrl,
+            persona: agent.persona || {},
+            kb_file_uri: kbFileUri,
             lead_context: leadContext,
             greeting_message: campaignGreeting,
             human_transfer_number: agent.human_transfer_number || '',
