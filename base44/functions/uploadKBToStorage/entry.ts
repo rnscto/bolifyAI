@@ -82,26 +82,17 @@ function splitIntoChunks(content) {
   return chunks;
 }
 
-// ─── Embed chunks via dedicated Azure embedding endpoint (text-embedding-3-small, api-version=1) ───
-function buildEmbeddingUrl() {
-  const raw = (Deno.env.get('AZURE_EMBEDDING_ENDPOINT') || '').replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_EMBEDDING_DEPLOYMENT');
-  if (!raw) return null;
-  if (raw.includes('/embeddings')) {
-    const u = new URL(raw);
-    u.searchParams.set('api-version', '1');
-    return u.toString();
-  }
-  if (!deployment) return null;
-  return `${raw}/openai/deployments/${deployment}/embeddings?api-version=1`;
-}
-
+// ─── Embed chunks via Azure Foundry embedding endpoint (text-embedding-3-small) ───
+// Foundry uses /openai/v1/embeddings with model name in body and api-version=preview
 async function embedChunks(chunks) {
+  const base = (Deno.env.get('AZURE_EMBEDDING_ENDPOINT') || '').replace(/\/+$/, '');
   const apiKey = Deno.env.get('AZURE_EMBEDDING_KEY');
-  const url = buildEmbeddingUrl();
-  if (!url || !apiKey) {
-    throw new Error('Embedding endpoint/key not configured');
+  const model = Deno.env.get('AZURE_OPENAI_EMBEDDING_DEPLOYMENT');
+  if (!base || !apiKey || !model) {
+    throw new Error('Embedding endpoint/key/model not configured');
   }
+  const url = `${base}/openai/v1/embeddings`;
+  console.log(`[uploadKBToStorage] embed URL: ${url}, model: ${model}`);
 
   const all = [];
   const BATCH = 16;
@@ -110,7 +101,7 @@ async function embedChunks(chunks) {
     const resp = await fetch(url, {
       method: 'POST',
       headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ input: batch })
+      body: JSON.stringify({ input: batch, model })
     });
     if (!resp.ok) {
       const errText = await resp.text();

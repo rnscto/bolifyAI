@@ -94,28 +94,18 @@ async function fetchRawText(agent) {
   return text;
 }
 
-// ─── Embed query via dedicated Azure embedding endpoint (text-embedding-3-small, api-version=1) ───
-function buildEmbeddingUrl() {
-  const raw = (Deno.env.get('AZURE_EMBEDDING_ENDPOINT') || '').replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_EMBEDDING_DEPLOYMENT');
-  if (!raw) return null;
-  if (raw.includes('/embeddings')) {
-    const u = new URL(raw);
-    u.searchParams.set('api-version', '1');
-    return u.toString();
-  }
-  if (!deployment) return null;
-  return `${raw}/openai/deployments/${deployment}/embeddings?api-version=1`;
-}
-
+// ─── Embed query via Azure Foundry embedding endpoint (text-embedding-3-small) ───
+// Foundry uses /openai/v1/embeddings with model name in body and api-version=preview
 async function embedQuery(query) {
+  const base = (Deno.env.get('AZURE_EMBEDDING_ENDPOINT') || '').replace(/\/+$/, '');
   const apiKey = Deno.env.get('AZURE_EMBEDDING_KEY');
-  const url = buildEmbeddingUrl();
-  if (!url || !apiKey) throw new Error('Embedding not configured');
+  const model = Deno.env.get('AZURE_OPENAI_EMBEDDING_DEPLOYMENT');
+  if (!base || !apiKey || !model) throw new Error('Embedding not configured');
+  const url = `${base}/openai/v1/embeddings`;
   const resp = await fetch(url, {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ input: query })
+    body: JSON.stringify({ input: query, model })
   });
   if (!resp.ok) throw new Error(`Embed query ${resp.status}: ${(await resp.text()).substring(0, 200)}`);
   const data = await resp.json();
