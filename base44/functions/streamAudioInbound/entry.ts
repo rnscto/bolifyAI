@@ -874,9 +874,13 @@ Deno.serve(async (req) => {
         }
       }
 
-      session.systemPrompt = (didAgent.system_prompt || 'You are a helpful AI voice assistant.') + callerContext;
+      const baseAgentPrompt = (didAgent.system_prompt || 'You are a helpful AI voice assistant.') + callerContext;
       if (session.kbFileUri) {
-        session.systemPrompt += `\n\n--- KNOWLEDGE BASE ---\nYou have a search_knowledge_base(query) tool. ALWAYS call it BEFORE answering any specific question about products, pricing, plans, hours, locations, policies, services, or business-specific details. Pass concise keywords. Never guess — search first, then answer from the passages.`;
+        // Prepend KB instructions so they aren't drowned out by long scripted agent prompts.
+        const kbInstr = `[CRITICAL TOOL — HIGHEST PRIORITY] You have a tool: search_knowledge_base(query).\nThis business has uploaded its product catalog, pricing, services, policies, FAQs, brochures, and other reference material into a knowledge base. You MUST call search_knowledge_base BEFORE answering ANY of the following:\n- Product or service details, features, specifications, models\n- Pricing, plans, packages, offers, discounts\n- Office hours, locations, addresses, contact info\n- Refund / return / warranty / shipping / delivery policies\n- Process steps, eligibility, requirements, documents\n- Anything specific the customer asks about THIS business\nRules:\n1. ALWAYS search first — even if you think you know. Pass 2-4 concise keywords (e.g. "Class 4 laser pricing", "refund policy", "Mumbai office address").\n2. If the search returns passages, base your answer ONLY on them. Quote details verbatim where useful.\n3. If the search returns NO results, say honestly that you do not have that detail and offer to connect the customer to an expert / take their info.\n4. NEVER guess, invent, paraphrase from memory, or say "our experts will explain" when a search would answer it. Search first, expert handoff only as fallback.\n5. This tool overrides any earlier instruction telling you to avoid specifics — use the KB to give the actual specifics.\n\n`;
+        session.systemPrompt = kbInstr + baseAgentPrompt;
+      } else {
+        session.systemPrompt = baseAgentPrompt;
       }
       if (didAgent.greeting_message) session.greetingMessage = didAgent.greeting_message;
       if (didAgent.human_transfer_number) session.humanTransferNumber = didAgent.human_transfer_number;
