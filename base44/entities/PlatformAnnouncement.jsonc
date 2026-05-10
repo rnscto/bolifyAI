@@ -1,0 +1,71 @@
+{
+  "name": "PlatformAnnouncement",
+  "type": "object",
+  "properties": {
+    "message": {
+      "type": "string",
+      "description": "Announcement text shown in the running marquee"
+    },
+    "severity": {
+      "type": "string",
+      "enum": [
+        "info",
+        "warning",
+        "critical",
+        "success"
+      ],
+      "default": "info",
+      "description": "Visual style of the announcement"
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether this announcement should currently be shown"
+    },
+    "audience": {
+      "type": "string",
+      "enum": [
+        "all",
+        "clients",
+        "admins"
+      ],
+      "default": "all",
+      "description": "Who should see the announcement"
+    },
+    "link_url": {
+      "type": "string",
+      "description": "Optional link the announcement points to"
+    },
+    "starts_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the announcement should start appearing"
+    },
+    "ends_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the announcement should stop appearing"
+    }
+  },
+  "required": [
+    "message"
+  ],
+  "rls": {
+    "read": {},
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

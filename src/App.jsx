@@ -18,6 +18,7 @@ import PersonalAIAssistant from './pages/PersonalAIAssistant';
 import AdminTopups from './pages/AdminTopups';
 import ClientWhatsAppTemplates from './pages/ClientWhatsAppTemplates';
 import AdminPlatformMessaging from './pages/AdminPlatformMessaging';
+import AdminAnnouncements from './pages/AdminAnnouncements';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -122,6 +123,11 @@ const AuthenticatedApp = () => {
       <Route path="/AdminPlatformMessaging" element={
         <LayoutWrapper currentPageName="AdminPlatformMessaging">
           <AdminPlatformMessaging />
+        </LayoutWrapper>
+      } />
+      <Route path="/AdminAnnouncements" element={
+        <LayoutWrapper currentPageName="AdminAnnouncements">
+          <AdminAnnouncements />
         </LayoutWrapper>
       } />
       <Route path="*" element={<PageNotFound />} />

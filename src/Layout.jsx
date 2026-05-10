@@ -31,6 +31,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import AgreementGate from './components/client/AgreementGate';
+import AnnouncementMarquee from './components/AnnouncementMarquee';
 
 export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
@@ -169,6 +170,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Concept Note', path: 'ConceptNote', icon: FileText },
     { name: 'Trusted Logos', path: 'AdminTrustedClients', icon: Globe },
     { name: 'Complaints', path: 'AdminComplaints', icon: Megaphone },
+    { name: 'Announcements', path: 'AdminAnnouncements', icon: Megaphone },
     { name: 'Platform Messaging', path: 'AdminPlatformMessaging', icon: MessageSquare },
     { name: 'Partners', path: 'AdminPartners', icon: Handshake },
     ];
@@ -351,6 +353,8 @@ export default function Layout({ children, currentPageName }) {
 
       {/* Main content */}
       <div className="lg:pl-64">
+        {/* Platform-wide announcement marquee (admin-managed) */}
+        <AnnouncementMarquee audience={isAdmin ? 'admins' : 'clients'} />
         {/* Top bar */}
         <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
           <div className="flex items-center justify-between px-4 py-4">
