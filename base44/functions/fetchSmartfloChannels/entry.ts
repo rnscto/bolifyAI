@@ -1,5 +1,39 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
 
+// In-memory token cache (per-isolate) — prevents repeated logins that cause Smartflo lockouts.
+let cachedToken = null;
+let cachedAt = 0;
+let loginPromise = null;
+const TOKEN_TTL_MS = 50 * 60 * 1000;
+
+async function performSmartfloLogin() {
+  const email = Deno.env.get('SMARTFLO_EMAIL');
+  const password = Deno.env.get('SMARTFLO_PASSWORD');
+  if (!email || !password) throw new Error('SMARTFLO_EMAIL or SMARTFLO_PASSWORD not configured');
+  const loginRes = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const loginData = await loginRes.json();
+  if (!loginData.success || !loginData.access_token) {
+    throw new Error('Smartflo login failed: ' + JSON.stringify(loginData));
+  }
+  console.log('[fetchSmartfloChannels] Login successful (token cached)');
+  return loginData.access_token;
+}
+
+async function getSmartfloToken(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedToken && (now - cachedAt) < TOKEN_TTL_MS) return cachedToken;
+  if (!loginPromise) {
+    loginPromise = performSmartfloLogin()
+      .then(t => { cachedToken = t; cachedAt = Date.now(); return t; })
+      .finally(() => { loginPromise = null; });
+  }
+  return await loginPromise;
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -9,24 +43,14 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
-    const email = Deno.env.get('SMARTFLO_EMAIL');
-    const password = Deno.env.get('SMARTFLO_PASSWORD');
-
-    // Login to get fresh bearer token
-    console.log('Logging in...');
-    const loginRes = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const loginData = await loginRes.json();
-    
-    if (!loginData.success || !loginData.access_token) {
-      return Response.json({ error: 'Login failed', details: loginData }, { status: 401 });
+    // Get cached Smartflo bearer token
+    let token;
+    try {
+      token = await getSmartfloToken();
+    } catch (e) {
+      return Response.json({ error: e.message }, { status: 500 });
     }
-
-    const token = loginData.access_token;
-    console.log('Login successful, token obtained');
+    console.log('Token obtained (cached)');
 
     const baseUrl = 'https://api-smartflo.tatateleservices.com/v1';
 
@@ -95,13 +119,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Logout
-    try {
-      await fetch(`${baseUrl}/auth/logout`, {
-        method: 'POST',
-        headers: { 'Authorization': token }
-      });
-    } catch (e) {}
+    // NOTE: Do NOT logout — token is cached and reused by future calls
 
     // Separate accessible vs inaccessible
     const accessible = {};

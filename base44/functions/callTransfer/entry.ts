@@ -3,27 +3,50 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 // Call Transfer / Monitor / Whisper / Barge-in via Smartflo API
 // Types: 1=Monitor, 2=Whisper, 3=Barge, 4=Transfer
 
-// Dynamically get Smartflo JWT token via login API
-async function getSmartfloToken() {
+// In-memory token cache (per-isolate) — avoids repeated logins that trigger lockouts.
+// Token reused for TOKEN_TTL_MS; concurrent calls share a single in-flight login via loginPromise.
+let cachedToken = null;
+let cachedAt = 0;
+let loginPromise = null;
+const TOKEN_TTL_MS = 50 * 60 * 1000; // 50 minutes
+
+async function performSmartfloLogin() {
   const email = Deno.env.get('SMARTFLO_EMAIL');
   const password = Deno.env.get('SMARTFLO_PASSWORD');
   if (!email || !password) {
     throw new Error('SMARTFLO_EMAIL or SMARTFLO_PASSWORD not configured');
   }
-
   const loginResp = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     body: JSON.stringify({ email, password })
   });
-
   const loginData = await loginResp.json();
   const token = loginData.access_token || loginData.token;
   if (!loginResp.ok || !token) {
     throw new Error(`Smartflo login failed: ${loginData.message || loginResp.status}`);
   }
-  console.log('[callTransfer] Smartflo login successful');
+  console.log('[callTransfer] Smartflo login successful (token cached)');
   return token;
+}
+
+async function getSmartfloToken(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedToken && (now - cachedAt) < TOKEN_TTL_MS) {
+    return cachedToken;
+  }
+  // Mutex: only one login in flight at a time
+  if (!loginPromise) {
+    loginPromise = performSmartfloLogin()
+      .then(t => { cachedToken = t; cachedAt = Date.now(); return t; })
+      .finally(() => { loginPromise = null; });
+  }
+  return await loginPromise;
+}
+
+function clearSmartfloTokenCache() {
+  cachedToken = null;
+  cachedAt = 0;
 }
 
 Deno.serve(async (req) => {
@@ -83,8 +106,8 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Monitor/Whisper/Barge requires a Smartflo agent_id. Configure smartflo_agent_id on the agent or pass agent_id parameter.' }, { status: 400 });
     }
 
-    // Get Smartflo JWT token dynamically via login
-    const smartfloToken = await getSmartfloToken();
+    // Get Smartflo JWT token (cached)
+    let smartfloToken = await getSmartfloToken();
 
     const body = {
       type: type,
@@ -102,7 +125,7 @@ Deno.serve(async (req) => {
     const typeLabels = { 1: 'Monitor', 2: 'Whisper', 3: 'Barge', 4: 'Transfer' };
     console.log(`[callTransfer] ${typeLabels[type]} request: call_id=${smartfloCallId}, agent_id=${smartfloAgentId}, intercom=${transferIntercom}`);
 
-    const response = await fetch('https://api-smartflo.tatateleservices.com/v1/call/options', {
+    let response = await fetch('https://api-smartflo.tatateleservices.com/v1/call/options', {
       method: 'POST',
       headers: {
         'Accept': 'application/json',
@@ -111,6 +134,22 @@ Deno.serve(async (req) => {
       },
       body: JSON.stringify(body)
     });
+
+    // If token rejected (401/403), clear cache and retry ONCE with fresh login
+    if (response.status === 401 || response.status === 403) {
+      console.log('[callTransfer] Token rejected, refreshing and retrying once...');
+      clearSmartfloTokenCache();
+      smartfloToken = await getSmartfloToken(true);
+      response = await fetch('https://api-smartflo.tatateleservices.com/v1/call/options', {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${smartfloToken}`
+        },
+        body: JSON.stringify(body)
+      });
+    }
 
     const responseData = await response.json();
     console.log(`[callTransfer] Smartflo response: ${response.status}`, JSON.stringify(responseData));

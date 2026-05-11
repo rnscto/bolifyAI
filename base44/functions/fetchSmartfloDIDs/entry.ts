@@ -1,5 +1,39 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
 
+// In-memory token cache (per-isolate) — prevents repeated logins that cause Smartflo lockouts.
+let cachedToken = null;
+let cachedAt = 0;
+let loginPromise = null;
+const TOKEN_TTL_MS = 50 * 60 * 1000;
+
+async function performSmartfloLogin() {
+  const email = Deno.env.get('SMARTFLO_EMAIL');
+  const password = Deno.env.get('SMARTFLO_PASSWORD');
+  if (!email || !password) throw new Error('SMARTFLO_EMAIL or SMARTFLO_PASSWORD not configured');
+  const loginRes = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email, password })
+  });
+  const loginData = await loginRes.json();
+  if (!loginData.success || !loginData.access_token) {
+    throw new Error('Smartflo login failed: ' + JSON.stringify(loginData));
+  }
+  console.log('[fetchSmartfloDIDs] Login successful (token cached)');
+  return loginData.access_token;
+}
+
+async function getSmartfloToken(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && cachedToken && (now - cachedAt) < TOKEN_TTL_MS) return cachedToken;
+  if (!loginPromise) {
+    loginPromise = performSmartfloLogin()
+      .then(t => { cachedToken = t; cachedAt = Date.now(); return t; })
+      .finally(() => { loginPromise = null; });
+  }
+  return await loginPromise;
+}
+
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
@@ -9,38 +43,29 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
     }
 
-    const email = Deno.env.get('SMARTFLO_EMAIL');
-    const password = Deno.env.get('SMARTFLO_PASSWORD');
-
-    if (!email || !password) {
-      return Response.json({ error: 'SMARTFLO_EMAIL or SMARTFLO_PASSWORD not configured' }, { status: 500 });
+    // Get cached Smartflo bearer token (auto-refreshes after TTL)
+    let token;
+    try {
+      token = await getSmartfloToken();
+    } catch (e) {
+      return Response.json({ error: e.message }, { status: 500 });
     }
 
-    // Login to get fresh bearer token
-    console.log('Logging in to Smartflo...');
-    const loginRes = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const loginData = await loginRes.json();
-
-    if (!loginData.success || !loginData.access_token) {
-      return Response.json({ error: 'Smartflo login failed', details: loginData }, { status: 401 });
-    }
-
-    const token = loginData.access_token;
-    console.log('Login successful');
-
-    // Fetch DIDs using bearer token
-    const response = await fetch('https://api-smartflo.tatateleservices.com/v1/my_number', {
+    // Fetch DIDs using bearer token (with 1-time refresh on auth failure)
+    let response = await fetch('https://api-smartflo.tatateleservices.com/v1/my_number', {
       method: 'GET',
-      headers: {
-        'Authorization': token,
-        'Content-Type': 'application/json',
-        'Accept': 'application/json'
-      }
+      headers: { 'Authorization': token, 'Content-Type': 'application/json', 'Accept': 'application/json' }
     });
+
+    if (response.status === 401 || response.status === 403) {
+      console.log('[fetchSmartfloDIDs] Token rejected, refreshing and retrying...');
+      cachedToken = null; cachedAt = 0;
+      token = await getSmartfloToken(true);
+      response = await fetch('https://api-smartflo.tatateleservices.com/v1/my_number', {
+        method: 'GET',
+        headers: { 'Authorization': token, 'Content-Type': 'application/json', 'Accept': 'application/json' }
+      });
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -99,13 +124,7 @@ Deno.serve(async (req) => {
       await base44.asServiceRole.entities.DID.bulkCreate(newDids);
     }
 
-    // Logout
-    try {
-      await fetch('https://api-smartflo.tatateleservices.com/v1/auth/logout', {
-        method: 'POST',
-        headers: { 'Authorization': token }
-      });
-    } catch (_) {}
+    // NOTE: Do NOT logout — token is cached and reused by future calls
 
     return Response.json({
       success: true,
