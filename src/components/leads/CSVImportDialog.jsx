@@ -179,74 +179,95 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
 
     if (ext === '.xlsx' || ext === '.xls') {
       // Excel: upload and extract server-side
-      const { file_url } = await base44.integrations.Core.UploadFile({ file: selectedFile });
-      const extracted = await base44.integrations.Core.ExtractDataFromUploadedFile({
-        file_url,
-        json_schema: {
-          type: "object",
-          properties: {
-            data: {
-              type: "array",
-              items: {
-                type: "object"
+      try {
+        const uploadRes = await base44.integrations.Core.UploadFile({ file: selectedFile });
+        const file_url = uploadRes?.file_url;
+        if (!file_url) {
+          toast.error('Failed to upload file (no URL returned)');
+          setFile(null);
+          setUploading(false);
+          e.target.value = '';
+          return;
+        }
+        const extracted = await base44.integrations.Core.ExtractDataFromUploadedFile({
+          file_url,
+          json_schema: {
+            type: "object",
+            properties: {
+              data: {
+                type: "array",
+                items: { type: "object" }
               }
             }
           }
+        });
+
+        console.log("Excel extraction result:", JSON.stringify(extracted).substring(0, 1000));
+
+        if (!extracted || extracted.status === 'error') {
+          toast.error('Failed to read file: ' + (extracted?.details || 'Unknown error'));
+          setFile(null);
+          setUploading(false);
+          e.target.value = '';
+          return;
         }
-      });
 
-      console.log("Excel extraction result:", JSON.stringify(extracted).substring(0, 1000));
-
-      if (extracted.status === 'error') {
-        toast.error('Failed to read file: ' + (extracted.details || 'Unknown error'));
-        setFile(null);
-        setUploading(false);
-        return;
-      }
-
-      // Handle various response shapes from ExtractDataFromUploadedFile
-      let rawRows = [];
-      if (Array.isArray(extracted.output)) {
-        rawRows = extracted.output;
-      } else if (extracted.output && typeof extracted.output === 'object') {
-        // Try common wrapper keys
-        const possibleKeys = ['data', 'rows', 'items', 'records'];
-        for (const key of possibleKeys) {
-          if (Array.isArray(extracted.output[key])) {
-            rawRows = extracted.output[key];
-            break;
+        // Handle various response shapes from ExtractDataFromUploadedFile
+        let rawRows = [];
+        if (Array.isArray(extracted.output)) {
+          rawRows = extracted.output;
+        } else if (extracted.output && typeof extracted.output === 'object') {
+          const possibleKeys = ['data', 'rows', 'items', 'records'];
+          for (const key of possibleKeys) {
+            if (Array.isArray(extracted.output[key])) {
+              rawRows = extracted.output[key];
+              break;
+            }
+          }
+          if (rawRows.length === 0) {
+            const firstArrayKey = Object.keys(extracted.output).find(k => Array.isArray(extracted.output[k]));
+            if (firstArrayKey) rawRows = extracted.output[firstArrayKey];
           }
         }
-        // If still empty, try the first array-valued property
-        if (rawRows.length === 0) {
-          const firstArrayKey = Object.keys(extracted.output).find(k => Array.isArray(extracted.output[k]));
-          if (firstArrayKey) rawRows = extracted.output[firstArrayKey];
+        if (!rawRows || rawRows.length === 0) {
+          toast.error('No data found in file. Make sure the first row contains column headers.');
+          setFile(null);
+          setUploading(false);
+          e.target.value = '';
+          return;
         }
-      }
-      if (rawRows.length === 0) {
-        toast.error('No data found in file');
+
+        const rows = rawRows.map(row => {
+          const strRow = {};
+          Object.entries(row).forEach(([k, v]) => {
+            strRow[k] = v !== null && v !== undefined ? String(v).trim() : '';
+          });
+          return strRow;
+        });
+
+        const headers = [...new Set(rows.flatMap(r => Object.keys(r)))].filter(h => h && h.trim());
+        if (headers.length === 0) {
+          toast.error('Could not detect column headers in the Excel file.');
+          setFile(null);
+          setUploading(false);
+          e.target.value = '';
+          return;
+        }
+        setFileHeaders(headers);
+        setRawData(rows);
+        setFieldMapping(autoMapFields(headers));
+        setUploading(false);
+        setStep(2);
+        e.target.value = '';
+        return;
+      } catch (err) {
+        console.error('Excel upload/extract error:', err);
+        toast.error('Failed to read Excel file: ' + (err?.message || 'Unknown error'));
         setFile(null);
         setUploading(false);
+        e.target.value = '';
         return;
       }
-
-      // Convert all values to strings (Excel may return numbers)
-      const rows = rawRows.map(row => {
-        const strRow = {};
-        Object.entries(row).forEach(([k, v]) => {
-          strRow[k] = v !== null && v !== undefined ? String(v).trim() : '';
-        });
-        return strRow;
-      });
-
-      console.log("Excel rows sample:", rows[0], rows[1]);
-      const headers = [...new Set(rows.flatMap(r => Object.keys(r)))].filter(h => h && h.trim());
-      console.log("Excel headers:", headers);
-      setFileHeaders(headers);
-      setRawData(rows);
-      setFieldMapping(autoMapFields(headers));
-      setUploading(false);
-      setStep(2);
     } else {
       // CSV: parse locally
       const reader = new FileReader();
