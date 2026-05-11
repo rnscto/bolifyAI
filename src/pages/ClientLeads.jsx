@@ -28,13 +28,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter, Loader2, PhoneCall, Eye, FolderOpen, Settings, Download, Sparkles } from 'lucide-react';
+import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter, Loader2, PhoneCall, Eye, FolderOpen, Settings, Download, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import CSVImportDialog from '../components/leads/CSVImportDialog';
 import LeadScoreBadge from '../components/leads/LeadScoreBadge';
 import LeadGroupManager from '../components/leads/LeadGroupManager';
+import { Checkbox } from '@/components/ui/checkbox';
 import { exportToExcel, formatDateTime } from '../lib/exportToExcel';
 
 export default function ClientLeads() {
@@ -54,6 +55,33 @@ export default function ClientLeads() {
   const [groups, setGroups] = useState([]);
   const [groupManagerOpen, setGroupManagerOpen] = useState(false);
   const [bulkRescoring, setBulkRescoring] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`Delete ${selectedIds.size} selected lead(s)? This cannot be undone.`)) return;
+    setBulkDeleting(true);
+    try {
+      const ids = Array.from(selectedIds);
+      await Promise.all(ids.map(id => base44.entities.Lead.delete(id).catch(e => ({ error: e, id }))));
+      toast.success(`Deleted ${ids.length} lead(s)`);
+      setSelectedIds(new Set());
+      loadData();
+    } catch (e) {
+      toast.error('Bulk delete failed');
+    } finally {
+      setBulkDeleting(false);
+    }
+  };
 
   const handleBulkRescore = async () => {
     if (!client) return;
@@ -459,42 +487,85 @@ export default function ClientLeads() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Phone</TableHead>
-                <TableHead>Group</TableHead>
-                <TableHead>Company</TableHead>
-                <TableHead>AI Score</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Last Call</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(() => {
-                const filtered = leads
-                  .filter(l => tierFilter === 'all' || l.qualification_tier === tierFilter)
-                  .filter(l => statusFilter === 'all' || l.status === statusFilter)
-                  .filter(l => sourceFilter === 'all' || l.source === sourceFilter)
-                  .filter(l => groupFilter === 'all' || (groupFilter === '_ungrouped' ? !l.group_id : l.group_id === groupFilter))
-                  .filter(l => {
-                    if (!searchTerm) return true;
-                    const s = searchTerm.toLowerCase();
-                    return (l.name || '').toLowerCase().includes(s) || 
-                           (l.phone || '').includes(s) || 
-                           (l.company || '').toLowerCase().includes(s);
-                  });
-                return filtered.length === 0 ? (
+          {(() => {
+            const filtered = leads
+              .filter(l => tierFilter === 'all' || l.qualification_tier === tierFilter)
+              .filter(l => statusFilter === 'all' || l.status === statusFilter)
+              .filter(l => sourceFilter === 'all' || l.source === sourceFilter)
+              .filter(l => groupFilter === 'all' || (groupFilter === '_ungrouped' ? !l.group_id : l.group_id === groupFilter))
+              .filter(l => {
+                if (!searchTerm) return true;
+                const s = searchTerm.toLowerCase();
+                return (l.name || '').toLowerCase().includes(s) ||
+                       (l.phone || '').includes(s) ||
+                       (l.company || '').toLowerCase().includes(s);
+              });
+            const allFilteredSelected = filtered.length > 0 && filtered.every(l => selectedIds.has(l.id));
+            const someFilteredSelected = filtered.some(l => selectedIds.has(l.id));
+            const toggleAll = () => {
+              setSelectedIds(prev => {
+                const next = new Set(prev);
+                if (allFilteredSelected) filtered.forEach(l => next.delete(l.id));
+                else filtered.forEach(l => next.add(l.id));
+                return next;
+              });
+            };
+            return (
+            <>
+              {selectedIds.size > 0 && (
+                <div className="flex items-center justify-between gap-3 p-3 mb-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <span className="text-sm text-blue-900 font-medium">
+                    {selectedIds.size} lead{selectedIds.size > 1 ? 's' : ''} selected
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+                      <X className="w-4 h-4 mr-1" /> Clear
+                    </Button>
+                    <Button size="sm" variant="destructive" onClick={handleBulkDelete} disabled={bulkDeleting}>
+                      {bulkDeleting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Trash2 className="w-4 h-4 mr-2" />}
+                      Delete Selected
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allFilteredSelected}
+                        onCheckedChange={toggleAll}
+                        aria-label="Select all"
+                        data-state={!allFilteredSelected && someFilteredSelected ? 'indeterminate' : undefined}
+                      />
+                    </TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Phone</TableHead>
+                    <TableHead>Group</TableHead>
+                    <TableHead>Company</TableHead>
+                    <TableHead>AI Score</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Last Call</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} className="text-center text-gray-500">
+                  <TableCell colSpan={9} className="text-center text-gray-500">
                     {leads.length === 0 ? 'No leads found. Add your first lead to get started.' : 'No leads match the current filter.'}
                   </TableCell>
                 </TableRow>
               ) : (
                 filtered.map((lead) => (
                   <TableRow key={lead.id} className={lead.qualification_tier === 'disqualified' ? 'opacity-50' : ''}>
+                    <TableCell className="w-10">
+                      <Checkbox
+                        checked={selectedIds.has(lead.id)}
+                        onCheckedChange={() => toggleSelect(lead.id)}
+                        aria-label={`Select ${lead.name}`}
+                      />
+                    </TableCell>
                     <TableCell>
                       <Link to={createPageUrl('LeadDetail') + `?id=${lead.id}`} className="hover:underline">
                         <span className="font-medium text-blue-700">{lead.name}</span>
@@ -564,10 +635,12 @@ export default function ClientLeads() {
                     </TableCell>
                   </TableRow>
                 ))
-              );
-              })()}
-            </TableBody>
-          </Table>
+              )}
+                </TableBody>
+              </Table>
+            </>
+            );
+          })()}
         </CardContent>
       </Card>
 
