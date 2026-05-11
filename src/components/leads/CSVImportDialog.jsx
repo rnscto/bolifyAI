@@ -251,34 +251,61 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
       // CSV: parse locally
       const reader = new FileReader();
       reader.onload = (event) => {
-        const text = event.target.result;
-        console.log("CSV raw first 500 chars:", text.substring(0, 500));
-        const { headers, rows } = parseCSVLocally(text);
-        console.log("Detected headers:", headers);
-        console.log("Sample row 0:", rows[0]);
-        console.log("Sample row 1:", rows[1]);
-        console.log("Total rows parsed:", rows.length);
-        if (rows.length === 0) {
-          toast.error('No data found in file');
+        try {
+          const text = event.target.result;
+          if (!text || !String(text).trim()) {
+            toast.error('File is empty');
+            setFile(null);
+            setUploading(false);
+            return;
+          }
+          console.log("CSV raw first 500 chars:", String(text).substring(0, 500));
+          const { headers, rows } = parseCSVLocally(String(text));
+          console.log("Detected headers:", headers);
+          console.log("Total rows parsed:", rows.length);
+          if (!headers || headers.length === 0) {
+            toast.error('Could not detect column headers. Make sure the first row contains column names.');
+            setFile(null);
+            setUploading(false);
+            return;
+          }
+          if (rows.length === 0) {
+            toast.error('No data rows found in file');
+            setFile(null);
+            setUploading(false);
+            return;
+          }
+          const mapping = autoMapFields(headers);
+          console.log("Auto mapping result:", mapping);
+          setFileHeaders(headers);
+          setRawData(rows);
+          setFieldMapping(mapping);
+          setUploading(false);
+          setStep(2);
+        } catch (err) {
+          console.error('CSV parse error:', err);
+          toast.error('Failed to parse CSV: ' + (err?.message || 'Unknown error'));
           setFile(null);
           setUploading(false);
-          return;
         }
-        const mapping = autoMapFields(headers);
-        console.log("Auto mapping result:", mapping);
-        setFileHeaders(headers);
-        setRawData(rows);
-        setFieldMapping(mapping);
-        setUploading(false);
-        setStep(2);
       };
       reader.onerror = () => {
+        console.error('FileReader error:', reader.error);
         toast.error('Failed to read file');
         setFile(null);
         setUploading(false);
       };
-      reader.readAsText(selectedFile);
+      try {
+        reader.readAsText(selectedFile, 'UTF-8');
+      } catch (err) {
+        console.error('readAsText error:', err);
+        toast.error('Failed to open file');
+        setFile(null);
+        setUploading(false);
+      }
     }
+    // Reset the input so picking the same file again re-triggers onChange
+    e.target.value = '';
   };
 
   const getMappedLeads = () => {
