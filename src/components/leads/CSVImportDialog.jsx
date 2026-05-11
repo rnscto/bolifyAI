@@ -13,7 +13,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Textarea } from '@/components/ui/textarea';
-import { Upload, Loader2, FileSpreadsheet, CheckCircle2, AlertCircle, ArrowRight, ArrowLeft, X, ClipboardPaste } from 'lucide-react';
+import { Upload, Loader2, FileSpreadsheet, CheckCircle2, AlertCircle, ArrowRight, ArrowLeft, X, ClipboardPaste, FolderOpen, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 
 const LEAD_FIELDS = [
@@ -112,6 +112,29 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
   const [inputMode, setInputMode] = useState('file'); // 'file' or 'paste'
   const [pasteText, setPasteText] = useState('');
   const [selectedGroupId, setSelectedGroupId] = useState('');
+  const [newGroupName, setNewGroupName] = useState('');
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [localGroups, setLocalGroups] = useState(groups);
+
+  React.useEffect(() => { setLocalGroups(groups); }, [groups]);
+
+  const handleCreateGroup = async () => {
+    const name = newGroupName.trim();
+    if (!name) { toast.error('Enter a group name'); return; }
+    if (!clientId) { toast.error('Client not loaded'); return; }
+    setCreatingGroup(true);
+    try {
+      const created = await base44.entities.LeadGroup.create({ client_id: clientId, name, color: '#3b82f6' });
+      setLocalGroups(prev => [created, ...prev]);
+      setSelectedGroupId(created.id);
+      setNewGroupName('');
+      toast.success(`Group "${name}" created`);
+    } catch (e) {
+      toast.error('Failed to create group');
+    } finally {
+      setCreatingGroup(false);
+    }
+  };
 
   const handlePasteSubmit = () => {
     if (!pasteText.trim()) {
@@ -336,6 +359,7 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
     setInputMode('file');
     setPasteText('');
     setSelectedGroupId('');
+    setNewGroupName('');
     onOpenChange(false);
   };
 
@@ -494,6 +518,44 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
                 <p className="text-xs text-yellow-700">Map at least one field to continue</p>
               </div>
             )}
+
+            {/* Assign to Group — available during mapping */}
+            <div className="border rounded-lg p-3 bg-blue-50/40 border-blue-200 space-y-2">
+              <div className="flex items-center gap-2">
+                <FolderOpen className="w-4 h-4 text-blue-700" />
+                <span className="text-sm font-medium text-blue-900">Assign all imported leads to a group <span className="text-blue-600 font-normal">(optional)</span></span>
+              </div>
+              <Select value={selectedGroupId || '_none'} onValueChange={(v) => setSelectedGroupId(v === '_none' ? '' : v)}>
+                <SelectTrigger className="bg-white">
+                  <SelectValue placeholder="No Group" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="_none">No Group</SelectItem>
+                  {localGroups.map(g => (
+                    <SelectItem key={g.id} value={g.id}>
+                      <span className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: g.color || '#3b82f6' }} />
+                        {g.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <div className="flex items-center gap-2">
+                <Input
+                  value={newGroupName}
+                  onChange={(e) => setNewGroupName(e.target.value)}
+                  placeholder="…or create a new group"
+                  className="bg-white h-9 text-sm"
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleCreateGroup(); } }}
+                />
+                <Button type="button" size="sm" variant="outline" onClick={handleCreateGroup} disabled={creatingGroup || !newGroupName.trim()}>
+                  {creatingGroup ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5 mr-1" />}
+                  Create
+                </Button>
+              </div>
+            </div>
+
             <div className="flex gap-3 justify-between">
               <Button variant="outline" onClick={() => { setStep(1); setFile(null); setFileHeaders([]); setRawData([]); setFieldMapping({}); }}>
                 <ArrowLeft className="w-4 h-4 mr-1" /> Back
@@ -566,28 +628,17 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
                 <p className="text-xs text-gray-400 text-center py-2">Showing first 20 of {rawData.length} rows</p>
               )}
             </div>
-            {/* Group assignment */}
-            {groups.length > 0 && (
-              <div className="flex items-center gap-3 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                <span className="text-sm text-blue-800 font-medium whitespace-nowrap">Assign to Group:</span>
-                <Select value={selectedGroupId || '_none'} onValueChange={(v) => setSelectedGroupId(v === '_none' ? '' : v)}>
-                  <SelectTrigger className="flex-1 bg-white">
-                    <SelectValue placeholder="No Group" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="_none">No Group</SelectItem>
-                    {groups.map(g => (
-                      <SelectItem key={g.id} value={g.id}>
-                        <span className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: g.color || '#3b82f6' }} />
-                          {g.name}
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
+            {/* Group assignment summary (set in step 2) */}
+            <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
+              <FolderOpen className="w-4 h-4 text-blue-700" />
+              <span className="text-sm text-blue-900">
+                {selectedGroupId ? (
+                  <>Will be added to group: <strong>{localGroups.find(g => g.id === selectedGroupId)?.name || '—'}</strong></>
+                ) : (
+                  <>No group assigned <span className="text-blue-600">(edit mapping to change)</span></>
+                )}
+              </span>
+            </div>
 
             <div className="flex gap-3 justify-between">
               <Button variant="outline" onClick={() => setStep(2)}>
