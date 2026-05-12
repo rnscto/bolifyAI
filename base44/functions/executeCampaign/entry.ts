@@ -1,5 +1,24 @@
 import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.20';
 
+// Paginated fetch: returns ALL CampaignLeads for a campaign (handles >1000 leads).
+// Base44's filter() defaults to 1000-record cap — using this avoids premature completion.
+async function fetchAllCampaignLeads(svc, campaignId) {
+  const PAGE = 500;
+  let all = [];
+  let skip = 0;
+  while (true) {
+    const batch = await svc.entities.CampaignLead.filter(
+      { campaign_id: campaignId }, 'created_date', PAGE, skip
+    );
+    if (!batch || batch.length === 0) break;
+    all = all.concat(batch);
+    if (batch.length < PAGE) break;
+    skip += PAGE;
+    if (skip > 100000) break;
+  }
+  return all;
+}
+
 Deno.serve(async (req) => {
   try {
     const body = await req.json();
@@ -202,8 +221,8 @@ Deno.serve(async (req) => {
     }).slice(0, slotsAvailable);
 
     if (pendingLeads.length === 0) {
-      // Check if campaign should be completed
-      const allLeads = await svc.entities.CampaignLead.filter({ campaign_id }, 'created_date', 1000);
+      // Check if campaign should be completed (paginated — handles >1000 leads)
+      const allLeads = await fetchAllCampaignLeads(svc, campaign_id);
       const callingCount = allLeads.filter(l => l.status === 'calling').length;
       const pendingWithFutureRetry = allLeads.filter(l =>
         l.status === 'pending' && l.followup_call_date && new Date(l.followup_call_date) > now
@@ -392,8 +411,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Update campaign counts
-    const allLeads = await svc.entities.CampaignLead.filter({ campaign_id }, 'created_date', 1000);
+    // Update campaign counts (paginated — handles >1000 leads)
+    const allLeads = await fetchAllCampaignLeads(svc, campaign_id);
     const completedCount = allLeads.filter(l => l.status === 'completed').length;
     const failedCount = allLeads.filter(l => l.status === 'failed').length;
     await svc.entities.Campaign.update(campaign_id, {

@@ -1,5 +1,24 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
+// Paginated fetch: returns ALL CampaignLeads for a campaign (handles >1000 leads).
+// Base44's filter() defaults to 1000-record cap — using this avoids premature completion.
+async function fetchAllCampaignLeads(svc, campaignId) {
+  const PAGE = 500;
+  let all = [];
+  let skip = 0;
+  while (true) {
+    const batch = await svc.entities.CampaignLead.filter(
+      { campaign_id: campaignId }, 'created_date', PAGE, skip
+    );
+    if (!batch || batch.length === 0) break;
+    all = all.concat(batch);
+    if (batch.length < PAGE) break;
+    skip += PAGE;
+    if (skip > 100000) break; // safety hard-cap at 100k leads
+  }
+  return all;
+}
+
 // This function runs every 5 minutes to:
 // 1. Fix stuck "calling" leads (calls that never got a webhook callback)
 // 2. Automatically trigger next batch of calls for running campaigns
@@ -215,7 +234,8 @@ Deno.serve(async (req) => {
         }
 
         // === STEP 2: Check if campaign should be completed ===
-        const allLeads = await svc.entities.CampaignLead.filter({ campaign_id: campaignId }, 'created_date', 1000);
+        // Paginated fetch — handles campaigns with >1000 leads (previously capped at 1000)
+        const allLeads = await fetchAllCampaignLeads(svc, campaignId);
         const pendingCount = allLeads.filter(l => l.status === 'pending').length;
         const callingCount = allLeads.filter(l => ['calling', 'processing'].includes(l.status)).length;
         const completedCount = allLeads.filter(l => l.status === 'completed').length;

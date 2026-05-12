@@ -1,5 +1,24 @@
 import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
 
+// Paginated fetch: returns ALL CampaignLeads for a campaign (handles >1000 leads).
+// Base44's filter() defaults to 1000-record cap — using this avoids premature completion.
+async function fetchAllCampaignLeads(base44, campaignId) {
+  const PAGE = 500;
+  let all = [];
+  let skip = 0;
+  while (true) {
+    const batch = await base44.entities.CampaignLead.filter(
+      { campaign_id: campaignId }, 'created_date', PAGE, skip
+    );
+    if (!batch || batch.length === 0) break;
+    all = all.concat(batch);
+    if (batch.length < PAGE) break;
+    skip += PAGE;
+    if (skip > 100000) break;
+  }
+  return all;
+}
+
 // ─── Send email using CLIENT's configured provider (via sendClientEmail function) ───
 // Falls back to platform SMTP if client has no email config
 async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
@@ -395,7 +414,8 @@ async function triggerNextBatch(base44, campaignId) {
     }
 
     const now = new Date();
-    const allLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId }, 'created_date', 1000);
+    // Paginated — handles campaigns with >1000 leads (previously capped at 1000)
+    const allLeads = await fetchAllCampaignLeads(base44, campaignId);
     const pendingLeads = allLeads.filter(l => l.status === 'pending');
     const callingLeads = allLeads.filter(l => l.status === 'calling');
     const maxConcurrent = campaign.max_concurrent_calls || 5;
@@ -929,7 +949,8 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
 // =====================================================
 async function updateCampaignStats(base44, campaignId) {
   try {
-    const allLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId });
+    // Paginated — handles campaigns with >1000 leads (previously capped at 1000)
+    const allLeads = await fetchAllCampaignLeads(base44, campaignId);
     const outcomes = countOutcomes(allLeads);
     const completedCount = allLeads.filter(l => l.status === 'completed').length;
     const failedCount = allLeads.filter(l => l.status === 'failed').length;
