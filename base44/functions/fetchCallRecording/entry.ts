@@ -44,12 +44,19 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { call_log_id, bulk } = await req.json();
+    const { call_log_id, bulk, force_refresh } = await req.json();
+
+    // Force-flush cached token if requested (e.g. after Smartflo password change)
+    if (force_refresh) {
+      cachedToken = null;
+      cachedAt = 0;
+      console.log('[fetchCallRecording] Force-refresh requested — token cache cleared');
+    }
 
     // Get cached Smartflo bearer token (single login shared across calls)
     let token;
     try {
-      token = await getSmartfloToken();
+      token = await getSmartfloToken(force_refresh === true);
     } catch (e) {
       return Response.json({ error: e.message }, { status: 500 });
     }
@@ -83,10 +90,20 @@ Deno.serve(async (req) => {
         let recordingUrl = null;
 
         // Method 1: CDR search by call_id
-        const cdrResp = await fetch(
+        let cdrResp = await fetch(
           `https://api-smartflo.tatateleservices.com/v1/call/records?call_id=${encodeURIComponent(callSid)}&limit=1`,
           { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } }
         );
+        // Auto-refresh token on 401/403 (stale token after password change)
+        if (cdrResp.status === 401 || cdrResp.status === 403) {
+          console.log(`[fetchCallRecording] Token rejected (${cdrResp.status}) — refreshing and retrying`);
+          cachedToken = null; cachedAt = 0;
+          token = await getSmartfloToken(true);
+          cdrResp = await fetch(
+            `https://api-smartflo.tatateleservices.com/v1/call/records?call_id=${encodeURIComponent(callSid)}&limit=1`,
+            { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } }
+          );
+        }
         if (cdrResp.ok) {
           const cdrData = await cdrResp.json();
           const records = cdrData.data || cdrData.records || cdrData.results || (Array.isArray(cdrData) ? cdrData : []);
