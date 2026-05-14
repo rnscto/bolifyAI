@@ -65,11 +65,30 @@ export default function CampaignDetail() {
     };
   }, [campaignId]);
 
+  // Paginated fetch — the SDK caps `.filter()` at 1000 records per call, so we
+  // page through all CampaignLead records to support large campaigns (10k+ leads).
+  const fetchAllCampaignLeads = async (cid) => {
+    const PAGE_SIZE = 500;
+    const SAFETY_CAP = 100000;
+    const all = [];
+    let skip = 0;
+    while (skip < SAFETY_CAP) {
+      const batch = await base44.entities.CampaignLead.filter(
+        { campaign_id: cid }, 'created_date', PAGE_SIZE, skip
+      );
+      if (!batch || batch.length === 0) break;
+      all.push(...batch);
+      if (batch.length < PAGE_SIZE) break;
+      skip += PAGE_SIZE;
+    }
+    return all;
+  };
+
   const loadData = async () => {
     try {
       const [campaignData, leadsData] = await Promise.all([
         base44.entities.Campaign.get(campaignId),
-        base44.entities.CampaignLead.filter({ campaign_id: campaignId }, 'created_date', 500)
+        fetchAllCampaignLeads(campaignId)
       ]);
       setCampaign(campaignData);
       setCampaignLeads(leadsData);

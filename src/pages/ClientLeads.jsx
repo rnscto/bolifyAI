@@ -116,6 +116,25 @@ export default function ClientLeads() {
     return () => clearInterval(interval);
   }, []);
 
+  // Paginated fetch — the SDK caps `.filter()` at 1000 records per call,
+  // so we page through all leads to support clients with 10k+ leads.
+  const fetchAllLeads = async (clientId) => {
+    const PAGE_SIZE = 500;
+    const SAFETY_CAP = 100000;
+    const all = [];
+    let skip = 0;
+    while (skip < SAFETY_CAP) {
+      const batch = await base44.entities.Lead.filter(
+        { client_id: clientId }, '-created_date', PAGE_SIZE, skip
+      );
+      if (!batch || batch.length === 0) break;
+      all.push(...batch);
+      if (batch.length < PAGE_SIZE) break;
+      skip += PAGE_SIZE;
+    }
+    return all;
+  };
+
   const loadData = async () => {
     try {
       const user = await base44.auth.me();
@@ -126,7 +145,7 @@ export default function ClientLeads() {
         setClient(clientData);
 
         const [leadsData, agentsData, groupsData] = await Promise.all([
-          base44.entities.Lead.filter({ client_id: clientData.id }, '-created_date'),
+          fetchAllLeads(clientData.id),
           base44.entities.Agent.filter({ client_id: clientData.id }),
           base44.entities.LeadGroup.filter({ client_id: clientData.id }, '-created_date')
         ]);
