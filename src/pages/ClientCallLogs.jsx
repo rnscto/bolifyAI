@@ -18,7 +18,18 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing, FileText, ExternalLink, Disc, Download, Loader2, FileSpreadsheet } from 'lucide-react';
+import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing, FileText, ExternalLink, Disc, Download, Loader2, FileSpreadsheet, Trash2 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
@@ -33,6 +44,9 @@ export default function ClientCallLogs() {
   const [loading, setLoading] = useState(true);
   const [fetchingRecording, setFetchingRecording] = useState(null);
   const [fetchingBulk, setFetchingBulk] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'single'|'bulk', id?: string }
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -83,6 +97,42 @@ export default function ClientCallLogs() {
     setFetchingBulk(false);
   };
 
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === calls.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(calls.map(c => c.id)));
+    }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      const ids = deleteTarget.type === 'single' ? [deleteTarget.id] : Array.from(selectedIds);
+      for (const id of ids) {
+        await base44.entities.CallLog.delete(id);
+      }
+      toast.success(`Deleted ${ids.length} call log${ids.length > 1 ? 's' : ''}`);
+      setSelectedIds(new Set());
+      setDeleteTarget(null);
+      if (selectedCall && ids.includes(selectedCall.id)) setSelectedCall(null);
+      await loadData();
+    } catch (err) {
+      toast.error('Failed to delete: ' + (err.message || 'unknown error'));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const statusColors = {
     initiated: 'bg-blue-100 text-blue-800',
     ringing: 'bg-yellow-100 text-yellow-800',
@@ -115,6 +165,11 @@ export default function ClientCallLogs() {
         <p className="text-gray-600 mt-1">View all your call history and transcripts</p>
       </div>
       <div className="flex justify-end gap-2">
+        {selectedIds.size > 0 && (
+          <Button variant="destructive" size="sm" onClick={() => setDeleteTarget({ type: 'bulk' })} className="gap-2">
+            <Trash2 className="w-4 h-4" /> Delete Selected ({selectedIds.size})
+          </Button>
+        )}
         <Button variant="outline" size="sm" onClick={() => {
           if (calls.length === 0) { toast.error('No call logs to export'); return; }
           exportToExcel(
@@ -206,6 +261,12 @@ export default function ClientCallLogs() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={calls.length > 0 && selectedIds.size === calls.length}
+                    onCheckedChange={toggleSelectAll}
+                  />
+                </TableHead>
                 <TableHead>Direction</TableHead>
                 <TableHead>Number</TableHead>
                 <TableHead>Lead</TableHead>
@@ -220,13 +281,19 @@ export default function ClientCallLogs() {
             <TableBody>
               {calls.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center text-gray-500">
+                  <TableCell colSpan={10} className="text-center text-gray-500">
                     No call history yet
                   </TableCell>
                 </TableRow>
               ) : (
                 calls.map((call) => (
                   <TableRow key={call.id}>
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(call.id)}
+                        onCheckedChange={() => toggleSelect(call.id)}
+                      />
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         {call.direction === 'outbound' ? (
@@ -289,6 +356,15 @@ export default function ClientCallLogs() {
                           onClick={() => setSelectedCall(call)}
                         >
                           <Eye className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                          onClick={() => setDeleteTarget({ type: 'single', id: call.id })}
+                          title="Delete call log"
+                        >
+                          <Trash2 className="w-4 h-4" />
                         </Button>
                       </div>
                     </TableCell>
@@ -394,6 +470,30 @@ export default function ClientCallLogs() {
           )}
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete call log{deleteTarget?.type === 'bulk' ? 's' : ''}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteTarget?.type === 'bulk'
+                ? `This will permanently delete ${selectedIds.size} call log${selectedIds.size > 1 ? 's' : ''}, including their transcripts and recording links. This action cannot be undone.`
+                : 'This will permanently delete this call log, including its transcript and recording link. This action cannot be undone.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); confirmDelete(); }}
+              disabled={deleting}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Trash2 className="w-4 h-4 mr-2" />}
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
     </FeatureGate>
   );
