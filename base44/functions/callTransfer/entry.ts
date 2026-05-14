@@ -5,9 +5,11 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
 
 // In-memory token cache (per-isolate) — avoids repeated logins that trigger lockouts.
 // Token reused for TOKEN_TTL_MS; concurrent calls share a single in-flight login via loginPromise.
+// Honors Smartflo's `retry_after` response to back off when rate-limited.
 let cachedToken = null;
 let cachedAt = 0;
 let loginPromise = null;
+let blockedUntil = 0;
 const TOKEN_TTL_MS = 50 * 60 * 1000; // 50 minutes
 
 async function performSmartfloLogin() {
@@ -21,9 +23,19 @@ async function performSmartfloLogin() {
     headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     body: JSON.stringify({ email, password })
   });
-  const loginData = await loginResp.json();
+  const loginData = await loginResp.json().catch(() => ({}));
   const token = loginData.access_token || loginData.token;
   if (!loginResp.ok || !token) {
+    // Honor retry_after on 429
+    if (loginResp.status === 429 || loginData.retry_after) {
+      let cooldownMs = 10 * 60 * 1000;
+      if (loginData.retry_after) {
+        const ra = new Date(loginData.retry_after.replace(' ', 'T') + '+05:30').getTime();
+        if (!isNaN(ra) && ra > Date.now()) cooldownMs = ra - Date.now() + 5000;
+      }
+      blockedUntil = Date.now() + cooldownMs;
+      throw new Error(`Smartflo rate-limited until ${new Date(blockedUntil).toISOString()} (${loginData.retry_after || 'no retry_after'})`);
+    }
     throw new Error(`Smartflo login failed: ${loginData.message || loginResp.status}`);
   }
   console.log('[callTransfer] Smartflo login successful (token cached)');
@@ -35,10 +47,14 @@ async function getSmartfloToken(forceRefresh = false) {
   if (!forceRefresh && cachedToken && (now - cachedAt) < TOKEN_TTL_MS) {
     return cachedToken;
   }
+  if (blockedUntil > now) {
+    const waitSec = Math.ceil((blockedUntil - now) / 1000);
+    throw new Error(`Smartflo login is rate-limited — retry in ${waitSec}s`);
+  }
   // Mutex: only one login in flight at a time
   if (!loginPromise) {
     loginPromise = performSmartfloLogin()
-      .then(t => { cachedToken = t; cachedAt = Date.now(); return t; })
+      .then(t => { cachedToken = t; cachedAt = Date.now(); blockedUntil = 0; return t; })
       .finally(() => { loginPromise = null; });
   }
   return await loginPromise;

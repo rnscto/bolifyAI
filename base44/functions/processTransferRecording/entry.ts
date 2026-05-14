@@ -2,12 +2,16 @@ import { createClient } from 'npm:@base44/sdk@0.8.23';
 
 // ─── Smartflo token cache (module-level) ───
 const SMARTFLO_TOKEN_TTL_MS = 50 * 60 * 1000;
-let _smartfloTokenCache = { token: null, expiresAt: 0, inFlight: null };
+let _smartfloTokenCache = { token: null, expiresAt: 0, inFlight: null, blockedUntil: 0 };
 
 async function getSmartfloToken(forceRefresh = false) {
   const now = Date.now();
   if (!forceRefresh && _smartfloTokenCache.token && _smartfloTokenCache.expiresAt > now) {
     return _smartfloTokenCache.token;
+  }
+  if (_smartfloTokenCache.blockedUntil > now) {
+    console.error(`[Smartflo] Login skipped — rate-limited`);
+    return null;
   }
   if (_smartfloTokenCache.inFlight) return _smartfloTokenCache.inFlight;
   const sfE = Deno.env.get('SMARTFLO_EMAIL'), sfP = Deno.env.get('SMARTFLO_PASSWORD');
@@ -19,11 +23,23 @@ async function getSmartfloToken(forceRefresh = false) {
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({ email: sfE, password: sfP })
       });
-      const ld = await lr.json();
+      const ld = await lr.json().catch(() => ({}));
       const tk = ld.access_token || ld.token;
-      if (!lr.ok || !tk) { console.error(`[Smartflo] Login failed: ${lr.status}`); return null; }
+      if (!lr.ok || !tk) {
+        if (lr.status === 429 || ld.retry_after) {
+          let cooldownMs = 10 * 60 * 1000;
+          if (ld.retry_after) {
+            const ra = new Date(ld.retry_after.replace(' ', 'T') + '+05:30').getTime();
+            if (!isNaN(ra) && ra > Date.now()) cooldownMs = ra - Date.now() + 5000;
+          }
+          _smartfloTokenCache.blockedUntil = Date.now() + cooldownMs;
+          console.error(`[Smartflo] Login 429 — backing off for ${Math.round(cooldownMs / 1000)}s`);
+        } else { console.error(`[Smartflo] Login failed: ${lr.status}`); }
+        return null;
+      }
       _smartfloTokenCache.token = tk;
       _smartfloTokenCache.expiresAt = Date.now() + SMARTFLO_TOKEN_TTL_MS;
+      _smartfloTokenCache.blockedUntil = 0;
       console.log(`[Smartflo] ✅ New token cached (valid 50min)`);
       return tk;
     } catch (e) { console.error(`[Smartflo] Login error: ${e.message}`); return null; }

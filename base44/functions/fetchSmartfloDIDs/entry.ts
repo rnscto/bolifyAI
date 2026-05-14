@@ -4,6 +4,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
 let cachedToken = null;
 let cachedAt = 0;
 let loginPromise = null;
+let blockedUntil = 0;
 const TOKEN_TTL_MS = 50 * 60 * 1000;
 
 async function performSmartfloLogin() {
@@ -15,8 +16,17 @@ async function performSmartfloLogin() {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password })
   });
-  const loginData = await loginRes.json();
+  const loginData = await loginRes.json().catch(() => ({}));
   if (!loginData.success || !loginData.access_token) {
+    if (loginRes.status === 429 || loginData.retry_after) {
+      let cooldownMs = 10 * 60 * 1000;
+      if (loginData.retry_after) {
+        const ra = new Date(loginData.retry_after.replace(' ', 'T') + '+05:30').getTime();
+        if (!isNaN(ra) && ra > Date.now()) cooldownMs = ra - Date.now() + 5000;
+      }
+      blockedUntil = Date.now() + cooldownMs;
+      throw new Error(`Smartflo rate-limited (retry_after=${loginData.retry_after || 'n/a'})`);
+    }
     throw new Error('Smartflo login failed: ' + JSON.stringify(loginData));
   }
   console.log('[fetchSmartfloDIDs] Login successful (token cached)');
@@ -26,9 +36,13 @@ async function performSmartfloLogin() {
 async function getSmartfloToken(forceRefresh = false) {
   const now = Date.now();
   if (!forceRefresh && cachedToken && (now - cachedAt) < TOKEN_TTL_MS) return cachedToken;
+  if (blockedUntil > now) {
+    const waitSec = Math.ceil((blockedUntil - now) / 1000);
+    throw new Error(`Smartflo login is rate-limited — retry in ${waitSec}s`);
+  }
   if (!loginPromise) {
     loginPromise = performSmartfloLogin()
-      .then(t => { cachedToken = t; cachedAt = Date.now(); return t; })
+      .then(t => { cachedToken = t; cachedAt = Date.now(); blockedUntil = 0; return t; })
       .finally(() => { loginPromise = null; });
   }
   return await loginPromise;

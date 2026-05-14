@@ -1,14 +1,20 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
 // ─── Smartflo token cache (module-level, shared across WebSocket sessions in this isolate) ───
-// Smartflo locks the account if you log in too frequently. Cache the JWT and reuse it.
+// Smartflo locks the account if you log in too frequently. Cache the JWT and respect retry_after.
 const SMARTFLO_TOKEN_TTL_MS = 50 * 60 * 1000;
-let _smartfloTokenCache = { token: null, expiresAt: 0, inFlight: null };
+let _smartfloTokenCache = { token: null, expiresAt: 0, inFlight: null, blockedUntil: 0 };
 
 async function getSmartfloToken(forceRefresh = false) {
   const now = Date.now();
   if (!forceRefresh && _smartfloTokenCache.token && _smartfloTokenCache.expiresAt > now) {
     return _smartfloTokenCache.token;
+  }
+  // Honor Smartflo's rate-limit cool-down: don't even attempt login while blocked.
+  if (_smartfloTokenCache.blockedUntil > now) {
+    const waitSec = Math.ceil((_smartfloTokenCache.blockedUntil - now) / 1000);
+    console.error(`[Smartflo] Login skipped — rate-limited for ${waitSec}s more`);
+    return null;
   }
   if (_smartfloTokenCache.inFlight) return _smartfloTokenCache.inFlight;
   const sfE = Deno.env.get('SMARTFLO_EMAIL'), sfP = Deno.env.get('SMARTFLO_PASSWORD');
@@ -20,11 +26,26 @@ async function getSmartfloToken(forceRefresh = false) {
         headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
         body: JSON.stringify({ email: sfE, password: sfP })
       });
-      const ld = await lr.json();
+      const ld = await lr.json().catch(() => ({}));
       const tk = ld.access_token || ld.token;
-      if (!lr.ok || !tk) { console.error(`[Smartflo] Login failed: ${lr.status}`); return null; }
+      if (!lr.ok || !tk) {
+        // Parse retry_after from Smartflo's body (e.g. "2026-05-14 17:40:45" in IST)
+        if (lr.status === 429 || ld.retry_after) {
+          let cooldownMs = 10 * 60 * 1000; // default 10min
+          if (ld.retry_after) {
+            const ra = new Date(ld.retry_after.replace(' ', 'T') + '+05:30').getTime();
+            if (!isNaN(ra) && ra > Date.now()) cooldownMs = ra - Date.now() + 5000;
+          }
+          _smartfloTokenCache.blockedUntil = Date.now() + cooldownMs;
+          console.error(`[Smartflo] Login 429 — backing off for ${Math.round(cooldownMs / 1000)}s. retry_after=${ld.retry_after || 'n/a'}`);
+        } else {
+          console.error(`[Smartflo] Login failed: ${lr.status} ${JSON.stringify(ld).slice(0, 200)}`);
+        }
+        return null;
+      }
       _smartfloTokenCache.token = tk;
       _smartfloTokenCache.expiresAt = Date.now() + SMARTFLO_TOKEN_TTL_MS;
+      _smartfloTokenCache.blockedUntil = 0;
       console.log(`[Smartflo] ✅ New token cached (valid 50min)`);
       return tk;
     } catch (e) { console.error(`[Smartflo] Login error: ${e.message}`); return null; }
