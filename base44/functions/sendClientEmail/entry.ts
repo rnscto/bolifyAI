@@ -32,12 +32,15 @@ async function sendViaSMTP({ to, subject, html, fromAddress, fromName, config })
   // Use Deno-compatible SMTP via raw SMTP socket or a lightweight library
   // For now, we use the smtp npm package
   const { SMTPClient } = await import('npm:emailjs@4.0.3');
+  const port = parseInt(config.email_smtp_port) || 587;
+  const useSSL = port === 465; // 465 = implicit SSL; 587/25 = STARTTLS
   const client = new SMTPClient({
     user: config.email_smtp_user,
     password: config.email_smtp_pass,
     host: config.email_smtp_host,
-    port: config.email_smtp_port || 587,
-    tls: true,
+    port,
+    ssl: useSSL,
+    tls: !useSSL,
     timeout: 15000
   });
   const message = await client.sendAsync({
