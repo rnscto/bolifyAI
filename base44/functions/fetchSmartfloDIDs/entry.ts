@@ -90,39 +90,50 @@ Deno.serve(async (req) => {
       }, { status: 500 });
     }
 
-    // Sync all DIDs to database
-    const existingDids = await base44.asServiceRole.entities.DID.list();
-    const existingNumbers = new Set(existingDids.map(d => d.number));
+    // ─── Page through ALL existing DIDs (default list limit is small — we must paginate) ───
+    const existingDids = [];
+    const PAGE_SIZE = 500;
+    for (let page = 0; page < 50; page++) {
+      const batch = await base44.asServiceRole.entities.DID.list('-created_date', PAGE_SIZE, page * PAGE_SIZE);
+      if (!batch || batch.length === 0) break;
+      existingDids.push(...batch);
+      if (batch.length < PAGE_SIZE) break;
+    }
+    console.log(`[fetchSmartfloDIDs] Loaded ${existingDids.length} existing DIDs from DB`);
+
+    // Build a lookup set of all known number variants for O(1) match
+    const existingSet = new Set();
+    for (const d of existingDids) {
+      if (!d.number) continue;
+      const n = String(d.number).replace(/\D/g, '');
+      existingSet.add(n);                                    // full digits
+      if (n.length >= 10) existingSet.add(n.slice(-10));     // last-10
+    }
 
     const newDids = [];
-    const updatedDids = [];
-
     for (const did of didsArray) {
-      // did.did is like "+918065485979", did.alias is "918065485979"
       const rawDid = did.did || did.alias || '';
-      // Strip leading + to get the number as stored (e.g. 918065485979 or 8065485979)
-      const phoneNumber = rawDid.replace(/^\+/, '');
-      // Also store the 10-digit local version for matching
-      const localNumber = phoneNumber.startsWith('91') ? phoneNumber.slice(2) : phoneNumber;
-
+      const phoneNumber = rawDid.replace(/^\+/, '').replace(/\D/g, '');
       if (!phoneNumber) continue;
+      const local10 = phoneNumber.slice(-10);
+      if (existingSet.has(phoneNumber) || existingSet.has(local10)) continue;
+      newDids.push({ number: phoneNumber, country_code: '+91', status: 'available', monthly_cost: 6500 });
+      existingSet.add(phoneNumber); existingSet.add(local10); // dedupe within this batch too
+    }
 
-      // Check if already exists by full number or local number
-      const existingFull = existingDids.find(d => d.number === phoneNumber || d.number === localNumber || d.number === rawDid);
-
-      if (!existingFull) {
-        newDids.push({
-          number: phoneNumber,
-          country_code: '+91',
-          status: 'available',
-          monthly_cost: 6500
-        });
+    // ─── Bulk-insert in small chunks to stay under timeout ───
+    const CHUNK = 50;
+    let inserted = 0;
+    for (let i = 0; i < newDids.length; i += CHUNK) {
+      const slice = newDids.slice(i, i + CHUNK);
+      try {
+        await base44.asServiceRole.entities.DID.bulkCreate(slice);
+        inserted += slice.length;
+      } catch (e) {
+        console.error(`[fetchSmartfloDIDs] bulkCreate chunk ${i}-${i + slice.length} failed: ${e.message}`);
       }
     }
-
-    if (newDids.length > 0) {
-      await base44.asServiceRole.entities.DID.bulkCreate(newDids);
-    }
+    console.log(`[fetchSmartfloDIDs] Inserted ${inserted}/${newDids.length} new DIDs`);
 
     // NOTE: Do NOT logout — token is cached and reused by future calls
 
@@ -130,9 +141,8 @@ Deno.serve(async (req) => {
       success: true,
       total_dids: didsArray.length,
       existing_dids: existingDids.length,
-      new_dids_added: newDids.length,
-      dids_in_smartflo: didsArray.map(d => d.did || d.alias),
-      message: `Successfully synced ${newDids.length} new DIDs from Smartflo (${didsArray.length} total in Smartflo)`
+      new_dids_added: inserted,
+      message: `Successfully synced ${inserted} new DIDs from Smartflo (${didsArray.length} total in Smartflo, ${existingDids.length} already in DB)`
     });
 
   } catch (error) {
