@@ -1,5 +1,38 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
 
+// ─── Smartflo token cache (module-level, shared across WebSocket sessions in this isolate) ───
+// Smartflo locks the account if you log in too frequently. Cache the JWT and reuse it.
+const SMARTFLO_TOKEN_TTL_MS = 50 * 60 * 1000;
+let _smartfloTokenCache = { token: null, expiresAt: 0, inFlight: null };
+
+async function getSmartfloToken(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && _smartfloTokenCache.token && _smartfloTokenCache.expiresAt > now) {
+    return _smartfloTokenCache.token;
+  }
+  if (_smartfloTokenCache.inFlight) return _smartfloTokenCache.inFlight;
+  const sfE = Deno.env.get('SMARTFLO_EMAIL'), sfP = Deno.env.get('SMARTFLO_PASSWORD');
+  if (!sfE || !sfP) return null;
+  _smartfloTokenCache.inFlight = (async () => {
+    try {
+      const lr = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ email: sfE, password: sfP })
+      });
+      const ld = await lr.json();
+      const tk = ld.access_token || ld.token;
+      if (!lr.ok || !tk) { console.error(`[Smartflo] Login failed: ${lr.status}`); return null; }
+      _smartfloTokenCache.token = tk;
+      _smartfloTokenCache.expiresAt = Date.now() + SMARTFLO_TOKEN_TTL_MS;
+      console.log(`[Smartflo] ✅ New token cached (valid 50min)`);
+      return tk;
+    } catch (e) { console.error(`[Smartflo] Login error: ${e.message}`); return null; }
+    finally { _smartfloTokenCache.inFlight = null; }
+  })();
+  return _smartfloTokenCache.inFlight;
+}
+
 // ═══════════════════════════════════════════════════════════════
 // streamAudioInbound — DEDICATED inbound WSS handler
 //
@@ -313,15 +346,9 @@ Deno.serve(async (req) => {
     console.log(`[${reqId}] 📴 Hangup: ${reason}`);
     session._callEnded = true;
     try {
-      const sfE = Deno.env.get('SMARTFLO_EMAIL'), sfP = Deno.env.get('SMARTFLO_PASSWORD');
-      if (sfE && sfP) {
-        const lr = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ email: sfE, password: sfP })
-        });
-        const ld = await lr.json();
-        const tk = ld.access_token || ld.token;
-        if (tk) {
+      const tk = await getSmartfloToken();
+      if (tk) {
+        {
           const liveCallId = await findLiveCallId(tk);
           const candidates = [...new Set([liveCallId, session.smartfloCallId, session.callSid].filter(Boolean))];
           for (const candidateId of candidates) {
@@ -332,6 +359,8 @@ Deno.serve(async (req) => {
             if (hr.ok) break;
           }
         }
+      } else {
+        console.error(`[${reqId}] ⚠️ Smartflo token unavailable for hangup`);
       }
     } catch (e) { console.error(`[${reqId}] ⚠️ Hangup: ${e.message}`); }
     if (session.realtimeWs?.readyState === WebSocket.OPEN) session.realtimeWs.close();
@@ -393,14 +422,10 @@ Deno.serve(async (req) => {
     if (functionName === 'transfer_to_human' && session.humanTransferNumber) {
       try {
         const args = JSON.parse(argsStr);
-        const sfEmail = Deno.env.get('SMARTFLO_EMAIL'), sfPassword = Deno.env.get('SMARTFLO_PASSWORD');
-        if (!sfEmail || !sfPassword) { result = { error: 'Transfer not configured' }; }
+        const tk = await getSmartfloToken();
+        if (!tk) { result = { error: 'Smartflo authentication failed' }; }
         else {
-          const lr = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' }, body: JSON.stringify({ email: sfEmail, password: sfPassword }) });
-          const ld = await lr.json();
-          const tk = ld.access_token || ld.token;
-          if (!lr.ok || !tk) { result = { error: 'Smartflo login failed' }; }
-          else {
+          {
             const txCallId = await findLiveCallId(tk) || session.smartfloCallId || session.callSid;
             const tr = await fetch('https://api-smartflo.tatateleservices.com/v1/call/options', { method: 'POST', headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': `Bearer ${tk}` }, body: JSON.stringify({ type: 4, call_id: txCallId, intercom: String(session.humanTransferNumber) }) });
             const td = await tr.json();

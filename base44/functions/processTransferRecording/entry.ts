@@ -1,5 +1,37 @@
 import { createClient } from 'npm:@base44/sdk@0.8.23';
 
+// ─── Smartflo token cache (module-level) ───
+const SMARTFLO_TOKEN_TTL_MS = 50 * 60 * 1000;
+let _smartfloTokenCache = { token: null, expiresAt: 0, inFlight: null };
+
+async function getSmartfloToken(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && _smartfloTokenCache.token && _smartfloTokenCache.expiresAt > now) {
+    return _smartfloTokenCache.token;
+  }
+  if (_smartfloTokenCache.inFlight) return _smartfloTokenCache.inFlight;
+  const sfE = Deno.env.get('SMARTFLO_EMAIL'), sfP = Deno.env.get('SMARTFLO_PASSWORD');
+  if (!sfE || !sfP) return null;
+  _smartfloTokenCache.inFlight = (async () => {
+    try {
+      const lr = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+        body: JSON.stringify({ email: sfE, password: sfP })
+      });
+      const ld = await lr.json();
+      const tk = ld.access_token || ld.token;
+      if (!lr.ok || !tk) { console.error(`[Smartflo] Login failed: ${lr.status}`); return null; }
+      _smartfloTokenCache.token = tk;
+      _smartfloTokenCache.expiresAt = Date.now() + SMARTFLO_TOKEN_TTL_MS;
+      console.log(`[Smartflo] ✅ New token cached (valid 50min)`);
+      return tk;
+    } catch (e) { console.error(`[Smartflo] Login error: ${e.message}`); return null; }
+    finally { _smartfloTokenCache.inFlight = null; }
+  })();
+  return _smartfloTokenCache.inFlight;
+}
+
 // Process the FULL recording from Smartflo for calls that were transferred to a human agent.
 // The AI's WebSocket only captured the pre-transfer transcript. Smartflo records the ENTIRE call
 // including the human agent portion. This function fetches that full recording, transcribes it,
@@ -41,26 +73,14 @@ Deno.serve(async (req) => {
     // Smartflo may require auth to download — try with and without JWT
     let audioResponse = await fetch(callLog.recording_url);
 
-    // If direct download fails, try with Smartflo JWT auth
+    // If direct download fails, try with Smartflo JWT auth (cached token)
     if (!audioResponse.ok) {
       console.log(`[processTransferRecording] Direct download failed (${audioResponse.status}), trying with Smartflo auth...`);
-      const sfEmail = Deno.env.get('SMARTFLO_EMAIL');
-      const sfPassword = Deno.env.get('SMARTFLO_PASSWORD');
-
-      if (sfEmail && sfPassword) {
-        const loginResp = await fetch('https://api-smartflo.tatateleservices.com/v1/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-          body: JSON.stringify({ email: sfEmail, password: sfPassword })
+      const token = await getSmartfloToken();
+      if (token) {
+        audioResponse = await fetch(callLog.recording_url, {
+          headers: { 'Authorization': `Bearer ${token}` }
         });
-        const loginData = await loginResp.json();
-        const token = loginData.access_token || loginData.token;
-
-        if (token) {
-          audioResponse = await fetch(callLog.recording_url, {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-        }
       }
 
       if (!audioResponse.ok) {
