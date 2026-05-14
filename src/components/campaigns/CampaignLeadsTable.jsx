@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,7 +11,9 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Eye, Mail, Phone, Clock, PhoneCall } from 'lucide-react';
+import { Eye, Mail, Phone, Clock, PhoneCall, ChevronLeft, ChevronRight } from 'lucide-react';
+
+const PAGE_SIZE = 50;
 
 const statusColors = {
   pending: 'bg-gray-100 text-gray-700',
@@ -55,12 +57,21 @@ const callStatusLabels = {
 export default function CampaignLeadsTable({ campaignLeads }) {
   const [selected, setSelected] = useState(null);
   const [filter, setFilter] = useState('all');
+  const [page, setPage] = useState(1);
 
-  const filtered = campaignLeads.filter(cl => {
+  const filtered = useMemo(() => campaignLeads.filter(cl => {
     if (filter === 'all') return true;
     if (filter === 'has_transcript') return !!cl.transcript;
     return cl.outcome === filter || cl.status === filter;
-  });
+  }), [campaignLeads, filter]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+
+  // Reset to page 1 when filter changes
+  useEffect(() => { setPage(1); }, [filter]);
 
   const formatDuration = (s) => {
     if (!s) return '-';
@@ -110,7 +121,7 @@ export default function CampaignLeadsTable({ campaignLeads }) {
                    <TableCell colSpan={8} className="text-center text-gray-500">No leads match filter</TableCell>
                 </TableRow>
               ) : (
-                filtered.map(cl => (
+                pageRows.map(cl => (
                   <TableRow key={cl.id}>
                     <TableCell className="font-medium">{cl.lead_name || '-'}</TableCell>
                     <TableCell>{cl.lead_phone}</TableCell>
@@ -153,6 +164,36 @@ export default function CampaignLeadsTable({ campaignLeads }) {
               )}
             </TableBody>
           </Table>
+
+          {/* Pagination */}
+          {filtered.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <p className="text-sm text-gray-600">
+                Showing {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, filtered.length)} of {filtered.length}
+              </p>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="w-4 h-4" /> Prev
+                </Button>
+                <span className="text-sm font-medium px-2">
+                  Page {currentPage} / {totalPages}
+                </span>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 

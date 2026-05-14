@@ -73,16 +73,26 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
   });
 
   const toggleLead = (id) => {
-    setSelectedLeads(prev =>
-      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-    );
+    setSelectedLeads(prev => {
+      if (prev.includes(id)) return prev.filter(x => x !== id);
+      if (prev.length >= 5000) {
+        toast.error('Campaign limit reached (5000 leads). Remove one to add another.');
+        return prev;
+      }
+      return [...prev, id];
+    });
   };
 
   const selectAll = () => {
     if (selectedLeads.length === filteredLeads.length) {
       setSelectedLeads([]);
     } else {
-      setSelectedLeads(filteredLeads.map(l => l.id));
+      // Cap at 5000 leads per campaign
+      const capped = filteredLeads.slice(0, 5000).map(l => l.id);
+      if (filteredLeads.length > 5000) {
+        toast.warning(`Selected first 5000 of ${filteredLeads.length} leads (campaign limit).`);
+      }
+      setSelectedLeads(capped);
     }
   };
 
@@ -90,6 +100,9 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
     e.preventDefault();
     if (!form.agent_id) return toast.error('Select an agent');
     if (selectedLeads.length === 0) return toast.error('Select at least one lead');
+    if (selectedLeads.length > 5000) {
+      return toast.error(`Each campaign is limited to 5000 leads. You selected ${selectedLeads.length}. Please split into multiple campaigns.`);
+    }
 
     let scheduledISO = null;
     if (scheduleEnabled) {
@@ -328,7 +341,10 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
           {/* Lead Selection */}
           <div className="border rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <p className="font-semibold text-sm text-gray-700">Select Leads ({selectedLeads.length} selected)</p>
+              <p className="font-semibold text-sm text-gray-700">
+                Select Leads ({selectedLeads.length} / 5000 max)
+                {selectedLeads.length >= 5000 && <span className="ml-2 text-red-600 text-xs">⚠ Limit reached</span>}
+              </p>
               <div className="flex gap-2 flex-wrap">
                 <Select value={groupFilter} onValueChange={setGroupFilter}>
                   <SelectTrigger className="w-40 h-8"><SelectValue placeholder="Group" /></SelectTrigger>
