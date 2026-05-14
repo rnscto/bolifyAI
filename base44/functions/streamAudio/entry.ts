@@ -759,18 +759,29 @@ Deno.serve(async (req) => {
             sendToRealtime({ type: 'response.create' });
             return;
           }
-          // Use live_calls to find real PBX call_id for transfer
-          const txCallId = await findLiveCallId(smartfloToken) || session.smartfloCallId || session.callSid;
+          // Use live_calls to find real PBX call_id for transfer (REQUIRED — call_sid won't work)
+          const liveCallId = await findLiveCallId(smartfloToken);
+          const txCallId = liveCallId || session.smartfloCallId || session.callSid;
+          if (!liveCallId) {
+            console.warn(`[${reqId}] ⚠️ No live_calls match — using fallback id=${txCallId}. Transfer may fail if call_sid != PBX call_id.`);
+          }
+
+          const transferBody = { type: 4, call_id: txCallId, intercom: String(session.humanTransferNumber).trim() };
+          console.log(`[${reqId}] 📞 Transfer body: ${JSON.stringify(transferBody)}`);
+
           const transferResp = await fetch('https://api-smartflo.tatateleservices.com/v1/call/options', {
             method: 'POST',
             headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': `Bearer ${smartfloToken}` },
-            body: JSON.stringify({ type: 4, call_id: txCallId, intercom: String(session.humanTransferNumber) })
+            body: JSON.stringify(transferBody)
           });
 
-          const transferData = await transferResp.json();
-          console.log(`[${reqId}] 📞 Transfer API response: ${transferResp.status}`, JSON.stringify(transferData));
+          const transferData = await transferResp.json().catch(() => ({}));
+          console.log(`[${reqId}] 📞 Transfer API response: HTTP ${transferResp.status}`, JSON.stringify(transferData));
 
-          if (transferResp.ok) {
+          // Smartflo can return HTTP 200 with success:false in body — treat that as failure
+          const smartfloSuccess = transferResp.ok && transferData.success !== false && !transferData.error;
+
+          if (smartfloSuccess) {
             result = { success: true, message: 'Call is being transferred to a human agent. The customer will be connected shortly.' };
 
             // Update CallLog with transfer info (fire-and-forget)
@@ -785,8 +796,9 @@ Deno.serve(async (req) => {
             // Add to transcript
             session.transcript.push({ speaker: 'System', text: `[Call transferred to human agent. Reason: ${reason}]` });
           } else {
-            result = { error: `Transfer failed: ${transferData.message || transferResp.status}` };
-            console.error(`[${reqId}] ❌ Transfer failed:`, transferData);
+            const errMsg = transferData.message || transferData.error || transferData.detail || `HTTP ${transferResp.status}`;
+            result = { error: `Transfer to extension ${session.humanTransferNumber} failed: ${errMsg}. Please inform the customer you cannot transfer and offer to take a message instead.` };
+            console.error(`[${reqId}] ❌ Transfer FAILED (HTTP ${transferResp.status}): ${errMsg}`, JSON.stringify(transferData));
           }
         }
       } catch (err) {
