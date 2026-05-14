@@ -38,6 +38,10 @@ export default function EmailSetup({ config, onSave }) {
   const fields = currentProvider?.fields || [];
 
   const handleTest = async () => {
+    if (!testRecipient) {
+      toast.error('Enter a test recipient email first');
+      return;
+    }
     setTesting(true);
     const res = await base44.functions.invoke('testMessagingConnection', {
       channel: 'email',
@@ -48,8 +52,24 @@ export default function EmailSetup({ config, onSave }) {
         email_from_address: fromAddress, email_from_name: fromName, email_domain: domain
       }
     });
-    if (res.data.success) toast.success(res.data.message);
-    else toast.error(res.data.error || 'Connection failed');
+    if (res.data.success) {
+      toast.success(res.data.message);
+      // Auto-save with 'connected' status on successful test
+      await onSave({
+        email_provider: provider, email_api_key: apiKey,
+        email_smtp_host: smtpHost, email_smtp_port: smtpPort, email_smtp_user: smtpUser, email_smtp_pass: smtpPass,
+        email_from_address: fromAddress, email_from_name: fromName, email_domain: domain,
+        email_status: 'connected',
+      });
+    } else {
+      toast.error(res.data.error || 'Connection failed');
+      await onSave({
+        email_provider: provider, email_api_key: apiKey,
+        email_smtp_host: smtpHost, email_smtp_port: smtpPort, email_smtp_user: smtpUser, email_smtp_pass: smtpPass,
+        email_from_address: fromAddress, email_from_name: fromName, email_domain: domain,
+        email_status: 'error',
+      });
+    }
     setTesting(false);
   };
 
@@ -59,8 +79,9 @@ export default function EmailSetup({ config, onSave }) {
       email_provider: provider, email_api_key: apiKey,
       email_smtp_host: smtpHost, email_smtp_port: smtpPort, email_smtp_user: smtpUser, email_smtp_pass: smtpPass,
       email_from_address: fromAddress, email_from_name: fromName, email_domain: domain,
-      email_status: provider === 'none' ? 'disconnected' : config?.email_status || 'disconnected',
+      email_status: provider === 'none' ? 'disconnected' : (config?.email_status || 'disconnected'),
     });
+    toast.success('Settings saved. Run "Send Test Email" to verify and mark as connected.');
     setSaving(false);
   };
 

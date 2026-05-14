@@ -253,13 +253,49 @@ Deno.serve(async (req) => {
       const fromAddr = config.email_from_address || 'noreply@vaaniai.io';
       const fromName = config.email_from_name || 'VaaniAI';
 
-      if (provider === 'smtp') {
-        // For SMTP we can't natively test in Deno easily, so we validate the fields and try a fetch-based SMTP relay
+      if (provider === 'smtp' || provider === 'ses') {
+        // Actually test the SMTP connection by sending a real test email via the emailjs library
         if (!config.email_smtp_host || !config.email_smtp_user || !config.email_smtp_pass) {
           return Response.json({ success: false, error: 'SMTP host, username, and password are required' });
         }
-        // We'll report config looks valid — actual SMTP test requires a mailer lib
-        return Response.json({ success: true, message: 'SMTP credentials saved. Full test will run on next email send.', note: 'SMTP connection validated on first send.' });
+        if (!testTo) {
+          return Response.json({ success: false, error: 'Test recipient email is required to verify the SMTP connection' });
+        }
+        try {
+          const { SMTPClient } = await import('npm:emailjs@4.0.3');
+          const port = parseInt(config.email_smtp_port) || 587;
+          // Port 465 = implicit SSL; 587/25 = STARTTLS
+          const useSSL = port === 465;
+          const client = new SMTPClient({
+            user: config.email_smtp_user,
+            password: config.email_smtp_pass,
+            host: config.email_smtp_host,
+            port,
+            ssl: useSSL,
+            tls: !useSSL,
+            timeout: 15000
+          });
+          const html = '<div style="font-family:Arial;padding:20px;"><h2>SMTP Connection Successful! ✅</h2><p>Your SMTP email integration with Bolify AI is configured correctly.</p><p style="color:#666;font-size:12px;">— Bolify AI Platform</p></div>';
+          const message = await client.sendAsync({
+            from: `${fromName} <${fromAddr || config.email_smtp_user}>`,
+            to: testTo,
+            subject: '✅ Bolify AI SMTP Connection Test',
+            attachment: [{ data: html, alternative: true }]
+          });
+          return Response.json({
+            success: true,
+            message: `SMTP connected! Test email sent to ${testTo}`,
+            message_id: message?.header?.['message-id'] || null
+          });
+        } catch (smtpErr) {
+          console.error('[testMessagingConnection/smtp] SMTP error:', smtpErr?.message, smtpErr?.code, smtpErr?.smtp);
+          let hint = '';
+          const msg = (smtpErr?.message || '').toLowerCase();
+          if (msg.includes('auth') || msg.includes('535') || msg.includes('credential')) hint = ' (Check username/password — for Gmail use an App Password, not your account password.)';
+          else if (msg.includes('connect') || msg.includes('timeout') || msg.includes('econn')) hint = ' (Cannot reach SMTP host — verify host & port. Try 587 for STARTTLS or 465 for SSL.)';
+          else if (msg.includes('tls') || msg.includes('ssl')) hint = ' (TLS mismatch — port 465 needs SSL, port 587 needs STARTTLS.)';
+          return Response.json({ success: false, error: `SMTP test failed: ${smtpErr?.message || smtpErr}${hint}` });
+        }
       }
 
       if (provider === 'resend') {
@@ -317,10 +353,6 @@ Deno.serve(async (req) => {
           return Response.json({ success: true, message: `Email (Mailgun) connected! Test sent to ${testTo}` });
         }
         return Response.json({ success: false, error: data.message || JSON.stringify(data) });
-      }
-
-      if (provider === 'ses') {
-        return Response.json({ success: false, error: 'AWS SES requires IAM credentials. Please use SMTP relay mode with SES SMTP credentials instead.' });
       }
 
       if (provider === 'postmark') {
