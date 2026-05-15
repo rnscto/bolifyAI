@@ -75,23 +75,28 @@ Deno.serve(async (req) => {
     const callPriority = ['call', 'followup'];
     const calls = dueNow.filter(a => callPriority.includes(a.type));
     const others = dueNow.filter(a => !callPriority.includes(a.type));
-    const activities = [...calls, ...others].slice(0, 15);
+    // Cap at 8 per run (down from 15) — fits comfortably in cron's 30s window.
+    // Remaining due activities will be processed in the next 5-minute cycle.
+    const activities = [...calls, ...others].slice(0, 8);
     console.log(`[FollowupEngine] Fetched ${allScheduled.length} unprocessed scheduled, ${dueNow.length} due, processing ${activities.length} (calls=${calls.length})`);
 
-    // Hard time guard — return gracefully before HTTP timeout (cron-job.org default ~30s, we use 50s for safety)
-    const RUN_DEADLINE_MS = 50 * 1000;
+    // Hard time guard — must return BEFORE cron-job.org's 30s HTTP timeout.
+    // We use 22s to leave headroom for response serialization + network.
+    const RUN_DEADLINE_MS = 22 * 1000;
     const runStart = Date.now();
     const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    let stoppedEarly = false;
 
     for (let i = 0; i < activities.length; i++) {
       const activity = activities[i];
       // Stop processing if we're close to the deadline — remaining activities will be picked up next run
       if (Date.now() - runStart > RUN_DEADLINE_MS) {
-        console.log(`[FollowupEngine] Deadline reached (${Math.round((Date.now()-runStart)/1000)}s) — stopping early; remaining activities will run next cycle`);
+        console.log(`[FollowupEngine] Deadline reached (${Math.round((Date.now()-runStart)/1000)}s) at activity ${i+1}/${activities.length} — stopping early; remaining will run next cycle`);
+        stoppedEarly = true;
         break;
       }
-      // Throttle to stay under Base44 SDK rate limit (each activity makes ~10 entity calls)
-      if (i > 0) await sleep(800);
+      // Light throttle — 200ms is enough to stay under Base44 rate limit without burning time budget
+      if (i > 0) await sleep(200);
       // ── Per-activity try/catch so one failure doesn't kill the whole run ──
       try {
         const scheduledDate = new Date(activity.scheduled_date);
@@ -512,8 +517,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    console.log(`[FollowupEngine] Done. Calls:${results.calls_initiated} Emails:${results.emails_sent} Alerts:${results.admin_alerts_sent} Overdue:${results.marked_overdue} Errors:${results.errors.length}`);
-    return Response.json({ success: true, processed: activities.length, ...results });
+    const elapsedSec = Math.round((Date.now() - runStart) / 1000);
+    console.log(`[FollowupEngine] Done in ${elapsedSec}s. Calls:${results.calls_initiated} Emails:${results.emails_sent} Alerts:${results.admin_alerts_sent} Overdue:${results.marked_overdue} Errors:${results.errors.length} StoppedEarly:${stoppedEarly}`);
+    return Response.json({ success: true, processed: activities.length, elapsed_sec: elapsedSec, stopped_early: stoppedEarly, ...results });
 
   } catch (error) {
     console.error('[FollowupEngine] Fatal error:', error);
