@@ -68,6 +68,73 @@ export default function AdminClientLifecycle() {
   const [search, setSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [backfilling, setBackfilling] = useState(false);
+
+  const backfillHistory = async () => {
+    if (!confirm('Generate initial lifecycle events from existing Client records? This creates one entry per client based on current status (activation, trial, billing). Safe to run multiple times — duplicates are skipped.')) return;
+    setBackfilling(true);
+    try {
+      const existing = await base44.entities.ClientLifecycleEvent.list('-created_date', 2000);
+      const existingKeys = new Set(existing.map(e => `${e.client_id}:${e.event_type}:backfill`));
+      const toCreate = [];
+      for (const c of clients) {
+        // Activation event
+        if ((c.account_status === 'active' || c.account_status === 'expired') && !existingKeys.has(`${c.id}:activated:backfill`)) {
+          toCreate.push({
+            client_id: c.id,
+            client_name: c.company_name,
+            event_type: 'activated',
+            to_value: c.account_status,
+            amount: c.billing_type === 'unlimited' ? (c.monthly_rate_per_channel || 0) * (c.total_channels || 1) : null,
+            effective_date: c.created_date,
+            expiry_date: c.next_billing_date || null,
+            billing_type: c.billing_type,
+            subscription_plan: c.subscription_plan,
+            channels: c.total_channels,
+            source: 'system_auto',
+            performed_by: 'backfill',
+            notes: 'Backfilled from existing Client record',
+          });
+        }
+        // Trial event
+        if (c.trial_start_date && !existingKeys.has(`${c.id}:trial_started:backfill`)) {
+          toCreate.push({
+            client_id: c.id,
+            client_name: c.company_name,
+            event_type: 'trial_started',
+            effective_date: c.trial_start_date,
+            expiry_date: c.trial_end_date,
+            source: 'system_auto',
+            performed_by: 'backfill',
+            notes: 'Backfilled trial period',
+          });
+        }
+        // Trial expired
+        if (c.account_status === 'expired' && c.trial_end_date && !existingKeys.has(`${c.id}:trial_expired:backfill`)) {
+          toCreate.push({
+            client_id: c.id,
+            client_name: c.company_name,
+            event_type: 'trial_expired',
+            effective_date: c.trial_end_date,
+            source: 'system_auto',
+            performed_by: 'backfill',
+            notes: 'Backfilled trial expiry',
+          });
+        }
+      }
+      if (toCreate.length === 0) {
+        alert('No new events to backfill — all clients already have history entries.');
+      } else {
+        await base44.entities.ClientLifecycleEvent.bulkCreate(toCreate);
+        alert(`✓ Backfilled ${toCreate.length} lifecycle events across ${clients.length} clients.`);
+        await loadData();
+      }
+    } catch (e) {
+      console.error('Backfill error', e);
+      alert('Backfill failed: ' + e.message);
+    }
+    setBackfilling(false);
+  };
 
   useEffect(() => {
     (async () => {
@@ -212,9 +279,12 @@ export default function AdminClientLifecycle() {
             White-label platform — full activation history, renewals, expiries, and billing changes.
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Button variant="outline" onClick={loadData}>
             <RefreshCw className="w-4 h-4 mr-2" /> Refresh
+          </Button>
+          <Button variant="outline" onClick={backfillHistory} disabled={backfilling}>
+            <History className="w-4 h-4 mr-2" /> {backfilling ? 'Backfilling…' : 'Backfill from Existing Clients'}
           </Button>
           <Button onClick={exportCSV} className="bg-blue-600 hover:bg-blue-700">
             <Download className="w-4 h-4 mr-2" /> Export CSV
