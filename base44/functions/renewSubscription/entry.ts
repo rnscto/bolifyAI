@@ -120,6 +120,28 @@ Deno.serve(async (req) => {
           company: client.company_name,
           amount: sub.total_amount,
         });
+
+        // Log lifecycle event for the renewal trigger
+        try {
+          await base44.entities.ClientLifecycleEvent.create({
+            client_id: sub.client_id,
+            client_name: client.company_name,
+            event_type: 'renewed',
+            from_value: 'active',
+            to_value: 'pending_payment',
+            amount: sub.total_amount || 0,
+            effective_date: new Date().toISOString(),
+            expiry_date: sub.billing_end_date ? new Date(sub.billing_end_date).toISOString() : null,
+            billing_type: client.billing_type,
+            subscription_plan: sub.billing_cycle,
+            channels: sub.channels,
+            source: 'renewal_cron',
+            performed_by: 'system',
+            notes: `Renewal due — payment email sent for ₹${sub.total_amount?.toLocaleString('en-IN')}`,
+          });
+        } catch (logErr) {
+          console.warn('Renewal lifecycle log failed:', logErr.message);
+        }
       }
     }
 

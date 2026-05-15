@@ -153,10 +153,12 @@ export default function Layout({ children, currentPageName }) {
   }
 
   const isAdmin = user?.role === 'admin';
+  const isMainAdmin = isAdmin && user?.email === 'neerajyrns@gmail.com';
 
   const adminNav = [
     { name: 'Dashboard', path: 'AdminDashboard', icon: LayoutDashboard },
     { name: 'Clients', path: 'AdminClients', icon: Users },
+    ...(isMainAdmin ? [{ name: 'Client Lifecycle', path: 'AdminClientLifecycle', icon: ShieldCheck }] : []),
     { name: 'Website Leads', path: 'AdminWebsiteLeads', icon: Globe },
     { name: 'Agents', path: 'AdminAgents', icon: Cpu },
     { name: 'DIDs', path: 'AdminDIDs', icon: Phone },

@@ -1,0 +1,118 @@
+{
+  "name": "ClientLifecycleEvent",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Client this event belongs to"
+    },
+    "client_name": {
+      "type": "string",
+      "description": "Cached client company name for fast listing"
+    },
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "activated",
+        "trial_started",
+        "trial_extended",
+        "trial_expired",
+        "expired",
+        "suspended",
+        "reactivated",
+        "cancelled",
+        "plan_changed",
+        "billing_type_changed",
+        "channels_changed",
+        "rate_changed",
+        "renewed",
+        "wallet_topup",
+        "wallet_adjusted",
+        "next_billing_updated",
+        "kyc_updated",
+        "note"
+      ],
+      "description": "Type of lifecycle event"
+    },
+    "from_value": {
+      "type": "string",
+      "description": "Previous value (for changes)"
+    },
+    "to_value": {
+      "type": "string",
+      "description": "New value (for changes)"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Monetary amount in INR if relevant (top-up, renewal total, etc.)"
+    },
+    "effective_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When this event takes effect"
+    },
+    "expiry_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the resulting state expires (trial end / next billing)"
+    },
+    "billing_type": {
+      "type": "string",
+      "description": "Snapshot of billing_type at event time"
+    },
+    "subscription_plan": {
+      "type": "string",
+      "description": "Snapshot of subscription_plan at event time"
+    },
+    "channels": {
+      "type": "number",
+      "description": "Snapshot of total_channels at event time"
+    },
+    "performed_by": {
+      "type": "string",
+      "description": "Email of the admin / system that performed the action"
+    },
+    "source": {
+      "type": "string",
+      "enum": [
+        "admin_manual",
+        "system_auto",
+        "client_self",
+        "renewal_cron",
+        "payment_webhook"
+      ],
+      "default": "admin_manual",
+      "description": "Origin of the event"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Free-form notes / reason"
+    }
+  },
+  "required": [
+    "client_id",
+    "event_type"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

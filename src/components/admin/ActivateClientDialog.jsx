@@ -68,6 +68,116 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
 
     await base44.entities.Client.update(client.id, updateData);
 
+    // ─── Log lifecycle events for audit/history ───
+    try {
+      const me = await base44.auth.me();
+      const performedBy = me?.email || 'admin';
+      const nowIso = new Date().toISOString();
+      const baseEvt = {
+        client_id: client.id,
+        client_name: client.company_name,
+        source: 'admin_manual',
+        performed_by: performedBy,
+        effective_date: nowIso,
+        billing_type: updateData.billing_type,
+        subscription_plan: updateData.subscription_plan,
+        channels: updateData.total_channels,
+      };
+      const eventsToLog = [];
+
+      // 1. Account status change
+      if (client.account_status !== updateData.account_status) {
+        const statusEventMap = {
+          active: client.account_status && client.account_status !== 'onboarding' ? 'reactivated' : 'activated',
+          trial: 'trial_started',
+          expired: 'expired',
+          suspended: 'suspended',
+          onboarding: 'note',
+        };
+        eventsToLog.push({
+          ...baseEvt,
+          event_type: statusEventMap[updateData.account_status] || 'note',
+          from_value: client.account_status || 'unknown',
+          to_value: updateData.account_status,
+          expiry_date: updateData.account_status === 'trial' ? updateData.trial_end_date : (updateData.next_billing_date ? new Date(updateData.next_billing_date).toISOString() : null),
+          notes: `Account status changed by admin`,
+        });
+      }
+
+      // 2. Billing type change
+      if (client.billing_type !== updateData.billing_type) {
+        eventsToLog.push({
+          ...baseEvt,
+          event_type: 'billing_type_changed',
+          from_value: client.billing_type || 'per_minute',
+          to_value: updateData.billing_type,
+        });
+      }
+
+      // 3. Plan change
+      if (client.subscription_plan !== updateData.subscription_plan) {
+        eventsToLog.push({
+          ...baseEvt,
+          event_type: 'plan_changed',
+          from_value: client.subscription_plan || '—',
+          to_value: updateData.subscription_plan,
+        });
+      }
+
+      // 4. Channels change
+      if ((client.total_channels || 1) !== updateData.total_channels) {
+        eventsToLog.push({
+          ...baseEvt,
+          event_type: 'channels_changed',
+          from_value: String(client.total_channels || 1),
+          to_value: String(updateData.total_channels),
+        });
+      }
+
+      // 5. Per-minute rate change
+      if ((client.per_minute_rate || 4) !== updateData.per_minute_rate) {
+        eventsToLog.push({
+          ...baseEvt,
+          event_type: 'rate_changed',
+          from_value: `₹${client.per_minute_rate || 4}/min`,
+          to_value: `₹${updateData.per_minute_rate}/min`,
+        });
+      }
+
+      // 6. Next billing date update
+      if (updateData.next_billing_date && client.next_billing_date !== updateData.next_billing_date) {
+        eventsToLog.push({
+          ...baseEvt,
+          event_type: 'next_billing_updated',
+          from_value: client.next_billing_date || '—',
+          to_value: updateData.next_billing_date,
+          expiry_date: new Date(updateData.next_billing_date).toISOString(),
+        });
+      }
+
+      // 7. Wallet adjustment (top-up handled below with amount)
+      const oldBal = parseFloat(client.wallet_balance) || 0;
+      const newBal = updateData.wallet_balance;
+      const delta = newBal - oldBal;
+      if (Math.abs(delta) > 0.01) {
+        eventsToLog.push({
+          ...baseEvt,
+          event_type: delta > 0 ? 'wallet_topup' : 'wallet_adjusted',
+          from_value: `₹${oldBal.toLocaleString()}`,
+          to_value: `₹${newBal.toLocaleString()}`,
+          amount: Math.abs(delta),
+          notes: delta > 0 ? `Wallet credited ₹${delta}` : `Wallet debited ₹${Math.abs(delta)}`,
+        });
+      }
+
+      // Write all events in parallel
+      if (eventsToLog.length > 0) {
+        await Promise.all(eventsToLog.map(ev => base44.entities.ClientLifecycleEvent.create(ev).catch(err => console.warn('Lifecycle log failed:', err))));
+      }
+    } catch (logErr) {
+      console.warn('Lifecycle logging failed:', logErr);
+    }
+
     // If admin increased the wallet balance, log it as an admin top-up Payment + UsageLog
     const oldBalance = parseFloat(client.wallet_balance) || 0;
     const newBalance = parseFloat(form.wallet_balance) || 0;
