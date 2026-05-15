@@ -211,7 +211,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
     if (form.account_status === 'active' && form.billing_type === 'unlimited' && form.next_billing_date) {
       const channels = parseInt(form.total_channels) || 1;
       const rate = parseFloat(form.monthly_rate_per_channel) || 6500;
-      const billingMonths = form.subscription_plan === 'quarterly' ? 3 : 1;
+      const billingMonths = form.subscription_plan === 'yearly' ? 12 : form.subscription_plan === 'quarterly' ? 3 : 1;
       const totalAmount = channels * rate * billingMonths;
 
       const billingStart = new Date().toISOString().split('T')[0];
@@ -372,6 +372,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
                     <SelectContent>
                       <SelectItem value="monthly">Monthly</SelectItem>
                       <SelectItem value="quarterly">Quarterly</SelectItem>
+                      <SelectItem value="yearly">Yearly</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -408,8 +409,8 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
               </div>
 
               {(() => {
-                const months = form.subscription_plan === 'monthly' ? 1 : 3;
-                const cycleLabel = form.subscription_plan === 'monthly' ? 'month' : 'quarter';
+                const months = form.subscription_plan === 'yearly' ? 12 : form.subscription_plan === 'quarterly' ? 3 : 1;
+                const cycleLabel = form.subscription_plan === 'yearly' ? 'year' : form.subscription_plan === 'quarterly' ? 'quarter' : 'month';
                 const total = (parseInt(form.total_channels) || 1) * (parseFloat(form.monthly_rate_per_channel) || 6500) * months;
                 return (
                   <div className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
