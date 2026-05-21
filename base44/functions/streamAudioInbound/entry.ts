@@ -545,16 +545,40 @@ Deno.serve(async (req) => {
       synthesizeWithAzureSpeech(greeting);
       applySessionConfig();
     } else {
-      // VOICE STABILITY FIX: don't re-send `voice` or change `instructions` mid-greeting —
-      // it causes the Realtime model to drift tone/accent. Voice was already locked on the
-      // initial session.update right after session.created. Just queue the greeting.
+      // VOICE LOCK: send the FULL Phase-2 config (voice + final instructions + tools) in a
+      // SINGLE session.update BEFORE any assistant audio is generated. After this, Azure
+      // refuses voice changes ("cannot_update_voice").
+      const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+      const timeInjection = `\n[LIVE CLOCK] Current IST: ${nowIST}.\n`;
+      const noiseHandling = `\n[AUDIO RULES] Phone call. Only respond to clear speech. Ignore garbled/short utterances. Keep replies 1-2 sentences.\n`;
+      let transferInstr = '';
+      if (session.humanTransferNumber && session.enableAutoTransfer) {
+        transferInstr = `\n\nUse transfer_to_human when caller explicitly asks for a human or for complex issues. Confirm before transferring.`;
+      }
+      const tools = buildToolDefinitions();
+      const fullCfg = {
+        modalities: ['text', 'audio'],
+        voice: session.voiceType,
+        output_audio_format: 'pcm16',
+        instructions: timeInjection + noiseHandling + session.systemPrompt + transferInstr
+      };
+      if (tools.length > 0) { fullCfg.tools = tools; fullCfg.tool_choice = 'auto'; }
+      sendToRealtime({ type: 'session.update', session: fullCfg });
+      session._voiceLocked = true;
+      session._phase2Sent = true;
+      console.log(`[${reqId}] 🔒 Voice locked: ${session.voiceType}, prompt=${session.systemPrompt.length}ch, tools=${tools.length}`);
       sendToRealtime({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '[SYSTEM: Say this exact greeting: "' + greeting + '"]' }] } });
       sendToRealtime({ type: 'response.create' });
-      setTimeout(() => applySessionConfig(), 200);
     }
   }
 
   function applySessionConfig() {
+    // VOICE LOCK GUARD: triggerPhase1Greeting() already sent the full Phase-2 config.
+    // Sending another session.update with `voice` would be rejected by Azure.
+    if (session._phase2Sent && session.voiceEngine !== 'azure_speech') {
+      console.log(`[${reqId}] ✅ Phase 2 already sent — skipping redundant config`);
+      return;
+    }
     const isHybrid = session.voiceEngine === 'azure_speech';
     const tools = buildToolDefinitions();
     const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
@@ -603,7 +627,9 @@ Deno.serve(async (req) => {
       } else if (session._fastConfigReady) {
         triggerPhase1Greeting();
       } else {
-        sendToRealtime({ type: 'session.update', session: { input_audio_format: 'pcm16', output_audio_format: 'pcm16', input_audio_transcription: { model: 'whisper-1' }, modalities: ['text', 'audio'], voice: 'alloy', instructions: 'You are a friendly AI voice assistant. Wait for further instructions.', turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } }});
+        // Minimal pre-config WITHOUT voice/modalities. The voice will be set exactly ONCE
+        // when triggerPhase1Greeting() fires the full Phase-2 session.update.
+        sendToRealtime({ type: 'session.update', session: { input_audio_format: 'pcm16', input_audio_transcription: { model: 'whisper-1' }, turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } }});
       }
       return;
     }

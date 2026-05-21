@@ -1004,19 +1004,46 @@ Deno.serve(async (req) => {
       synthesizeWithAzureSpeech(greeting);
       applySessionConfig(); // Phase 2 immediately (hybrid doesn't need delay)
     } else {
-      console.log(`[${reqId}] ⚡ P1 realtime greeting: "${greeting.substring(0, 60)}"`);
-      // VOICE STABILITY FIX: Do NOT send a new session.update here. The voice was already
-      // locked on the initial session.update (from session.created handler). Re-sending
-      // `voice` or different `instructions` mid-greeting causes the Realtime API to drift
-      // tone/accent. We only inject the greeting message and trigger a response.
+      console.log(`[${reqId}] ⚡ P1 realtime greeting: "${greeting.substring(0, 60)}" (voice=${session.voiceType})`);
+      // VOICE LOCK: send the FULL Phase-2 config (voice + final instructions + tools) in a
+      // SINGLE session.update BEFORE any assistant audio is generated. After this, Azure
+      // refuses voice changes ("cannot_update_voice"), so we must never send `voice` again.
+      const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+      const timeInjection = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}.\n`;
+      const noiseHandling = `\n[AUDIO RULES] You are on a PHONE CALL in India. Only respond to CLEAR human speech. IGNORE background noise, garbled audio, TV, traffic, or random short syllables. NEVER end a call based on noise. Keep replies SHORT (1-2 sentences).\n`;
+      let transferInstr = '';
+      if (session.humanTransferNumber && session.enableAutoTransfer) {
+        transferInstr = `\n\nYou can transfer to a human via transfer_to_human when the caller explicitly asks or you cannot resolve their issue. Always inform the caller before transferring.`;
+      }
+      const tools = buildToolDefinitions();
+      const fullCfg = {
+        modalities: ['text', 'audio'],
+        voice: session.voiceType,
+        output_audio_format: 'pcm16',
+        instructions: timeInjection + noiseHandling + session.systemPrompt + transferInstr
+      };
+      if (tools.length > 0) { fullCfg.tools = tools; fullCfg.tool_choice = 'auto'; }
+      sendToRealtime({ type: 'session.update', session: fullCfg });
+      session._voiceLocked = true;
+      session._phase2Sent = true;
+      console.log(`[${reqId}] 🔒 Voice locked: ${session.voiceType}, prompt=${session.systemPrompt.length}ch, tools=${tools.length}`);
+
+      // Now inject the greeting and trigger response.
       sendToRealtime({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '[SYSTEM: Say this exact greeting: "' + greeting + '"]' }] } });
       sendToRealtime({ type: 'response.create' });
-      setTimeout(() => applySessionConfig(), 200); // Phase 2 after greeting starts generating
     }
   }
 
   // ─── PHASE 2 / Full config: Apply complete system prompt, KB, tools ───
   function applySessionConfig() {
+    // VOICE LOCK GUARD: triggerPhase1Greeting() already sent the full Phase-2 config
+    // (voice + instructions + tools) as a single session.update BEFORE assistant audio
+    // started. Sending another session.update with `voice` would be rejected by Azure
+    // ("cannot_update_voice"). Skip entirely for realtime mode in that case.
+    if (session._phase2Sent && session.voiceEngine !== 'azure_speech') {
+      console.log(`[${reqId}] ✅ Phase 2 already sent in greeting — skipping redundant config`);
+      return;
+    }
     const isHybrid = session.voiceEngine === 'azure_speech';
     const tools = buildToolDefinitions();
     const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
@@ -1095,17 +1122,17 @@ Deno.serve(async (req) => {
         console.log(`[${reqId}] ⚡ Fast config ready before Realtime — triggering Phase 1 greeting`);
         triggerPhase1Greeting();
       } else {
-        // Realtime connected first — send minimal config so audio can flow
+        // Realtime connected first — send minimal config WITHOUT voice/modalities.
+        // We deliberately DO NOT set `voice` here. The voice will be set exactly ONCE
+        // in triggerPhase1Greeting() / applySessionConfig() once agent config arrives,
+        // and the `_voiceLocked` flag will prevent any later re-send (Azure rejects
+        // voice changes once assistant audio is present).
         sendToRealtime({ type: 'session.update', session: {
           input_audio_format: 'pcm16',
-          output_audio_format: 'pcm16',
           input_audio_transcription: { model: 'whisper-1' },
-          modalities: ['text', 'audio'],
-          voice: 'alloy',
-          instructions: 'You are a friendly AI voice assistant. Be professional and concise. Wait for the system to provide further instructions before speaking. IMPORTANT: Ignore any background noise or unclear audio — only respond to clear human speech directed at you.',
           turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 }
         }});
-        console.log(`[${reqId}] 📤 Minimal config sent (waiting for agent config before greeting)`);
+        console.log(`[${reqId}] 📤 Minimal pre-config sent (no voice/modalities yet — waiting for agent config)`);
       }
       return;
     }
