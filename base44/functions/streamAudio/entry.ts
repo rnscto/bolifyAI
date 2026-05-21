@@ -1005,7 +1005,10 @@ Deno.serve(async (req) => {
       applySessionConfig(); // Phase 2 immediately (hybrid doesn't need delay)
     } else {
       console.log(`[${reqId}] ⚡ P1 realtime greeting: "${greeting.substring(0, 60)}"`);
-      sendToRealtime({ type: 'session.update', session: { input_audio_format: 'pcm16', output_audio_format: 'pcm16', modalities: ['text', 'audio'], voice: session.voiceType, instructions: 'Say exactly what the user asks. Do not add anything.', turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 }, input_audio_transcription: { model: 'whisper-1', language: 'hi' } }});
+      // VOICE STABILITY FIX: Do NOT send a new session.update here. The voice was already
+      // locked on the initial session.update (from session.created handler). Re-sending
+      // `voice` or different `instructions` mid-greeting causes the Realtime API to drift
+      // tone/accent. We only inject the greeting message and trigger a response.
       sendToRealtime({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '[SYSTEM: Say this exact greeting: "' + greeting + '"]' }] } });
       sendToRealtime({ type: 'response.create' });
       setTimeout(() => applySessionConfig(), 200); // Phase 2 after greeting starts generating
@@ -1035,11 +1038,19 @@ Deno.serve(async (req) => {
     } else {
       sessionConfig.modalities = ['text', 'audio'];
       sessionConfig.instructions = timeInjection + noiseHandling + session.systemPrompt + transferInstructions + greetingGuard;
-      sessionConfig.voice = session.voiceType; sessionConfig.output_audio_format = 'pcm16';
+      sessionConfig.output_audio_format = 'pcm16';
+      // VOICE STABILITY FIX: only include `voice` on the FIRST session.update of this connection.
+      // Re-sending the voice field on subsequent updates can cause the Realtime model to
+      // re-initialize voice characteristics mid-call (tone/accent drift). The voice was
+      // already set on the initial session.update right after session.created.
+      if (!session._voiceLocked) {
+        sessionConfig.voice = session.voiceType;
+        session._voiceLocked = true;
+      }
     }
     if (tools.length > 0) { sessionConfig.tools = tools; sessionConfig.tool_choice = 'auto'; console.log(`[${reqId}] 🔧 ${tools.length} tool(s) registered`); }
     sendToRealtime({ type: 'session.update', session: sessionConfig });
-    console.log(`[${reqId}] 📤 ${session._phase1Applied ? 'P2' : 'Full'} config: engine=${session.voiceEngine}, voice=${session.voiceType}, greetingSent=${session._greetingSent}`);
+    console.log(`[${reqId}] 📤 ${session._phase1Applied ? 'P2' : 'Full'} config: engine=${session.voiceEngine}, voice=${session.voiceType}, greetingSent=${session._greetingSent}, voiceLocked=${session._voiceLocked}`);
     // Trigger greeting only if Phase 1 didn't already send it
     if (!session._greetingSent) triggerGreeting();
   }
@@ -1072,8 +1083,10 @@ Deno.serve(async (req) => {
         } else {
           sessionConfig.modalities = ['text', 'audio'];
           sessionConfig.instructions = timeInjection + session.systemPrompt;
+          // Set voice on reconnect (new connection = new session = needs voice).
           sessionConfig.voice = session.voiceType;
           sessionConfig.output_audio_format = 'pcm16';
+          session._voiceLocked = true;
         }
         if (tools.length > 0) { sessionConfig.tools = tools; sessionConfig.tool_choice = 'auto'; }
         sendToRealtime({ type: 'session.update', session: sessionConfig });

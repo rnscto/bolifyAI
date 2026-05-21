@@ -9,13 +9,12 @@ import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
 import { Loader2, Save } from 'lucide-react';
 import { REALTIME_VOICES, AZURE_SPEECH_VOICES } from './VoiceData';
+import { INDIAN_LANGUAGES } from './IndianLanguages';
+import PromptGeneratorDialog from './PromptGeneratorDialog';
+import { Sparkles } from 'lucide-react';
 
 const TONE_OPTIONS = ['professional', 'friendly', 'formal', 'energetic', 'empathetic'];
-const LANGUAGE_OPTIONS = [
-  { value: 'en-IN', label: 'English (India)' },
-  { value: 'hi-IN', label: 'Hindi' },
-  { value: 'bilingual', label: 'Bilingual (Hindi + English)' },
-];
+const LANGUAGE_OPTIONS = INDIAN_LANGUAGES.map(l => ({ value: l.value, label: l.label }));
 
 export default function AgentEditDialog({ agent, open, onOpenChange, onSaved }) {
   const [form, setForm] = useState({
@@ -26,6 +25,22 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved }) 
     persona: { voice_engine: 'realtime', voice_type: 'alloy', tone: 'friendly', language: 'en-IN' }
   });
   const [saving, setSaving] = useState(false);
+  const [genOpen, setGenOpen] = useState(false);
+
+  const handleApplyGenerated = ({ system_prompt, greeting_message, language, tone, voice_type }) => {
+    setForm(p => ({
+      ...p,
+      system_prompt: system_prompt || p.system_prompt,
+      greeting_message: greeting_message || p.greeting_message,
+      persona: {
+        ...p.persona,
+        language: language || p.persona.language,
+        tone: tone || p.persona.tone,
+        voice_type: voice_type || p.persona.voice_type
+      }
+    }));
+    toast.success('Prompt & persona applied — click Save to keep changes');
+  };
 
   useEffect(() => {
     if (agent && open) {
@@ -162,16 +177,33 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved }) 
 
           {/* System Prompt */}
           <div>
-            <Label>System Prompt / Instructions</Label>
+            <div className="flex items-center justify-between">
+              <Label>System Prompt / Instructions</Label>
+              <Button type="button" variant="outline" size="sm" onClick={() => setGenOpen(true)} className="h-7 gap-1 text-[#0097a7] border-[#0097a7]/30 hover:bg-cyan-50">
+                <Sparkles className="w-3.5 h-3.5" /> Generate with AI
+              </Button>
+            </div>
             <Textarea
               value={form.system_prompt}
               onChange={e => setForm(p => ({ ...p, system_prompt: e.target.value }))}
               placeholder="Instructions for the AI agent..."
               className="mt-1 h-48 font-mono text-xs"
+              maxLength={5000}
             />
-            <p className="text-xs text-gray-500 mt-1">Controls the agent's behavior, personality, and knowledge during calls.</p>
+            <p className="text-xs text-gray-500 mt-1">
+              {form.system_prompt.length} / 5000 chars · Controls the agent's behavior, anti-hallucination rules, language and voice stability.
+            </p>
           </div>
         </div>
+
+        <PromptGeneratorDialog
+          open={genOpen}
+          onOpenChange={setGenOpen}
+          onApply={handleApplyGenerated}
+          defaultLanguage={form.persona.language}
+          defaultTone={form.persona.tone}
+          voiceEngine={form.persona.voice_engine}
+        />
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>

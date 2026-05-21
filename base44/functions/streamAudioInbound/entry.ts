@@ -545,7 +545,9 @@ Deno.serve(async (req) => {
       synthesizeWithAzureSpeech(greeting);
       applySessionConfig();
     } else {
-      sendToRealtime({ type: 'session.update', session: { input_audio_format: 'pcm16', output_audio_format: 'pcm16', modalities: ['text', 'audio'], voice: session.voiceType, instructions: 'Say exactly what the user asks. Do not add anything.', turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 }, input_audio_transcription: { model: 'whisper-1', language: 'hi' } }});
+      // VOICE STABILITY FIX: don't re-send `voice` or change `instructions` mid-greeting —
+      // it causes the Realtime model to drift tone/accent. Voice was already locked on the
+      // initial session.update right after session.created. Just queue the greeting.
       sendToRealtime({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '[SYSTEM: Say this exact greeting: "' + greeting + '"]' }] } });
       sendToRealtime({ type: 'response.create' });
       setTimeout(() => applySessionConfig(), 200);
@@ -572,7 +574,12 @@ Deno.serve(async (req) => {
     } else {
       sessionConfig.modalities = ['text', 'audio'];
       sessionConfig.instructions = timeInjection + noiseHandling + session.systemPrompt + transferInstructions + greetingGuard;
-      sessionConfig.voice = session.voiceType; sessionConfig.output_audio_format = 'pcm16';
+      sessionConfig.output_audio_format = 'pcm16';
+      // VOICE STABILITY FIX: only include `voice` on the FIRST session.update of this connection.
+      if (!session._voiceLocked) {
+        sessionConfig.voice = session.voiceType;
+        session._voiceLocked = true;
+      }
     }
     if (tools.length > 0) { sessionConfig.tools = tools; sessionConfig.tool_choice = 'auto'; }
     sendToRealtime({ type: 'session.update', session: sessionConfig });
@@ -590,7 +597,7 @@ Deno.serve(async (req) => {
         const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
         const sessionConfig = { input_audio_format: 'pcm16', input_audio_transcription: { model: 'whisper-1', language: 'hi' }, turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } };
         if (isHybrid) { sessionConfig.instructions = 'You are a transcription-only assistant.'; sessionConfig.modalities = ['text']; sessionConfig.voice = 'alloy'; }
-        else { sessionConfig.modalities = ['text', 'audio']; sessionConfig.instructions = `\n[LIVE CLOCK] Current IST: ${nowIST}.\n` + session.systemPrompt; sessionConfig.voice = session.voiceType; sessionConfig.output_audio_format = 'pcm16'; }
+        else { sessionConfig.modalities = ['text', 'audio']; sessionConfig.instructions = `\n[LIVE CLOCK] Current IST: ${nowIST}.\n` + session.systemPrompt; sessionConfig.voice = session.voiceType; sessionConfig.output_audio_format = 'pcm16'; session._voiceLocked = true; }
         if (tools.length > 0) { sessionConfig.tools = tools; sessionConfig.tool_choice = 'auto'; }
         sendToRealtime({ type: 'session.update', session: sessionConfig });
       } else if (session._fastConfigReady) {
