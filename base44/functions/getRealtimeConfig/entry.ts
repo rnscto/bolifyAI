@@ -26,8 +26,13 @@ Deno.serve(async (req) => {
 
     // Build the full WSS URL with deployment path — never expose the API key to clients
     let wsUrl = endpoint.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://').replace(/\/+$/, '');
-    if (!wsUrl.includes('/openai/realtime')) {
-      wsUrl = wsUrl + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2';
+    const pathIdx = wsUrl.indexOf('/', wsUrl.indexOf('//') + 2);
+    if (pathIdx > 0) wsUrl = wsUrl.substring(0, pathIdx);
+    const isFoundry = wsUrl.includes('.services.ai.azure.com');
+    if (isFoundry) {
+      wsUrl = `${wsUrl}/api/projects/yadavnand886-7905/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2`;
+    } else {
+      wsUrl = `${wsUrl}/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2`;
     }
 
     return Response.json({

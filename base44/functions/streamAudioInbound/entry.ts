@@ -338,9 +338,17 @@ Deno.serve(async (req) => {
     const realtimeKey = Deno.env.get('AZURE_REALTIME_KEY');
     if (!realtimeUrl || !realtimeKey) { console.error(`[${reqId}] ❌ Missing AZURE_REALTIME secrets`); return; }
     let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://').replace(/\/+$/, '');
-    // Strip any existing path so we always build a clean URL
-    if (wsUrl.includes('/openai/')) wsUrl = wsUrl.substring(0, wsUrl.indexOf('/openai/'));
-    wsUrl = wsUrl + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2';
+    // Strip any existing path so we always build a clean URL from the base domain
+    const pathIdx = wsUrl.indexOf('/', wsUrl.indexOf('//') + 2);
+    if (pathIdx > 0) wsUrl = wsUrl.substring(0, pathIdx);
+    // Azure AI Foundry (services.ai.azure.com) uses project-scoped path
+    const isFoundry = wsUrl.includes('.services.ai.azure.com');
+    const projectName = 'yadavnand886-7905';
+    if (isFoundry) {
+      wsUrl = `${wsUrl}/api/projects/${projectName}/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2`;
+    } else {
+      wsUrl = `${wsUrl}/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2`;
+    }
     wsUrl = `${wsUrl}&api-key=${encodeURIComponent(realtimeKey)}`;
     const ws = new WebSocket(wsUrl);
     ws.onopen = () => { console.log(`[${reqId}] ✅ Realtime connected`); session._realtimeReconnectAttempts = 0; session._lastRealtimeOpenTs = Date.now(); };
