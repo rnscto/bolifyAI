@@ -191,7 +191,7 @@ export default function ClientAgents() {
             </CardContent>
           </Card>
 
-          <AgentEditDialog agent={agent} open={editOpen} onOpenChange={setEditOpen} onSaved={loadData} />
+          <AgentEditDialog agent={agent} open={editOpen} onOpenChange={setEditOpen} onSaved={loadData} clientId={client?.id} />
         </>
       )}
     </div>

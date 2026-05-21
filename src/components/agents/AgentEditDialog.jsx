@@ -16,7 +16,7 @@ import { Sparkles } from 'lucide-react';
 const TONE_OPTIONS = ['professional', 'friendly', 'formal', 'energetic', 'empathetic'];
 const LANGUAGE_OPTIONS = INDIAN_LANGUAGES.map(l => ({ value: l.value, label: l.label }));
 
-export default function AgentEditDialog({ agent, open, onOpenChange, onSaved }) {
+export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, clientId }) {
   const [form, setForm] = useState({
     name: '',
     industry: '',
@@ -203,6 +203,7 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved }) 
           defaultLanguage={form.persona.language}
           defaultTone={form.persona.tone}
           voiceEngine={form.persona.voice_engine}
+          clientId={clientId || agent?.client_id}
         />
 
         <DialogFooter>
