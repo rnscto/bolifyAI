@@ -1611,17 +1611,6 @@ Deno.serve(async (req) => {
 
       // ── PHASE A: Extract greeting + voice + base prompt SYNCHRONOUSLY (no awaits) ──
       session.agentId = callLog.agent_id || null;
-      // Helper: strip any leftover references to the KB tool from a prompt when no KB is linked.
-      // Prevents the model from hallucinating tool calls to a function that isn't registered.
-      const stripKBToolMentions = (text) => {
-        if (!text) return text;
-        return text
-          // Remove explicit mentions of the tool name
-          .replace(/search_knowledge_base/gi, '')
-          // Remove any paragraph/bullet that talks about a knowledge_base / KB tool
-          .replace(/[^\n]*\b(knowledge[ _-]?base|kb)\b[^\n]*tool[^\n]*\n?/gi, '')
-          .replace(/\n{3,}/g, '\n\n');
-      };
       if (cache) {
         if (cache.persona) {
           if (cache.persona.voice_engine) session.voiceEngine = cache.persona.voice_engine;
@@ -1648,14 +1637,6 @@ Deno.serve(async (req) => {
           // paragraph gets de-prioritized. Put KB instructions FIRST so the model honors them.
           const kbInstr = `[CRITICAL TOOL — HIGHEST PRIORITY] You have a tool: search_knowledge_base(query).\nThis business has uploaded its product catalog, pricing, services, policies, FAQs, brochures, and other reference material into a knowledge base. You MUST call search_knowledge_base BEFORE answering ANY of the following:\n- Product or service details, features, specifications, models\n- Pricing, plans, packages, offers, discounts\n- Office hours, locations, addresses, contact info\n- Refund / return / warranty / shipping / delivery policies\n- Process steps, eligibility, requirements, documents\n- Anything specific the customer asks about THIS business\nRules:\n1. ALWAYS search first — even if you think you know. Pass 2-4 concise keywords (e.g. "Class 4 laser pricing", "refund policy", "Mumbai office address").\n2. If the search returns passages, base your answer ONLY on them. Quote details verbatim where useful.\n3. If the search returns NO results, say honestly that you do not have that detail and offer to connect the customer to an expert / take their info.\n4. NEVER guess, invent, paraphrase from memory, or say "our experts will explain" when a search would answer it. Search first, expert handoff only as fallback.\n5. This tool overrides any earlier instruction telling you to avoid specifics — use the KB to give the actual specifics.\n\n`;
           session.systemPrompt = kbInstr + session.systemPrompt;
-        } else {
-          // No KB linked — strip any stale KB-tool references from the agent's custom prompt
-          // to prevent the model from hallucinating calls to a tool that isn't registered.
-          const before = session.systemPrompt.length;
-          session.systemPrompt = stripKBToolMentions(session.systemPrompt);
-          if (session.systemPrompt.length !== before) {
-            console.log(`[${reqId}] 🧹 Stripped KB tool mentions from prompt (${before}→${session.systemPrompt.length}ch) — no KB linked`);
-          }
         }
       }
       console.log(`[${reqId}] 🎙️ FAST config: engine=${session.voiceEngine}, voice=${session.voiceType}, greeting=${!!session.greetingMessage}, kb=${!!session.kbFileUri}`);
