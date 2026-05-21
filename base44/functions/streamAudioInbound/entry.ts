@@ -348,7 +348,7 @@ Deno.serve(async (req) => {
     ws.onopen = () => { console.log(`[${reqId}] ✅ Realtime connected`); session._realtimeReconnectAttempts = 0; session._lastRealtimeOpenTs = Date.now(); };
     ws.onmessage = (event) => { try { handleRealtimeMessage(JSON.parse(event.data)); } catch (err) { console.error(`[${reqId}] ❌ Realtime parse: ${err.message}`); } };
     ws.onclose = (event) => {
-      console.log(`[${reqId}] 🔴 Realtime closed: ${event.code}`);
+      console.log(`[${reqId}] 🔴 Realtime closed: code=${event.code} reason=${event.reason} wasClean=${event.wasClean} endpoint=${(realtimeUrl || '').substring(0, 60)} keyLen=${(realtimeKey || '').length}`);
       session.realtimeReady = false;
       const stableMs = session._lastRealtimeOpenTs ? (Date.now() - session._lastRealtimeOpenTs) : 0;
       if (stableMs > 30000 && session._realtimeReconnectAttempts > 0) session._realtimeReconnectAttempts = 0;
@@ -358,7 +358,7 @@ Deno.serve(async (req) => {
         setTimeout(() => { if (!session._callEnded) connectRealtime(); }, delay);
       }
     };
-    ws.onerror = () => console.error(`[${reqId}] ❌ Realtime error`);
+    ws.onerror = (event) => console.error(`[${reqId}] ❌ Realtime error — message=${event?.message || 'unknown'} type=${event?.type || 'unknown'}`);
     session.realtimeWs = ws;
   }
 
