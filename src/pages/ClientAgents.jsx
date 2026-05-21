@@ -3,7 +3,7 @@ import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Bot, Phone as PhoneIcon, Pencil } from 'lucide-react';
+import { Bot, Phone as PhoneIcon, Pencil, BookOpen, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import FeatureGate from '../components/FeatureGate';
 import DIDManager from '../components/agents/DIDManager';
@@ -126,6 +126,17 @@ export default function ClientAgents() {
                           {i === 0 && <span className="text-xs text-blue-600 ml-1">primary</span>}
                         </Badge>
                       ))}
+                      {(agent.knowledge_base_ids?.length || 0) > 0 ? (
+                        <Badge className="bg-green-100 text-green-800 flex items-center gap-1">
+                          <BookOpen className="w-3 h-3" />
+                          KB Linked ({agent.knowledge_base_ids.length})
+                        </Badge>
+                      ) : (
+                        <Badge className="bg-amber-100 text-amber-800 flex items-center gap-1">
+                          <AlertCircle className="w-3 h-3" />
+                          No KB Linked
+                        </Badge>
+                      )}
                     </div>
                   </div>
                 </div>

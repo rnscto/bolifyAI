@@ -7,7 +7,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { base44 } from '@/api/base44Client';
 import { toast } from 'sonner';
-import { Loader2, Save } from 'lucide-react';
+import { Loader2, Save, BookOpen, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
 import { REALTIME_VOICES, AZURE_SPEECH_VOICES } from './VoiceData';
 import { INDIAN_LANGUAGES } from './IndianLanguages';
 import PromptGeneratorDialog from './PromptGeneratorDialog';
@@ -26,6 +28,9 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
   });
   const [saving, setSaving] = useState(false);
   const [genOpen, setGenOpen] = useState(false);
+  const [knowledgeBases, setKnowledgeBases] = useState([]);
+  const [selectedKBs, setSelectedKBs] = useState([]);
+  const [kbLoading, setKbLoading] = useState(false);
 
   const handleApplyGenerated = ({ system_prompt, greeting_message, language, tone, voice_type }) => {
     setForm(p => ({
@@ -56,8 +61,22 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
           language: agent.persona?.language || 'en-IN',
         }
       });
+      setSelectedKBs(agent.knowledge_base_ids || []);
+      // Load available KB documents for this client
+      const cid = clientId || agent.client_id;
+      if (cid) {
+        setKbLoading(true);
+        base44.entities.KnowledgeBase.filter({ client_id: cid })
+          .then(docs => setKnowledgeBases(docs || []))
+          .catch(() => setKnowledgeBases([]))
+          .finally(() => setKbLoading(false));
+      }
     }
-  }, [agent, open]);
+  }, [agent, open, clientId]);
+
+  const toggleKB = (kbId) => {
+    setSelectedKBs(prev => prev.includes(kbId) ? prev.filter(id => id !== kbId) : [...prev, kbId]);
+  };
 
   const updatePersona = (key, value) => {
     setForm(prev => ({
@@ -74,14 +93,23 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
       return;
     }
     setSaving(true);
+    const prevKBs = agent.knowledge_base_ids || [];
+    const kbChanged = JSON.stringify([...prevKBs].sort()) !== JSON.stringify([...selectedKBs].sort());
     await base44.entities.Agent.update(agent.id, {
       name: form.name.trim(),
       industry: form.industry.trim(),
       greeting_message: form.greeting_message.trim(),
       system_prompt: form.system_prompt.trim(),
       persona: form.persona,
+      knowledge_base_ids: selectedKBs,
     });
-    toast.success('Agent updated');
+    // Rebuild combined KB blob in Azure if KB selection changed (fire-and-forget)
+    if (kbChanged) {
+      base44.functions.invoke('uploadKBToStorage', { agent_id: agent.id }).catch(() => {});
+      toast.success('Agent updated — Knowledge Base is syncing in the background');
+    } else {
+      toast.success('Agent updated');
+    }
     setSaving(false);
     onOpenChange(false);
     onSaved?.();
@@ -173,6 +201,44 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
               className="mt-1 h-20"
             />
             <p className="text-xs text-gray-500 mt-1">The first thing the AI says when a call connects.</p>
+          </div>
+
+          {/* Knowledge Base linking */}
+          <div className="border rounded-lg p-4 bg-cyan-50/30 border-cyan-100">
+            <div className="flex items-center justify-between mb-2">
+              <Label className="flex items-center gap-2 text-sm font-semibold">
+                <BookOpen className="w-4 h-4 text-[#0097a7]" />
+                Link Knowledge Base
+              </Label>
+              {selectedKBs.length > 0 ? (
+                <Badge className="bg-green-100 text-green-800 gap-1"><CheckCircle2 className="w-3 h-3" /> {selectedKBs.length} linked</Badge>
+              ) : (
+                <Badge className="bg-amber-100 text-amber-800 gap-1"><AlertCircle className="w-3 h-3" /> None linked</Badge>
+              )}
+            </div>
+            <p className="text-xs text-gray-600 mb-3">
+              Linked documents are searchable by the AI during live calls. Without a linked KB, the agent can only use its system prompt.
+            </p>
+            {kbLoading ? (
+              <div className="flex items-center gap-2 text-sm text-gray-500 py-2"><Loader2 className="w-4 h-4 animate-spin" /> Loading documents...</div>
+            ) : knowledgeBases.length === 0 ? (
+              <p className="text-xs text-gray-500 italic py-2">No documents uploaded yet. Add documents in the Knowledge Base section first.</p>
+            ) : (
+              <div className="space-y-1.5 max-h-44 overflow-y-auto">
+                {knowledgeBases.map(kb => (
+                  <label key={kb.id} className="flex items-center gap-3 p-2 rounded hover:bg-white cursor-pointer">
+                    <Checkbox checked={selectedKBs.includes(kb.id)} onCheckedChange={() => toggleKB(kb.id)} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{kb.title}</p>
+                      <p className="text-xs text-gray-500">{kb.category || 'Uncategorized'} · {kb.file_type?.toUpperCase() || 'TXT'}</p>
+                    </div>
+                    <Badge variant="outline" className={`text-xs ${kb.status === 'ready' ? 'border-green-300 text-green-700' : 'border-yellow-300 text-yellow-700'}`}>
+                      {kb.status}
+                    </Badge>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* System Prompt */}
