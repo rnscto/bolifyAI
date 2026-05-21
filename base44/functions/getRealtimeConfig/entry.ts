@@ -24,8 +24,11 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Azure Realtime not configured' }, { status: 500 });
     }
 
-    // Only return the WSS URL — never expose the API key to clients
-    const wsUrl = endpoint.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
+    // Build the full WSS URL with deployment path — never expose the API key to clients
+    let wsUrl = endpoint.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://').replace(/\/+$/, '');
+    if (!wsUrl.includes('/openai/realtime')) {
+      wsUrl = wsUrl + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2';
+    }
 
     return Response.json({
       url: wsUrl,
