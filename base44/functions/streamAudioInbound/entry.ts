@@ -337,24 +337,18 @@ Deno.serve(async (req) => {
     const realtimeUrl = Deno.env.get('AZURE_REALTIME_ENDPOINT');
     const realtimeKey = Deno.env.get('AZURE_REALTIME_KEY');
     if (!realtimeUrl || !realtimeKey) { console.error(`[${reqId}] ❌ Missing AZURE_REALTIME secrets`); return; }
-    let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://').replace(/\/+$/, '');
-    // Strip any existing path so we always build a clean URL from the base domain
-    const pathIdx = wsUrl.indexOf('/', wsUrl.indexOf('//') + 2);
-    if (pathIdx > 0) wsUrl = wsUrl.substring(0, pathIdx);
-    // Azure AI Foundry (services.ai.azure.com) uses project-scoped path
-    const isFoundry = wsUrl.includes('.services.ai.azure.com');
-    const projectName = 'yadavnand886-7905';
-    if (isFoundry) {
-      wsUrl = `${wsUrl}/api/projects/${projectName}/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2`;
-    } else {
-      wsUrl = `${wsUrl}/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2`;
+    let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
+    if (!wsUrl.includes('/openai/realtime')) {
+      wsUrl = wsUrl.replace(/\/+$/, '') + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-1.5';
     }
-    wsUrl = `${wsUrl}&api-key=${encodeURIComponent(realtimeKey)}`;
+    wsUrl = wsUrl.replace('api-version=2025-04-01&', 'api-version=2025-04-01-preview&');
+    const separator = wsUrl.includes('?') ? '&' : '?';
+    wsUrl = `${wsUrl}${separator}api-key=${encodeURIComponent(realtimeKey)}`;
     const ws = new WebSocket(wsUrl);
     ws.onopen = () => { console.log(`[${reqId}] ✅ Realtime connected`); session._realtimeReconnectAttempts = 0; session._lastRealtimeOpenTs = Date.now(); };
     ws.onmessage = (event) => { try { handleRealtimeMessage(JSON.parse(event.data)); } catch (err) { console.error(`[${reqId}] ❌ Realtime parse: ${err.message}`); } };
     ws.onclose = (event) => {
-      console.log(`[${reqId}] 🔴 Realtime closed: code=${event.code} reason=${event.reason || '(none)'} wasClean=${event.wasClean}`);
+      console.log(`[${reqId}] 🔴 Realtime closed: ${event.code}`);
       session.realtimeReady = false;
       const stableMs = session._lastRealtimeOpenTs ? (Date.now() - session._lastRealtimeOpenTs) : 0;
       if (stableMs > 30000 && session._realtimeReconnectAttempts > 0) session._realtimeReconnectAttempts = 0;
