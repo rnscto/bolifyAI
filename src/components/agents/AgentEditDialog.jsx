@@ -71,6 +71,10 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
           .catch(() => setKnowledgeBases([]))
           .finally(() => setKbLoading(false));
       }
+      // Auto-heal: if agent has KB IDs but no kb_file_uri (stale state), trigger upload silently
+      if ((agent.knowledge_base_ids?.length || 0) > 0 && !agent.kb_file_uri) {
+        base44.functions.invoke('uploadKBToStorage', { agent_id: agent.id }).catch(() => {});
+      }
     }
   }, [agent, open, clientId]);
 
