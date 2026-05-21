@@ -591,7 +591,7 @@ Deno.serve(async (req) => {
     };
 
     ws.onclose = (event) => {
-      console.log(`[${reqId}] 🔴 Azure Realtime closed: code=${event.code} reason=${event.reason}`);
+      console.log(`[${reqId}] 🔴 Azure Realtime closed: code=${event.code} reason=${event.reason} wasClean=${event.wasClean} endpoint=${(realtimeUrl || '').substring(0, 60)} keyLen=${(realtimeKey || '').length}`);
       session.realtimeReady = false;
 
       // If we had a stable connection for >30s, reset the counter so a transient blip
@@ -616,7 +616,7 @@ Deno.serve(async (req) => {
     };
 
     ws.onerror = (event) => {
-      console.error(`[${reqId}] ❌ Azure Realtime error`);
+      console.error(`[${reqId}] ❌ Azure Realtime error — message=${event?.message || 'unknown'} type=${event?.type || 'unknown'}`);
     };
 
     session.realtimeWs = ws;
