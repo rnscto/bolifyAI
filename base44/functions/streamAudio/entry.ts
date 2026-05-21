@@ -561,7 +561,7 @@ Deno.serve(async (req) => {
     // Ensure the URL includes the /openai/realtime path and required query params
     // If the endpoint is just a base URI (no /openai/realtime), append deployment path
     if (!wsUrl.includes('/openai/realtime')) {
-      wsUrl = wsUrl.replace(/\/+$/, '') + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-1.5';
+      wsUrl = wsUrl.replace(/\/+$/, '') + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2';
     }
     // Ensure api-version uses preview (required for WebSocket realtime on Azure)
     wsUrl = wsUrl.replace('api-version=2025-04-01&', 'api-version=2025-04-01-preview&');

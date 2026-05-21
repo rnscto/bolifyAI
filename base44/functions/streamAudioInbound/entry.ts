@@ -339,7 +339,7 @@ Deno.serve(async (req) => {
     if (!realtimeUrl || !realtimeKey) { console.error(`[${reqId}] ❌ Missing AZURE_REALTIME secrets`); return; }
     let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
     if (!wsUrl.includes('/openai/realtime')) {
-      wsUrl = wsUrl.replace(/\/+$/, '') + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-1.5';
+      wsUrl = wsUrl.replace(/\/+$/, '') + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2';
     }
     wsUrl = wsUrl.replace('api-version=2025-04-01&', 'api-version=2025-04-01-preview&');
     const separator = wsUrl.includes('?') ? '&' : '?';
