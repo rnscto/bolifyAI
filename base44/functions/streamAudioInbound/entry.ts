@@ -337,18 +337,16 @@ Deno.serve(async (req) => {
     const realtimeUrl = Deno.env.get('AZURE_REALTIME_ENDPOINT');
     const realtimeKey = Deno.env.get('AZURE_REALTIME_KEY');
     if (!realtimeUrl || !realtimeKey) { console.error(`[${reqId}] ❌ Missing AZURE_REALTIME secrets`); return; }
-    let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
-    if (!wsUrl.includes('/openai/realtime')) {
-      wsUrl = wsUrl.replace(/\/+$/, '') + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2';
-    }
-    wsUrl = wsUrl.replace('api-version=2025-04-01&', 'api-version=2025-04-01-preview&');
-    const separator = wsUrl.includes('?') ? '&' : '?';
-    wsUrl = `${wsUrl}${separator}api-key=${encodeURIComponent(realtimeKey)}`;
+    let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://').replace(/\/+$/, '');
+    // Strip any existing path so we always build a clean URL
+    if (wsUrl.includes('/openai/')) wsUrl = wsUrl.substring(0, wsUrl.indexOf('/openai/'));
+    wsUrl = wsUrl + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2';
+    wsUrl = `${wsUrl}&api-key=${encodeURIComponent(realtimeKey)}`;
     const ws = new WebSocket(wsUrl);
     ws.onopen = () => { console.log(`[${reqId}] ✅ Realtime connected`); session._realtimeReconnectAttempts = 0; session._lastRealtimeOpenTs = Date.now(); };
     ws.onmessage = (event) => { try { handleRealtimeMessage(JSON.parse(event.data)); } catch (err) { console.error(`[${reqId}] ❌ Realtime parse: ${err.message}`); } };
     ws.onclose = (event) => {
-      console.log(`[${reqId}] 🔴 Realtime closed: ${event.code}`);
+      console.log(`[${reqId}] 🔴 Realtime closed: code=${event.code} reason=${event.reason || '(none)'} wasClean=${event.wasClean}`);
       session.realtimeReady = false;
       const stableMs = session._lastRealtimeOpenTs ? (Date.now() - session._lastRealtimeOpenTs) : 0;
       if (stableMs > 30000 && session._realtimeReconnectAttempts > 0) session._realtimeReconnectAttempts = 0;

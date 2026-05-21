@@ -557,17 +557,20 @@ Deno.serve(async (req) => {
     }
 
     // Convert https:// to wss:// for WebSocket
-    let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://');
-    // Ensure the URL includes the /openai/realtime path and required query params
-    // If the endpoint is just a base URI (no /openai/realtime), append deployment path
-    if (!wsUrl.includes('/openai/realtime')) {
-      wsUrl = wsUrl.replace(/\/+$/, '') + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2';
+    let wsUrl = realtimeUrl.replace(/^https:\/\//, 'wss://').replace(/^http:\/\//, 'ws://').replace(/\/+$/, '');
+    // Strip any existing path/query so we always build a clean URL
+    if (wsUrl.includes('/openai/')) {
+      wsUrl = wsUrl.substring(0, wsUrl.indexOf('/openai/'));
     }
-    // Ensure api-version uses preview (required for WebSocket realtime on Azure)
-    wsUrl = wsUrl.replace('api-version=2025-04-01&', 'api-version=2025-04-01-preview&');
+    // Azure AI Foundry (services.ai.azure.com) uses a different path than legacy openai.azure.com
+    const isFoundry = wsUrl.includes('.services.ai.azure.com');
+    if (isFoundry) {
+      wsUrl = wsUrl + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2';
+    } else {
+      wsUrl = wsUrl + '/openai/realtime?api-version=2025-04-01-preview&deployment=gpt-realtime-2';
+    }
     // Append api-key to URL since Deno WebSocket doesn't support custom headers
-    const separator = wsUrl.includes('?') ? '&' : '?';
-    wsUrl = `${wsUrl}${separator}api-key=${encodeURIComponent(realtimeKey)}`;
+    wsUrl = `${wsUrl}&api-key=${encodeURIComponent(realtimeKey)}`;
     console.log(`[${reqId}] 🔌 Connecting to Azure Realtime: ${wsUrl.substring(0, 80)}...`);
 
     const ws = new WebSocket(wsUrl);
