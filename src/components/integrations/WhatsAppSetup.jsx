@@ -58,51 +58,50 @@ export default function WhatsAppSetup({ config, onSave }) {
     }
   }, [provider, config?.client_id]);
 
+  // Sanitize credentials before sending to backend (strip whitespace + accidental "Bearer " prefix)
+  const cleanCreds = () => ({
+    whatsapp_provider: provider,
+    whatsapp_api_key: apiKey.trim().replace(/^Bearer\s+/i, ''),
+    whatsapp_phone_number_id: phoneNumberId.trim(),
+    whatsapp_business_id: businessId.trim(),
+    whatsapp_api_endpoint: apiEndpoint.trim(),
+  });
+
   const handleTest = async () => {
     setTesting(true);
     const tmpl = templates.find(t => t.id === selectedTemplate);
+    const creds = cleanCreds();
     const res = await base44.functions.invoke('testMessagingConnection', {
       channel: 'whatsapp',
-      test_recipient: testRecipient,
+      test_recipient: testRecipient.trim(),
       template_name: tmpl?.name || '',
       template_language: tmpl?.language || 'en_US',
-      config: { whatsapp_provider: provider, whatsapp_api_key: apiKey, whatsapp_phone_number_id: phoneNumberId, whatsapp_business_id: businessId, whatsapp_api_endpoint: apiEndpoint }
+      config: creds
     });
     if (res.data.success) {
       toast.success(res.data.message);
-      // Auto-save credentials + mark connected on successful test
-      await onSave({
-        whatsapp_provider: provider,
-        whatsapp_api_key: apiKey,
-        whatsapp_phone_number_id: phoneNumberId,
-        whatsapp_business_id: businessId,
-        whatsapp_api_endpoint: apiEndpoint,
-        whatsapp_status: 'connected',
-        whatsapp_last_tested: new Date().toISOString(),
-      });
+      // Reflect cleaned values back to inputs
+      setApiKey(creds.whatsapp_api_key);
+      setPhoneNumberId(creds.whatsapp_phone_number_id);
+      setBusinessId(creds.whatsapp_business_id);
+      setApiEndpoint(creds.whatsapp_api_endpoint);
+      await onSave({ ...creds, whatsapp_status: 'connected', whatsapp_last_tested: new Date().toISOString() });
     } else {
-      toast.error(res.data.error || 'Connection failed');
-      await onSave({
-        whatsapp_provider: provider,
-        whatsapp_api_key: apiKey,
-        whatsapp_phone_number_id: phoneNumberId,
-        whatsapp_business_id: businessId,
-        whatsapp_api_endpoint: apiEndpoint,
-        whatsapp_status: 'error',
-        whatsapp_last_tested: new Date().toISOString(),
-      });
+      toast.error(res.data.error || 'Connection failed', { duration: 8000 });
+      await onSave({ ...creds, whatsapp_status: 'error', whatsapp_last_tested: new Date().toISOString() });
     }
     setTesting(false);
   };
 
   const handleSave = async () => {
     setSaving(true);
+    const creds = cleanCreds();
+    setApiKey(creds.whatsapp_api_key);
+    setPhoneNumberId(creds.whatsapp_phone_number_id);
+    setBusinessId(creds.whatsapp_business_id);
+    setApiEndpoint(creds.whatsapp_api_endpoint);
     await onSave({
-      whatsapp_provider: provider,
-      whatsapp_api_key: apiKey,
-      whatsapp_phone_number_id: phoneNumberId,
-      whatsapp_business_id: businessId,
-      whatsapp_api_endpoint: apiEndpoint,
+      ...creds,
       whatsapp_status: provider === 'none' ? 'disconnected' : (config?.whatsapp_status || 'disconnected'),
     });
     setSaving(false);

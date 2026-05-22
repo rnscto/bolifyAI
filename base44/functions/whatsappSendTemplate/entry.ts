@@ -88,14 +88,21 @@ Deno.serve(async (req) => {
       return Response.json({ error: `Invalid phone number after normalization: ${cleanRecipient}` }, { status: 400 });
     }
 
+    // Sanitize: strip whitespace + remove accidental "Bearer " prefix
+    const apiKey = String(cfg.whatsapp_api_key).trim().replace(/^Bearer\s+/i, '');
+    const phoneNumberId = String(cfg.whatsapp_phone_number_id || '').trim();
+    if (!phoneNumberId) {
+      return Response.json({ error: 'Phone Number ID is not configured. Please add it in Integrations.' }, { status: 400 });
+    }
     const baseUrl = cfg.whatsapp_provider === 'rcs_digital'
-      ? `https://rcsdigital.in/v23.0/${cfg.whatsapp_phone_number_id}/messages`
-      : `https://graph.facebook.com/v20.0/${cfg.whatsapp_phone_number_id}/messages`;
+      ? `https://rcsdigital.in/v23.0/${phoneNumberId}/messages`
+      : `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
     const url = baseUrl;
+    console.log(`[whatsappSendTemplate] → POST ${url} (to=${cleanRecipient}, template=${template.name})`);
     const res = await fetch(url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${cfg.whatsapp_api_key}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -112,6 +119,7 @@ Deno.serve(async (req) => {
     });
 
     const data = await res.json();
+    console.log(`[whatsappSendTemplate] ← HTTP ${res.status}: ${JSON.stringify(data).substring(0, 400)}`);
     const messageId = data.messages?.[0]?.id;
 
     // Always log outreach
@@ -135,10 +143,16 @@ Deno.serve(async (req) => {
     } catch (_) {}
 
     if (!res.ok) {
-      return Response.json({
-        error: data.error?.error_user_msg || data.error?.message || 'Send failed',
-        details: data
-      }, { status: 400 });
+      const metaErr = data.error || {};
+      let friendly = metaErr.error_user_msg || metaErr.message || 'Send failed';
+      if (metaErr.code === 190 || res.status === 401) {
+        friendly = `Authentication failed (Meta error 190). Access Token is invalid or expired. Regenerate your System User Token at business.facebook.com.`;
+      } else if (metaErr.code === 131026) {
+        friendly = `Recipient hasn't opted-in or 24-hour window expired. Template messages require a valid phone number registered with WhatsApp.`;
+      } else if (metaErr.code === 132000 || metaErr.code === 132001) {
+        friendly = `Template "${template.name}" not found or wrong language. Sync templates first from the Templates page.`;
+      }
+      return Response.json({ error: friendly, details: data }, { status: 400 });
     }
 
     // Increment send count

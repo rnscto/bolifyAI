@@ -115,10 +115,11 @@ export default function CreateTemplateDialog({ clientId, open, onOpenChange, onC
         setExamples([]); setButtons([]); setHeaderType('NONE');
         onOpenChange(false);
       } else {
-        toast.error(res.data.error || 'Creation failed');
+        toast.error(res.data.error || 'Creation failed', { duration: 10000 });
       }
     } catch (e) {
-      toast.error(e.message);
+      const backendErr = e?.response?.data?.error || e?.message || 'Creation failed';
+      toast.error(backendErr, { duration: 10000 });
     } finally {
       setSaving(false);
     }

@@ -38,6 +38,9 @@ Deno.serve(async (req) => {
     if (!cfg.whatsapp_api_key || !cfg.whatsapp_business_id) {
       return Response.json({ error: 'WABA ID and Access Token are required' }, { status: 400 });
     }
+    // Sanitize: strip whitespace + remove accidental "Bearer " prefix
+    const apiKey = String(cfg.whatsapp_api_key).trim().replace(/^Bearer\s+/i, '');
+    const businessId = String(cfg.whatsapp_business_id).trim();
     const baseHost = cfg.whatsapp_provider === 'rcs_digital'
       ? `https://rcsdigital.in/v23.0`
       : `https://graph.facebook.com/v20.0`;
@@ -80,11 +83,12 @@ Deno.serve(async (req) => {
     }
 
     // Submit to vendor (Meta or RCS Digital — same shape)
-    const url = `${baseHost}/${cfg.whatsapp_business_id}/message_templates`;
+    const url = `${baseHost}/${businessId}/message_templates`;
+    console.log(`[whatsappCreateTemplate] → POST ${url} (provider=${cfg.whatsapp_provider}, name=${name})`);
     const res = await fetch(url, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${cfg.whatsapp_api_key}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
@@ -96,11 +100,14 @@ Deno.serve(async (req) => {
     });
 
     const data = await res.json();
+    console.log(`[whatsappCreateTemplate] ← HTTP ${res.status}: ${JSON.stringify(data).substring(0, 500)}`);
     if (!res.ok) {
-      return Response.json({
-        error: data.error?.error_user_msg || data.error?.message || 'Meta API rejected the template',
-        details: data
-      }, { status: 400 });
+      const metaErr = data.error || {};
+      let friendly = metaErr.error_user_msg || metaErr.message || 'Meta API rejected the template';
+      if (metaErr.code === 190 || res.status === 401) {
+        friendly = `Authentication failed (Meta error 190). Your Access Token is invalid or expired. For Meta Cloud API use a System User Token (starts with "EAAQ..."), NOT an App Token ("appid|secret").`;
+      }
+      return Response.json({ error: friendly, details: data }, { status: 400 });
     }
 
     // Save locally

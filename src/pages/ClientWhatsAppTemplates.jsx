@@ -50,13 +50,15 @@ export default function ClientWhatsAppTemplates() {
     try {
       const res = await base44.functions.invoke('whatsappListTemplates', { client_id: client.id });
       if (res.data.success) {
-        toast.success(`Synced ${res.data.synced} templates from Meta`);
+        toast.success(`Synced ${res.data.synced} templates (${res.data.created} new, ${res.data.updated} updated)`);
         await loadAll();
       } else {
-        toast.error(res.data.error || 'Sync failed');
+        toast.error(res.data.error || 'Sync failed', { duration: 10000 });
       }
     } catch (e) {
-      toast.error(e.message);
+      // Axios-style errors expose backend error in e.response.data
+      const backendErr = e?.response?.data?.error || e?.message || 'Sync failed';
+      toast.error(backendErr, { duration: 10000 });
     } finally {
       setSyncing(false);
     }

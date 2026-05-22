@@ -22,8 +22,9 @@ Deno.serve(async (req) => {
     // ===== WHATSAPP TEST =====
     if (channel === 'whatsapp') {
       const provider = config.whatsapp_provider;
-      const apiKey = config.whatsapp_api_key;
-      const phoneNumberId = config.whatsapp_phone_number_id;
+      // Sanitize: strip whitespace + accidental "Bearer " prefix users paste
+      const apiKey = String(config.whatsapp_api_key || '').trim().replace(/^Bearer\s+/i, '');
+      const phoneNumberId = String(config.whatsapp_phone_number_id || '').trim();
 
       if (!apiKey) return Response.json({ success: false, error: 'API key is required' });
 

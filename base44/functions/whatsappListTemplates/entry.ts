@@ -34,14 +34,18 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'WABA ID and Access Token are required' }, { status: 400 });
     }
 
+    // Sanitize credentials: strip whitespace + remove accidental "Bearer " prefix users paste
+    const apiKey = String(cfg.whatsapp_api_key).trim().replace(/^Bearer\s+/i, '');
+    const businessId = String(cfg.whatsapp_business_id).trim();
+
     // Fetch templates from Meta or RCS Digital (Meta-compatible)
     const baseHost = cfg.whatsapp_provider === 'rcs_digital'
       ? `https://rcsdigital.in/v23.0`
       : `https://graph.facebook.com/v20.0`;
-    const url = `${baseHost}/${cfg.whatsapp_business_id}/message_templates?limit=200`;
+    const url = `${baseHost}/${businessId}/message_templates?limit=200`;
     console.log(`[whatsappListTemplates] → GET ${url} (provider=${cfg.whatsapp_provider})`);
     const res = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${cfg.whatsapp_api_key}` }
+      headers: { 'Authorization': `Bearer ${apiKey}` }
     });
     const rawText = await res.text();
     console.log(`[whatsappListTemplates] ← HTTP ${res.status} ${res.statusText}`);
@@ -49,7 +53,16 @@ Deno.serve(async (req) => {
     let data;
     try { data = JSON.parse(rawText); } catch (_) { data = { raw: rawText }; }
     if (!res.ok) {
-      return Response.json({ error: data.error?.message || `HTTP ${res.status}: ${rawText.substring(0, 300)}`, details: data }, { status: 400 });
+      // Provide actionable error messages for common Meta/RCS auth failures
+      const metaErr = data.error || {};
+      let friendly = metaErr.error_user_msg || metaErr.message || `HTTP ${res.status}`;
+      if (metaErr.code === 190 || res.status === 401) {
+        friendly = `Authentication failed (Meta error 190). Your Access Token is invalid, expired, or doesn't have whatsapp_business_management permission. For Meta Cloud API you need a System User Token (starts with "EAAQ..." or "EAAB..."), NOT an App Token (format "appid|secret"). Generate one at business.facebook.com → Business Settings → Users → System Users.`;
+      } else if (metaErr.code === 100 || res.status === 400) {
+        friendly = `${metaErr.message || 'Bad Request'}. Check that your WhatsApp Business Account ID is correct (no spaces, tabs, or extra characters).`;
+      }
+      console.error(`[whatsappListTemplates] ❌ ${res.status} ${friendly}`);
+      return Response.json({ error: friendly, details: data }, { status: 400 });
     }
 
     const metaTemplates = data.data || [];
