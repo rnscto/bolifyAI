@@ -74,6 +74,24 @@ Deno.serve(async (req) => {
     };
 
     const components = [];
+
+    // Header component: required when template has IMAGE/VIDEO/DOCUMENT header
+    const headerType = (template.header_type || 'NONE').toUpperCase();
+    if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerType)) {
+      const mediaUrl = template.header_media_url;
+      if (mediaUrl) {
+        const mediaKey = headerType.toLowerCase(); // image | video | document
+        components.push({
+          type: 'header',
+          parameters: [{ type: mediaKey, [mediaKey]: { link: mediaUrl } }]
+        });
+      } else {
+        return Response.json({
+          error: `Template "${template.name}" has a ${headerType} header but no header_media_url is set. Please edit the template and add a media URL.`
+        }, { status: 400 });
+      }
+    }
+
     const vars = variables || [];
     if (vars.length > 0) {
       components.push({
