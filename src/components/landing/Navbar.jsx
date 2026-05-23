@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { base44 } from '@/api/base44Client';
 import { createPageUrl } from '../../utils';
 
-const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg";
+const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/a1247aabb_generated_image.png";
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);

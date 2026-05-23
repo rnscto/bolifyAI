@@ -159,7 +159,7 @@ export default function Layout({ children, currentPageName }) {
   const isAdmin = user?.role === 'admin';
 
   // White-label branding: use client's custom logo/name/color, fall back to defaults
-  const wlLogoUrl = !isAdmin && brand?.dashboard_logo_url ? brand.dashboard_logo_url : 'https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg';
+  const wlLogoUrl = !isAdmin && brand?.dashboard_logo_url ? brand.dashboard_logo_url : 'https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/a1247aabb_generated_image.png';
   const wlAppName = !isAdmin && brand?.dashboard_app_name ? brand.dashboard_app_name : 'Bolify AI';
   const wlPrimary = !isAdmin && brand?.dashboard_primary_color ? brand.dashboard_primary_color : '#00bcd4';
   const wlFavicon = !isAdmin && brand?.dashboard_favicon_url ? brand.dashboard_favicon_url : null;
