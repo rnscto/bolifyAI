@@ -59,7 +59,7 @@ export default function Layout({ children, currentPageName }) {
       const currentUser = await base44.auth.me();
       setUser(currentUser);
       // Prompt non-admin users to set a proper display name if missing
-      if (currentUser.role !== 'admin' && !currentUser.display_name) {
+      if (currentUser.role !== 'admin' && !currentUser.display_name && !currentUser.data?.display_name) {
         setNeedsDisplayName(true);
       }
       
@@ -373,7 +373,7 @@ export default function Layout({ children, currentPageName }) {
             <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-gray-50">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">
-                  {user.display_name || user.full_name}
+                  {user.display_name || user.data?.display_name || user.full_name}
                 </p>
                 <p className="text-xs text-gray-500 truncate">
                   {isAdmin ? 'Administrator' : client?.company_name}
