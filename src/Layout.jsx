@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import AgreementGate from './components/client/AgreementGate';
 import AnnouncementMarquee from './components/AnnouncementMarquee';
+import SetDisplayNameDialog from './components/SetDisplayNameDialog';
 
 export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
@@ -40,6 +41,7 @@ export default function Layout({ children, currentPageName }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [needsAgreement, setNeedsAgreement] = useState(false);
+  const [needsDisplayName, setNeedsDisplayName] = useState(false);
 
   // Only legal pages remain publicly accessible (required for OAuth compliance).
   // All marketing / landing pages now require login.
@@ -56,6 +58,10 @@ export default function Layout({ children, currentPageName }) {
     try {
       const currentUser = await base44.auth.me();
       setUser(currentUser);
+      // Prompt non-admin users to set a proper display name if missing
+      if (currentUser.role !== 'admin' && !currentUser.display_name) {
+        setNeedsDisplayName(true);
+      }
       
       if (currentUser.role !== 'admin') {
         let clients = [];
@@ -367,7 +373,7 @@ export default function Layout({ children, currentPageName }) {
             <div className="flex items-center gap-3 px-4 py-3 rounded-lg bg-gray-50">
               <div className="flex-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900 truncate">
-                  {user.full_name}
+                  {user.display_name || user.full_name}
                 </p>
                 <p className="text-xs text-gray-500 truncate">
                   {isAdmin ? 'Administrator' : client?.company_name}
@@ -428,6 +434,16 @@ export default function Layout({ children, currentPageName }) {
           {children}
         </main>
       </div>
+
+      {/* First-time display name prompt (clients only) */}
+      <SetDisplayNameDialog
+        open={needsDisplayName && !isAdmin}
+        defaultValue={user?.full_name || ''}
+        onClose={(newName) => {
+          setUser({ ...user, display_name: newName });
+          setNeedsDisplayName(false);
+        }}
+      />
     </div>
   );
 }

@@ -18,7 +18,7 @@ export default function ClientSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
-    full_name: '',
+    display_name: '',
     company_name: '',
     email: '',
     phone: '',
@@ -30,14 +30,14 @@ export default function ClientSettings() {
   const loadData = async () => {
     const currentUser = await base44.auth.me();
     setUser(currentUser);
-    setFormData(prev => ({ ...prev, full_name: currentUser.full_name || '' }));
+    setFormData(prev => ({ ...prev, display_name: currentUser.display_name || currentUser.full_name || '' }));
 
     const clients = await base44.entities.Client.filter({ user_id: currentUser.id });
     if (clients.length > 0) {
       const c = clients[0];
       setClient(c);
       setFormData({
-        full_name: currentUser.full_name || '',
+        display_name: currentUser.display_name || currentUser.full_name || '',
         company_name: c.company_name || '',
         email: c.email || '',
         phone: c.phone || '',
@@ -49,7 +49,7 @@ export default function ClientSettings() {
 
   const handleSave = async () => {
     setSaving(true);
-    await base44.auth.updateMe({ full_name: formData.full_name });
+    await base44.auth.updateMe({ display_name: formData.display_name });
     if (client) {
       await base44.entities.Client.update(client.id, {
         company_name: formData.company_name,
@@ -99,8 +99,9 @@ export default function ClientSettings() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label htmlFor="full_name">Full Name</Label>
-            <Input id="full_name" value={formData.full_name} onChange={(e) => setFormData({ ...formData, full_name: e.target.value })} />
+            <Label htmlFor="display_name">Display Name</Label>
+            <Input id="display_name" value={formData.display_name} onChange={(e) => setFormData({ ...formData, display_name: e.target.value })} placeholder="The name shown across your dashboard" />
+            <p className="text-xs text-gray-400 mt-1">This is the name shown in the sidebar and across the dashboard.</p>
           </div>
           <div>
             <Label htmlFor="email">Email</Label>

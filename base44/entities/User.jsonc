@@ -13,6 +13,13 @@
     "client_id": {
       "type": "string",
       "description": "Associated client ID for RLS matching"
+    },
+    "display_name": {
+      "type": "string",
+      "description": "User's chosen display name shown across the dashboard (overrides full_name which auto-derives from email)"
     }
-  }
+  },
+  "required": [
+    "client_id"
+  ]
 }
