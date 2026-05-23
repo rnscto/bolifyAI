@@ -36,11 +36,14 @@ import AnnouncementMarquee from './components/AnnouncementMarquee';
 export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
   const [client, setClient] = useState(null);
+  const [brand, setBrand] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
   const [needsAgreement, setNeedsAgreement] = useState(false);
 
-  const isPublicPage = ['Home', 'PrivacyPolicy', 'TermsOfService', 'RefundPolicy', 'PartnerSignup', 'PartnerReferral', 'CompliancePolicy'].includes(currentPageName);
+  // Only legal pages remain publicly accessible (required for OAuth compliance).
+  // All marketing / landing pages now require login.
+  const isPublicPage = ['PrivacyPolicy', 'TermsOfService', 'RefundPolicy', 'CompliancePolicy'].includes(currentPageName);
   const isOnboardingPage = currentPageName === 'Onboarding';
 
   useEffect(() => {
@@ -81,6 +84,11 @@ export default function Layout({ children, currentPageName }) {
           if (!currentUser.client_id || currentUser.client_id !== clients[0].id) {
             try { await base44.auth.updateMe({ client_id: clients[0].id }); } catch (_) {}
           }
+          // Load client's white-label branding (logo, app name, color, favicon)
+          try {
+            const brandRows = await base44.entities.BrandSettings.filter({ client_id: clients[0].id });
+            if (brandRows.length > 0) setBrand(brandRows[0]);
+          } catch (_) {}
           // If onboarding not completed, redirect
           if (!clients[0].onboarding_completed) {
             window.location.href = createPageUrl('Onboarding');
@@ -148,11 +156,32 @@ export default function Layout({ children, currentPageName }) {
     base44.auth.logout();
   };
 
+  const isAdmin = user?.role === 'admin';
+
+  // White-label branding: use client's custom logo/name/color, fall back to defaults
+  const wlLogoUrl = !isAdmin && brand?.dashboard_logo_url ? brand.dashboard_logo_url : 'https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg';
+  const wlAppName = !isAdmin && brand?.dashboard_app_name ? brand.dashboard_app_name : 'Bolify AI';
+  const wlPrimary = !isAdmin && brand?.dashboard_primary_color ? brand.dashboard_primary_color : '#00bcd4';
+  const wlFavicon = !isAdmin && brand?.dashboard_favicon_url ? brand.dashboard_favicon_url : null;
+
+  // Update browser tab title + favicon to reflect white-label
+  useEffect(() => {
+    if (!isAdmin && brand?.dashboard_app_name) document.title = brand.dashboard_app_name;
+    if (wlFavicon) {
+      let link = document.querySelector("link[rel~='icon']");
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        document.head.appendChild(link);
+      }
+      link.href = wlFavicon;
+    }
+  }, [brand, wlFavicon, isAdmin]);
+
   if (isPublicPage || isOnboardingPage) {
     return <>{children}</>;
   }
 
-  const isAdmin = user?.role === 'admin';
   const isMainAdmin = isAdmin && user?.email === 'neerajyrns@gmail.com';
 
   const adminNav = [
@@ -271,7 +300,10 @@ export default function Layout({ children, currentPageName }) {
           {/* Logo */}
           <div className="flex items-center justify-between p-6 border-b">
             <div className="flex items-center gap-2">
-              <img src="https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg" alt="Bolify AI" className="h-[56px] object-contain rounded-md" />
+              <img src={wlLogoUrl} alt={wlAppName} className="h-[56px] object-contain rounded-md" />
+              {!isAdmin && brand?.dashboard_app_name && (
+                <span className="font-semibold text-gray-800 text-sm hidden xl:inline">{wlAppName}</span>
+              )}
             </div>
             <button
               onClick={() => setSidebarOpen(false)}
@@ -291,10 +323,11 @@ export default function Layout({ children, currentPageName }) {
                       <Link
                         key={item.path}
                         to={createPageUrl(item.path)}
+                        style={isActive ? { color: wlPrimary, backgroundColor: `${wlPrimary}1A` } : undefined}
                         className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
                           isActive
-                            ? 'bg-cyan-50 text-[#0097a7]'
-                            : 'text-gray-700 hover:bg-gray-50 hover:text-[#00bcd4]'
+                            ? ''
+                            : 'text-gray-700 hover:bg-gray-50'
                         }`}
                       >
                         <Icon className="w-5 h-5" />
@@ -314,10 +347,9 @@ export default function Layout({ children, currentPageName }) {
                           <Link
                             key={item.path}
                             to={createPageUrl(item.path)}
+                            style={isActive ? { color: wlPrimary, backgroundColor: `${wlPrimary}1A` } : undefined}
                             className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                              isActive
-                                ? 'bg-cyan-50 text-[#0097a7]'
-                                  : 'text-gray-700 hover:bg-gray-50 hover:text-[#00bcd4]'
+                              isActive ? '' : 'text-gray-700 hover:bg-gray-50'
                             }`}
                           >
                             <Icon className="w-5 h-5" />
@@ -370,7 +402,7 @@ export default function Layout({ children, currentPageName }) {
               <div className="text-sm text-gray-600">
                 {isAdmin ? (
                   <span className="font-medium text-[#0097a7]">Admin Panel — Bolify AI</span>
-                ) : (
+                ) : !client ? null : (
                   <span>
                     {client?.billing_type === 'unlimited' ? (
                       <span>Plan: <span className="font-medium">Unlimited × {client?.total_channels || 1} channel(s)</span></span>

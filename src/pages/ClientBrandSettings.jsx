@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Save, Loader2, MessageSquare, ShoppingBag, Phone, CalendarDays } from 'lucide-react';
+import { Save, Loader2, MessageSquare, ShoppingBag, Phone, CalendarDays, Sparkles } from 'lucide-react';
 import { toast } from "@/components/ui/use-toast";
 import BrandVoiceTab from '../components/brand/BrandVoiceTab';
 import ProductsServicesTab from '../components/brand/ProductsServicesTab';
 import ContactSocialTab from '../components/brand/ContactSocialTab';
 import OccasionsTab from '../components/brand/OccasionsTab';
+import WhiteLabelTab from '../components/brand/WhiteLabelTab';
 
 const DEFAULT_FORM = {
   brand_voice: '', tone: 'professional', target_audience: '', logo_url: '', brand_colors: '',
@@ -17,6 +18,7 @@ const DEFAULT_FORM = {
   addresses: [], contact_phone: '', contact_email: '', contact_whatsapp: '', website_url: '',
   social_instagram: '', social_facebook: '', social_linkedin: '', social_twitter: '',
   social_youtube: '', google_maps_link: '', enabled_occasions: [], custom_occasions: [],
+  dashboard_logo_url: '', dashboard_app_name: '', dashboard_primary_color: '', dashboard_favicon_url: '',
 };
 
 export default function ClientBrandSettings() {
@@ -76,14 +78,18 @@ export default function ClientBrandSettings() {
         </Button>
       </div>
 
-      <Tabs defaultValue="brand" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+      <Tabs defaultValue="whitelabel" className="w-full">
+        <TabsList className="grid w-full grid-cols-5">
+          <TabsTrigger value="whitelabel" className="gap-1.5 text-xs sm:text-sm"><Sparkles className="w-4 h-4 hidden sm:inline" /> White-Label</TabsTrigger>
           <TabsTrigger value="brand" className="gap-1.5 text-xs sm:text-sm"><MessageSquare className="w-4 h-4 hidden sm:inline" /> Brand & Voice</TabsTrigger>
           <TabsTrigger value="products" className="gap-1.5 text-xs sm:text-sm"><ShoppingBag className="w-4 h-4 hidden sm:inline" /> Products & Services</TabsTrigger>
           <TabsTrigger value="contact" className="gap-1.5 text-xs sm:text-sm"><Phone className="w-4 h-4 hidden sm:inline" /> Contact & Social</TabsTrigger>
           <TabsTrigger value="occasions" className="gap-1.5 text-xs sm:text-sm"><CalendarDays className="w-4 h-4 hidden sm:inline" /> Marketing Calendar</TabsTrigger>
         </TabsList>
 
+        <TabsContent value="whitelabel">
+          <WhiteLabelTab form={form} setForm={setForm} />
+        </TabsContent>
         <TabsContent value="brand">
           <BrandVoiceTab form={form} setForm={setForm} newTheme={newTheme} setNewTheme={setNewTheme} />
         </TabsContent>

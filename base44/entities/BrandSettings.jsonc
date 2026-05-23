@@ -254,6 +254,22 @@
         }
       },
       "description": "Client-added custom occasions not in default calendar"
+    },
+    "dashboard_logo_url": {
+      "type": "string",
+      "description": "White-label: Custom logo shown in the dashboard sidebar"
+    },
+    "dashboard_app_name": {
+      "type": "string",
+      "description": "White-label: Custom app name shown in the dashboard"
+    },
+    "dashboard_primary_color": {
+      "type": "string",
+      "description": "White-label: Custom primary color (hex) for the dashboard UI"
+    },
+    "dashboard_favicon_url": {
+      "type": "string",
+      "description": "White-label: Custom browser tab favicon URL"
     }
   },
   "required": [
