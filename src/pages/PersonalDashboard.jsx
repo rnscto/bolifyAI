@@ -65,7 +65,7 @@ export default function PersonalDashboard() {
 
       <div>
         <h1 className="text-3xl font-bold text-gray-900">
-          Hi, {user?.full_name} 👋
+          Hi, {user?.display_name || user?.full_name} 👋
         </h1>
         <p className="text-gray-600 mt-1">Your AI assistant is screening your calls</p>
       </div>
