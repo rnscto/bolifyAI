@@ -117,7 +117,7 @@ export default function PromptGeneratorDialog({
             Generate System Prompt & Persona
           </DialogTitle>
           <DialogDescription>
-            Provide business info, choose languages, optionally add a website + knowledge base — we'll generate a production-ready ≤5000-char prompt with anti-hallucination, noise handling, voice stability and language rules baked in.
+            Provide business info, choose languages, optionally add a website + knowledge base — we'll generate a production-ready ≤10000-char prompt with anti-hallucination, noise handling, voice stability and language rules baked in.
           </DialogDescription>
         </DialogHeader>
 

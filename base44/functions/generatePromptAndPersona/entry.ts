@@ -13,7 +13,7 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 //  - Stay under 5000 characters (hard cap enforced)
 // ─────────────────────────────────────────────────────────────────────
 
-const MAX_PROMPT_CHARS = 5000;
+const MAX_PROMPT_CHARS = 10000;
 
 function languageLabel(code) {
   const map = {
@@ -118,7 +118,7 @@ async function callAzureOpenAI({ system, user }) {
         { role: 'system', content: system },
         { role: 'user',   content: user }
       ],
-      max_completion_tokens: 1800,
+      max_completion_tokens: 3500,
       response_format: { type: 'json_object' }
     })
   });
@@ -233,7 +233,7 @@ Deno.serve(async (req) => {
 
 Return ONLY a JSON object with these exact keys:
 {
-  "business_section": "string — the business-specific portion of the system prompt. MUST be under 2800 characters. Describe the agent's persona (name, role, employer), the call goal, what they should ask, what they should offer, and how they should handle common objections. Use the GROUNDING CONTEXT if provided to make the prompt SPECIFIC to this business (real products, services, USPs, locations). Do NOT include generic phone-call rules — those are added separately. Write in clean prose with short labelled sections like 'WHO YOU ARE', 'ABOUT THE BUSINESS', 'CALL GOAL', 'WHAT TO ASK', 'OBJECTION HANDLING'. Plain text only — no markdown.",
+  "business_section": "string — the business-specific portion of the system prompt. MUST be under 7800 characters. Describe the agent's persona (name, role, employer), the call goal, what they should ask, what they should offer, and how they should handle common objections. Use the GROUNDING CONTEXT if provided to make the prompt SPECIFIC to this business (real products, services, USPs, locations). Do NOT include generic phone-call rules — those are added separately. Write in clean prose with short labelled sections like 'WHO YOU ARE', 'ABOUT THE BUSINESS', 'CALL GOAL', 'WHAT TO ASK', 'OBJECTION HANDLING'. Plain text only — no markdown.",
   "greeting": "string — the FIRST line the agent says when the call connects. Max 25 words. Natural in the PRIMARY language, identify the business, ask one short opening question. No emojis.",
   "agent_persona_name": "string — a natural Indian first name appropriate for the primary language",
   "recommended_tone": "string — one of: professional | friendly | formal | energetic | empathetic"
@@ -243,7 +243,7 @@ Rules for business_section:
 - Refer to the AI by its persona name + business name.
 - If GROUNDING CONTEXT is provided, extract and use concrete facts from it (products, services, USPs, key benefits, contact details) — but always instruct the agent to call search_knowledge_base BEFORE quoting specifics during the call.
 - Be specific to the industry, goal, and the languages the agent can speak.
-- Keep it under 2800 characters.`;
+- Keep it under 7800 characters.`;
 
     const usr = `Create the system prompt for this AI voice agent:
 
@@ -258,7 +258,7 @@ Tone: ${tone}
 Voice engine: ${voice_engine}
 Business description (optional): ${business_description || 'not provided'}
 ${groundingBlock}
-Remember: business_section MUST be under 2800 characters. Greeting must be under 25 words. Return JSON only.`;
+Remember: business_section MUST be under 7800 characters. Greeting must be under 25 words. Return JSON only.`;
 
     let llmOut;
     try {
