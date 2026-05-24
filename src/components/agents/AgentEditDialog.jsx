@@ -258,10 +258,10 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
               onChange={e => setForm(p => ({ ...p, system_prompt: e.target.value }))}
               placeholder="Instructions for the AI agent..."
               className="mt-1 h-48 font-mono text-xs"
-              maxLength={5000}
+              maxLength={10000}
             />
             <p className="text-xs text-gray-500 mt-1">
-              {form.system_prompt.length} / 5000 chars · Controls the agent's behavior, anti-hallucination rules, language and voice stability.
+              {form.system_prompt.length} / 10000 chars · Controls the agent's behavior, anti-hallucination rules, language and voice stability.
             </p>
           </div>
         </div>
