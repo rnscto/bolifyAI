@@ -53,48 +53,34 @@ async function getSmartfloToken(forceRefresh = false) {
   return _smartfloTokenCache.inFlight;
 }
 
-// ─── Audio Conversion Helpers ───
+// ─── Audio Bridging (NATIVE G.711 µ-LAW 8kHz — NO CONVERSION) ───
+//
+// Azure Realtime API natively supports g711_ulaw I/O at 8kHz; Smartflo natively streams
+// g711_ulaw at 8kHz. By telling both endpoints to use g711_ulaw we eliminate ALL audio
+// conversion (the previous code did 8k→24k upsample on input and 24k→8k decimation on
+// output PER PACKET, which caused aliasing, CPU jitter, and the breaking/glitching voice).
+//
+// Input  (Smartflo → Azure):   mu-law base64 → forwarded verbatim → input_audio_buffer.append
+// Output (Azure → Smartflo):   mu-law base64 → forwarded verbatim → media payload
+//
+// audioState is kept for backward compatibility with callers but no longer used.
 
-function decodeMulaw(m) { const B=33;let u=~m&0xFF;return ((u&0x80)?-1:1)*((((u&0x0F)<<3)+B)<<((u>>4)&0x07))-B; }
-function encodeMulaw(s) { const M=32635,B=33;const sn=s<0?0x80:0;if(s<0)s=-s;if(s>M)s=M;s+=B;let e=7;for(;e>0;e--){if(s&0x4000)break;s<<=1;}return ~(sn|(e<<4)|((s>>10)&0x0F))&0xFF; }
-
-// Realtime API uses 24kHz PCM16, Smartflo uses 8kHz mu-law (upsample 8k→24k input, downsample 24k→8k output).
-// Per-session audio state is passed in to avoid cross-call corruption.
-
-// Convert mu-law 8kHz → PCM16 24kHz LE base64 (upsample 3x for Realtime API)
-function mulawToBase64PCM16_24k(mb, ast) {
-  const p8 = new Int16Array(mb.length);
-  for(let i=0;i<mb.length;i++) p8[i] = decodeMulaw(mb[i]);
-  const p24 = new Int16Array(p8.length * 3);
-  for(let i=0;i<p8.length;i++) {
-    const s0 = i===0 ? ast.lastUpsampleValue : p8[i-1], s1 = p8[i], s2 = i<p8.length-1 ? p8[i+1] : s1;
-    p24[i*3] = s1; p24[i*3+1] = Math.round(s1+(s2-s0)/6); p24[i*3+2] = Math.round(s1+(s2-s0)/3);
-  }
-  if(p8.length>0) ast.lastUpsampleValue = p8[p8.length-1];
-  const buf = new Uint8Array(p24.length * 2), vw = new DataView(buf.buffer);
-  for(let i=0;i<p24.length;i++) vw.setInt16(i*2, p24[i], true);
-  let bin = ''; for(let i=0;i<buf.length;i++) bin += String.fromCharCode(buf[i]);
+// Pass-through: caller→model (Smartflo gives us base64 mu-law already, we just forward it)
+function mulawBytesToBase64ULaw(mb) {
+  let bin = ''; for (let i = 0; i < mb.length; i++) bin += String.fromCharCode(mb[i]);
   return btoa(bin);
 }
 
-// Convert PCM16 24kHz LE base64 (from Realtime API) → mu-law 8kHz bytes (downsample 3x)
-// Uses a 3-tap averaging low-pass filter before decimation to prevent aliasing
-function base64PCM16_24kToMulaw(b64, ast) {
-  const rw = atob(b64), bs = new Uint8Array(rw.length);
-  for(let i=0;i<rw.length;i++) bs[i] = rw.charCodeAt(i);
-  const n = Math.floor(bs.length/2), vw = new DataView(bs.buffer, bs.byteOffset, bs.byteLength);
-  const rem = ast.lastDownsampleRemainder, all = new Int16Array(rem.length + n);
-  for(let i=0;i<rem.length;i++) all[i] = rem[i];
-  for(let i=0;i<n;i++) all[rem.length+i] = vw.getInt16(i*2, true);
-  const dl = Math.floor(all.length/3), mu = new Uint8Array(dl);
-  for(let i=0;i<dl;i++) {
-    const idx=i*3, p=idx>0?all[idx-1]:all[idx], c=all[idx], nx=idx+1<all.length?all[idx+1]:c;
-    mu[i] = encodeMulaw(Math.max(-32768, Math.min(32767, Math.round((p+2*c+nx)/4))));
-  }
-  const nr = []; for(let i=dl*3;i<all.length;i++) nr.push(all[i]);
-  ast.lastDownsampleRemainder = nr;
-  return mu;
+// Pass-through: model→caller (Azure gives us base64 mu-law, we decode to bytes for paced send)
+function base64ULawToMulawBytes(b64) {
+  const raw = atob(b64), out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
 }
+
+// Aliases preserved for existing call-sites — they now do native mu-law pass-through
+function mulawToBase64PCM16_24k(mb, _ast) { return mulawBytesToBase64ULaw(mb); }
+function base64PCM16_24kToMulaw(b64, _ast) { return base64ULawToMulawBytes(b64); }
 
 // ─── Save call record (reused from original) ───
 
@@ -1032,10 +1018,14 @@ Deno.serve(async (req) => {
         transferInstr = `\n\nYou can transfer to a human via transfer_to_human when the caller explicitly asks or you cannot resolve their issue. Always inform the caller before transferring.`;
       }
       const tools = buildToolDefinitions();
+      // NATIVE TELEPHONY FORMAT: g711_ulaw 8kHz both ways — eliminates resampling artifacts.
+      // Azure Realtime supports g711_ulaw as input_audio_format AND output_audio_format,
+      // matching Smartflo's native mu-law/8000 spec exactly. ZERO conversion = clean audio.
       const fullCfg = {
         modalities: ['text', 'audio'],
         voice: session.voiceType,
-        output_audio_format: 'pcm16',
+        input_audio_format: 'g711_ulaw',
+        output_audio_format: 'g711_ulaw',
         instructions: timeInjection + noiseHandling + session.systemPrompt + transferInstr
       };
       if (tools.length > 0) { fullCfg.tools = tools; fullCfg.tool_choice = 'auto'; }
@@ -1088,7 +1078,8 @@ Deno.serve(async (req) => {
       } else {
         sessionConfig.modalities = ['text', 'audio'];
         sessionConfig.instructions = timeInjection + noiseHandling + session.systemPrompt + transferInstructions + greetingGuard;
-        sessionConfig.output_audio_format = 'pcm16';
+        sessionConfig.input_audio_format = 'g711_ulaw';
+        sessionConfig.output_audio_format = 'g711_ulaw';
         if (!session._voiceLocked) { sessionConfig.voice = session.voiceType; session._voiceLocked = true; }
       }
       if (tools.length > 0) { sessionConfig.tools = tools; sessionConfig.tool_choice = 'auto'; }
@@ -1127,7 +1118,8 @@ Deno.serve(async (req) => {
           sessionConfig.instructions = timeInjection + session.systemPrompt;
           // Set voice on reconnect (new connection = new session = needs voice).
           sessionConfig.voice = session.voiceType;
-          sessionConfig.output_audio_format = 'pcm16';
+          sessionConfig.input_audio_format = 'g711_ulaw';
+          sessionConfig.output_audio_format = 'g711_ulaw';
           session._voiceLocked = true;
         }
         if (tools.length > 0) { sessionConfig.tools = tools; sessionConfig.tool_choice = 'auto'; }
@@ -1143,11 +1135,11 @@ Deno.serve(async (req) => {
         // and the `_voiceLocked` flag will prevent any later re-send (Azure rejects
         // voice changes once assistant audio is present).
         sendToRealtime({ type: 'session.update', session: {
-          input_audio_format: 'pcm16',
+          input_audio_format: 'g711_ulaw',
           input_audio_transcription: { model: 'whisper-1' },
           turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 }
         }});
-        console.log(`[${reqId}] 📤 Minimal pre-config sent (no voice/modalities yet — waiting for agent config)`);
+        console.log(`[${reqId}] 📤 Minimal pre-config sent (g711_ulaw, no voice yet — waiting for agent config)`);
       }
       return;
     }
@@ -1220,7 +1212,9 @@ Deno.serve(async (req) => {
     }
 
     if (type === 'input_audio_buffer.speech_started') {
+      // Caller interrupted — flush both Smartflo's playback buffer AND our local pacer queue
       if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) { smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: session.streamSid })); }
+      clearOutQueue();
       if (session._ttsAbort) { session._ttsAbort.abort(); session._ttsAbort = null; }
       session.isSpeaking = false; return;
     }
@@ -1463,30 +1457,61 @@ Deno.serve(async (req) => {
     return btoa(binary);
   }
 
-  // ─── Send mu-law audio to Smartflo in 160-byte aligned chunks ───
-  function sendMulawToSmartflo(mulawBytes) {
-    const CHUNK_SIZE = 960; // 120ms at 8kHz mu-law (smaller = smoother audio, less breaking)
-    for (let i = 0; i < mulawBytes.length; i += CHUNK_SIZE) {
-      const end = Math.min(i + CHUNK_SIZE, mulawBytes.length);
-      let chunk = mulawBytes.slice(i, end);
+  // ─── Send mu-law to Smartflo with REAL-TIME 20ms PACING ───
+  // Smartflo expects audio to arrive at real-time playback speed (one 20ms frame every 20ms).
+  // Bursting an entire utterance instantly overflows Smartflo's playback buffer → freezing/stuttering.
+  // We queue and drain at exactly 20ms intervals = 160 mu-law bytes per frame (8kHz × 20ms × 1 byte).
+  // CRITICAL: NEVER pad with silence (0xFF) mid-speech — that injects audible gaps. Any leftover
+  // bytes < 160 are held in the queue for the next packet.
+  session._outQueue = session._outQueue || new Uint8Array(0);
+  session._outTimer = session._outTimer || null;
+  session._outNextDueMs = session._outNextDueMs || 0;
 
-      // Pad to 160-byte boundary (20ms frame alignment)
-      if (chunk.length % 160 !== 0) {
-        const paddedLen = Math.ceil(chunk.length / 160) * 160;
-        const padded = new Uint8Array(paddedLen);
-        padded.set(chunk);
-        padded.fill(0xFF, chunk.length); // silence padding
-        chunk = padded;
-      }
-
-      const payload = uint8ToBase64(chunk);
-      smartfloSocket.send(JSON.stringify({
-        event: 'media',
-        streamSid: session.streamSid,
-        media: { payload }
-      }));
-    }
+  function enqueueMulawForSmartflo(mulawBytes) {
+    // Append to per-session queue
+    const merged = new Uint8Array(session._outQueue.length + mulawBytes.length);
+    merged.set(session._outQueue, 0); merged.set(mulawBytes, session._outQueue.length);
+    session._outQueue = merged;
+    if (!session._outTimer) startOutPacer();
   }
+
+  function startOutPacer() {
+    const FRAME_BYTES = 160; // 20ms @ 8kHz mu-law
+    const FRAME_MS = 20;
+    session._outNextDueMs = Date.now();
+    const tick = () => {
+      if (session._callEnded || smartfloSocket.readyState !== WebSocket.OPEN) {
+        session._outTimer = null; return;
+      }
+      // Drain all frames whose play-time has arrived (catch-up if event-loop was busy)
+      while (session._outQueue.length >= FRAME_BYTES && Date.now() >= session._outNextDueMs) {
+        const frame = session._outQueue.slice(0, FRAME_BYTES);
+        session._outQueue = session._outQueue.slice(FRAME_BYTES);
+        if (session.streamSid) {
+          smartfloSocket.send(JSON.stringify({
+            event: 'media', streamSid: session.streamSid,
+            media: { payload: uint8ToBase64(frame) }
+          }));
+        }
+        session._outNextDueMs += FRAME_MS;
+      }
+      // If we drained everything and have no leftover, stop the pacer until next audio arrives
+      if (session._outQueue.length < FRAME_BYTES && !session.isSpeaking) {
+        session._outTimer = null; return;
+      }
+      session._outTimer = setTimeout(tick, 5); // 5ms granularity for accurate pacing
+    };
+    session._outTimer = setTimeout(tick, 0);
+  }
+
+  // Called by interrupt handler to instantly drop queued AI audio when caller speaks
+  function clearOutQueue() {
+    session._outQueue = new Uint8Array(0);
+    if (session._outTimer) { clearTimeout(session._outTimer); session._outTimer = null; }
+  }
+
+  // Backward-compatible name used elsewhere in this file
+  function sendMulawToSmartflo(mulawBytes) { enqueueMulawForSmartflo(mulawBytes); }
 
   async function synthesizeWithAzureSpeech(text) {
     const speechKey = Deno.env.get('AZURE_SPEECH_KEY'), speechRegion = Deno.env.get('AZURE_SPEECH_REGION');

@@ -66,83 +66,18 @@ async function getSmartfloToken(forceRefresh = false) {
 // not this one — this function will reject them.
 // ═══════════════════════════════════════════════════════════════
 
-// ─── Audio Conversion Helpers ───
-function decodeMulaw(mulawByte) {
-  const MULAW_BIAS = 33;
-  let mu = ~mulawByte & 0xFF;
-  const sign = (mu & 0x80) ? -1 : 1;
-  const exponent = (mu >> 4) & 0x07;
-  const mantissa = mu & 0x0F;
-  let sample = ((mantissa << 3) + MULAW_BIAS) << exponent;
-  sample -= MULAW_BIAS;
-  return sign * sample;
+// ─── Audio Bridging (NATIVE G.711 µ-LAW 8kHz — NO CONVERSION) ───
+// Azure Realtime supports g711_ulaw natively; Smartflo streams g711_ulaw natively.
+// Pass mu-law through both directions verbatim — eliminates resampling artifacts that
+// caused breaking/glitching voice in the previous implementation.
+function mulawToBase64PCM16_24k(mb, _ast) {
+  let bin = ''; for (let i = 0; i < mb.length; i++) bin += String.fromCharCode(mb[i]);
+  return btoa(bin);
 }
-
-function encodeMulaw(sample) {
-  const MULAW_MAX = 32635;
-  const MULAW_BIAS = 33;
-  const sign = sample < 0 ? 0x80 : 0;
-  if (sample < 0) sample = -sample;
-  if (sample > MULAW_MAX) sample = MULAW_MAX;
-  sample += MULAW_BIAS;
-  let exponent = 7;
-  const expMask = 0x4000;
-  for (; exponent > 0; exponent--) {
-    if (sample & expMask) break;
-    sample <<= 1;
-  }
-  const mantissa = (sample >> 10) & 0x0F;
-  return ~(sign | (exponent << 4) | mantissa) & 0xFF;
-}
-
-function mulawToBase64PCM16_24k(mulawBytes, audioState) {
-  const pcm8k = new Int16Array(mulawBytes.length);
-  for (let i = 0; i < mulawBytes.length; i++) pcm8k[i] = decodeMulaw(mulawBytes[i]);
-  const pcm24k = new Int16Array(pcm8k.length * 3);
-  for (let i = 0; i < pcm8k.length; i++) {
-    const s0 = i === 0 ? audioState.lastUpsampleValue : pcm8k[i - 1];
-    const s1 = pcm8k[i];
-    const s2 = i < pcm8k.length - 1 ? pcm8k[i + 1] : s1;
-    pcm24k[i * 3] = s1;
-    pcm24k[i * 3 + 1] = Math.round(s1 + (s2 - s0) / 6);
-    pcm24k[i * 3 + 2] = Math.round(s1 + (s2 - s0) / 3);
-  }
-  if (pcm8k.length > 0) audioState.lastUpsampleValue = pcm8k[pcm8k.length - 1];
-  const buffer = new Uint8Array(pcm24k.length * 2);
-  const view = new DataView(buffer.buffer);
-  for (let i = 0; i < pcm24k.length; i++) view.setInt16(i * 2, pcm24k[i], true);
-  let binary = '';
-  for (let i = 0; i < buffer.length; i++) binary += String.fromCharCode(buffer[i]);
-  return btoa(binary);
-}
-
-function base64PCM16_24kToMulaw(base64Pcm16, audioState) {
-  const raw = atob(base64Pcm16);
-  const bytes = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
-  const numSamples = Math.floor(bytes.length / 2);
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const remainder = audioState.lastDownsampleRemainder;
-  const allSamples = new Int16Array(remainder.length + numSamples);
-  for (let i = 0; i < remainder.length; i++) allSamples[i] = remainder[i];
-  for (let i = 0; i < numSamples; i++) allSamples[remainder.length + i] = view.getInt16(i * 2, true);
-  const totalSamples = allSamples.length;
-  const downsampledLen = Math.floor(totalSamples / 3);
-  const mulaw = new Uint8Array(downsampledLen);
-  for (let i = 0; i < downsampledLen; i++) {
-    const idx = i * 3;
-    const prev = idx > 0 ? allSamples[idx - 1] : allSamples[idx];
-    const curr = allSamples[idx];
-    const next = idx + 1 < totalSamples ? allSamples[idx + 1] : curr;
-    const filtered = Math.round((prev + 2 * curr + next) / 4);
-    const clamped = Math.max(-32768, Math.min(32767, filtered));
-    mulaw[i] = encodeMulaw(clamped);
-  }
-  const consumed = downsampledLen * 3;
-  const newRemainder = [];
-  for (let i = consumed; i < totalSamples; i++) newRemainder.push(allSamples[i]);
-  audioState.lastDownsampleRemainder = newRemainder;
-  return mulaw;
+function base64PCM16_24kToMulaw(b64, _ast) {
+  const raw = atob(b64), out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
 }
 
 // ─── Save call record (post-call analysis + persistence) ───
@@ -689,10 +624,12 @@ Deno.serve(async (req) => {
         transferInstr = `\n\nUse transfer_to_human when caller explicitly asks for a human or for complex issues. Confirm before transferring.`;
       }
       const tools = buildToolDefinitions();
+      // NATIVE TELEPHONY FORMAT: g711_ulaw 8kHz both directions (matches Smartflo exactly).
       const fullCfg = {
         modalities: ['text', 'audio'],
         voice: session.voiceType,
-        output_audio_format: 'pcm16',
+        input_audio_format: 'g711_ulaw',
+        output_audio_format: 'g711_ulaw',
         instructions: timeInjection + noiseHandling + session.systemPrompt + transferInstr
       };
       if (tools.length > 0) { fullCfg.tools = tools; fullCfg.tool_choice = 'auto'; }
@@ -731,7 +668,8 @@ Deno.serve(async (req) => {
     } else {
       sessionConfig.modalities = ['text', 'audio'];
       sessionConfig.instructions = timeInjection + noiseHandling + session.systemPrompt + transferInstructions + greetingGuard;
-      sessionConfig.output_audio_format = 'pcm16';
+      sessionConfig.input_audio_format = 'g711_ulaw';
+      sessionConfig.output_audio_format = 'g711_ulaw';
       // VOICE STABILITY FIX: only include `voice` on the FIRST session.update of this connection.
       if (!session._voiceLocked) {
         sessionConfig.voice = session.voiceType;
@@ -752,9 +690,9 @@ Deno.serve(async (req) => {
         const isHybrid = session.voiceEngine === 'azure_speech';
         const tools = buildToolDefinitions();
         const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
-        const sessionConfig = { input_audio_format: 'pcm16', input_audio_transcription: { model: 'whisper-1', language: 'hi' }, turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } };
+        const sessionConfig = { input_audio_format: 'g711_ulaw', input_audio_transcription: { model: 'whisper-1', language: 'hi' }, turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } };
         if (isHybrid) { sessionConfig.instructions = 'You are a transcription-only assistant.'; sessionConfig.modalities = ['text']; sessionConfig.voice = 'alloy'; }
-        else { sessionConfig.modalities = ['text', 'audio']; sessionConfig.instructions = `\n[LIVE CLOCK] Current IST: ${nowIST}.\n` + session.systemPrompt; sessionConfig.voice = session.voiceType; sessionConfig.output_audio_format = 'pcm16'; session._voiceLocked = true; }
+        else { sessionConfig.modalities = ['text', 'audio']; sessionConfig.instructions = `\n[LIVE CLOCK] Current IST: ${nowIST}.\n` + session.systemPrompt; sessionConfig.voice = session.voiceType; sessionConfig.input_audio_format = 'g711_ulaw'; sessionConfig.output_audio_format = 'g711_ulaw'; session._voiceLocked = true; }
         if (tools.length > 0) { sessionConfig.tools = tools; sessionConfig.tool_choice = 'auto'; }
         sendToRealtime({ type: 'session.update', session: sessionConfig });
       } else if (session._fastConfigReady) {
@@ -762,7 +700,7 @@ Deno.serve(async (req) => {
       } else {
         // Minimal pre-config WITHOUT voice/modalities. The voice will be set exactly ONCE
         // when triggerPhase1Greeting() fires the full Phase-2 session.update.
-        sendToRealtime({ type: 'session.update', session: { input_audio_format: 'pcm16', input_audio_transcription: { model: 'whisper-1' }, turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } }});
+        sendToRealtime({ type: 'session.update', session: { input_audio_format: 'g711_ulaw', input_audio_transcription: { model: 'whisper-1' }, turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } }});
       }
       return;
     }
@@ -800,7 +738,9 @@ Deno.serve(async (req) => {
     }
     if (type === 'response.text.done' && session.voiceEngine === 'azure_speech') return;
     if (type === 'input_audio_buffer.speech_started') {
+      // Caller interrupted — flush Smartflo playback AND local pacer queue
       if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: session.streamSid }));
+      clearOutQueue();
       if (session._ttsAbort) { session._ttsAbort.abort(); session._ttsAbort = null; }
       session.isSpeaking = false; return;
     }
@@ -982,20 +922,55 @@ Deno.serve(async (req) => {
     return btoa(binary);
   }
 
-  function sendMulawToSmartflo(mulawBytes) {
-    const CHUNK_SIZE = 960;
-    for (let i = 0; i < mulawBytes.length; i += CHUNK_SIZE) {
-      const end = Math.min(i + CHUNK_SIZE, mulawBytes.length);
-      let chunk = mulawBytes.slice(i, end);
-      if (chunk.length % 160 !== 0) {
-        const paddedLen = Math.ceil(chunk.length / 160) * 160;
-        const padded = new Uint8Array(paddedLen);
-        padded.set(chunk); padded.fill(0xFF, chunk.length);
-        chunk = padded;
-      }
-      smartfloSocket.send(JSON.stringify({ event: 'media', streamSid: session.streamSid, media: { payload: uint8ToBase64(chunk) } }));
-    }
+  // ─── 20ms PACED output to Smartflo (NO bursting, NO silence-padding) ───
+  // Smartflo expects audio at real-time playback rate. Bursting causes freezing; padding
+  // partial frames with 0xFF injects audible silence mid-speech. We queue and drain at
+  // exactly 20ms intervals (160 mu-law bytes per frame) and KEEP leftover < 160 bytes
+  // in the queue until the next chunk arrives.
+  session._outQueue = session._outQueue || new Uint8Array(0);
+  session._outTimer = session._outTimer || null;
+  session._outNextDueMs = session._outNextDueMs || 0;
+
+  function enqueueMulawForSmartflo(mulawBytes) {
+    const merged = new Uint8Array(session._outQueue.length + mulawBytes.length);
+    merged.set(session._outQueue, 0); merged.set(mulawBytes, session._outQueue.length);
+    session._outQueue = merged;
+    if (!session._outTimer) startOutPacer();
   }
+
+  function startOutPacer() {
+    const FRAME_BYTES = 160;  // 20ms @ 8kHz mu-law
+    const FRAME_MS = 20;
+    session._outNextDueMs = Date.now();
+    const tick = () => {
+      if (session._callEnded || smartfloSocket.readyState !== WebSocket.OPEN) {
+        session._outTimer = null; return;
+      }
+      while (session._outQueue.length >= FRAME_BYTES && Date.now() >= session._outNextDueMs) {
+        const frame = session._outQueue.slice(0, FRAME_BYTES);
+        session._outQueue = session._outQueue.slice(FRAME_BYTES);
+        if (session.streamSid) {
+          smartfloSocket.send(JSON.stringify({
+            event: 'media', streamSid: session.streamSid,
+            media: { payload: uint8ToBase64(frame) }
+          }));
+        }
+        session._outNextDueMs += FRAME_MS;
+      }
+      if (session._outQueue.length < FRAME_BYTES && !session.isSpeaking) {
+        session._outTimer = null; return;
+      }
+      session._outTimer = setTimeout(tick, 5);
+    };
+    session._outTimer = setTimeout(tick, 0);
+  }
+
+  function clearOutQueue() {
+    session._outQueue = new Uint8Array(0);
+    if (session._outTimer) { clearTimeout(session._outTimer); session._outTimer = null; }
+  }
+
+  function sendMulawToSmartflo(mulawBytes) { enqueueMulawForSmartflo(mulawBytes); }
 
   async function synthesizeWithAzureSpeech(text) {
     const speechKey = Deno.env.get('AZURE_SPEECH_KEY'), speechRegion = Deno.env.get('AZURE_SPEECH_REGION');
