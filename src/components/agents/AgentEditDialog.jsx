@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { Loader2, Save, BookOpen, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { REALTIME_VOICES, AZURE_SPEECH_VOICES } from './VoiceData';
+import { REALTIME_VOICES, AZURE_SPEECH_VOICES, GEMINI_VOICES } from './VoiceData';
 import { INDIAN_LANGUAGES } from './IndianLanguages';
 import PromptGeneratorDialog from './PromptGeneratorDialog';
 import { Sparkles } from 'lucide-react';
@@ -89,7 +89,7 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
     }));
   };
 
-  const voices = form.persona.voice_engine === 'realtime' ? REALTIME_VOICES : AZURE_SPEECH_VOICES;
+  const voices = form.persona.voice_engine === 'realtime' ? REALTIME_VOICES : (form.persona.voice_engine === 'gemini_realtime' ? GEMINI_VOICES : AZURE_SPEECH_VOICES);
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -145,12 +145,13 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
               <Label>Voice Engine</Label>
               <Select value={form.persona.voice_engine} onValueChange={v => {
                 updatePersona('voice_engine', v);
-                updatePersona('voice_type', v === 'realtime' ? 'alloy' : 'en-IN-NeerjaNeural');
+                updatePersona('voice_type', v === 'realtime' ? 'alloy' : (v === 'gemini_realtime' ? 'Aoede' : 'en-IN-NeerjaNeural'));
               }}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="realtime">Realtime (GPT-4o built-in)</SelectItem>
                   <SelectItem value="azure_speech">Azure Speech (400+ voices)</SelectItem>
+                  <SelectItem value="gemini_realtime">Gemini Realtime (Gemini 2.0 Flash Lite)</SelectItem>
                 </SelectContent>
               </Select>
             </div>

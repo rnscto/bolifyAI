@@ -13,6 +13,15 @@ export const REALTIME_VOICES = [
 ];
 
 // Azure Speech TTS voices (popular Indian English + Hindi voices)
+export const GEMINI_VOICES = [
+  { name: "Aoede", gender: "Female", style: "Neutral" },
+  { name: "Puck", gender: "Male", style: "Neutral" },
+  { name: "Charon", gender: "Male", style: "Neutral" },
+  { name: "Kore", gender: "Female", style: "Neutral" },
+  { name: "Fenrir", gender: "Male", style: "Neutral" },
+  { name: "Leto", gender: "Female", style: "Neutral" }
+];
+
 export const AZURE_SPEECH_VOICES = [
   // English (India)
   { name: "en-IN-NeerjaNeural", gender: "Female", style: "Default Indian English", lang: "en-IN" },

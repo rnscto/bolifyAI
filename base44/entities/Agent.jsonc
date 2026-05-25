@@ -21,10 +21,11 @@
           "type": "string",
           "enum": [
             "realtime",
-            "azure_speech"
+            "azure_speech",
+            "gemini_realtime"
           ],
           "default": "realtime",
-          "description": "Voice engine: realtime (built-in GPT-4o voices) or azure_speech (Azure Speech TTS with 400+ voices)"
+          "description": "Voice engine: realtime (built-in GPT-4o voices), azure_speech (Azure Speech TTS), or gemini_realtime (Gemini Live API)"
         },
         "voice_type": {
           "type": "string",

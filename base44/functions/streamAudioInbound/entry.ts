@@ -334,6 +334,45 @@ Deno.serve(async (req) => {
 
   // ─── Connect to Azure Realtime API ───
   function connectRealtime() {
+    if (session.voiceEngine === 'gemini_realtime') {
+      const geminiKey = Deno.env.get('GEMINI_API_KEY');
+      if (!geminiKey) { console.error(`[${reqId}] ❌ Missing GEMINI_API_KEY`); return; }
+      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${geminiKey}`;
+      console.log(`[${reqId}] 🔌 Connecting to Gemini Realtime...`);
+      const ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        console.log(`[${reqId}] ✅ Gemini Realtime WebSocket connected (attempt ${session._realtimeReconnectAttempts})`);
+        session._realtimeReconnectAttempts = 0;
+        session._lastRealtimeOpenTs = Date.now();
+        if (session._fastConfigReady) {
+           triggerPhase1Greeting();
+        }
+      };
+      ws.onmessage = (event) => {
+        try {
+          const text = typeof event.data === 'string' ? event.data : new TextDecoder().decode(event.data);
+          handleGeminiMessage(JSON.parse(text));
+        } catch (err) {
+          console.error(`[${reqId}] ❌ Gemini parse error: ${err.message}`);
+        }
+      };
+      ws.onclose = (event) => {
+        console.log(`[${reqId}] 🔴 Gemini Realtime closed: code=${event.code}`);
+        session.realtimeReady = false;
+        const stableMs = session._lastRealtimeOpenTs ? (Date.now() - session._lastRealtimeOpenTs) : 0;
+        if (stableMs > 30000 && session._realtimeReconnectAttempts > 0) session._realtimeReconnectAttempts = 0;
+        const RECONNECT_DELAYS_MS = [500, 1500, 3000, 6000, 10000, 15000];
+        if (!session._callEnded && session._realtimeReconnectAttempts < RECONNECT_DELAYS_MS.length) {
+          const delay = RECONNECT_DELAYS_MS[session._realtimeReconnectAttempts];
+          session._realtimeReconnectAttempts++;
+          setTimeout(() => { if (!session._callEnded) connectRealtime(); }, delay);
+        }
+      };
+      ws.onerror = () => console.error(`[${reqId}] ❌ Gemini error`);
+      session.realtimeWs = ws;
+      return;
+    }
+
     const realtimeUrl = Deno.env.get('AZURE_REALTIME_ENDPOINT');
     const realtimeKey = Deno.env.get('AZURE_REALTIME_KEY');
     if (!realtimeUrl || !realtimeKey) { console.error(`[${reqId}] ❌ Missing AZURE_REALTIME secrets`); return; }
@@ -405,6 +444,24 @@ Deno.serve(async (req) => {
     return null;
   }
 
+  function buildGeminiTools() {
+    const openaiTools = buildToolDefinitions();
+    if (!openaiTools || openaiTools.length === 0) return [];
+    return [{
+      functionDeclarations: openaiTools.map(t => ({
+        name: t.name,
+        description: t.description,
+        parameters: {
+          type: "OBJECT",
+          properties: Object.fromEntries(
+            Object.entries(t.parameters.properties).map(([k, v]) => [k, { type: v.type.toUpperCase(), description: v.description, enum: v.enum }])
+          ),
+          required: t.parameters.required
+        }
+      }))
+    }];
+  }
+
   function buildToolDefinitions() {
     const tools = [];
     tools.push({type:'function',name:'end_call',description:'End/disconnect the call. Use when conversation concluded with goodbye, spam declined, or caller asked to end. Say goodbye BEFORE calling this.',parameters:{type:'object',properties:{reason:{type:'string'}},required:['reason']}});
@@ -434,7 +491,8 @@ Deno.serve(async (req) => {
     if (functionName === 'end_call') {
       const a = JSON.parse(argsStr);
       result = { success: true };
-      sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } });
+      if (session.voiceEngine === 'gemini_realtime') { sendToRealtime({ toolResponse: { functionResponses: [{ id: callId, name: functionName, response: result }] } }); }
+      else { sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } }); }
       session.transcript.push({ speaker: 'System', text: `[Call ended: ${a.reason}]` });
       setTimeout(() => hangupCall(a.reason || 'ended'), 1500);
       return;
@@ -462,8 +520,8 @@ Deno.serve(async (req) => {
           }
         }
       } catch (err) { result = { error: `Transfer failed: ${err.message}` }; }
-      sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } });
-      sendToRealtime({ type: 'response.create' });
+      if (session.voiceEngine === 'gemini_realtime') { sendToRealtime({ toolResponse: { functionResponses: [{ id: callId, name: functionName, response: result }] } }); }
+      else { sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } }); sendToRealtime({ type: 'response.create' }); }
       return;
     }
 
@@ -481,8 +539,8 @@ Deno.serve(async (req) => {
         }
         console.log(`[${reqId}] 📚 KB "${(args.query || '').substring(0, 50)}" → ${data.results?.length || 0} passages`);
       } catch (err) { result = { error: 'KB search failed', passages: '' }; }
-      sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } });
-      sendToRealtime({ type: 'response.create' });
+      if (session.voiceEngine === 'gemini_realtime') { sendToRealtime({ toolResponse: { functionResponses: [{ id: callId, name: functionName, response: result }] } }); }
+      else { sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } }); sendToRealtime({ type: 'response.create' }); }
       return;
     }
 
@@ -522,8 +580,12 @@ Deno.serve(async (req) => {
       } catch (err) { result = { error: err.message }; }
     }
 
-    sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } });
-    sendToRealtime({ type: 'response.create' });
+    if (session.voiceEngine === 'gemini_realtime') {
+      sendToRealtime({ toolResponse: { functionResponses: [{ id: callId, name: functionName, response: result }] } });
+    } else {
+      sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } });
+      sendToRealtime({ type: 'response.create' });
+    }
   }
 
   function formatShopifyOrder(o) {
@@ -544,6 +606,30 @@ Deno.serve(async (req) => {
       session.chatHistory = [{ role: 'system', content: 'You are a helpful AI voice assistant.' }, { role: 'assistant', content: greeting }];
       synthesizeWithAzureSpeech(greeting);
       applySessionConfig();
+    } else if (session.voiceEngine === 'gemini_realtime') {
+      const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+      const timeInjection = `\n[LIVE CLOCK] Current IST: ${nowIST}.\n`;
+      const noiseHandling = `\n[AUDIO RULES] Phone call. Only respond to clear speech. Ignore garbled/short utterances. Keep replies 1-2 sentences.\n`;
+      let transferInstr = '';
+      if (session.humanTransferNumber && session.enableAutoTransfer) transferInstr = `\n\nUse transfer_to_human when caller explicitly asks for a human.`;
+      const tools = buildGeminiTools();
+      const setupMsg = {
+        setup: {
+          model: "models/gemini-2.0-flash-lite-preview-02-27",
+          generationConfig: {
+            responseModalities: ["AUDIO"],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: session.voiceType || "Aoede" } } }
+          },
+          systemInstruction: { parts: [{ text: timeInjection + noiseHandling + session.systemPrompt + transferInstr }] }
+        }
+      };
+      if (tools.length > 0) setupMsg.setup.tools = tools;
+      sendToRealtime(setupMsg);
+      session._voiceLocked = true;
+      session._phase2Sent = true;
+      
+      const greetingMsg = greeting ? `[SYSTEM: Say this exact greeting: "${greeting}"]` : `[SYSTEM: The call just connected. Greet warmly.]`;
+      sendToRealtime({ clientContent: { turns: [{ role: 'user', parts: [{ text: greetingMsg }] }], turnComplete: true } });
     } else {
       // VOICE LOCK: send the FULL Phase-2 config (voice + final instructions + tools) in a
       // SINGLE session.update BEFORE any assistant audio is generated. After this, Azure
@@ -674,6 +760,59 @@ Deno.serve(async (req) => {
     if (type === 'input_audio_buffer.speech_stopped') return;
     if (type === 'response.function_call_arguments.done') { executeToolCall(msg.call_id, msg.name, msg.arguments || '{}'); return; }
     if (type === 'error') { console.error(`[${reqId}] ❌ Realtime error:`, JSON.stringify(msg.error || msg)); return; }
+  }
+
+  function handleGeminiMessage(msg) {
+    if (msg.setupComplete) {
+      console.log(`[${reqId}] ✅ Gemini setup complete`);
+      session.realtimeReady = true;
+      return;
+    }
+    if (msg.serverContent) {
+      const modelTurn = msg.serverContent.modelTurn;
+      if (modelTurn) {
+        for (const part of modelTurn.parts) {
+          if (part.inlineData && part.inlineData.data) {
+             session.isSpeaking = true;
+             const mulawBytes = base64PCM16_24kToMulaw(part.inlineData.data, session._audioState);
+             if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
+               sendMulawToSmartflo(mulawBytes);
+             }
+          }
+          if (part.text) {
+             console.log(`[${reqId}] 🤖 AI: "${part.text.substring(0, 100)}"`);
+             session.transcript.push({ speaker: 'AI', text: part.text.trim() });
+             if (session._personalMode && session._personalClientId && !session._midCallTgSent) {
+               const aiCount = session.transcript.filter(t => t.speaker === 'AI').length;
+               if (aiCount >= 3) { session._midCallTgSent = true; sendMidCallTelegramUpdate(); }
+             }
+          }
+          if (part.functionCall) {
+             const args = JSON.stringify(part.functionCall.args || {});
+             executeToolCall(part.functionCall.id, part.functionCall.name, args);
+          }
+        }
+      }
+      if (msg.serverContent.turnComplete) {
+        session.isSpeaking = false;
+        session._responseInFlight = false;
+      }
+      if (msg.serverContent.interrupted) {
+        if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
+          smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: session.streamSid }));
+        }
+        session.isSpeaking = false;
+      }
+    }
+    if (msg.toolCall) {
+       for (const call of msg.toolCall.functionCalls || []) {
+           const args = JSON.stringify(call.args || {});
+           executeToolCall(call.id, call.name, args);
+       }
+    }
+    if (msg.error) {
+       console.error(`[${reqId}] ❌ Gemini error:`, JSON.stringify(msg.error));
+    }
   }
 
   // ─── Mid-call Telegram (personal accounts) ───
@@ -1059,6 +1198,16 @@ Deno.serve(async (req) => {
       }
 
       console.log(`[${reqId}] ✅ Inbound config loaded in ${Date.now() - t0}ms: engine=${session.voiceEngine}, voice=${session.voiceType}`);
+      
+      if (session.voiceEngine === 'gemini_realtime' && session.realtimeWs && session.realtimeWs.url && session.realtimeWs.url.includes('openai')) {
+        console.log(`[${reqId}] 🔄 Switching pre-warmed connection from Azure to Gemini`);
+        session.realtimeWs.onclose = null;
+        session.realtimeWs.close();
+        session.realtimeWs = null;
+        session.realtimeReady = false;
+        connectRealtime();
+      }
+
       session._fastConfigReady = true;
       if (session.realtimeReady) triggerPhase1Greeting();
     } catch (e) { console.error(`[${reqId}] ❌ Inbound config load failed: ${e.message}`); }
@@ -1129,13 +1278,15 @@ Deno.serve(async (req) => {
           session._mediaBufferFlushed = true;
           for (const buffered of session._mediaBuffer) {
             const pcmBuf = mulawToBase64PCM16_24k(buffered, session._audioState);
-            sendToRealtime({ type: 'input_audio_buffer.append', audio: pcmBuf });
+            if (session.voiceEngine === 'gemini_realtime') sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=24000", data: pcmBuf }] } });
+            else sendToRealtime({ type: 'input_audio_buffer.append', audio: pcmBuf });
           }
           session._mediaBuffer = []; session._mediaBufferBytes = 0;
         }
 
         const pcm16Base64 = mulawToBase64PCM16_24k(mulawBytes, session._audioState);
-        sendToRealtime({ type: 'input_audio_buffer.append', audio: pcm16Base64 });
+        if (session.voiceEngine === 'gemini_realtime') sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=24000", data: pcm16Base64 }] } });
+        else sendToRealtime({ type: 'input_audio_buffer.append', audio: pcm16Base64 });
         return;
       }
 

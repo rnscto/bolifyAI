@@ -55,123 +55,45 @@ async function getSmartfloToken(forceRefresh = false) {
 
 // ─── Audio Conversion Helpers ───
 
-function decodeMulaw(mulawByte) {
-  const MULAW_BIAS = 33;
-  let mu = ~mulawByte & 0xFF;
-  const sign = (mu & 0x80) ? -1 : 1;
-  const exponent = (mu >> 4) & 0x07;
-  const mantissa = mu & 0x0F;
-  let sample = ((mantissa << 3) + MULAW_BIAS) << exponent;
-  sample -= MULAW_BIAS;
-  return sign * sample;
-}
-
-function encodeMulaw(sample) {
-  const MULAW_MAX = 32635;
-  const MULAW_BIAS = 33;
-  const sign = sample < 0 ? 0x80 : 0;
-  if (sample < 0) sample = -sample;
-  if (sample > MULAW_MAX) sample = MULAW_MAX;
-  sample += MULAW_BIAS;
-  let exponent = 7;
-  const expMask = 0x4000;
-  for (; exponent > 0; exponent--) {
-    if (sample & expMask) break;
-    sample <<= 1;
-  }
-  const mantissa = (sample >> 10) & 0x0F;
-  return ~(sign | (exponent << 4) | mantissa) & 0xFF;
-}
+function decodeMulaw(m) { const B=33;let u=~m&0xFF;return ((u&0x80)?-1:1)*((((u&0x0F)<<3)+B)<<((u>>4)&0x07))-B; }
+function encodeMulaw(s) { const M=32635,B=33;const sn=s<0?0x80:0;if(s<0)s=-s;if(s>M)s=M;s+=B;let e=7;for(;e>0;e--){if(s&0x4000)break;s<<=1;}return ~(sn|(e<<4)|((s>>10)&0x0F))&0xFF; }
 
 // Realtime API uses 24kHz PCM16, Smartflo uses 8kHz mu-law (upsample 8k→24k input, downsample 24k→8k output).
 // Per-session audio state is passed in to avoid cross-call corruption.
 
 // Convert mu-law 8kHz → PCM16 24kHz LE base64 (upsample 3x for Realtime API)
-function mulawToBase64PCM16_24k(mulawBytes, audioState) {
-  // Decode mu-law to PCM16 at 8kHz
-  const pcm8k = new Int16Array(mulawBytes.length);
-  for (let i = 0; i < mulawBytes.length; i++) {
-    pcm8k[i] = decodeMulaw(mulawBytes[i]);
+function mulawToBase64PCM16_24k(mb, ast) {
+  const p8 = new Int16Array(mb.length);
+  for(let i=0;i<mb.length;i++) p8[i] = decodeMulaw(mb[i]);
+  const p24 = new Int16Array(p8.length * 3);
+  for(let i=0;i<p8.length;i++) {
+    const s0 = i===0 ? ast.lastUpsampleValue : p8[i-1], s1 = p8[i], s2 = i<p8.length-1 ? p8[i+1] : s1;
+    p24[i*3] = s1; p24[i*3+1] = Math.round(s1+(s2-s0)/6); p24[i*3+2] = Math.round(s1+(s2-s0)/3);
   }
-
-  // Upsample 8kHz → 24kHz using cubic-style interpolation with cross-chunk continuity
-  const pcm24k = new Int16Array(pcm8k.length * 3);
-  for (let i = 0; i < pcm8k.length; i++) {
-    const s0 = i === 0 ? audioState.lastUpsampleValue : pcm8k[i - 1];
-    const s1 = pcm8k[i];
-    const s2 = i < pcm8k.length - 1 ? pcm8k[i + 1] : s1;
-
-    // 3-point interpolation: smoother than linear, avoids metallic artifacts
-    pcm24k[i * 3] = s1;
-    pcm24k[i * 3 + 1] = Math.round(s1 + (s2 - s0) / 6);
-    pcm24k[i * 3 + 2] = Math.round(s1 + (s2 - s0) / 3);
-  }
-  if (pcm8k.length > 0) {
-    audioState.lastUpsampleValue = pcm8k[pcm8k.length - 1];
-  }
-
-  // Convert to base64 (little-endian bytes)
-  const buffer = new Uint8Array(pcm24k.length * 2);
-  const view = new DataView(buffer.buffer);
-  for (let i = 0; i < pcm24k.length; i++) {
-    view.setInt16(i * 2, pcm24k[i], true);
-  }
-  let binary = '';
-  for (let i = 0; i < buffer.length; i++) {
-    binary += String.fromCharCode(buffer[i]);
-  }
-  return btoa(binary);
+  if(p8.length>0) ast.lastUpsampleValue = p8[p8.length-1];
+  const buf = new Uint8Array(p24.length * 2), vw = new DataView(buf.buffer);
+  for(let i=0;i<p24.length;i++) vw.setInt16(i*2, p24[i], true);
+  let bin = ''; for(let i=0;i<buf.length;i++) bin += String.fromCharCode(buf[i]);
+  return btoa(bin);
 }
 
 // Convert PCM16 24kHz LE base64 (from Realtime API) → mu-law 8kHz bytes (downsample 3x)
 // Uses a 3-tap averaging low-pass filter before decimation to prevent aliasing
-function base64PCM16_24kToMulaw(base64Pcm16, audioState) {
-  const raw = atob(base64Pcm16);
-  const bytes = new Uint8Array(raw.length);
-  for (let i = 0; i < raw.length; i++) {
-    bytes[i] = raw.charCodeAt(i);
+function base64PCM16_24kToMulaw(b64, ast) {
+  const rw = atob(b64), bs = new Uint8Array(rw.length);
+  for(let i=0;i<rw.length;i++) bs[i] = rw.charCodeAt(i);
+  const n = Math.floor(bs.length/2), vw = new DataView(bs.buffer, bs.byteOffset, bs.byteLength);
+  const rem = ast.lastDownsampleRemainder, all = new Int16Array(rem.length + n);
+  for(let i=0;i<rem.length;i++) all[i] = rem[i];
+  for(let i=0;i<n;i++) all[rem.length+i] = vw.getInt16(i*2, true);
+  const dl = Math.floor(all.length/3), mu = new Uint8Array(dl);
+  for(let i=0;i<dl;i++) {
+    const idx=i*3, p=idx>0?all[idx-1]:all[idx], c=all[idx], nx=idx+1<all.length?all[idx+1]:c;
+    mu[i] = encodeMulaw(Math.max(-32768, Math.min(32767, Math.round((p+2*c+nx)/4))));
   }
-
-  // Read PCM16 LE samples safely using DataView
-  const numSamples = Math.floor(bytes.length / 2);
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-
-  // Prepend leftover samples from previous chunk for continuity
-  const remainder = audioState.lastDownsampleRemainder;
-  const allSamples = new Int16Array(remainder.length + numSamples);
-  for (let i = 0; i < remainder.length; i++) {
-    allSamples[i] = remainder[i];
-  }
-  for (let i = 0; i < numSamples; i++) {
-    allSamples[remainder.length + i] = view.getInt16(i * 2, true);
-  }
-
-  const totalSamples = allSamples.length;
-  // How many complete groups of 3 we can process
-  const downsampledLen = Math.floor(totalSamples / 3);
-  const mulaw = new Uint8Array(downsampledLen);
-
-  for (let i = 0; i < downsampledLen; i++) {
-    const idx = i * 3;
-    // 3-tap averaging filter: (s[n-1] + 2*s[n] + s[n+1]) / 4
-    const prev = idx > 0 ? allSamples[idx - 1] : allSamples[idx];
-    const curr = allSamples[idx];
-    const next = idx + 1 < totalSamples ? allSamples[idx + 1] : curr;
-    const filtered = Math.round((prev + 2 * curr + next) / 4);
-    // Clamp to Int16 range
-    const clamped = Math.max(-32768, Math.min(32767, filtered));
-    mulaw[i] = encodeMulaw(clamped);
-  }
-
-  // Save leftover samples for next chunk
-  const consumed = downsampledLen * 3;
-  const newRemainder = [];
-  for (let i = consumed; i < totalSamples; i++) {
-    newRemainder.push(allSamples[i]);
-  }
-  audioState.lastDownsampleRemainder = newRemainder;
-
-  return mulaw;
+  const nr = []; for(let i=dl*3;i<all.length;i++) nr.push(all[i]);
+  ast.lastDownsampleRemainder = nr;
+  return mu;
 }
 
 // ─── Save call record (reused from original) ───
@@ -548,6 +470,46 @@ Deno.serve(async (req) => {
 
   // ─── Connect to Azure Realtime API ───
   function connectRealtime() {
+    if (session.voiceEngine === 'gemini_realtime') {
+      const geminiKey = Deno.env.get('GEMINI_API_KEY');
+      if (!geminiKey) { console.error(`[${reqId}] ❌ Missing GEMINI_API_KEY`); return; }
+      const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${geminiKey}`;
+      console.log(`[${reqId}] 🔌 Connecting to Gemini Realtime...`);
+      const ws = new WebSocket(wsUrl);
+      ws.onopen = () => {
+        console.log(`[${reqId}] ✅ Gemini Realtime WebSocket connected (attempt ${session._realtimeReconnectAttempts})`);
+        session._realtimeReconnectAttempts = 0;
+        session._lastRealtimeOpenTs = Date.now();
+        // Trigger setup if agent config is ready
+        if (session._fastConfigReady) {
+           triggerPhase1Greeting();
+        }
+      };
+      ws.onmessage = (event) => {
+        try {
+          const text = typeof event.data === 'string' ? event.data : new TextDecoder().decode(event.data);
+          handleGeminiMessage(JSON.parse(text));
+        } catch (err) {
+          console.error(`[${reqId}] ❌ Gemini message parse error: ${err.message}`);
+        }
+      };
+      ws.onclose = (event) => {
+        console.log(`[${reqId}] 🔴 Gemini Realtime closed: code=${event.code}`);
+        session.realtimeReady = false;
+        const stableMs = session._lastRealtimeOpenTs ? (Date.now() - session._lastRealtimeOpenTs) : 0;
+        if (stableMs > 30000 && session._realtimeReconnectAttempts > 0) session._realtimeReconnectAttempts = 0;
+        const RECONNECT_DELAYS_MS = [500, 1500, 3000, 6000, 10000, 15000];
+        if (!session._callEnded && session._realtimeReconnectAttempts < RECONNECT_DELAYS_MS.length) {
+          const delay = RECONNECT_DELAYS_MS[session._realtimeReconnectAttempts];
+          session._realtimeReconnectAttempts++;
+          setTimeout(() => { if (!session._callEnded) connectRealtime(); }, delay);
+        }
+      };
+      ws.onerror = () => console.error(`[${reqId}] ❌ Gemini error`);
+      session.realtimeWs = ws;
+      return;
+    }
+
     const realtimeUrl = Deno.env.get('AZURE_REALTIME_ENDPOINT');
     const realtimeKey = Deno.env.get('AZURE_REALTIME_KEY');
 
@@ -685,6 +647,24 @@ Deno.serve(async (req) => {
     return null;
   }
 
+  function buildGeminiTools() {
+    const openaiTools = buildToolDefinitions();
+    if (!openaiTools || openaiTools.length === 0) return [];
+    return [{
+      functionDeclarations: openaiTools.map(t => ({
+        name: t.name,
+        description: t.description,
+        parameters: {
+          type: "OBJECT",
+          properties: Object.fromEntries(
+            Object.entries(t.parameters.properties).map(([k, v]) => [k, { type: v.type.toUpperCase(), description: v.description, enum: v.enum }])
+          ),
+          required: t.parameters.required
+        }
+      }))
+    }];
+  }
+
   function buildToolDefinitions() {
     const tools = [];
     // End call tool
@@ -764,7 +744,8 @@ Deno.serve(async (req) => {
     if (functionName === 'end_call') {
       const a = JSON.parse(argsStr);
       result = { success: true };
-      sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } });
+      if (session.voiceEngine === 'gemini_realtime') { sendToRealtime({ toolResponse: { functionResponses: [{ id: callId, name: functionName, response: result }] } }); }
+      else { sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } }); }
       session.transcript.push({ speaker: 'System', text: `[Call ended: ${a.reason}]` });
       // Short delay to let the goodbye audio play, then hang up
       setTimeout(() => hangupCall(a.reason || 'ended'), 1500);
@@ -837,11 +818,8 @@ Deno.serve(async (req) => {
       }
 
       // Send result back to Realtime API
-      sendToRealtime({
-        type: 'conversation.item.create',
-        item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) }
-      });
-      sendToRealtime({ type: 'response.create' });
+      if (session.voiceEngine === 'gemini_realtime') { sendToRealtime({ toolResponse: { functionResponses: [{ id: callId, name: functionName, response: result }] } }); }
+      else { sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } }); sendToRealtime({ type: 'response.create' }); }
       return;
     }
 
@@ -970,16 +948,12 @@ Deno.serve(async (req) => {
     console.log(`[${reqId}] 🔧 Tool result: ${JSON.stringify(result).substring(0, 300)}`);
 
     // Send the result back to the Realtime API
-    sendToRealtime({
-      type: 'conversation.item.create',
-      item: {
-        type: 'function_call_output',
-        call_id: callId,
-        output: JSON.stringify(result)
-      }
-    });
-    // Trigger a new response from the model with the tool result
-    sendToRealtime({ type: 'response.create' });
+    if (session.voiceEngine === 'gemini_realtime') {
+      sendToRealtime({ toolResponse: { functionResponses: [{ id: callId, name: functionName, response: result }] } });
+    } else {
+      sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } });
+      sendToRealtime({ type: 'response.create' });
+    }
   }
 
   function formatShopifyOrder(o) {
@@ -1003,6 +977,31 @@ Deno.serve(async (req) => {
       session.chatHistory = [{ role: 'system', content: 'You are a helpful AI voice assistant.' }, { role: 'assistant', content: greeting }];
       synthesizeWithAzureSpeech(greeting);
       applySessionConfig(); // Phase 2 immediately (hybrid doesn't need delay)
+    } else if (session.voiceEngine === 'gemini_realtime') {
+      console.log(`[${reqId}] ⚡ P1 gemini realtime greeting: "${greeting.substring(0, 60)}" (voice=${session.voiceType})`);
+      const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+      const timeInjection = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}.\n`;
+      const noiseHandling = `\n[AUDIO RULES] You are on a PHONE CALL in India. Only respond to CLEAR human speech. IGNORE background noise, garbled audio, TV, traffic. NEVER end a call based on noise. Keep replies SHORT (1-2 sentences).\n`;
+      let transferInstr = '';
+      if (session.humanTransferNumber && session.enableAutoTransfer) transferInstr = `\n\nUse transfer_to_human when caller explicitly asks for a human.`;
+      const tools = buildGeminiTools();
+      const setupMsg = {
+        setup: {
+          model: "models/gemini-2.0-flash-lite-preview-02-27",
+          generationConfig: {
+            responseModalities: ["AUDIO"],
+            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: session.voiceType || "Aoede" } } }
+          },
+          systemInstruction: { parts: [{ text: timeInjection + noiseHandling + session.systemPrompt + transferInstr }] }
+        }
+      };
+      if (tools.length > 0) setupMsg.setup.tools = tools;
+      sendToRealtime(setupMsg);
+      session._voiceLocked = true;
+      session._phase2Sent = true;
+
+      const greetingMsg = greeting ? `[SYSTEM: Say this exact greeting: "${greeting}"]` : `[SYSTEM: The call just connected. Greet warmly.]`;
+      sendToRealtime({ clientContent: { turns: [{ role: 'user', parts: [{ text: greetingMsg }] }], turnComplete: true } });
     } else {
       console.log(`[${reqId}] ⚡ P1 realtime greeting: "${greeting.substring(0, 60)}" (voice=${session.voiceType})`);
       // VOICE LOCK: send the FULL Phase-2 config (voice + final instructions + tools) in a
@@ -1056,29 +1055,28 @@ Deno.serve(async (req) => {
     // Prevent double greeting after Phase 2 upgrade
     const greetingGuard = session._greetingSent ? '\n\nIMPORTANT: You have ALREADY greeted the customer. Do NOT greet again. Wait for the customer to speak next.' : '';
     const sessionConfig = { input_audio_format: 'pcm16', input_audio_transcription: { model: 'whisper-1', language: 'hi' }, turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } };
-    if (isHybrid) {
-      sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
-      sessionConfig.modalities = ['text']; sessionConfig.voice = 'alloy';
-      session.chatHistory = [{ role: 'system', content: timeInjection + noiseHandling + session.systemPrompt + transferInstructions + greetingGuard }];
-      if (session._greetingSent && session.greetingMessage) session.chatHistory.push({ role: 'assistant', content: session.greetingMessage });
-      console.log(`[${reqId}] 🔀 ${session._phase1Applied ? 'P2' : 'Full'} hybrid: STT → LLM → TTS (${session.voiceType})`);
+    if (session.voiceEngine === 'gemini_realtime') {
+      const gTools = buildGeminiTools();
+      const setupMsg = { setup: { model: "models/gemini-2.0-flash-lite-preview-02-27", generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: session.voiceType || "Aoede" } } } }, systemInstruction: { parts: [{ text: timeInjection + noiseHandling + session.systemPrompt + transferInstructions + greetingGuard }] } } };
+      if (gTools.length > 0) setupMsg.setup.tools = gTools;
+      sendToRealtime(setupMsg);
+      session._voiceLocked = true;
+      session._phase2Sent = true;
     } else {
-      sessionConfig.modalities = ['text', 'audio'];
-      sessionConfig.instructions = timeInjection + noiseHandling + session.systemPrompt + transferInstructions + greetingGuard;
-      sessionConfig.output_audio_format = 'pcm16';
-      // VOICE STABILITY FIX: only include `voice` on the FIRST session.update of this connection.
-      // Re-sending the voice field on subsequent updates can cause the Realtime model to
-      // re-initialize voice characteristics mid-call (tone/accent drift). The voice was
-      // already set on the initial session.update right after session.created.
-      if (!session._voiceLocked) {
-        sessionConfig.voice = session.voiceType;
-        session._voiceLocked = true;
+      if (isHybrid) {
+        sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
+        sessionConfig.modalities = ['text']; sessionConfig.voice = 'alloy';
+        session.chatHistory = [{ role: 'system', content: timeInjection + noiseHandling + session.systemPrompt + transferInstructions + greetingGuard }];
+        if (session._greetingSent && session.greetingMessage) session.chatHistory.push({ role: 'assistant', content: session.greetingMessage });
+      } else {
+        sessionConfig.modalities = ['text', 'audio'];
+        sessionConfig.instructions = timeInjection + noiseHandling + session.systemPrompt + transferInstructions + greetingGuard;
+        sessionConfig.output_audio_format = 'pcm16';
+        if (!session._voiceLocked) { sessionConfig.voice = session.voiceType; session._voiceLocked = true; }
       }
+      if (tools.length > 0) { sessionConfig.tools = tools; sessionConfig.tool_choice = 'auto'; }
+      sendToRealtime({ type: 'session.update', session: sessionConfig });
     }
-    if (tools.length > 0) { sessionConfig.tools = tools; sessionConfig.tool_choice = 'auto'; console.log(`[${reqId}] 🔧 ${tools.length} tool(s) registered`); }
-    sendToRealtime({ type: 'session.update', session: sessionConfig });
-    console.log(`[${reqId}] 📤 ${session._phase1Applied ? 'P2' : 'Full'} config: engine=${session.voiceEngine}, voice=${session.voiceType}, greetingSent=${session._greetingSent}, voiceLocked=${session._voiceLocked}`);
-    // Trigger greeting only if Phase 1 didn't already send it
     if (!session._greetingSent) triggerGreeting();
   }
 
@@ -1214,6 +1212,59 @@ Deno.serve(async (req) => {
     if (type === 'error') { console.error(`[${reqId}] ❌ Realtime error:`, JSON.stringify(msg.error || msg)); return; }
   }
 
+  function handleGeminiMessage(msg) {
+    if (msg.setupComplete) {
+      console.log(`[${reqId}] ✅ Gemini setup complete`);
+      session.realtimeReady = true;
+      return;
+    }
+    if (msg.serverContent) {
+      const modelTurn = msg.serverContent.modelTurn;
+      if (modelTurn) {
+        for (const part of modelTurn.parts) {
+          if (part.inlineData && part.inlineData.data) {
+             session.isSpeaking = true;
+             const mulawBytes = base64PCM16_24kToMulaw(part.inlineData.data, session._audioState);
+             if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
+               sendMulawToSmartflo(mulawBytes);
+             }
+          }
+          if (part.text) {
+             console.log(`[${reqId}] 🤖 AI: "${part.text.substring(0, 100)}"`);
+             session.transcript.push({ speaker: 'AI', text: part.text.trim() });
+             if (session._personalMode && session._personalClientId && !session._midCallTgSent) {
+               const aiCount = session.transcript.filter(t => t.speaker === 'AI').length;
+               if (aiCount >= 3) { session._midCallTgSent = true; sendMidCallTelegramUpdate(); }
+             }
+          }
+          if (part.functionCall) {
+             const args = JSON.stringify(part.functionCall.args || {});
+             executeToolCall(part.functionCall.id, part.functionCall.name, args);
+          }
+        }
+      }
+      if (msg.serverContent.turnComplete) {
+        session.isSpeaking = false;
+        session._responseInFlight = false;
+      }
+      if (msg.serverContent.interrupted) {
+        if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
+          smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: session.streamSid }));
+        }
+        session.isSpeaking = false;
+      }
+    }
+    if (msg.toolCall) {
+       for (const call of msg.toolCall.functionCalls || []) {
+           const args = JSON.stringify(call.args || {});
+           executeToolCall(call.id, call.name, args);
+       }
+    }
+    if (msg.error) {
+       console.error(`[${reqId}] ❌ Gemini error:`, JSON.stringify(msg.error));
+    }
+  }
+
   // ─── Mid-call Telegram: classify caller + send interactive action buttons ───
   async function sendMidCallTelegramUpdate() {
     const tgT = Deno.env.get('TELEGRAM_BOT_TOKEN');
@@ -1331,7 +1382,11 @@ Deno.serve(async (req) => {
     const isHybrid = session.voiceEngine === 'azure_speech';
     const greeting = session.greetingMessage || '';
 
-    if (isHybrid) {
+    if (session.voiceEngine === 'gemini_realtime') {
+      if (greeting) session.transcript.push({ speaker: 'AI', text: greeting });
+      const greetingMsg = greeting ? `[SYSTEM: Say this exact greeting to the customer: "${greeting}"]` : `[SYSTEM: The call just connected. Greet the customer warmly as your opening line. Do not wait for them to speak first.]`;
+      sendToRealtime({ clientContent: { turns: [{ role: 'user', parts: [{ text: greetingMsg }] }], turnComplete: true } });
+    } else if (isHybrid) {
       // In hybrid mode, directly synthesize the greeting via Azure Speech TTS
       if (greeting) {
         console.log(`[${reqId}] 🎙️ Sending custom greeting (hybrid): "${greeting.substring(0, 80)}"`);
@@ -1641,6 +1696,16 @@ Deno.serve(async (req) => {
       }
       console.log(`[${reqId}] 🎙️ FAST config: engine=${session.voiceEngine}, voice=${session.voiceType}, greeting=${!!session.greetingMessage}, kb=${!!session.kbFileUri}`);
 
+      // ── If pre-warmed for Azure but Agent uses Gemini, switch connection ──
+      if (session.voiceEngine === 'gemini_realtime' && session.realtimeWs && session.realtimeWs.url && session.realtimeWs.url.includes('openai')) {
+        console.log(`[${reqId}] 🔄 Switching pre-warmed connection from Azure to Gemini`);
+        session.realtimeWs.onclose = null; // Prevent Azure auto-reconnect
+        session.realtimeWs.close();
+        session.realtimeWs = null;
+        session.realtimeReady = false;
+        connectRealtime();
+      }
+
       // ── Signal that greeting can fire NOW (before slow KB/Shopify/personal fetches) ──
       session._fastConfigReady = true;
       if (session.realtimeReady) {
@@ -1792,14 +1857,16 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
           console.log(`[${reqId}] 🚀 Flushing ${session._mediaBuffer.length} buffered packets (${session._mediaBufferBytes}B)`);
           for (const buffered of session._mediaBuffer) {
             const pcmBuf = mulawToBase64PCM16_24k(buffered, session._audioState);
-            sendToRealtime({ type: 'input_audio_buffer.append', audio: pcmBuf });
+            if (session.voiceEngine === 'gemini_realtime') sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=24000", data: pcmBuf }] } });
+            else sendToRealtime({ type: 'input_audio_buffer.append', audio: pcmBuf });
           }
           session._mediaBuffer = [];
           session._mediaBufferBytes = 0;
         }
 
         const pcm16Base64 = mulawToBase64PCM16_24k(mulawBytes, session._audioState);
-        sendToRealtime({ type: 'input_audio_buffer.append', audio: pcm16Base64 });
+        if (session.voiceEngine === 'gemini_realtime') sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=24000", data: pcm16Base64 }] } });
+        else sendToRealtime({ type: 'input_audio_buffer.append', audio: pcm16Base64 });
         return;
       }
 
