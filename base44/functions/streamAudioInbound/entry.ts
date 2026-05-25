@@ -297,7 +297,54 @@ Deno.serve(async (req) => {
   // Non-WebSocket: Smartflo Dynamic endpoint — return wss URL pointing to THIS function
   if (!isWebSocket) {
     const host = req.headers.get('host') || req.headers.get('x-forwarded-host') || 'localhost';
-    const wssUrl = `wss://${host}/functions/streamAudioInbound`;
+    
+    let isGemini = false;
+    try {
+      let calleeNumber = '';
+      let callerNumber = '';
+      if (req.method === 'POST') {
+        const bd = await req.json();
+        calleeNumber = bd.did || bd.to || bd.called_number || '';
+        callerNumber = bd.caller_id || bd.from || bd.customer_number || '';
+      } else if (req.method === 'GET') {
+        const u = new URL(req.url);
+        calleeNumber = u.searchParams.get('did') || u.searchParams.get('to') || '';
+        callerNumber = u.searchParams.get('caller_id') || u.searchParams.get('from') || '';
+      }
+      
+      const cleanCalleeDID = calleeNumber.replace(/[^0-9]/g, '').slice(-10);
+      const cleanCallerDID = callerNumber.replace(/[^0-9]/g, '').slice(-10);
+      
+      if (cleanCalleeDID || cleanCallerDID) {
+        const { createClient } = await import('npm:@base44/sdk@0.8.23');
+        const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+        const allDIDs = await svc.entities.DID.list('-created_date', 200).catch(()=>[]);
+        const matchedDID = allDIDs.find(d => { const n = (d.number || '').replace(/\D/g, '').slice(-10); return n === cleanCalleeDID || n === cleanCallerDID; });
+        
+        let didAgent = null;
+        if (matchedDID?.agent_id) {
+          didAgent = await svc.entities.Agent.get(matchedDID.agent_id).catch(()=>null);
+        }
+        if (!didAgent) {
+          const allAgents = await svc.entities.Agent.list('-created_date', 100).catch(()=>[]);
+          didAgent = allAgents.find(a => {
+            const dids = (a.assigned_dids || []).concat(a.assigned_did ? [a.assigned_did] : []);
+            return dids.some(d => { const n = (d || '').replace(/\D/g, '').slice(-10); return n === cleanCalleeDID || n === cleanCallerDID; });
+          });
+        }
+        
+        if (didAgent?.persona?.voice_engine === 'gemini_realtime') {
+          isGemini = true;
+        }
+      }
+    } catch (e) {
+      console.error(`[${reqId}] ❌ Failed to check voice engine for inbound dynamic endpoint: ${e.message}`);
+    }
+    
+    const endpoint = isGemini ? 'streamAudioInboundGemini' : 'streamAudioInbound';
+    const wssUrl = `wss://${host}/functions/${endpoint}`;
+    console.log(`[${reqId}] 🔗 inbound wss_url routing to ${endpoint}`);
+    
     return new Response(JSON.stringify({ sucess: true, wss_url: wssUrl }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
 

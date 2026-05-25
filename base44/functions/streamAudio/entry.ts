@@ -402,8 +402,25 @@ Deno.serve(async (req) => {
     } else if (req.method === 'GET') {
       const u = new URL(req.url); cid = u.searchParams.get('call_log_id') || u.searchParams.get('custom_identifier') || '';
     }
-    const wssUrl = `wss://${host}/functions/streamAudio${cid ? '?call_log_id=' + encodeURIComponent(cid) : ''}`;
-    if (cid) console.log(`[${reqId}] 🔗 wss_url with call_log_id=${cid}`);
+    
+    let isGemini = false;
+    if (cid) {
+      try {
+        const { createClient } = await import('npm:@base44/sdk@0.8.23');
+        const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+        const callLog = await svc.entities.CallLog.get(cid);
+        if (callLog?.agent_config_cache?.persona?.voice_engine === 'gemini_realtime') {
+          isGemini = true;
+        }
+      } catch (e) {
+        console.error(`[${reqId}] ❌ Failed to check voice engine for dynamic endpoint: ${e.message}`);
+      }
+    }
+    
+    const endpoint = isGemini ? 'streamAudioGemini' : 'streamAudio';
+    const wssUrl = `wss://${host}/functions/${endpoint}${cid ? '?call_log_id=' + encodeURIComponent(cid) : ''}`;
+    if (cid) console.log(`[${reqId}] 🔗 wss_url with call_log_id=${cid} routing to ${endpoint}`);
+    
     return new Response(JSON.stringify({ sucess: true, wss_url: wssUrl }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }
   // Extract call_log_id from WebSocket connection URL (set by Dynamic endpoint above)
