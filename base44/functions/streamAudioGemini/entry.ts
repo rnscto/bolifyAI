@@ -353,13 +353,17 @@ Deno.serve(async (req) => {
     const noiseHandling = `\n[AUDIO RULES] You are on a PHONE CALL in India. Only respond to CLEAR human speech. Keep replies SHORT (1-2 sentences).\n`;
     let transferInstr = (session.humanTransferNumber && session.enableAutoTransfer) ? `\n\nUse transfer_to_human when caller asks for a human.` : '';
     const tools = buildGeminiTools();
+    // Valid Gemini Live voices for v1alpha: Aoede, Charon, Fenrir, Kore, Puck
+    const validGeminiVoices = ['Aoede', 'Charon', 'Fenrir', 'Kore', 'Puck'];
+    const voice = validGeminiVoices.includes(session.voiceType) ? session.voiceType : 'Aoede';
     const setupMsg = {
       setup: {
-        model: "models/gemini-2.0-flash-exp",
-        generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: session.voiceType || "Aoede" } } } },
+        model: "models/gemini-2.0-flash-live-001",
+        generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
         systemInstruction: { parts: [{ text: timeInjection + noiseHandling + session.systemPrompt + transferInstr }] }
       }
     };
+    console.log(`[${reqId}] 📤 Sending Gemini setup (model=gemini-2.0-flash-live-001, voice=${voice})`);
     if (tools.length > 0) setupMsg.setup.tools = tools;
     sendToRealtime(setupMsg);
     
