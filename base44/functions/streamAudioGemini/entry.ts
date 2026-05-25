@@ -419,7 +419,23 @@ Deno.serve(async (req) => {
       if (session._explicitCallLogId) {
         callLog = await svc.entities.CallLog.get(session._explicitCallLogId).catch(e => { console.error(`[${reqId}] ❌ CallLog.get(${session._explicitCallLogId}) failed: ${e.message}`); return null; });
       }
-      if (!callLog) { console.error(`[${reqId}] ❌ No callLog found for explicitId=${session._explicitCallLogId}`); return; }
+      // Fallback: match by call_sid or phone (same strategy as Azure streamAudio.js)
+      if (!callLog && session.callSid) {
+        const sidMatches = await svc.entities.CallLog.filter({ call_sid: session.callSid }).catch(() => []);
+        if (sidMatches?.length > 0) { callLog = sidMatches[0]; console.log(`[${reqId}] 🔍 call_sid match: ${callLog.id}`); }
+      }
+      if (!callLog && session.calleeNumber) {
+        const cutoff = new Date(Date.now() - 120000).toISOString();
+        const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '').slice(-10);
+        const [ring, init] = await Promise.all([
+          svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
+          svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => [])
+        ]);
+        const match = (list) => list.find(l => !l.stream_sid && l.created_date >= cutoff && (l.callee_number || '').replace(/[^0-9]/g, '').slice(-10) === cleanCallee);
+        callLog = match(ring) || match(init);
+        if (callLog) console.log(`[${reqId}] 🔍 Phone match: ${callLog.id}`);
+      }
+      if (!callLog) { console.error(`[${reqId}] ❌ No callLog found. explicitId=${session._explicitCallLogId}, callSid=${session.callSid}, callee=${session.calleeNumber}`); return; }
       console.log(`[${reqId}] ✅ CallLog loaded: id=${callLog.id}, hasCache=${!!callLog.agent_config_cache}`);
       
       session.callLogId = callLog.id;
@@ -455,9 +471,14 @@ Deno.serve(async (req) => {
       if (msg.event === 'start') {
         const startData = msg.start || {};
         session.streamSid = startData.streamSid; session.callSid = startData.callSid;
-        session.calleeNumber = startData.customParameters?.customer_number || startData.to || '';
-        session.callerNumber = startData.from || '';
-        console.log(`[${reqId}] 📞 START: streamSid=${session.streamSid}, callSid=${session.callSid}, callee=${session.calleeNumber}, explicitId=${session._explicitCallLogId || 'none'}`);
+        const cp = startData.customParameters || {};
+        // Extract call_log_id from Smartflo customParameters if URL didn't carry it
+        if (!session._explicitCallLogId) {
+          session._explicitCallLogId = cp.custom_identifier || cp.call_log_id || cp.callLogId || null;
+        }
+        session.calleeNumber = cp.customer_number || cp.called_number || cp.to || startData.to || startData.callee || cp.did || '';
+        session.callerNumber = startData.from || startData.caller || cp.caller_number || cp.from || cp.caller_id || '';
+        console.log(`[${reqId}] 📞 START: streamSid=${session.streamSid}, callSid=${session.callSid}, callee=${session.calleeNumber}, explicitId=${session._explicitCallLogId || 'none'}, params=${JSON.stringify(cp).substring(0,200)}`);
         loadAgentConfig();
         return;
       }
