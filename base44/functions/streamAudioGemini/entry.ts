@@ -350,7 +350,7 @@ Deno.serve(async (req) => {
     const tools = buildGeminiTools();
     const setupMsg = {
       setup: {
-        model: "models/gemini-2.0-flash-lite-preview-02-27",
+        model: "models/gemini-3.1-flash-lite",
         generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: session.voiceType || "Aoede" } } } },
         systemInstruction: { parts: [{ text: timeInjection + noiseHandling + session.systemPrompt + transferInstr }] }
       }
