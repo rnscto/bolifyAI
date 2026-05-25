@@ -441,8 +441,9 @@ Deno.serve(async (req) => {
       if (newLog) session.callLogId = newLog.id;
 
       session._fastConfigReady = true;
-      if (session.realtimeReady) triggerPhase1Greeting();
-    } catch (e) {}
+      console.log(`[${reqId}] ⚡ Inbound agent loaded — voice=${session.voiceType}, prompt=${session.systemPrompt.length}ch`);
+      if (session.realtimeWs?.readyState === WebSocket.OPEN) triggerPhase1Greeting();
+    } catch (e) { console.error(`[${reqId}] ❌ loadInboundAgent: ${e.message}`); }
   }
 
   connectRealtime();

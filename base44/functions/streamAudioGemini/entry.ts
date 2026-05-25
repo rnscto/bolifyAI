@@ -416,8 +416,11 @@ Deno.serve(async (req) => {
       const { createClient } = await import('npm:@base44/sdk@0.8.23');
       const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
       let callLog = null;
-      if (session._explicitCallLogId) callLog = await svc.entities.CallLog.get(session._explicitCallLogId).catch(()=>null);
-      if (!callLog) return;
+      if (session._explicitCallLogId) {
+        callLog = await svc.entities.CallLog.get(session._explicitCallLogId).catch(e => { console.error(`[${reqId}] ❌ CallLog.get(${session._explicitCallLogId}) failed: ${e.message}`); return null; });
+      }
+      if (!callLog) { console.error(`[${reqId}] ❌ No callLog found for explicitId=${session._explicitCallLogId}`); return; }
+      console.log(`[${reqId}] ✅ CallLog loaded: id=${callLog.id}, hasCache=${!!callLog.agent_config_cache}`);
       
       session.callLogId = callLog.id;
       session.clientId = callLog.client_id;
@@ -434,7 +437,9 @@ Deno.serve(async (req) => {
       }
       
       session._fastConfigReady = true;
-      if (session.realtimeReady) triggerPhase1Greeting();
+      console.log(`[${reqId}] ⚡ Agent config loaded — voice=${session.voiceType}, greeting=${session.greetingMessage?.substring(0,40) || 'auto'}, prompt=${session.systemPrompt.length}ch`);
+      // Trigger setup as soon as WebSocket is OPEN (don't wait for realtimeReady — setup MUST be sent first to GET setupComplete)
+      if (session.realtimeWs?.readyState === WebSocket.OPEN) triggerPhase1Greeting();
       
       if (session.streamSid) svc.entities.CallLog.update(callLog.id, { stream_sid: session.streamSid }).catch(()=>{});
     } catch (e) {}
@@ -452,6 +457,7 @@ Deno.serve(async (req) => {
         session.streamSid = startData.streamSid; session.callSid = startData.callSid;
         session.calleeNumber = startData.customParameters?.customer_number || startData.to || '';
         session.callerNumber = startData.from || '';
+        console.log(`[${reqId}] 📞 START: streamSid=${session.streamSid}, callSid=${session.callSid}, callee=${session.calleeNumber}, explicitId=${session._explicitCallLogId || 'none'}`);
         loadAgentConfig();
         return;
       }
