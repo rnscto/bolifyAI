@@ -202,8 +202,10 @@ Deno.serve(async (req) => {
     const geminiKey = Deno.env.get('GEMINI_API_KEY');
     if (!geminiKey) return;
     const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${geminiKey}`;
+    console.log(`[${reqId}] 🔌 Connecting to Gemini Live API...`);
     const ws = new WebSocket(wsUrl);
     ws.onopen = () => {
+      console.log(`[${reqId}] ✅ Gemini WebSocket OPEN`);
       session._realtimeReconnectAttempts = 0;
       session._lastRealtimeOpenTs = Date.now();
       if (session._fastConfigReady) triggerPhase1Greeting();
@@ -212,9 +214,11 @@ Deno.serve(async (req) => {
       try {
         const text = typeof event.data === 'string' ? event.data : new TextDecoder().decode(event.data);
         handleGeminiMessage(JSON.parse(text));
-      } catch (err) {}
+      } catch (err) { console.error(`[${reqId}] ❌ Gemini msg error: ${err.message}`); }
     };
-    ws.onclose = () => {
+    ws.onerror = (e) => { console.error(`[${reqId}] ❌ Gemini WS error: ${e?.message || 'unknown'}`); };
+    ws.onclose = (e) => {
+      console.log(`[${reqId}] 🔴 Gemini WS closed: code=${e.code} reason=${e.reason}`);
       session.realtimeReady = false;
       const stableMs = session._lastRealtimeOpenTs ? (Date.now() - session._lastRealtimeOpenTs) : 0;
       if (stableMs > 30000 && session._realtimeReconnectAttempts > 0) session._realtimeReconnectAttempts = 0;
@@ -339,7 +343,7 @@ Deno.serve(async (req) => {
     const tools = buildGeminiTools();
     const setupMsg = {
       setup: {
-        model: "models/gemini-3.1-flash-lite",
+        model: "models/gemini-2.0-flash-exp",
         generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: session.voiceType || "Aoede" } } } },
         systemInstruction: { parts: [{ text: timeInjection + noiseHandling + session.systemPrompt + transferInstr }] }
       }
@@ -369,7 +373,12 @@ Deno.serve(async (req) => {
   }
 
   function handleGeminiMessage(msg) {
-    if (msg.setupComplete) { session.realtimeReady = true; return; }
+    if (msg.setupComplete) {
+      console.log(`[${reqId}] ✅ Gemini setupComplete — ready`);
+      session.realtimeReady = true;
+      return;
+    }
+    if (msg.error) { console.error(`[${reqId}] ❌ Gemini error:`, JSON.stringify(msg.error)); return; }
     if (msg.serverContent?.modelTurn) {
       for (const part of msg.serverContent.modelTurn.parts) {
         if (part.inlineData && part.inlineData.data) {
@@ -456,7 +465,21 @@ Deno.serve(async (req) => {
         const raw = atob(msg.media.payload);
         const mulawBytes = new Uint8Array(raw.length);
         for (let i = 0; i < raw.length; i++) mulawBytes[i] = raw.charCodeAt(i);
-        if (!session.realtimeReady) return;
+        if (!session.realtimeReady) {
+          while (session._mediaBuffer.length > 0 && session._mediaBufferBytes + mulawBytes.length > session._mediaBufferMaxBytes) {
+            const d = session._mediaBuffer.shift(); session._mediaBufferBytes -= d.length;
+          }
+          session._mediaBuffer.push(mulawBytes); session._mediaBufferBytes += mulawBytes.length;
+          return;
+        }
+        if (!session._mediaBufferFlushed && session._mediaBuffer.length > 0) {
+          session._mediaBufferFlushed = true;
+          console.log(`[${reqId}] 🚀 Flushing ${session._mediaBuffer.length} buffered packets`);
+          for (const b of session._mediaBuffer) {
+            sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=24000", data: mulawToBase64PCM16_24k(b, session._audioState) }] } });
+          }
+          session._mediaBuffer = []; session._mediaBufferBytes = 0;
+        }
         const pcm16Base64 = mulawToBase64PCM16_24k(mulawBytes, session._audioState);
         sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=24000", data: pcm16Base64 }] } });
       }
