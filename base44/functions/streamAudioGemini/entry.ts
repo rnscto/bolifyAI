@@ -647,7 +647,7 @@ Deno.serve(async (req) => {
 
     const setup = {
       setup: {
-        model: 'models/gemini-2.0-flash-lite-preview-02-27',
+        model: 'models/gemini-3.1-flash-live-preview',
         generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
         systemInstruction: { parts: [{ text: fullPrompt }] },
         inputAudioTranscription: {}, outputAudioTranscription: {}
