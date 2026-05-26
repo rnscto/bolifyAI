@@ -570,9 +570,19 @@ Deno.serve(async (req) => {
     if (!freeKey) session._usingPaidKey = true;
     const key = session._usingPaidKey ? paidKey : freeKey;
     console.log(`[${reqId}] 🔑 Gemini key=${session._usingPaidKey ? 'PAID' : 'FREE'}`);
-    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${key}`;
+    // Gemini Live model→endpoint mapping:
+    //   - gemini-2.0-flash-live-001 → v1alpha
+    //   - gemini-2.5-flash-preview-native-audio-dialog → v1beta
+    // The wrong combination causes Gemini to silently close the WebSocket right after setup.
+    const apiVersion = 'v1alpha';
+    const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.${apiVersion}.GenerativeService.BidiGenerateContent?key=${key}`;
     const ws = new WebSocket(wsUrl);
-    ws.onopen = () => { session._geminiReconnectAttempts = 0; if (session._agentConfigReady) sendGeminiSetup(); };
+    session._geminiOpenedAt = 0;
+    ws.onopen = () => {
+      session._geminiOpenedAt = Date.now();
+      console.log(`[${reqId}] 🔌 Gemini WS OPEN (${apiVersion})`);
+      if (session._agentConfigReady) sendGeminiSetup();
+    };
     ws.onmessage = async (e) => {
       try {
         let t;
@@ -584,6 +594,13 @@ Deno.serve(async (req) => {
     };
     ws.onclose = (ev) => {
       session.geminiReady = false;
+      // Stability gate: ONLY reset the reconnect counter if the connection stayed open
+      // for >30s (real working session). Closes that happen within seconds of opening
+      // mean Gemini is rejecting our setup — don't mask that as a "fresh" reconnect.
+      const aliveMs = session._geminiOpenedAt ? (Date.now() - session._geminiOpenedAt) : 0;
+      if (aliveMs > 30000) session._geminiReconnectAttempts = 0;
+      console.log(`[${reqId}] 🔴 Gemini WS closed: code=${ev.code} reason="${(ev.reason || '').substring(0, 200)}" aliveMs=${aliveMs}`);
+
       // FREE → PAID auto-fallback on quota close
       if (!session._usingPaidKey && !session._triedKeyFallback && paidKey && isQuotaCloseEvt(ev) && !session._callEnded) {
         session._triedKeyFallback = true;
@@ -592,7 +609,7 @@ Deno.serve(async (req) => {
         connectGemini();
         return;
       }
-      // Exponential backoff, max 5 attempts
+      // Exponential backoff, max 5 attempts (counter only resets on stable connections)
       if (!session._callEnded && session._geminiReconnectAttempts < 5) {
         session._geminiReconnectAttempts++;
         const base = Math.min(15000, 1000 * Math.pow(2, session._geminiReconnectAttempts - 1));
@@ -607,7 +624,7 @@ Deno.serve(async (req) => {
         saveCallRecord(session, reqId, d).then(() => { if (smartfloSocket.readyState === WebSocket.OPEN) smartfloSocket.close(); });
       }
     };
-    ws.onerror = () => {};
+    ws.onerror = (e) => { console.error(`[${reqId}] ❌ Gemini WS error: ${e?.message || e?.type || 'unknown'}`); };
     session.geminiWs = ws;
   }
 
