@@ -571,10 +571,10 @@ Deno.serve(async (req) => {
     const key = session._usingPaidKey ? paidKey : freeKey;
     console.log(`[${reqId}] 🔑 Gemini key=${session._usingPaidKey ? 'PAID' : 'FREE'}`);
     // Gemini Live model→endpoint mapping:
-    //   - gemini-2.0-flash-live-001 → v1alpha
-    //   - gemini-2.5-flash-preview-native-audio-dialog → v1beta
+    //   - gemini-2.0-flash-live-001 → v1beta
+    //   - gemini-live-2.5-flash-preview → v1beta
     // The wrong combination causes Gemini to silently close the WebSocket right after setup.
-    const apiVersion = 'v1alpha';
+    const apiVersion = 'v1beta';
     const wsUrl = `wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.${apiVersion}.GenerativeService.BidiGenerateContent?key=${key}`;
     const ws = new WebSocket(wsUrl);
     session._geminiOpenedAt = 0;
