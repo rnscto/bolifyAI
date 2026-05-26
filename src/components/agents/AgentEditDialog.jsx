@@ -31,6 +31,11 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
   const [knowledgeBases, setKnowledgeBases] = useState([]);
   const [selectedKBs, setSelectedKBs] = useState([]);
   const [kbLoading, setKbLoading] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    base44.auth.me().then(u => setIsAdmin(u?.role === 'admin')).catch(() => setIsAdmin(false));
+  }, []);
 
   const handleApplyGenerated = ({ system_prompt, greeting_message, language, tone, voice_type }) => {
     setForm(p => ({
@@ -151,7 +156,9 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
                 <SelectContent>
                   <SelectItem value="realtime">Realtime (GPT-4o built-in)</SelectItem>
                   <SelectItem value="azure_speech">Azure Speech (400+ voices)</SelectItem>
-                  <SelectItem value="gemini_realtime">Gemini Realtime (Gemini 2.0 Flash Lite)</SelectItem>
+                  {isAdmin && (
+                    <SelectItem value="gemini_realtime">Gemini Realtime (Gemini 2.0 Flash Lite)</SelectItem>
+                  )}
                 </SelectContent>
               </Select>
             </div>
