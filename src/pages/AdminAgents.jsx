@@ -30,7 +30,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Plus, Edit, Trash2, Bot, Phone } from 'lucide-react';
 import { toast } from 'sonner';
-import { REALTIME_VOICES, AZURE_SPEECH_VOICES } from '../components/agents/VoiceData';
+import { REALTIME_VOICES, AZURE_SPEECH_VOICES, GEMINI_VOICES } from '../components/agents/VoiceData';
 
 const AGENT_TEMPLATES = {
   ecommerce_support: {
@@ -331,7 +331,7 @@ export default function AdminAgents() {
                   <Select
                     value={formData.voice_engine}
                     onValueChange={(value) => {
-                      const defaultVoice = value === 'realtime' ? 'alloy' : 'en-IN-NeerjaNeural';
+                      const defaultVoice = value === 'realtime' ? 'alloy' : (value === 'gemini_realtime' ? 'Aoede' : 'en-IN-NeerjaNeural');
                       setFormData({ ...formData, voice_engine: value, voice_type: defaultVoice });
                     }}
                   >
@@ -351,6 +351,12 @@ export default function AdminAgents() {
                           <span className="text-xs text-gray-400">400+ voices, custom</span>
                         </span>
                       </SelectItem>
+                      <SelectItem value="gemini_realtime">
+                        <span className="flex items-center gap-2">
+                          Gemini Realtime
+                          <span className="text-xs text-gray-400">Gemini 3.1 Flash Live</span>
+                        </span>
+                      </SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -364,7 +370,7 @@ export default function AdminAgents() {
                       <SelectValue placeholder="Select voice" />
                     </SelectTrigger>
                     <SelectContent className="max-h-64">
-                      {(formData.voice_engine === 'azure_speech' ? AZURE_SPEECH_VOICES : REALTIME_VOICES).map((v) => (
+                      {(formData.voice_engine === 'azure_speech' ? AZURE_SPEECH_VOICES : (formData.voice_engine === 'gemini_realtime' ? GEMINI_VOICES : REALTIME_VOICES)).map((v) => (
                         <SelectItem key={v.name} value={v.name}>
                           <span className="flex items-center gap-2">
                             {v.name}
