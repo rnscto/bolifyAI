@@ -5,6 +5,10 @@ import { Copy, Key, Eye, EyeOff, RefreshCw, Shield, Loader2 } from 'lucide-react
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import QuickStartGuide from '@/components/api-docs/QuickStartGuide';
+import DocsTOC from '@/components/api-docs/DocsTOC';
+import ErrorCodesCard from '@/components/api-docs/ErrorCodesCard';
+import OutboundWebhookCard from '@/components/api-docs/OutboundWebhookCard';
 
 export default function APIDocs() {
   const [denoUrl, setDenoUrl] = useState('Loading...');
@@ -90,13 +94,19 @@ export default function APIDocs() {
   };
 
   return (
-    <div className="space-y-6 max-w-5xl">
+    <div className="flex gap-6 max-w-7xl">
+      <DocsTOC />
+      <div className="space-y-6 flex-1 min-w-0">
       <div>
         <h1 className="text-3xl font-bold text-gray-900">API Documentation</h1>
         <p className="text-gray-600 mt-1">WebSocket and REST API integration guide</p>
       </div>
 
-      <Card className="border-blue-200 bg-blue-50">
+      <div id="quickstart">
+        <QuickStartGuide />
+      </div>
+
+      <Card id="websocket" className="border-blue-200 bg-blue-50">
         <CardHeader>
           <CardTitle>⚙️ Your Fixed WebSocket URL</CardTitle>
         </CardHeader>
@@ -190,7 +200,7 @@ export default function APIDocs() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="rest-core">
         <CardHeader>
           <CardTitle>REST API Endpoints</CardTitle>
         </CardHeader>
@@ -278,24 +288,10 @@ export default function APIDocs() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Authentication</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-gray-600 mb-3">
-            All API requests must include authentication. WebSocket connections are authenticated via the Base44 SDK.
-          </p>
-          <code className="block bg-gray-100 p-3 rounded text-sm">
-            Authorization: Bearer YOUR_API_TOKEN
-          </code>
-        </CardContent>
-      </Card>
-
       {/* ─── CRM API SECTION ─── */}
-      <div className="pt-4">
+      <div id="auth-keys" className="pt-4">
         <h2 className="text-2xl font-bold text-gray-900 mb-1">CRM Integration APIs</h2>
-        <p className="text-gray-600 mb-4">Connect any external CRM to push/pull data via JSON REST APIs.</p>
+        <p className="text-gray-600 mb-4">Connect any external CRM to push/pull data via JSON REST APIs. <strong>Use the <code className="bg-gray-100 px-1 rounded">x-auth-key</code> header for all requests.</strong></p>
       </div>
 
       {/* Platform Authorization Key */}
@@ -410,7 +406,7 @@ export default function APIDocs() {
       </Card>
 
       {/* INBOUND: Push data TO platform */}
-      <Card>
+      <Card id="crm-inbound">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Badge className="bg-green-100 text-green-800">POST</Badge>
@@ -507,7 +503,7 @@ Body:
       </Card>
 
       {/* FETCH: Pull data FROM platform */}
-      <Card>
+      <Card id="crm-fetch">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Badge className="bg-blue-100 text-blue-800">POST</Badge>
@@ -580,65 +576,9 @@ Body:
         </CardContent>
       </Card>
 
-      {/* OUTBOUND PUSH: Push data TO external CRM */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Badge className="bg-orange-100 text-orange-800">POST</Badge>
-            /functions/crmOutboundPush — Push Events to External CRM
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <p className="text-sm text-gray-600">Sends real-time event data to your external CRM's webhook URL whenever leads, deals, or calls are created/updated.</p>
-          
-          <div>
-            <h4 className="font-semibold text-sm mb-2">Supported Event Types</h4>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-              {['lead_created', 'lead_updated', 'deal_created', 'deal_updated', 'call_completed', 'activity_created'].map(e => (
-                <Badge key={e} variant="outline" className="justify-center">{e}</Badge>
-              ))}
-            </div>
-          </div>
+      <OutboundWebhookCard />
 
-          <div>
-            <h4 className="font-semibold text-sm mb-1">Trigger Outbound Push</h4>
-            <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-{`POST /functions/crmOutboundPush
-Body:
-{
-  "client_id": "client_abc",
-  "event_type": "call_completed",
-  "entity_id": "calllog_xyz"
-}`}
-            </pre>
-          </div>
-
-          <div>
-            <h4 className="font-semibold text-sm mb-1">What your CRM webhook receives</h4>
-            <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-{`{
-  "event": "call_completed",
-  "timestamp": "2026-04-07T12:00:00.000Z",
-  "source": "bolify_ai",
-  "entity_id": "calllog_xyz",
-  "data": {
-    "caller_id": "918065489191",
-    "callee_number": "9876543210",
-    "duration": 180,
-    "status": "completed",
-    "transcript": "...",
-    "conversation_summary": "...",
-    "lead_status_updated": "interested"
-  }
-}`}
-            </pre>
-          </div>
-
-          <div className="bg-orange-50 border border-orange-200 rounded p-3 text-sm text-orange-800">
-            <strong>Setup:</strong> Configure your CRM webhook URL in Settings → CRM Integration → Webhook URL. The platform will POST JSON events to that URL with your API key in the <code>x-api-key</code> header.
-          </div>
-        </CardContent>
-      </Card>
+      <ErrorCodesCard />
 
       {/* Field Mapping */}
       <Card>
@@ -667,7 +607,7 @@ Body:
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="examples">
         <CardHeader>
           <CardTitle>Quick Integration Examples</CardTitle>
         </CardHeader>
@@ -723,6 +663,7 @@ console.log(data);`}
           </div>
         </CardContent>
       </Card>
+      </div>
     </div>
   );
 }
