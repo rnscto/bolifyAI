@@ -6,6 +6,8 @@ import { toast } from "@/components/ui/use-toast";
 import CalendarHeader from '../components/social/CalendarHeader';
 import CalendarGrid from '../components/social/CalendarGrid';
 import PostPreviewDialog from '../components/social/PostPreviewDialog';
+import AddOnAccessGate from '../components/AddOnAccessGate';
+import { Image } from 'lucide-react';
 
 export default function SocialMediaCalendar() {
   const [client, setClient] = useState(null);
@@ -60,7 +62,30 @@ export default function SocialMediaCalendar() {
 
   if (!client) return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
 
+  const reloadClient = async () => {
+    const user = await base44.auth.me();
+    const cs = await base44.entities.Client.filter({ user_id: user.id });
+    if (cs.length > 0) setClient(cs[0]);
+  };
+
   return (
+    <AddOnAccessGate
+      client={client}
+      onChange={reloadClient}
+      featureName="Social Media Content"
+      featureIcon={<Image className="w-6 h-6" />}
+      statusField="social_media_access_status"
+      requestedAtField="social_media_access_requested_at"
+      activatedAtField="social_media_access_activated_at"
+      feeField="social_media_access_fee"
+      notesField="social_media_access_notes"
+      description="AI-generated content calendar for your social media. Plan, schedule, and share posts across platforms."
+      bullets={[
+        'Drag-to-reschedule monthly/weekly calendar',
+        'Festival & occasion-based auto-posts',
+        'Multi-platform sharing'
+      ]}
+    >
     <div className="space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Content Calendar</h1>
@@ -92,5 +117,6 @@ export default function SocialMediaCalendar() {
         onShared={handleShared}
       />
     </div>
+    </AddOnAccessGate>
   );
 }

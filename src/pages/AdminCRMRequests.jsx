@@ -10,7 +10,11 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { CheckCircle2, XCircle, Database, Clock, Ban, IndianRupee } from 'lucide-react';
+import { CheckCircle2, XCircle, Database, Clock, Ban, IndianRupee, Upload } from 'lucide-react';
+import RaisePaymentRequestDialog from '../components/admin/RaisePaymentRequestDialog';
+
+const CEO_EMAIL = 'ceo@getwaygroup.com';
+const MAIN_ADMIN_EMAIL = 'neerajyrns@gmail.com';
 
 const STATUS_META = {
   not_requested: { label: 'Not requested', color: 'bg-gray-100 text-gray-700' },
@@ -30,6 +34,7 @@ export default function AdminCRMRequests() {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [me, setMe] = useState(null);
+  const [raiseClient, setRaiseClient] = useState(null);
 
   useEffect(() => { load(); }, []);
 
@@ -67,29 +72,9 @@ export default function AdminCRMRequests() {
     if (!selected || !action) return;
     setSaving(true);
     try {
-      const now = new Date().toISOString();
-      let patch = { crm_api_access_notes: notes || '' };
-
-      if (action === 'approve') {
-        const feeNum = parseFloat(fee);
-        if (isNaN(feeNum) || feeNum < 0) {
-          toast.error('Enter a valid one-time fee (₹)');
-          setSaving(false);
-          return;
-        }
-        patch = {
-          ...patch,
-          crm_api_access_status: 'active',
-          crm_api_access_fee: feeNum,
-          crm_api_access_activated_at: now,
-          crm_api_access_activated_by: me?.email || ''
-        };
-      } else if (action === 'reject') {
-        patch.crm_api_access_status = 'rejected';
-      } else if (action === 'revoke') {
-        patch.crm_api_access_status = 'revoked';
-      }
-
+      const patch = { crm_api_access_notes: notes || '' };
+      if (action === 'reject') patch.crm_api_access_status = 'rejected';
+      else if (action === 'revoke') patch.crm_api_access_status = 'revoked';
       await base44.entities.Client.update(selected.id, patch);
       toast.success(`CRM access ${action}d for ${selected.company_name}`);
       closeDialog();
@@ -212,30 +197,26 @@ export default function AdminCRMRequests() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right space-x-1">
-                          {status === 'requested' && (
-                            <>
-                              <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => openAction(c, 'approve')}>
-                                <CheckCircle2 className="w-4 h-4 mr-1" /> Approve
-                              </Button>
-                              <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => openAction(c, 'reject')}>
-                                <XCircle className="w-4 h-4 mr-1" /> Reject
-                              </Button>
-                            </>
+                          {/* Activation (any non-active status) → CEO raises payment approval request */}
+                          {status !== 'active' && (me?.email || '').toLowerCase() === CEO_EMAIL && (
+                            <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700" onClick={() => setRaiseClient(c)}>
+                              <Upload className="w-4 h-4 mr-1" /> Raise Payment Approval
+                            </Button>
                           )}
-                          {status === 'active' && (
+                          {/* Reject (only main admin, direct) */}
+                          {status === 'requested' && (me?.email || '').toLowerCase() === MAIN_ADMIN_EMAIL && (
+                            <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => openAction(c, 'reject')}>
+                              <XCircle className="w-4 h-4 mr-1" /> Reject
+                            </Button>
+                          )}
+                          {/* Revoke (main admin only, direct) */}
+                          {status === 'active' && (me?.email || '').toLowerCase() === MAIN_ADMIN_EMAIL && (
                             <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => openAction(c, 'revoke')}>
                               <Ban className="w-4 h-4 mr-1" /> Revoke
                             </Button>
                           )}
-                          {(status === 'rejected' || status === 'revoked') && (
-                            <Button size="sm" variant="outline" onClick={() => openAction(c, 'approve')}>
-                              <CheckCircle2 className="w-4 h-4 mr-1" /> Activate
-                            </Button>
-                          )}
-                          {status === 'not_requested' && (
-                            <Button size="sm" variant="outline" onClick={() => openAction(c, 'approve')}>
-                              Activate Manually
-                            </Button>
+                          {status === 'active' && (me?.email || '').toLowerCase() !== MAIN_ADMIN_EMAIL && (
+                            <span className="text-xs text-gray-400">—</span>
                           )}
                         </td>
                       </tr>
@@ -252,25 +233,11 @@ export default function AdminCRMRequests() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {action === 'approve' && `Activate CRM Access — ${selected?.company_name}`}
               {action === 'reject' && `Reject CRM Request — ${selected?.company_name}`}
               {action === 'revoke' && `Revoke CRM Access — ${selected?.company_name}`}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            {action === 'approve' && (
-              <div>
-                <Label>One-time Activation Fee (₹) *</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  value={fee}
-                  onChange={(e) => setFee(e.target.value)}
-                  placeholder="e.g. 4999"
-                />
-                <p className="text-xs text-gray-500 mt-1">Charged once at activation. Record-keeping only; collect payment offline or via your billing flow.</p>
-              </div>
-            )}
             <div>
               <Label>Notes (optional)</Label>
               <Textarea
@@ -286,13 +253,23 @@ export default function AdminCRMRequests() {
             <Button
               onClick={handleSubmit}
               disabled={saving}
-              className={action === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}
+              className="bg-red-600 hover:bg-red-700"
             >
-              {saving ? 'Saving…' : action === 'approve' ? 'Confirm Activation' : action === 'reject' ? 'Confirm Rejection' : 'Confirm Revoke'}
+              {saving ? 'Saving…' : action === 'reject' ? 'Confirm Rejection' : 'Confirm Revoke'}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* CEO raises payment approval request for CRM activation */}
+      <RaisePaymentRequestDialog
+        open={!!raiseClient}
+        onOpenChange={(o) => !o && setRaiseClient(null)}
+        defaultType="crm_integration_access"
+        clientId={raiseClient?.id || null}
+        clientName={raiseClient?.company_name || ''}
+        onSubmitted={() => { setRaiseClient(null); load(); }}
+      />
     </div>
   );
 }

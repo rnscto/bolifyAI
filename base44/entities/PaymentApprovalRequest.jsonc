@@ -1,0 +1,132 @@
+{
+  "name": "PaymentApprovalRequest",
+  "type": "object",
+  "properties": {
+    "request_type": {
+      "type": "string",
+      "enum": [
+        "client_activation",
+        "wallet_topup",
+        "crm_integration_access",
+        "social_media_access",
+        "subscription_renewal",
+        "channel_addition",
+        "other"
+      ],
+      "description": "What this payment approval unlocks"
+    },
+    "client_id": {
+      "type": "string",
+      "description": "Target client"
+    },
+    "client_name": {
+      "type": "string",
+      "description": "Cached client name for fast display"
+    },
+    "client_email": {
+      "type": "string",
+      "description": "Cached client email"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Amount in INR being approved"
+    },
+    "transaction_number": {
+      "type": "string",
+      "description": "Bank/UPI/Cashfree transaction reference number"
+    },
+    "payment_method": {
+      "type": "string",
+      "enum": [
+        "bank_transfer",
+        "upi",
+        "cash",
+        "cheque",
+        "card",
+        "other"
+      ],
+      "default": "bank_transfer",
+      "description": "How the client paid"
+    },
+    "payment_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Date the payment was made"
+    },
+    "screenshot_url": {
+      "type": "string",
+      "description": "Uploaded payment screenshot (proof) URL"
+    },
+    "requested_by": {
+      "type": "string",
+      "description": "Email of the admin who raised the request (only ceo@getwaygroup.com)"
+    },
+    "request_notes": {
+      "type": "string",
+      "description": "Notes from the requester (CEO admin)"
+    },
+    "request_metadata": {
+      "type": "object",
+      "description": "Type-specific data (e.g. topup amount breakdown, plan details, channel count)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "rejected"
+      ],
+      "default": "pending"
+    },
+    "reviewed_by": {
+      "type": "string",
+      "description": "Email of the main admin who approved/rejected (only neerajyrns@gmail.com)"
+    },
+    "reviewed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "review_notes": {
+      "type": "string",
+      "description": "Notes from the main admin"
+    },
+    "applied": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether the underlying change has been applied to the client (true after successful processing)"
+    },
+    "apply_error": {
+      "type": "string",
+      "description": "Error message if applying the change failed"
+    }
+  },
+  "required": [
+    "request_type",
+    "client_id",
+    "amount",
+    "transaction_number",
+    "requested_by"
+  ],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

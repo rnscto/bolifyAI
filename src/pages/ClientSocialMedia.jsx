@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sparkles, Calendar, Clock, CheckCircle2, XCircle, Share2, Loader2, RefreshCw, Image } from 'lucide-react';
 import PostCard from '../components/social/PostCard';
+import AddOnAccessGate from '../components/AddOnAccessGate';
 
 export default function ClientSocialMedia() {
   const [client, setClient] = useState(null);
@@ -60,7 +61,31 @@ export default function ClientSocialMedia() {
     );
   }
 
+  const reloadClient = async () => {
+    const user = await base44.auth.me();
+    const cs = await base44.entities.Client.filter({ user_id: user.id });
+    if (cs.length > 0) setClient(cs[0]);
+  };
+
   return (
+    <AddOnAccessGate
+      client={client}
+      onChange={reloadClient}
+      featureName="Social Media Content"
+      featureIcon={<Image className="w-6 h-6" />}
+      statusField="social_media_access_status"
+      requestedAtField="social_media_access_requested_at"
+      activatedAtField="social_media_access_activated_at"
+      feeField="social_media_access_fee"
+      notesField="social_media_access_notes"
+      description="AI-generated social media posts tailored to your brand. Auto-create, review, approve and share content across platforms."
+      bullets={[
+        'AI-generated posts based on your brand voice & products',
+        'Multi-platform: Instagram, Facebook, LinkedIn, Twitter',
+        'Auto-images, scheduling & content calendar',
+        'Festival/occasion-based content automation'
+      ]}
+    >
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -154,5 +179,6 @@ export default function ClientSocialMedia() {
         </div>
       )}
     </div>
+    </AddOnAccessGate>
   );
 }

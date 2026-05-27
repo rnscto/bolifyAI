@@ -9,8 +9,12 @@ import {
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Wallet, IndianRupee, Clock, Receipt, Search } from 'lucide-react';
+import { Wallet, IndianRupee, Clock, Receipt, Search, Upload } from 'lucide-react';
 import InvoiceButton from '../components/subscription/InvoiceButton';
+import { Button } from '@/components/ui/button';
+import RaisePaymentRequestDialog from '../components/admin/RaisePaymentRequestDialog';
+
+const CEO_EMAIL = 'ceo@getwaygroup.com';
 
 const statusColors = {
   paid: 'bg-green-100 text-green-800',
@@ -34,8 +38,10 @@ export default function AdminTopups() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [me, setMe] = useState(null);
+  const [raiseOpen, setRaiseOpen] = useState(false);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); base44.auth.me().then(setMe).catch(() => {}); }, []);
 
   const loadData = async () => {
     const [paysData, clientsData] = await Promise.all([
@@ -46,6 +52,8 @@ export default function AdminTopups() {
     setClients(clientsData);
     setLoading(false);
   };
+
+  const isCEO = (me?.email || '').toLowerCase() === CEO_EMAIL;
 
   const getClient = (id) => clients.find(c => c.id === id);
 
@@ -87,10 +95,25 @@ export default function AdminTopups() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Wallet Top-Ups</h1>
-        <p className="text-gray-600 mt-1">All wallet top-up transactions, minutes sold & GST billing</p>
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-3xl font-bold text-gray-900">Wallet Top-Ups</h1>
+          <p className="text-gray-600 mt-1">All wallet top-up transactions, minutes sold & GST billing</p>
+        </div>
+        {isCEO && (
+          <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => setRaiseOpen(true)}>
+            <Upload className="w-4 h-4 mr-1" /> Raise Top-Up Approval
+          </Button>
+        )}
       </div>
+
+      <RaisePaymentRequestDialog
+        open={raiseOpen}
+        onOpenChange={setRaiseOpen}
+        defaultType="wallet_topup"
+        clients={clients}
+        onSubmitted={loadData}
+      />
 
       {/* Summary */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

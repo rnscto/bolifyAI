@@ -194,6 +194,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Dashboard', path: 'AdminDashboard', icon: LayoutDashboard },
     { name: 'Clients', path: 'AdminClients', icon: Users },
     { name: 'CRM Access Requests', path: 'AdminCRMRequests', icon: Database },
+    { name: 'Payment Approvals', path: 'AdminPaymentApprovals', icon: ShieldCheck },
     ...(isMainAdmin ? [{ name: 'Client Lifecycle', path: 'AdminClientLifecycle', icon: ShieldCheck }] : []),
     { name: 'Website Leads', path: 'AdminWebsiteLeads', icon: Globe },
     { name: 'Agents', path: 'AdminAgents', icon: Cpu },

@@ -304,6 +304,40 @@
     "crm_api_access_notes": {
       "type": "string",
       "description": "Admin notes about the CRM API activation/rejection"
+    },
+    "social_media_access_status": {
+      "type": "string",
+      "enum": [
+        "not_requested",
+        "requested",
+        "active",
+        "rejected",
+        "revoked"
+      ],
+      "default": "not_requested",
+      "description": "Social Media add-on access status. Admin must activate."
+    },
+    "social_media_access_fee": {
+      "type": "number",
+      "description": "One-time fee for Social Media add-on activation (INR)"
+    },
+    "social_media_access_requested_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When client requested Social Media access"
+    },
+    "social_media_access_activated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When admin activated Social Media access"
+    },
+    "social_media_access_activated_by": {
+      "type": "string",
+      "description": "Email of admin who activated Social Media access"
+    },
+    "social_media_access_notes": {
+      "type": "string",
+      "description": "Admin notes about Social Media activation/rejection"
     }
   },
   "required": [
