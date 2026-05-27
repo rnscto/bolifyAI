@@ -270,6 +270,40 @@
     "api_auth_key": {
       "type": "string",
       "description": "Platform authorization key for clients integrating Bolify AI into their CRM. Used in x-auth-key header."
+    },
+    "crm_api_access_status": {
+      "type": "string",
+      "enum": [
+        "not_requested",
+        "requested",
+        "active",
+        "rejected",
+        "revoked"
+      ],
+      "default": "not_requested",
+      "description": "CRM Integration API access status. Admin must activate before client can use crmInbound/crmFetchData/crmOutboundPush."
+    },
+    "crm_api_access_fee": {
+      "type": "number",
+      "description": "One-time fee charged to activate CRM Integration API access (in INR)"
+    },
+    "crm_api_access_requested_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the client requested CRM Integration API access"
+    },
+    "crm_api_access_activated_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the admin activated CRM Integration API access"
+    },
+    "crm_api_access_activated_by": {
+      "type": "string",
+      "description": "Email of the admin who activated CRM API access"
+    },
+    "crm_api_access_notes": {
+      "type": "string",
+      "description": "Admin notes about the CRM API activation/rejection"
     }
   },
   "required": [

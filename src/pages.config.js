@@ -49,6 +49,7 @@
  */
 import APIDocs from './pages/APIDocs';
 import AdminAgents from './pages/AdminAgents';
+import AdminCRMRequests from './pages/AdminCRMRequests';
 import AdminClients from './pages/AdminClients';
 import AdminDIDs from './pages/AdminDIDs';
 import AdminDashboard from './pages/AdminDashboard';
@@ -97,6 +98,7 @@ export const PAGES = {
     "APIDocs": APIDocs,
     "AdminAgents": AdminAgents,
     "AdminClients": AdminClients,
+    "AdminCRMRequests": AdminCRMRequests,
     "AdminDIDs": AdminDIDs,
     "AdminDashboard": AdminDashboard,
     "AdminOutreach": AdminOutreach,

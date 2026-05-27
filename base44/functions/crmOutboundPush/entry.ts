@@ -199,6 +199,16 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Missing client_id or event_type' }, { status: 400 });
     }
 
+    // ─── CRM API access gate: admin must activate this client ───
+    const clientRec = await svc.entities.Client.get(client_id).catch(() => null);
+    const accessStatus = clientRec?.crm_api_access_status || 'not_requested';
+    if (accessStatus !== 'active') {
+      return Response.json({
+        error: 'CRM Integration API access is not active for this client.',
+        access_status: accessStatus
+      }, { status: 403 });
+    }
+
     const integrations = await svc.entities.CRMIntegration.filter({ client_id, status: 'active' });
     if (integrations.length === 0) {
       return Response.json({ success: true, skipped: 'no_active_integration' });

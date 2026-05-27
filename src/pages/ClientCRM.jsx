@@ -17,6 +17,7 @@ import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import BuildCRMCard from '../components/crm/BuildCRMCard';
 import FeatureGate from '../components/FeatureGate';
+import CRMAccessGate from '../components/crm/CRMAccessGate';
 
 export default function ClientCRM() {
   const [integrations, setIntegrations] = useState([]);
@@ -106,7 +107,8 @@ export default function ClientCRM() {
          </Card>
        )}
 
-      {/* External CRM Integrations */}
+      {/* External CRM Integrations — gated behind admin-approved access */}
+      <CRMAccessGate client={client} onChange={loadData}>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">External CRM Integration</h1>
@@ -209,6 +211,7 @@ export default function ClientCRM() {
           ))}
         </div>
       )}
+      </CRMAccessGate>
     </div>
     </FeatureGate>
   );

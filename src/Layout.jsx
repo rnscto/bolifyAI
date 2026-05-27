@@ -193,6 +193,7 @@ export default function Layout({ children, currentPageName }) {
   const adminNav = [
     { name: 'Dashboard', path: 'AdminDashboard', icon: LayoutDashboard },
     { name: 'Clients', path: 'AdminClients', icon: Users },
+    { name: 'CRM Access Requests', path: 'AdminCRMRequests', icon: Database },
     ...(isMainAdmin ? [{ name: 'Client Lifecycle', path: 'AdminClientLifecycle', icon: ShieldCheck }] : []),
     { name: 'Website Leads', path: 'AdminWebsiteLeads', icon: Globe },
     { name: 'Agents', path: 'AdminAgents', icon: Cpu },

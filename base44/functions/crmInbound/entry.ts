@@ -47,6 +47,17 @@ Deno.serve(async (req) => {
       clientId = integration.client_id;
     }
 
+    // ─── CRM API access gate: admin must activate this client ───
+    const clientRec = await base44.entities.Client.get(clientId).catch(() => null);
+    const accessStatus = clientRec?.crm_api_access_status || 'not_requested';
+    if (accessStatus !== 'active') {
+      return Response.json({
+        error: 'CRM Integration API access is not active for this account.',
+        access_status: accessStatus,
+        next_step: 'Go to the CRM Integration page and request access. An admin will activate it.'
+      }, { status: 403 });
+    }
+
     const { action, data } = await req.json();
     if (!action || !data) {
       return Response.json({ error: 'Missing "action" and "data" in request body' }, { status: 400 });
