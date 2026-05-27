@@ -222,6 +222,8 @@ function ClientBillingTable({ clients, statusColors }) {
               <TableHead>Client</TableHead>
               <TableHead>Billing Type</TableHead>
               <TableHead>Account Status</TableHead>
+              <TableHead>Activated On</TableHead>
+              <TableHead>Renewal Due</TableHead>
               <TableHead>Wallet / Channels</TableHead>
               <TableHead>Free Min</TableHead>
               <TableHead>Used Min</TableHead>
@@ -231,10 +233,20 @@ function ClientBillingTable({ clients, statusColors }) {
           <TableBody>
             {clients.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-gray-500">No clients found</TableCell>
+                <TableCell colSpan={9} className="text-center text-gray-500">No clients found</TableCell>
               </TableRow>
             ) : (
-              clients.map((c) => (
+              clients.map((c) => {
+                const renewal = c.next_billing_date ? new Date(c.next_billing_date) : null;
+                const daysToRenewal = renewal ? Math.ceil((renewal - new Date()) / (1000 * 60 * 60 * 24)) : null;
+                const renewalClass = daysToRenewal == null
+                  ? 'text-gray-400'
+                  : daysToRenewal < 0
+                    ? 'text-red-600 font-semibold'
+                    : daysToRenewal <= 7
+                      ? 'text-amber-600 font-medium'
+                      : 'text-gray-700';
+                return (
                 <TableRow key={c.id}>
                   <TableCell>
                     <div>
@@ -252,6 +264,29 @@ function ClientBillingTable({ clients, statusColors }) {
                       {c.account_status}
                     </Badge>
                   </TableCell>
+                  <TableCell className="text-sm">
+                    {c.trial_start_date
+                      ? new Date(c.trial_start_date).toLocaleDateString()
+                      : c.created_date
+                        ? new Date(c.created_date).toLocaleDateString()
+                        : '-'}
+                  </TableCell>
+                  <TableCell className={`text-sm ${renewalClass}`}>
+                    {renewal ? (
+                      <div>
+                        <div>{renewal.toLocaleDateString()}</div>
+                        {daysToRenewal != null && (
+                          <div className="text-xs">
+                            {daysToRenewal < 0
+                              ? `${Math.abs(daysToRenewal)}d overdue`
+                              : daysToRenewal === 0
+                                ? 'Due today'
+                                : `in ${daysToRenewal}d`}
+                          </div>
+                        )}
+                      </div>
+                    ) : '-'}
+                  </TableCell>
                   <TableCell>
                     {c.billing_type === 'unlimited' ? (
                       <span>{c.total_channels || 1} channel(s)</span>
@@ -265,7 +300,8 @@ function ClientBillingTable({ clients, statusColors }) {
                   <TableCell>{c.total_minutes_used || 0}</TableCell>
                   <TableCell>₹{(c.total_amount_spent || 0).toLocaleString()}</TableCell>
                 </TableRow>
-              ))
+                );
+              })
             )}
           </TableBody>
         </Table>
