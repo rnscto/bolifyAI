@@ -302,11 +302,14 @@ export default function AdminClients() {
                       <Badge className={{
                         active: 'bg-green-100 text-green-800',
                         trial: 'bg-blue-100 text-blue-800',
+                        activation_pending: 'bg-amber-100 text-amber-800',
                         expired: 'bg-red-100 text-red-800',
                         onboarding: 'bg-yellow-100 text-yellow-800',
                         suspended: 'bg-gray-100 text-gray-800',
                       }[client.account_status] || 'bg-gray-100 text-gray-800'}>
-                        {client.account_status || 'unknown'}
+                        {client.account_status === 'activation_pending'
+                          ? 'Activation in progress'
+                          : (client.account_status || 'unknown')}
                       </Badge>
                     </TableCell>
                     <TableCell>

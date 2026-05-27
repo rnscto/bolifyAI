@@ -53,6 +53,16 @@ Deno.serve(async (req) => {
       applied: false
     });
 
+    // Reflect pending state on the client for activation-type requests so the UI
+    // shows "Activation in progress" until the main admin approves/rejects.
+    if (request_type === 'client_activation' && client.account_status !== 'active') {
+      try {
+        await svc.entities.Client.update(client_id, { account_status: 'activation_pending' });
+      } catch (e) {
+        console.warn('[submitPaymentApproval] could not set activation_pending:', e.message);
+      }
+    }
+
     return Response.json({ success: true, id: reqRec.id, request: reqRec });
   } catch (e) {
     console.error('[submitPaymentApproval]', e.message);
