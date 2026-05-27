@@ -20,6 +20,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, CreditCard, Calendar, Wallet, Upload, FileImage, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
+import { uploadPrivateFile, getSignedUrl } from '@/lib/azureBlob';
 
 const CEO_EMAIL = 'ceo@getwaygroup.com';
 const MAIN_ADMIN_EMAIL = 'neerajyrns@gmail.com';
@@ -61,13 +62,22 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      setScreenshotUrl(file_url);
-      toast.success('Payment screenshot uploaded');
+      const { file_uri } = await uploadPrivateFile(file, 'payment-proofs');
+      setScreenshotUrl(file_uri);
+      toast.success('Payment screenshot uploaded securely');
     } catch (e) {
       toast.error('Upload failed: ' + (e.message || 'unknown'));
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleViewProof = async () => {
+    try {
+      const { signed_url } = await getSignedUrl(screenshotUrl, 600);
+      window.open(signed_url, '_blank');
+    } catch (e) {
+      toast.error('Could not open proof: ' + e.message);
     }
   };
 
@@ -400,9 +410,9 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
                   {uploading && <Loader2 className="w-4 h-4 animate-spin text-gray-500" />}
                 </div>
                 {screenshotUrl && (
-                  <a href={screenshotUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                  <button type="button" onClick={handleViewProof} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
                     <FileImage className="w-3 h-3" /> View uploaded proof
-                  </a>
+                  </button>
                 )}
               </div>
               <div>

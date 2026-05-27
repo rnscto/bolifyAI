@@ -10,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Upload, Loader2, FileImage } from 'lucide-react';
+import { uploadPrivateFile, getSignedUrl } from '@/lib/azureBlob';
 
 const TYPE_LABELS = {
   client_activation: 'Client Activation',
@@ -63,13 +64,22 @@ export default function RaisePaymentRequestDialog({
     if (!file) return;
     setUploading(true);
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
-      setScreenshotUrl(file_url);
-      toast.success('Screenshot uploaded');
+      const { file_uri } = await uploadPrivateFile(file, 'payment-proofs');
+      setScreenshotUrl(file_uri);
+      toast.success('Screenshot uploaded securely');
     } catch (e) {
       toast.error('Upload failed: ' + (e.message || 'unknown'));
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleViewProof = async () => {
+    try {
+      const { signed_url } = await getSignedUrl(screenshotUrl, 600);
+      window.open(signed_url, '_blank');
+    } catch (e) {
+      toast.error('Could not open proof: ' + e.message);
     }
   };
 
@@ -195,9 +205,9 @@ export default function RaisePaymentRequestDialog({
               {uploading && <Loader2 className="w-4 h-4 animate-spin text-gray-500" />}
             </div>
             {screenshotUrl && (
-              <a href={screenshotUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+              <button type="button" onClick={handleViewProof} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
                 <FileImage className="w-3 h-3" /> View uploaded screenshot
-              </a>
+              </button>
             )}
           </div>
 

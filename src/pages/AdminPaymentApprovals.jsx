@@ -12,6 +12,7 @@ import {
   CheckCircle2, XCircle, Clock, FileImage, IndianRupee, ShieldCheck, Plus, Loader2
 } from 'lucide-react';
 import RaisePaymentRequestDialog from '../components/admin/RaisePaymentRequestDialog';
+import { getSignedUrl } from '@/lib/azureBlob';
 
 const CEO_EMAIL = 'ceo@getwaygroup.com';
 const MAIN_ADMIN_EMAIL = 'neerajyrns@gmail.com';
@@ -43,8 +44,25 @@ export default function AdminPaymentApprovals() {
   const [decision, setDecision] = useState(null);
   const [reviewNotes, setReviewNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [reviewProofUrl, setReviewProofUrl] = useState('');
 
   useEffect(() => { load(); }, []);
+
+  // Open a private payment-proof blob via signed URL
+  const openProof = async (uri) => {
+    if (!uri) return;
+    try {
+      // Legacy public URLs may still exist — open directly
+      if (!uri.includes('blob.core.windows.net') || uri.includes('?')) {
+        window.open(uri, '_blank');
+        return;
+      }
+      const { signed_url } = await getSignedUrl(uri, 600);
+      window.open(signed_url, '_blank');
+    } catch (e) {
+      toast.error('Could not open proof: ' + e.message);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -76,8 +94,20 @@ export default function AdminPaymentApprovals() {
 
   const filtered = requests.filter(r => filter === 'all' ? true : r.status === filter);
 
-  const openReview = (r, d) => { setReviewing(r); setDecision(d); setReviewNotes(''); };
-  const closeReview = () => { setReviewing(null); setDecision(null); setReviewNotes(''); };
+  const openReview = async (r, d) => {
+    setReviewing(r); setDecision(d); setReviewNotes(''); setReviewProofUrl('');
+    if (r.screenshot_url) {
+      try {
+        if (r.screenshot_url.includes('blob.core.windows.net') && !r.screenshot_url.includes('?')) {
+          const { signed_url } = await getSignedUrl(r.screenshot_url, 600);
+          setReviewProofUrl(signed_url);
+        } else {
+          setReviewProofUrl(r.screenshot_url);
+        }
+      } catch (e) { console.warn('signed url failed', e); }
+    }
+  };
+  const closeReview = () => { setReviewing(null); setDecision(null); setReviewNotes(''); setReviewProofUrl(''); };
 
   const submitReview = async () => {
     if (!reviewing || !decision) return;
@@ -188,9 +218,9 @@ export default function AdminPaymentApprovals() {
                         <td className="px-4 py-3 font-mono text-xs">{r.transaction_number}</td>
                         <td className="px-4 py-3">
                           {r.screenshot_url ? (
-                            <a href={r.screenshot_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline flex items-center gap-1 text-xs">
+                            <button type="button" onClick={() => openProof(r.screenshot_url)} className="text-blue-600 hover:underline flex items-center gap-1 text-xs">
                               <FileImage className="w-3 h-3" /> View
-                            </a>
+                            </button>
                           ) : <span className="text-xs text-gray-400">—</span>}
                         </td>
                         <td className="px-4 py-3 text-xs text-gray-600">
@@ -254,10 +284,10 @@ export default function AdminPaymentApprovals() {
                 <div className="col-span-2"><strong>Raised by:</strong> {reviewing.requested_by}</div>
                 {reviewing.request_notes && <div className="col-span-2 text-xs text-gray-600">"{reviewing.request_notes}"</div>}
               </div>
-              {reviewing.screenshot_url && (
-                <a href={reviewing.screenshot_url} target="_blank" rel="noreferrer">
-                  <img src={reviewing.screenshot_url} alt="Payment proof" className="max-h-48 rounded border" />
-                </a>
+              {reviewProofUrl && (
+                <button type="button" onClick={() => openProof(reviewing.screenshot_url)}>
+                  <img src={reviewProofUrl} alt="Payment proof" className="max-h-48 rounded border" />
+                </button>
               )}
               <div>
                 <label className="text-sm font-medium">Review notes (optional)</label>
