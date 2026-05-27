@@ -32,6 +32,18 @@ Deno.serve(async (req) => {
     const nowISO = new Date().toISOString();
 
     if (decision === 'reject') {
+      // For client_activation rejections, revert the client back to 'expired'
+      // (it was flipped to 'activation_pending' when the CEO raised the request).
+      if (reqRec.request_type === 'client_activation') {
+        try {
+          const client = await svc.entities.Client.get(reqRec.client_id);
+          if (client && client.account_status === 'activation_pending') {
+            await svc.entities.Client.update(reqRec.client_id, { account_status: 'expired' });
+          }
+        } catch (e) {
+          console.warn('[processPaymentApproval] could not revert client to expired:', e.message);
+        }
+      }
       const updated = await svc.entities.PaymentApprovalRequest.update(request_id, {
         status: 'rejected',
         reviewed_by: user.email,
