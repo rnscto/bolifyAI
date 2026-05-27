@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import {
   Dialog,
@@ -16,12 +16,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CreditCard, Calendar, AlertTriangle, Wallet } from 'lucide-react';
+import { Loader2, CreditCard, Calendar, Wallet, Upload, FileImage, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
+const CEO_EMAIL = 'ceo@getwaygroup.com';
+const MAIN_ADMIN_EMAIL = 'neerajyrns@gmail.com';
+
 export default function ActivateClientDialog({ client, open, onOpenChange, onUpdated }) {
+  const [me, setMe] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+
   const [form, setForm] = useState({
     account_status: client?.account_status || 'trial',
     status: client?.status || 'active',
@@ -30,213 +37,138 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
     total_channels: client?.total_channels || 1,
     monthly_rate_per_channel: client?.monthly_rate_per_channel || 6500,
     per_minute_rate: client?.per_minute_rate || 4,
-    wallet_balance: client?.wallet_balance || 0,
+    wallet_credit: 0, // amount to ADD to wallet (₹)
     free_minutes_remaining: client?.free_minutes_remaining || 0,
     next_billing_date: client?.next_billing_date || '',
     trial_end_date: client?.trial_end_date ? new Date(client.trial_end_date).toISOString().slice(0, 10) : '',
   });
 
-  const handleSave = async () => {
-    setSaving(true);
+  // Payment proof (required for CEO submissions)
+  const [payAmount, setPayAmount] = useState('');
+  const [txn, setTxn] = useState('');
+  const [payMethod, setPayMethod] = useState('bank_transfer');
+  const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
+  const [screenshotUrl, setScreenshotUrl] = useState('');
+  const [notes, setNotes] = useState('');
 
-    const updateData = {
-      account_status: form.account_status,
-      status: form.status,
-      billing_type: form.billing_type,
-      subscription_plan: form.subscription_plan,
-      total_channels: parseInt(form.total_channels) || 1,
-      monthly_rate_per_channel: parseFloat(form.monthly_rate_per_channel) || 6500,
-      per_minute_rate: parseFloat(form.per_minute_rate) || 4,
-      wallet_balance: parseFloat(form.wallet_balance) || 0,
-      free_minutes_remaining: parseFloat(form.free_minutes_remaining) || 0,
-    };
+  useEffect(() => { base44.auth.me().then(setMe).catch(() => {}); }, []);
 
-    // Set billing date if activating
-    if (form.account_status === 'active' && form.next_billing_date) {
-      updateData.next_billing_date = form.next_billing_date;
-    }
+  const myEmail = (me?.email || '').toLowerCase();
+  const isCEO = myEmail === CEO_EMAIL;
+  const isMainAdmin = myEmail === MAIN_ADMIN_EMAIL;
 
-    // Set trial end date if setting to trial
-    if (form.account_status === 'trial' && form.trial_end_date) {
-      updateData.trial_end_date = new Date(form.trial_end_date).toISOString();
-    }
-
-    // If activating from trial/expired, clear trial dates and set billing start
-    if (form.account_status === 'active') {
-      updateData.status = 'active';
-    }
-
-    await base44.entities.Client.update(client.id, updateData);
-
-    // ─── Log lifecycle events for audit/history ───
+  const handleUpload = async (file) => {
+    if (!file) return;
+    setUploading(true);
     try {
-      const me = await base44.auth.me();
-      const performedBy = me?.email || 'admin';
-      const nowIso = new Date().toISOString();
-      const baseEvt = {
-        client_id: client.id,
-        client_name: client.company_name,
-        source: 'admin_manual',
-        performed_by: performedBy,
-        effective_date: nowIso,
-        billing_type: updateData.billing_type,
-        subscription_plan: updateData.subscription_plan,
-        channels: updateData.total_channels,
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      setScreenshotUrl(file_url);
+      toast.success('Payment screenshot uploaded');
+    } catch (e) {
+      toast.error('Upload failed: ' + (e.message || 'unknown'));
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // ── CEO: submit a payment approval request to main admin ──
+  const handleSubmitForApproval = async () => {
+    if (!payAmount || Number(payAmount) <= 0) return toast.error('Enter the amount paid (₹)');
+    if (!txn.trim()) return toast.error('Transaction number is required');
+    if (!screenshotUrl) return toast.error('Upload payment proof (screenshot)');
+
+    setSaving(true);
+    try {
+      const metadata = {
+        account_status: form.account_status,
+        status: form.status,
+        billing_type: form.billing_type,
+        subscription_plan: form.subscription_plan,
+        total_channels: parseInt(form.total_channels) || 1,
+        monthly_rate_per_channel: parseFloat(form.monthly_rate_per_channel) || 6500,
+        per_minute_rate: parseFloat(form.per_minute_rate) || 4,
+        wallet_credit: parseFloat(form.wallet_credit) || 0,
+        free_minutes_remaining: parseFloat(form.free_minutes_remaining) || 0,
+        next_billing_date: form.next_billing_date || null,
+        trial_days: form.trial_end_date ? null : 7
       };
-      const eventsToLog = [];
-
-      // 1. Account status change
-      if (client.account_status !== updateData.account_status) {
-        const statusEventMap = {
-          active: client.account_status && client.account_status !== 'onboarding' ? 'reactivated' : 'activated',
-          trial: 'trial_started',
-          expired: 'expired',
-          suspended: 'suspended',
-          onboarding: 'note',
-        };
-        eventsToLog.push({
-          ...baseEvt,
-          event_type: statusEventMap[updateData.account_status] || 'note',
-          from_value: client.account_status || 'unknown',
-          to_value: updateData.account_status,
-          expiry_date: updateData.account_status === 'trial' ? updateData.trial_end_date : (updateData.next_billing_date ? new Date(updateData.next_billing_date).toISOString() : null),
-          notes: `Account status changed by admin`,
-        });
-      }
-
-      // 2. Billing type change
-      if (client.billing_type !== updateData.billing_type) {
-        eventsToLog.push({
-          ...baseEvt,
-          event_type: 'billing_type_changed',
-          from_value: client.billing_type || 'per_minute',
-          to_value: updateData.billing_type,
-        });
-      }
-
-      // 3. Plan change
-      if (client.subscription_plan !== updateData.subscription_plan) {
-        eventsToLog.push({
-          ...baseEvt,
-          event_type: 'plan_changed',
-          from_value: client.subscription_plan || '—',
-          to_value: updateData.subscription_plan,
-        });
-      }
-
-      // 4. Channels change
-      if ((client.total_channels || 1) !== updateData.total_channels) {
-        eventsToLog.push({
-          ...baseEvt,
-          event_type: 'channels_changed',
-          from_value: String(client.total_channels || 1),
-          to_value: String(updateData.total_channels),
-        });
-      }
-
-      // 5. Per-minute rate change
-      if ((client.per_minute_rate || 4) !== updateData.per_minute_rate) {
-        eventsToLog.push({
-          ...baseEvt,
-          event_type: 'rate_changed',
-          from_value: `₹${client.per_minute_rate || 4}/min`,
-          to_value: `₹${updateData.per_minute_rate}/min`,
-        });
-      }
-
-      // 6. Next billing date update
-      if (updateData.next_billing_date && client.next_billing_date !== updateData.next_billing_date) {
-        eventsToLog.push({
-          ...baseEvt,
-          event_type: 'next_billing_updated',
-          from_value: client.next_billing_date || '—',
-          to_value: updateData.next_billing_date,
-          expiry_date: new Date(updateData.next_billing_date).toISOString(),
-        });
-      }
-
-      // 7. Wallet adjustment (top-up handled below with amount)
-      const oldBal = parseFloat(client.wallet_balance) || 0;
-      const newBal = updateData.wallet_balance;
-      const delta = newBal - oldBal;
-      if (Math.abs(delta) > 0.01) {
-        eventsToLog.push({
-          ...baseEvt,
-          event_type: delta > 0 ? 'wallet_topup' : 'wallet_adjusted',
-          from_value: `₹${oldBal.toLocaleString()}`,
-          to_value: `₹${newBal.toLocaleString()}`,
-          amount: Math.abs(delta),
-          notes: delta > 0 ? `Wallet credited ₹${delta}` : `Wallet debited ₹${Math.abs(delta)}`,
-        });
-      }
-
-      // Write all events in parallel
-      if (eventsToLog.length > 0) {
-        await Promise.all(eventsToLog.map(ev => base44.entities.ClientLifecycleEvent.create(ev).catch(err => console.warn('Lifecycle log failed:', err))));
-      }
-    } catch (logErr) {
-      console.warn('Lifecycle logging failed:', logErr);
-    }
-
-    // If admin increased the wallet balance, log it as an admin top-up Payment + UsageLog
-    const oldBalance = parseFloat(client.wallet_balance) || 0;
-    const newBalance = parseFloat(form.wallet_balance) || 0;
-    const credited = newBalance - oldBalance;
-    if (credited > 0) {
-      const payment = await base44.entities.Payment.create({
+      const res = await base44.functions.invoke('submitPaymentApproval', {
+        request_type: 'client_activation',
         client_id: client.id,
-        amount: credited,
-        currency: 'INR',
-        status: 'paid',
-        payment_method: 'admin_manual',
-        cashfree_order_id: `admin_${client.id.slice(-8)}_${Date.now()}`,
-        description: JSON.stringify({ type: 'wallet_topup', amount: credited, gst: 0, total: credited, source: 'admin_manual' }),
-        paid_at: new Date().toISOString(),
+        amount: Number(payAmount),
+        transaction_number: txn.trim(),
+        payment_method: payMethod,
+        payment_date: payDate,
+        screenshot_url: screenshotUrl,
+        request_notes: notes,
+        request_metadata: metadata
       });
-      try {
-        await base44.entities.UsageLog.create({
-          client_id: client.id,
-          type: 'topup',
-          direction: 'credit',
-          amount: credited,
-          balance_before: oldBalance,
-          balance_after: newBalance,
-          description: `Admin manual top-up ₹${credited}`,
-          payment_id: payment.id,
-        });
-      } catch (_) { /* UsageLog optional */ }
+      if (res.data?.error) throw new Error(res.data.error);
+      toast.success('Submitted to main admin for approval');
+      onOpenChange(false);
+      onUpdated && onUpdated();
+    } catch (e) {
+      toast.error(e.message || 'Failed to submit');
+    } finally {
+      setSaving(false);
     }
+  };
 
-    // Also create/update a subscription record when activating with unlimited billing
-    if (form.account_status === 'active' && form.billing_type === 'unlimited' && form.next_billing_date) {
-      const channels = parseInt(form.total_channels) || 1;
-      const rate = parseFloat(form.monthly_rate_per_channel) || 6500;
-      const billingMonths = form.subscription_plan === 'yearly' ? 12 : form.subscription_plan === 'quarterly' ? 3 : 1;
-      const totalAmount = channels * rate * billingMonths;
-
-      const billingStart = new Date().toISOString().split('T')[0];
-
-      await base44.entities.Subscription.create({
-        client_id: client.id,
-        billing_cycle: form.subscription_plan,
-        channels: channels,
-        rate_per_channel: rate,
-        total_amount: totalAmount,
-        billing_start_date: billingStart,
-        billing_end_date: form.next_billing_date,
-        next_billing_date: form.next_billing_date,
-        status: 'active',
-        payment_status: 'paid',
-      });
+  // ── Main admin: direct save (no payment proof required) ──
+  const handleDirectSave = async () => {
+    setSaving(true);
+    try {
+      const oldBalance = parseFloat(client.wallet_balance) || 0;
+      const credit = parseFloat(form.wallet_credit) || 0;
+      const updateData = {
+        account_status: form.account_status,
+        status: form.status,
+        billing_type: form.billing_type,
+        subscription_plan: form.subscription_plan,
+        total_channels: parseInt(form.total_channels) || 1,
+        monthly_rate_per_channel: parseFloat(form.monthly_rate_per_channel) || 6500,
+        per_minute_rate: parseFloat(form.per_minute_rate) || 4,
+        free_minutes_remaining: parseFloat(form.free_minutes_remaining) || 0,
+        wallet_balance: oldBalance + credit,
+      };
+      if (form.account_status === 'active' && form.next_billing_date) {
+        updateData.next_billing_date = form.next_billing_date;
+      }
+      if (form.account_status === 'trial' && form.trial_end_date) {
+        updateData.trial_end_date = new Date(form.trial_end_date).toISOString();
+      }
+      await base44.entities.Client.update(client.id, updateData);
+      toast.success(`Client "${client.company_name}" updated`);
+      onOpenChange(false);
+      onUpdated && onUpdated();
+    } catch (e) {
+      toast.error(e.message || 'Failed to update');
+    } finally {
+      setSaving(false);
     }
-
-    toast.success(`Client "${client.company_name}" updated to ${form.account_status}`);
-    setSaving(false);
-    onOpenChange(false);
-    onUpdated();
   };
 
   if (!client) return null;
+  if (!me) return null;
+
+  // Block other admins (not CEO, not main admin)
+  if (!isCEO && !isMainAdmin) {
+    return (
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Restricted</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-gray-700">
+            Only the CEO ({CEO_EMAIL}) or main admin ({MAIN_ADMIN_EMAIL}) may manage client billing.
+          </p>
+          <div className="flex justify-end">
+            <Button onClick={() => onOpenChange(false)}>Close</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    );
+  }
 
   const statusBadge = {
     onboarding: 'bg-yellow-100 text-yellow-800',
@@ -248,13 +180,32 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CreditCard className="w-5 h-5" />
             Manage Account — {client.company_name}
           </DialogTitle>
         </DialogHeader>
+
+        {/* Mode banner */}
+        {isCEO && (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-start gap-2">
+            <ShieldCheck className="w-4 h-4 text-indigo-700 mt-0.5 shrink-0" />
+            <p className="text-xs text-indigo-800">
+              <strong>Two-tier approval:</strong> Set the target billing/status below, attach payment proof, and submit.
+              The main admin ({MAIN_ADMIN_EMAIL}) will review and approve — your changes will be applied only after approval.
+            </p>
+          </div>
+        )}
+        {isMainAdmin && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2">
+            <AlertTriangle className="w-4 h-4 text-green-700 mt-0.5 shrink-0" />
+            <p className="text-xs text-green-800">
+              <strong>Main admin mode:</strong> Direct save (no payment proof required). To approve a CEO-submitted request, go to <em>Payment Approvals</em>.
+            </p>
+          </div>
+        )}
 
         {/* Current status */}
         <div className="bg-gray-50 rounded-lg p-3 flex items-center justify-between text-sm">
@@ -269,13 +220,11 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
           <div>
             <Label>Account Status</Label>
             <Select value={form.account_status} onValueChange={(v) => setForm({ ...form, account_status: v })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="onboarding">Onboarding</SelectItem>
                 <SelectItem value="trial">Trial</SelectItem>
-                <SelectItem value="active">Active (Billing)</SelectItem>
+                <SelectItem value="active">Active (Paid)</SelectItem>
                 <SelectItem value="expired">Expired</SelectItem>
                 <SelectItem value="suspended">Suspended</SelectItem>
               </SelectContent>
@@ -286,9 +235,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
           <div>
             <Label>Billing Type</Label>
             <Select value={form.billing_type} onValueChange={(v) => setForm({ ...form, billing_type: v })}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
+              <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="per_minute">Per Minute (₹{form.per_minute_rate}/min prepaid)</SelectItem>
                 <SelectItem value="unlimited">Unlimited (flat channel rate)</SelectItem>
@@ -296,7 +243,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
             </Select>
           </div>
 
-          {/* Per-minute wallet management */}
+          {/* Per-minute wallet credit + free minutes */}
           {form.billing_type === 'per_minute' && (
             <div className="bg-cyan-50 border border-cyan-200 rounded-lg p-3 space-y-3">
               <div className="flex items-center gap-2 text-sm font-medium text-cyan-800">
@@ -306,38 +253,36 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
                 <div>
                   <Label className="text-xs">Rate (₹/min)</Label>
                   <Input
-                    type="number"
-                    min="1"
+                    type="number" min="1"
                     value={form.per_minute_rate}
                     onChange={(e) => setForm({ ...form, per_minute_rate: e.target.value })}
                   />
                 </div>
                 <div>
-                  <Label className="text-xs">Wallet Balance (₹)</Label>
+                  <Label className="text-xs">Credit to Wallet (₹)</Label>
                   <Input
-                    type="number"
-                    min="0"
-                    value={form.wallet_balance}
-                    onChange={(e) => setForm({ ...form, wallet_balance: e.target.value })}
+                    type="number" min="0"
+                    value={form.wallet_credit}
+                    onChange={(e) => setForm({ ...form, wallet_credit: e.target.value })}
+                    placeholder="0"
                   />
                 </div>
                 <div>
                   <Label className="text-xs">Free Minutes</Label>
                   <Input
-                    type="number"
-                    min="0"
+                    type="number" min="0"
                     value={form.free_minutes_remaining}
                     onChange={(e) => setForm({ ...form, free_minutes_remaining: e.target.value })}
                   />
                 </div>
               </div>
               <p className="text-xs text-cyan-700">
-                Current: ₹{(client?.wallet_balance || 0).toLocaleString()} balance, {client?.free_minutes_remaining || 0} free min, {(client?.total_minutes_used || 0).toFixed(1)} min used total
+                Current wallet: ₹{(client?.wallet_balance || 0).toLocaleString()} · {client?.free_minutes_remaining || 0} free min · {(client?.total_minutes_used || 0).toFixed(1)} min used
               </p>
             </div>
           )}
 
-          {/* Trial end date — only when trial */}
+          {/* Trial end */}
           {form.account_status === 'trial' && (
             <div>
               <Label className="flex items-center gap-1">
@@ -348,27 +293,17 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
                 value={form.trial_end_date}
                 onChange={(e) => setForm({ ...form, trial_end_date: e.target.value })}
               />
-              <p className="text-xs text-gray-500 mt-1">Leave blank to keep the existing trial end date.</p>
             </div>
           )}
 
-          {/* Unlimited subscription fields — only when active + unlimited */}
+          {/* Unlimited subscription fields */}
           {form.account_status === 'active' && form.billing_type === 'unlimited' && (
             <>
-              <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2">
-                <AlertTriangle className="w-4 h-4 text-green-700 shrink-0 mt-0.5" />
-                <p className="text-xs text-green-800">
-                  Activating this account will create a subscription record and set billing. Make sure payment has been received.
-                </p>
-              </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Subscription Plan</Label>
                   <Select value={form.subscription_plan} onValueChange={(v) => setForm({ ...form, subscription_plan: v })}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="monthly">Monthly</SelectItem>
                       <SelectItem value="quarterly">Quarterly</SelectItem>
@@ -379,14 +314,12 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
                 <div>
                   <Label>Channels</Label>
                   <Input
-                    type="number"
-                    min="1"
+                    type="number" min="1"
                     value={form.total_channels}
                     onChange={(e) => setForm({ ...form, total_channels: e.target.value })}
                   />
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <Label>Rate/Channel (₹/mo)</Label>
@@ -407,26 +340,89 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
                   />
                 </div>
               </div>
-
               {(() => {
                 const months = form.subscription_plan === 'yearly' ? 12 : form.subscription_plan === 'quarterly' ? 3 : 1;
-                const cycleLabel = form.subscription_plan === 'yearly' ? 'year' : form.subscription_plan === 'quarterly' ? 'quarter' : 'month';
                 const total = (parseInt(form.total_channels) || 1) * (parseFloat(form.monthly_rate_per_channel) || 6500) * months;
                 return (
                   <div className="text-sm text-gray-600 bg-gray-50 rounded-lg p-3">
-                    Total: <strong>₹{total.toLocaleString()}</strong> / {cycleLabel}
-                    ({form.total_channels} ch × ₹{parseFloat(form.monthly_rate_per_channel || 6500).toLocaleString()} × {months} month{months > 1 ? 's' : ''})
+                    Plan Total: <strong>₹{total.toLocaleString()}</strong>
                   </div>
                 );
               })()}
             </>
           )}
 
+          {/* Payment proof block — CEO only */}
+          {isCEO && (
+            <div className="border-2 border-indigo-200 rounded-lg p-3 space-y-3 bg-indigo-50/40">
+              <div className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
+                <Upload className="w-4 h-4" /> Payment Proof (required)
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Amount Paid (₹) *</Label>
+                  <Input type="number" min="0" value={payAmount} onChange={(e) => setPayAmount(e.target.value)} placeholder="e.g. 14999" />
+                </div>
+                <div>
+                  <Label>Payment Date *</Label>
+                  <Input type="date" value={payDate} onChange={(e) => setPayDate(e.target.value)} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Transaction Number *</Label>
+                  <Input value={txn} onChange={(e) => setTxn(e.target.value)} placeholder="UPI / Bank ref" />
+                </div>
+                <div>
+                  <Label>Method</Label>
+                  <Select value={payMethod} onValueChange={setPayMethod}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="upi">UPI</SelectItem>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="cheque">Cheque</SelectItem>
+                      <SelectItem value="card">Card</SelectItem>
+                      <SelectItem value="other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label>Screenshot / Receipt *</Label>
+                <div className="flex items-center gap-2 mt-1">
+                  <Input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => handleUpload(e.target.files?.[0])}
+                    disabled={uploading}
+                  />
+                  {uploading && <Loader2 className="w-4 h-4 animate-spin text-gray-500" />}
+                </div>
+                {screenshotUrl && (
+                  <a href={screenshotUrl} target="_blank" rel="noreferrer" className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                    <FileImage className="w-3 h-3" /> View uploaded proof
+                  </a>
+                )}
+              </div>
+              <div>
+                <Label>Notes to main admin (optional)</Label>
+                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-3 justify-end pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
-              {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Saving...</> : 'Save Changes'}
-            </Button>
+            {isCEO ? (
+              <Button onClick={handleSubmitForApproval} disabled={saving || uploading} className="bg-indigo-600 hover:bg-indigo-700">
+                {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Submitting…</> : <><Upload className="w-4 h-4 mr-2" /> Submit to Main Admin</>}
+              </Button>
+            ) : (
+              <Button onClick={handleDirectSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
+                {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Saving…</> : 'Save Changes'}
+              </Button>
+            )}
           </div>
         </div>
       </DialogContent>

@@ -51,19 +51,54 @@ Deno.serve(async (req) => {
 
       switch (reqRec.request_type) {
         case 'client_activation': {
-          const trialEnd = new Date();
-          trialEnd.setDate(trialEnd.getDate() + (meta.trial_days || 7));
-          await svc.entities.Client.update(client.id, {
-            status: 'active',
-            account_status: 'active',
-            trial_start_date: new Date().toISOString(),
-            trial_end_date: trialEnd.toISOString(),
+          // Intended target status + billing config carried in request_metadata
+          const targetAccountStatus = meta.account_status || 'active';
+          const patch = {
+            status: meta.status || 'active',
+            account_status: targetAccountStatus,
             ...(meta.billing_type ? { billing_type: meta.billing_type } : {}),
-            ...(meta.total_channels ? { total_channels: meta.total_channels } : {}),
-            ...(meta.per_minute_rate ? { per_minute_rate: meta.per_minute_rate } : {}),
-            ...(meta.monthly_rate_per_channel ? { monthly_rate_per_channel: meta.monthly_rate_per_channel } : {}),
-            ...(meta.next_billing_date ? { next_billing_date: meta.next_billing_date } : {})
-          });
+            ...(meta.subscription_plan ? { subscription_plan: meta.subscription_plan } : {}),
+            ...(meta.total_channels ? { total_channels: Number(meta.total_channels) } : {}),
+            ...(meta.per_minute_rate != null ? { per_minute_rate: Number(meta.per_minute_rate) } : {}),
+            ...(meta.monthly_rate_per_channel != null ? { monthly_rate_per_channel: Number(meta.monthly_rate_per_channel) } : {}),
+            ...(meta.next_billing_date ? { next_billing_date: meta.next_billing_date } : {}),
+            ...(meta.free_minutes_remaining != null ? { free_minutes_remaining: Number(meta.free_minutes_remaining) } : {})
+          };
+          // Wallet credit (delta on top of existing balance)
+          const walletCredit = Number(meta.wallet_credit) || 0;
+          if (walletCredit > 0) {
+            patch.wallet_balance = (Number(client.wallet_balance) || 0) + walletCredit;
+          } else if (meta.wallet_balance != null) {
+            patch.wallet_balance = Number(meta.wallet_balance);
+          }
+          // Trial dates only when explicitly activating a trial
+          if (targetAccountStatus === 'trial') {
+            const trialEnd = new Date();
+            trialEnd.setDate(trialEnd.getDate() + (Number(meta.trial_days) || 7));
+            patch.trial_start_date = new Date().toISOString();
+            patch.trial_end_date = trialEnd.toISOString();
+          }
+          await svc.entities.Client.update(client.id, patch);
+
+          // Record the payment if money changed hands
+          if (amount > 0) {
+            try {
+              await svc.entities.Payment.create({
+                client_id: client.id,
+                amount,
+                status: 'paid',
+                paid_at: nowISO,
+                description: JSON.stringify({
+                  type: 'client_activation',
+                  account_status: targetAccountStatus,
+                  billing_type: patch.billing_type || client.billing_type,
+                  transaction_number: reqRec.transaction_number,
+                  approval_request_id: request_id,
+                  metadata: meta
+                })
+              });
+            } catch (_) {}
+          }
           break;
         }
         case 'wallet_topup': {
