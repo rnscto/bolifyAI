@@ -141,6 +141,20 @@
       "type": "string",
       "format": "date-time",
       "description": "Last timestamp when this lead was pushed to external CRM via outbound webhook"
+    },
+    "crm_push_attempts": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of failed push attempts to external CRM webhook (resets on success)"
+    },
+    "crm_push_last_error": {
+      "type": "string",
+      "description": "Last error message from CRM webhook push attempt"
+    },
+    "crm_push_next_retry_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Earliest time the next retry attempt is allowed (exponential backoff)"
     }
   },
   "required": [
