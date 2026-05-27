@@ -136,6 +136,11 @@
     "group_id": {
       "type": "string",
       "description": "Lead group ID for organizing leads"
+    },
+    "crm_pushed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last timestamp when this lead was pushed to external CRM via outbound webhook"
     }
   },
   "required": [

@@ -88,6 +88,11 @@
     "agent_config_cache": {
       "type": "object",
       "description": "Cached agent config for WebSocket use (system_prompt, persona, knowledge_base_content)"
+    },
+    "crm_pushed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Timestamp when this call was pushed to external CRM via outbound webhook"
     }
   },
   "required": [
