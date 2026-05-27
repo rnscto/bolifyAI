@@ -34,6 +34,8 @@ import ClientAgreementTemplateEditor from '../components/admin/ClientAgreementTe
 import AdminSignedAgreements from '../components/admin/AdminSignedAgreements';
 import AdminKYCManagement from '../components/admin/AdminKYCManagement';
 import ActivateClientDialog from '../components/admin/ActivateClientDialog';
+import CEOStatusOverrideDialog from '../components/admin/CEOStatusOverrideDialog';
+import { ArrowDownCircle } from 'lucide-react';
 
 export default function AdminClients() {
   const [clients, setClients] = useState([]);
@@ -42,6 +44,8 @@ export default function AdminClients() {
   const [editingClient, setEditingClient] = useState(null);
   const [users, setUsers] = useState([]);
   const [activateClient, setActivateClient] = useState(null);
+  const [overrideClient, setOverrideClient] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
   const [formData, setFormData] = useState({
     company_name: '',
     email: '',
@@ -52,6 +56,7 @@ export default function AdminClients() {
 
   useEffect(() => {
     loadClients();
+    base44.auth.me().then(setCurrentUser).catch(() => {});
   }, []);
 
   const loadClients = async () => {
@@ -342,6 +347,16 @@ export default function AdminClients() {
                         >
                           <CreditCard className="w-4 h-4 text-blue-600" />
                         </Button>
+                        {(currentUser?.email || '').toLowerCase() === 'ceo@getwaygroup.com' && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Override status → Expired / Suspended / Trial"
+                            onClick={() => setOverrideClient(client)}
+                          >
+                            <ArrowDownCircle className="w-4 h-4 text-amber-600" />
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="ghost"
@@ -386,6 +401,15 @@ export default function AdminClients() {
           client={activateClient}
           open={!!activateClient}
           onOpenChange={(open) => { if (!open) setActivateClient(null); }}
+          onUpdated={loadClients}
+        />
+      )}
+      {overrideClient && (
+        <CEOStatusOverrideDialog
+          client={overrideClient}
+          currentUser={currentUser}
+          open={!!overrideClient}
+          onOpenChange={(open) => { if (!open) setOverrideClient(null); }}
           onUpdated={loadClients}
         />
       )}
