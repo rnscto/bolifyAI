@@ -661,10 +661,16 @@ Deno.serve(async (req) => {
   function handleGeminiMessage(msg) {
     if (msg.setupComplete !== undefined) {
       session.geminiReady = true;
-      console.log(`[${reqId}] ✅ Gemini setupComplete`);
+      console.log(`[${reqId}] ✅ Gemini setupComplete (buffered=${session._audioBuffer.length})`);
       if (session._agentConfigReady && !session._greetingTriggered) triggerGreeting();
-      // Drop handshake-buffered audio — flushing causes Gemini to burst-generate audio
-      session._audioBuffer = [];
+      // Flush buffered handshake audio — dropping it loses the first words the caller spoke,
+      // which is a major cause of "AI didn't respond / 20s silence" complaints.
+      if (session._audioBuffer.length > 0) {
+        for (const b64 of session._audioBuffer) {
+          sendToGemini({ realtimeInput: { audio: { data: b64, mimeType: 'audio/pcm;rate=16000' } } });
+        }
+        session._audioBuffer = [];
+      }
       return;
     }
     if (msg.error) { console.error(`[${reqId}] ❌ Gemini error:`, JSON.stringify(msg.error)); return; }

@@ -373,7 +373,8 @@ Deno.serve(async (req) => {
       session.realtimeReady = false;
       const stableMs = session._lastRealtimeOpenTs ? (Date.now() - session._lastRealtimeOpenTs) : 0;
       if (stableMs > 30000 && session._realtimeReconnectAttempts > 0) session._realtimeReconnectAttempts = 0;
-      const RECONNECT_DELAYS_MS = [500, 1500, 3000, 6000, 10000, 15000];
+      // Fast first retry to mask transient blips, then exponential backoff
+      const RECONNECT_DELAYS_MS = [50, 500, 1500, 3000, 6000, 10000];
       if (!session._callEnded && session._realtimeReconnectAttempts < RECONNECT_DELAYS_MS.length) {
         const delay = RECONNECT_DELAYS_MS[session._realtimeReconnectAttempts++];
         setTimeout(() => { if (!session._callEnded) connectRealtime(); }, delay);
@@ -659,7 +660,9 @@ Deno.serve(async (req) => {
       transferInstructions = `\n\n--- HUMAN TRANSFER AVAILABLE ---\nUse transfer_to_human when customer explicitly asks for a human or for complex issues. Always confirm: "Let me connect you to a human agent. Please hold."`;
     }
     const greetingGuard = session._greetingSent ? '\n\nIMPORTANT: You have ALREADY greeted. Do NOT greet again.' : '';
-    const sessionConfig = { input_audio_format: 'pcm16', input_audio_transcription: { model: 'whisper-1', language: 'hi' }, turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } };
+    // CRITICAL: keep g711_ulaw end-to-end (Smartflo native format). Switching to pcm16 here
+    // while caller audio is still mu-law causes Azure VAD to never trigger → 20s silence.
+    const sessionConfig = { input_audio_format: 'g711_ulaw', output_audio_format: 'g711_ulaw', input_audio_transcription: { model: 'whisper-1', language: 'hi' }, turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } };
     if (isHybrid) {
       sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
       sessionConfig.modalities = ['text']; sessionConfig.voice = 'alloy';
@@ -1299,16 +1302,18 @@ Deno.serve(async (req) => {
         if (!session._mediaBufferFlushed && session._mediaBuffer.length > 0) {
           session._mediaBufferFlushed = true;
           for (const buffered of session._mediaBuffer) {
-            const pcmBuf = mulawToBase64PCM16_24k(buffered, session._audioState);
-            if (session.voiceEngine === 'gemini_realtime') sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=24000", data: pcmBuf }] } });
-            else sendToRealtime({ type: 'input_audio_buffer.append', audio: pcmBuf });
+            // mulawToBase64PCM16_24k is a pass-through stub here (true native mu-law mode).
+            // Send raw mu-law base64 with the correct mime type/format.
+            const ulawB64 = mulawToBase64PCM16_24k(buffered, session._audioState);
+            if (session.voiceEngine === 'gemini_realtime') sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/x-mulaw;rate=8000", data: ulawB64 }] } });
+            else sendToRealtime({ type: 'input_audio_buffer.append', audio: ulawB64 });
           }
           session._mediaBuffer = []; session._mediaBufferBytes = 0;
         }
 
-        const pcm16Base64 = mulawToBase64PCM16_24k(mulawBytes, session._audioState);
-        if (session.voiceEngine === 'gemini_realtime') sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=24000", data: pcm16Base64 }] } });
-        else sendToRealtime({ type: 'input_audio_buffer.append', audio: pcm16Base64 });
+        const ulawB64 = mulawToBase64PCM16_24k(mulawBytes, session._audioState);
+        if (session.voiceEngine === 'gemini_realtime') sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/x-mulaw;rate=8000", data: ulawB64 }] } });
+        else sendToRealtime({ type: 'input_audio_buffer.append', audio: ulawB64 });
         return;
       }
 

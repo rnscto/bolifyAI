@@ -567,8 +567,8 @@ Deno.serve(async (req) => {
         session._realtimeReconnectAttempts = 0;
       }
 
-      // Exponential backoff: 500ms, 1.5s, 3s, 6s, 10s, 15s (6 attempts, ~36s total budget)
-      const RECONNECT_DELAYS_MS = [500, 1500, 3000, 6000, 10000, 15000];
+      // Fast first retry to mask transient blips, then exponential backoff
+      const RECONNECT_DELAYS_MS = [50, 500, 1500, 3000, 6000, 10000];
       const MAX_RECONNECT = RECONNECT_DELAYS_MS.length;
       if (!session._callEnded && session._realtimeReconnectAttempts < MAX_RECONNECT) {
         const delay = RECONNECT_DELAYS_MS[session._realtimeReconnectAttempts];
@@ -1061,7 +1061,9 @@ Deno.serve(async (req) => {
     }
     // Prevent double greeting after Phase 2 upgrade
     const greetingGuard = session._greetingSent ? '\n\nIMPORTANT: You have ALREADY greeted the customer. Do NOT greet again. Wait for the customer to speak next.' : '';
-    const sessionConfig = { input_audio_format: 'pcm16', input_audio_transcription: { model: 'whisper-1', language: 'hi' }, turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } };
+    // CRITICAL: keep g711_ulaw end-to-end. Switching to pcm16 here while Smartflo still
+    // streams mu-law bytes causes Azure VAD to never trigger → 20s of silence until reconnect.
+    const sessionConfig = { input_audio_format: 'g711_ulaw', output_audio_format: 'g711_ulaw', input_audio_transcription: { model: 'whisper-1', language: 'hi' }, turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } };
     if (session.voiceEngine === 'gemini_realtime') {
       const gTools = buildGeminiTools();
       const setupMsg = { setup: { model: "models/gemini-2.0-flash-lite-preview-02-27", generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: session.voiceType || "Aoede" } } } }, systemInstruction: { parts: [{ text: timeInjection + noiseHandling + session.systemPrompt + transferInstructions + greetingGuard }] } } };
@@ -1105,7 +1107,8 @@ Deno.serve(async (req) => {
         const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
         const timeInjection = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}.\n`;
         const sessionConfig = {
-          input_audio_format: 'pcm16',
+          input_audio_format: 'g711_ulaw',
+          output_audio_format: 'g711_ulaw',
           input_audio_transcription: { model: 'whisper-1', language: 'hi' },
           turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 }
         };
@@ -1898,17 +1901,18 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
           session._mediaBufferFlushed = true;
           console.log(`[${reqId}] 🚀 Flushing ${session._mediaBuffer.length} buffered packets (${session._mediaBufferBytes}B)`);
           for (const buffered of session._mediaBuffer) {
-            const pcmBuf = mulawToBase64PCM16_24k(buffered, session._audioState);
-            if (session.voiceEngine === 'gemini_realtime') sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=24000", data: pcmBuf }] } });
-            else sendToRealtime({ type: 'input_audio_buffer.append', audio: pcmBuf });
+            const ulawB64 = mulawBytesToBase64ULaw(buffered);
+            // Azure Realtime: native g711_ulaw input. Gemini path here is legacy — also send mu-law as PCM is not faithful from mu-law without true resampling.
+            if (session.voiceEngine === 'gemini_realtime') sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/x-mulaw;rate=8000", data: ulawB64 }] } });
+            else sendToRealtime({ type: 'input_audio_buffer.append', audio: ulawB64 });
           }
           session._mediaBuffer = [];
           session._mediaBufferBytes = 0;
         }
 
-        const pcm16Base64 = mulawToBase64PCM16_24k(mulawBytes, session._audioState);
-        if (session.voiceEngine === 'gemini_realtime') sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=24000", data: pcm16Base64 }] } });
-        else sendToRealtime({ type: 'input_audio_buffer.append', audio: pcm16Base64 });
+        const ulawB64 = mulawBytesToBase64ULaw(mulawBytes);
+        if (session.voiceEngine === 'gemini_realtime') sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/x-mulaw;rate=8000", data: ulawB64 }] } });
+        else sendToRealtime({ type: 'input_audio_buffer.append', audio: ulawB64 });
         return;
       }
 
