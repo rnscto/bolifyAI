@@ -580,6 +580,7 @@ Deno.serve(async (req) => {
     session._geminiOpenedAt = 0;
     ws.onopen = () => {
       session._geminiOpenedAt = Date.now();
+      session._setupSent = false; // new WS instance → allow one fresh setup
       console.log(`[${reqId}] 🔌 Gemini WS OPEN (${apiVersion})`);
       if (session._agentConfigReady) sendGeminiSetup();
     };
@@ -631,6 +632,10 @@ Deno.serve(async (req) => {
   function sendToGemini(msg) { if (session.geminiWs?.readyState === WebSocket.OPEN) session.geminiWs.send(JSON.stringify(msg)); }
 
   function sendGeminiSetup() {
+    // Guard against double-setup: connectGemini().onopen AND loadAgentConfig() can both call this.
+    // Sending setup twice on the same WS makes Gemini close with code 1007 "invalid argument".
+    if (session._setupSent) { console.log(`[${reqId}] ⏭️ setup already sent, skipping`); return; }
+    session._setupSent = true;
     const tools = buildGeminiTools();
     const hasKB = session._toolFlags?.has_kb || session._kbFileUri || session._kbChunks.length > 0 || !!session._agentId;
     const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' });
@@ -662,11 +667,17 @@ Deno.serve(async (req) => {
     if (msg.setupComplete !== undefined) {
       session.geminiReady = true;
       console.log(`[${reqId}] ✅ Gemini setupComplete (buffered=${session._audioBuffer.length})`);
-      if (session._agentConfigReady && !session._greetingTriggered) triggerGreeting();
-      // Flush buffered handshake audio — dropping it loses the first words the caller spoke,
-      // which is a major cause of "AI didn't respond / 20s silence" complaints.
-      if (session._audioBuffer.length > 0) {
-        for (const b64 of session._audioBuffer) {
+      // If greeting hasn't started, send it FIRST and drop buffered audio (caller hasn't really
+      // spoken yet — buffer contains noise/silence from before pickup).
+      // If greeting was already triggered before (reconnect case), flush only the last ~1s of
+      // buffered audio (50 chunks ≈ 1s of 20ms frames) to avoid stale-burst turn confusion.
+      const wasReconnect = session._greetingTriggered;
+      if (!wasReconnect) {
+        if (session._agentConfigReady) triggerGreeting();
+        session._audioBuffer = [];
+      } else if (session._audioBuffer.length > 0) {
+        const tail = session._audioBuffer.slice(-50);
+        for (const b64 of tail) {
           sendToGemini({ realtimeInput: { audio: { data: b64, mimeType: 'audio/pcm;rate=16000' } } });
         }
         session._audioBuffer = [];
