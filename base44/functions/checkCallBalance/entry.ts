@@ -21,6 +21,19 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'Client not found' }, { status: 404 });
     }
 
+    // ── ACCOUNT STATUS GATE ──
+    // Blocked statuses cannot make calls regardless of wallet balance.
+    const blockedStatuses = ['expired', 'suspended', 'activation_pending', 'cancelled'];
+    if (blockedStatuses.includes(client.account_status)) {
+      return Response.json({
+        can_call: false,
+        billing_type: client.billing_type,
+        account_status: client.account_status,
+        blocked_reason: 'account_not_active',
+        message: `Account status is '${client.account_status}'. Renew or activate to resume calling.`
+      });
+    }
+
     // Unlimited plans always have sufficient balance
     if (client.billing_type === 'unlimited') {
       return Response.json({

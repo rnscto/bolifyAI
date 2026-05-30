@@ -33,6 +33,8 @@ import {
 import AgreementGate from './components/client/AgreementGate';
 import AnnouncementMarquee from './components/AnnouncementMarquee';
 import SetDisplayNameDialog from './components/SetDisplayNameDialog';
+import AccountStatusGate from './components/AccountStatusGate';
+import AccountStatusBanner from './components/AccountStatusBanner';
 
 export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
@@ -105,11 +107,11 @@ export default function Layout({ children, currentPageName }) {
             window.location.href = createPageUrl('PersonalDashboard');
             return;
           }
-            // Check if trial expired and not subscribed
+            // Check if trial expired and not subscribed — flip status so the gate kicks in
             if (clients[0].account_status === 'trial' && clients[0].trial_end_date) {
               const trialEnd = new Date(clients[0].trial_end_date);
               if (trialEnd < new Date()) {
-                await base44.entities.Client.update(clients[0].id, { account_status: 'expired' });
+                try { await base44.entities.Client.update(clients[0].id, { account_status: 'expired' }); } catch (_) {}
                 clients[0].account_status = 'expired';
               }
             }
@@ -288,6 +290,11 @@ export default function Layout({ children, currentPageName }) {
     );
   }
 
+  // Block clients whose account is expired / suspended / pending activation.
+  // Gate self-allows the Subscription + Settings pages so the user can pay/renew.
+  const lockedStates = ['expired', 'suspended', 'activation_pending'];
+  const showStatusGate = !isAdmin && client && lockedStates.includes(client.account_status);
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Mobile sidebar backdrop */}
@@ -433,9 +440,15 @@ export default function Layout({ children, currentPageName }) {
 
         {/* Page content */}
         <main className="p-6">
+          {!isAdmin && client && <AccountStatusBanner client={client} />}
           {children}
         </main>
       </div>
+
+      {/* Hard lockout overlay for expired / suspended / activation_pending accounts */}
+      {showStatusGate && (
+        <AccountStatusGate client={client} currentPageName={currentPageName} />
+      )}
 
       {/* First-time display name prompt (clients only) */}
       <SetDisplayNameDialog

@@ -175,6 +175,19 @@ Deno.serve(async (req) => {
     const clientData = clients[0];
     const isDemoAgent = clientData.account_status === 'trial' || clientData.account_status === 'onboarding';
 
+    // ── ACCOUNT STATUS GATE ──
+    // Block calls for accounts that are expired, suspended, awaiting activation, or cancelled.
+    // This is the backend safety net so a hijacked client cannot bypass the frontend gate.
+    const blockedStatuses = ['expired', 'suspended', 'activation_pending', 'cancelled'];
+    if (blockedStatuses.includes(clientData.account_status)) {
+      return Response.json({
+        success: false,
+        error: 'account_not_active',
+        message: `Your account is currently '${clientData.account_status}'. Please renew your subscription or top up to resume calling.`,
+        account_status: clientData.account_status
+      }, { status: 402 });
+    }
+
     // ── BALANCE CHECK for per-minute billing ──
     if (clientData.billing_type !== 'unlimited') {
       const freeMin = clientData.free_minutes_remaining || 0;

@@ -13,7 +13,7 @@ export default function TrialBanner({ client }) {
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-red-600" />
           <span className="text-sm font-medium text-red-800">
-            Your free trial has expired. Subscribe to continue using VaaniAI.
+            Your free trial has expired. Subscribe to continue using Bolify AI.
           </span>
         </div>
         <Link to={createPageUrl('ClientSubscription')}>
@@ -36,7 +36,7 @@ export default function TrialBanner({ client }) {
         <div className="flex items-center gap-2">
           <Clock className="w-4 h-4 text-red-600" />
           <span className="text-sm font-medium text-red-800">
-            Your free trial has expired. Subscribe to continue using VaaniAI.
+            Your free trial has expired. Subscribe to continue using Bolify AI.
           </span>
         </div>
         <Link to={createPageUrl('ClientSubscription')}>
