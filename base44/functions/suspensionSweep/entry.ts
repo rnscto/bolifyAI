@@ -5,9 +5,9 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
  *
  * Rules applied:
  *  1. Trial ended (trial_end_date in past) + status still 'trial' → 'expired'.
- *  2. Subscription pending payment for > 7 days → Client.account_status = 'suspended'
+ *  2. Subscription pending payment (any duration) → Client.account_status = 'suspended'
  *     and Subscription.status = 'overdue'.
- *  3. Active subscription whose billing_end_date passed > 7 days ago without a new
+ *  3. Active subscription whose billing_end_date has passed without a new
  *     active subscription → Client.account_status = 'suspended'.
  *
  * Idempotent — safe to run multiple times per day.
@@ -27,7 +27,6 @@ Deno.serve(async (req) => {
 
     const base44 = createClientFromRequest(req).asServiceRole;
     const now = new Date();
-    const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
 
     const results = { trial_expired: [], suspended_pending: [], suspended_overdue: [] };
 
@@ -55,12 +54,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // 2. Subscription pending > 7 days → suspend client
+    // 2. Subscription pending payment → suspend client immediately (no grace)
     const pendingSubs = await base44.entities.Subscription.filter({ status: 'pending' });
     for (const sub of pendingSubs) {
-      const triggeredAt = sub.updated_date ? new Date(sub.updated_date) : new Date(sub.created_date);
-      if (now - triggeredAt < sevenDaysMs) continue;
-
       // Mark sub overdue
       await base44.entities.Subscription.update(sub.id, { status: 'overdue', payment_status: 'failed' });
 
@@ -84,17 +80,17 @@ Deno.serve(async (req) => {
           effective_date: now.toISOString(),
           source: 'system_auto',
           performed_by: 'suspensionSweep',
-          notes: `Renewal payment overdue by more than 7 days. Subscription ${sub.id} marked overdue.`
+          notes: `Renewal payment not received. Subscription ${sub.id} marked overdue.`
         });
       } catch (_) {}
     }
 
-    // 3. Active subscription whose billing_end_date is > 7 days past with no follow-up
+    // 3. Active subscription whose billing_end_date has passed with no follow-up
     const activeSubs = await base44.entities.Subscription.filter({ status: 'active' });
     for (const sub of activeSubs) {
       if (!sub.billing_end_date) continue;
       const end = new Date(sub.billing_end_date);
-      if (now - end < sevenDaysMs) continue;
+      if (end >= now) continue;
 
       // Look for a newer active subscription for the same client
       const allClientSubs = await base44.entities.Subscription.filter({ client_id: sub.client_id });
@@ -125,7 +121,7 @@ Deno.serve(async (req) => {
           effective_date: now.toISOString(),
           source: 'system_auto',
           performed_by: 'suspensionSweep',
-          notes: `Subscription ${sub.id} billing_end_date passed more than 7 days ago without renewal.`
+          notes: `Subscription ${sub.id} billing_end_date passed without renewal.`
         });
       } catch (_) {}
     }

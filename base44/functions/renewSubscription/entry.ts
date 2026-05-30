@@ -18,7 +18,7 @@ async function sendEmail({ to, subject, html }) {
  *  - 3 days before billing_end_date → reminder email.
  *  - On/after billing_end_date → mark sub `pending`, email payment link.
  *
- * Final suspension (after 7 days non-payment) is handled by `suspensionSweep`.
+ * Suspension on non-payment is handled by `suspensionSweep` (no grace period).
  */
 Deno.serve(async (req) => {
   try {
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
                   <div style="text-align: center; margin: 30px 0;">
                     <a href="https://bolify.ai/ClientSubscription" style="background: linear-gradient(135deg, #e67e22, #f39c12); color: white; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: bold; font-size: 16px;">Pay & Renew</a>
                   </div>
-                  <p style="color: #718096; font-size: 13px; text-align: center;">Your account will be suspended if payment is not received within 7 days.</p>
+                  <p style="color: #718096; font-size: 13px; text-align: center;">Your account access will be paused immediately until payment is received.</p>
                 </div>
               </div>
             `,
