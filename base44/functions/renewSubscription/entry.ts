@@ -6,9 +6,18 @@ async function sendEmail({ to, subject, html }) {
   const smtpUser = Deno.env.get('PLATFORM_SMTP_USER');
   const smtpPass = Deno.env.get('PLATFORM_SMTP_PASS');
   const smtpFrom = Deno.env.get('PLATFORM_SMTP_FROM') || smtpUser;
-  const smtpPort = parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587');
+  const smtpPort = parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '465');
   if (!smtpHost || !smtpUser || !smtpPass) throw new Error('Platform SMTP not configured');
-  const client = new SMTPClient({ user: smtpUser, password: smtpPass, host: smtpHost, port: smtpPort, tls: true, timeout: 15000 });
+  const useSSL = smtpPort === 465;
+  const client = new SMTPClient({
+    user: smtpUser,
+    password: smtpPass,
+    host: smtpHost,
+    port: smtpPort,
+    ssl: useSSL,
+    tls: !useSSL,
+    timeout: 15000,
+  });
   await client.sendAsync({ from: `Bolify AI <${smtpFrom}>`, to, subject, attachment: [{ data: html, alternative: true }] });
   return { status: 'sent' };
 }
