@@ -7,6 +7,7 @@ async function sendEmail({ to, subject, html, displayName }) {
   const smtpPass = Deno.env.get('PLATFORM_SMTP_PASS');
   const smtpFrom = Deno.env.get('PLATFORM_SMTP_FROM') || smtpUser;
   const smtpPort = parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '465');
+  console.log('[SMTP] host=', smtpHost, 'port=', smtpPort, 'user=', smtpUser);
   if (!smtpHost || !smtpUser || !smtpPass) throw new Error('Platform SMTP not configured');
   // Port 465 → implicit SSL (ssl: true). Port 587 → STARTTLS (tls: true).
   const useSSL = smtpPort === 465;
@@ -43,6 +44,13 @@ Deno.serve(async (req) => {
 
     const base44_client = createClientFromRequest(req);
     const base44 = base44_client.asServiceRole;
+
+    // Diagnostic: log SMTP config at function entry
+    console.log('[trialExpiryCheck] SMTP config:',
+      'host=', Deno.env.get('PLATFORM_SMTP_HOST'),
+      'port=', Deno.env.get('PLATFORM_SMTP_PORT'),
+      'user=', Deno.env.get('PLATFORM_SMTP_USER')
+    );
 
     const now = new Date();
     const results = { emails_sent: [], agents_triggered: [], expired_updated: [] };
