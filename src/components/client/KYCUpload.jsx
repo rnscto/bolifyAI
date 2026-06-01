@@ -81,26 +81,35 @@ export default function KYCUpload({ client }) {
   const handleFileUpload = async (field, file) => {
     if (!file) return;
     setUploading(prev => ({ ...prev, [field]: true }));
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    if (kycDoc) {
-      await base44.entities.KYCDocument.update(kycDoc.id, { [field]: file_url });
-      setKycDoc(prev => ({ ...prev, [field]: file_url }));
-    } else {
-      // Create KYC doc if first upload
-      const newDoc = await base44.entities.KYCDocument.create({
-        client_id: client.id,
-        entity_type: 'client',
-        entity_name: client.company_name,
-        company_type: formData.company_type || client.company_type,
-        signatory_name: formData.signatory_name,
-        status: 'pending',
-        kyc_deadline: client.kyc_deadline,
-        [field]: file_url,
-      });
-      setKycDoc(newDoc);
+    try {
+      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      if (kycDoc) {
+        await base44.entities.KYCDocument.update(kycDoc.id, { [field]: file_url });
+        setKycDoc(prev => ({ ...prev, [field]: file_url }));
+      } else {
+        // Create KYC doc on first upload. Only include company_type if user has selected one
+        // (entity used to require it, which blocked uploads before selection).
+        const payload = {
+          client_id: client.id,
+          entity_type: 'client',
+          entity_name: client.company_name,
+          signatory_name: formData.signatory_name,
+          status: 'pending',
+          kyc_deadline: client.kyc_deadline,
+          [field]: file_url,
+        };
+        const ct = formData.company_type || client.company_type;
+        if (ct) payload.company_type = ct;
+        const newDoc = await base44.entities.KYCDocument.create(payload);
+        setKycDoc(newDoc);
+      }
+      toast.success('Document uploaded');
+    } catch (err) {
+      console.error('KYC upload failed:', err);
+      toast.error(`Upload failed: ${err?.message || 'Please try again'}`);
+    } finally {
+      setUploading(prev => ({ ...prev, [field]: false }));
     }
-    toast.success('Document uploaded');
-    setUploading(prev => ({ ...prev, [field]: false }));
   };
 
   const handleSubmitKYC = async () => {
