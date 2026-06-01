@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 
 const PROVIDERS = [
   { value: 'none', label: 'Not Connected' },
-  { value: 'rcs_digital', label: 'RCS Digital (Meta-compatible)', fields: ['api_key', 'phone_number_id', 'business_id'] },
+  { value: 'rcs_digital', label: 'RCS Digital (Meta-compatible)', fields: ['api_key', 'phone_number_id', 'business_id', 'api_endpoint'] },
   { value: 'meta_cloud', label: 'Meta Cloud API (Official)', fields: ['api_key', 'phone_number_id', 'business_id'] },
   { value: 'gupshup', label: 'Gupshup', fields: ['api_key', 'phone_number_id', 'business_id'] },
   { value: 'aisensy', label: 'AiSensy', fields: ['api_key', 'phone_number_id', 'api_endpoint'] },
@@ -25,7 +25,7 @@ const FIELD_LABELS = {
   api_key: { meta_cloud: 'Access Token', gupshup: 'API Key', twilio: 'Auth Token', rcs_digital: 'Bearer Token / API Key', default: 'API Key / Token' },
   phone_number_id: { meta_cloud: 'Phone Number ID', rcs_digital: 'Phone Number ID', twilio: 'WhatsApp Number (+91...)', default: 'Sender Phone Number' },
   business_id: { meta_cloud: 'WhatsApp Business Account ID', rcs_digital: 'WhatsApp Business Account ID', twilio: 'Account SID', gupshup: 'App Name', default: 'Business / App ID' },
-  api_endpoint: { default: 'API Endpoint URL' },
+  api_endpoint: { rcs_digital: 'Custom API Host (optional, e.g. https://icpaas.in)', default: 'API Endpoint URL' },
 };
 
 const getLabel = (field, provider) => FIELD_LABELS[field]?.[provider] || FIELD_LABELS[field]?.default || field;
