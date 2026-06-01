@@ -138,6 +138,37 @@ Deno.serve(async (req) => {
       return Response.json({ success: true, trai_window_open: false, current_ist: istString, ...results });
     }
 
+    // === GLOBAL CALLLOG SWEEP: Flip orphan "ringing"/"initiated" calls older than 2 min ===
+    // This catches calls where Smartflo never sent a terminal-status webhook (customer didn't pick up,
+    // missed call, or webhook delivery failed). Without this, calls stay stuck at "ringing" forever.
+    try {
+      const orphanCutoff = Date.now() - 2 * 60 * 1000; // 2 minutes
+      const [ringingLogs, initiatedLogs] = await Promise.all([
+        svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 200),
+        svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 200)
+      ]);
+      const stuckLogs = [...ringingLogs, ...initiatedLogs].filter(l => {
+        // Stuck = no stream_sid (call never answered) AND older than 2 min
+        const age = new Date(l.updated_date || l.created_date).getTime();
+        return !l.stream_sid && age < orphanCutoff;
+      });
+      let orphansFixed = 0;
+      for (const l of stuckLogs) {
+        try {
+          await svc.entities.CallLog.update(l.id, {
+            status: 'no_answer',
+            call_end_time: new Date().toISOString(),
+            conversation_summary: l.conversation_summary || 'Call did not connect — customer did not answer (auto-recovered by poller after 2 min).',
+            lead_status_updated: 'no_answer'
+          });
+          orphansFixed++;
+        } catch (_) {}
+      }
+      if (orphansFixed > 0) console.log(`[campaignPoller] Recovered ${orphansFixed} orphan ringing/initiated CallLogs (no Smartflo terminal webhook received)`);
+    } catch (sweepErr) {
+      console.error(`[campaignPoller] Orphan CallLog sweep failed: ${sweepErr.message}`);
+    }
+
     // Find all running campaigns (includes the ones just auto-started/resumed)
     const runningCampaigns = await svc.entities.Campaign.filter({ status: 'running' });
     console.log(`[campaignPoller] Found ${runningCampaigns.length} running campaigns (${autoStarted} just auto-started, ${autoResumed} auto-resumed)`);
