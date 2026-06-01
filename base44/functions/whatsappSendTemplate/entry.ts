@@ -112,9 +112,12 @@ Deno.serve(async (req) => {
     if (!phoneNumberId) {
       return Response.json({ error: 'Phone Number ID is not configured. Please add it in Integrations.' }, { status: 400 });
     }
+    // RCS Digital tenants vary by host (rcsdigital.in, icpaas.in, etc.) — honor the
+    // configured whatsapp_api_endpoint when provided, otherwise fall back to defaults.
+    const customHost = String(cfg.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '');
     const baseUrl = cfg.whatsapp_provider === 'rcs_digital'
-      ? `https://rcsdigital.in/v23.0/${phoneNumberId}/messages`
-      : `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
+      ? `${customHost || 'https://rcsdigital.in'}/v23.0/${phoneNumberId}/messages`
+      : `${customHost || 'https://graph.facebook.com/v20.0'}/${phoneNumberId}/messages`.replace('/v20.0//', '/v20.0/');
     const url = baseUrl;
     console.log(`[whatsappSendTemplate] → POST ${url} (to=${cleanRecipient}, template=${template.name})`);
     const res = await fetch(url, {

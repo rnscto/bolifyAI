@@ -29,10 +29,13 @@ Deno.serve(async (req) => {
       if (!apiKey) return Response.json({ success: false, error: 'API key is required' });
 
       if (provider === 'rcs_digital') {
-        // RCS Digital is Meta-compatible at https://rcsdigital.in/v23.0
+        // RCS Digital is Meta-compatible. Default host is rcsdigital.in, but some tenants
+        // (e.g. icpaas.in) use a different base URL — allow override via whatsapp_api_endpoint.
         if (!phoneNumberId) return Response.json({ success: false, error: 'Phone Number ID required' });
+        const customHost = String(config.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '');
+        const baseHost = customHost || 'https://rcsdigital.in';
         const tokenPreview = apiKey.length > 12 ? `${apiKey.slice(0, 6)}...${apiKey.slice(-4)} (len=${apiKey.length})` : `(len=${apiKey.length})`;
-        const fullUrl = `https://rcsdigital.in/v23.0/${phoneNumberId}?fields=verified_name,display_phone_number`;
+        const fullUrl = `${baseHost}/v23.0/${phoneNumberId}?fields=verified_name,display_phone_number`;
         console.log(`[testMessagingConnection/rcs_digital] → GET ${fullUrl}`);
         console.log(`[testMessagingConnection/rcs_digital] → Phone Number ID: "${phoneNumberId}", Token: ${tokenPreview}`);
         const validateRes = await fetch(fullUrl, {
