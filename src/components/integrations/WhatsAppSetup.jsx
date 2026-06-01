@@ -47,6 +47,17 @@ export default function WhatsAppSetup({ config, onSave }) {
   const currentProvider = PROVIDERS.find(p => p.value === provider);
   const fields = currentProvider?.fields || [];
 
+  // Re-sync local state when config prop arrives or changes (config is null during initial page load)
+  useEffect(() => {
+    if (config) {
+      setProvider(config.whatsapp_provider || 'none');
+      setApiKey(config.whatsapp_api_key || '');
+      setPhoneNumberId(config.whatsapp_phone_number_id || '');
+      setBusinessId(config.whatsapp_business_id || '');
+      setApiEndpoint(config.whatsapp_api_endpoint || '');
+    }
+  }, [config?.id]);
+
   // Load approved templates when Meta Cloud is selected and credentials exist
   useEffect(() => {
     if ((provider === 'meta_cloud' || provider === 'rcs_digital') && config?.client_id) {

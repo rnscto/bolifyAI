@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { base44 } from '@/api/base44Client';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,28 +28,56 @@ export default function RCSSetup({ config, onSave }) {
   const [saving, setSaving] = useState(false);
   const [showKey, setShowKey] = useState(false);
 
+  // Re-sync local state when config prop arrives or changes (config is null during initial page load)
+  useEffect(() => {
+    if (config) {
+      setProvider(config.rcs_provider || 'none');
+      setApiKey(config.rcs_api_key || '');
+      setSenderId(config.rcs_sender_id || '');
+      setApiEndpoint(config.rcs_api_endpoint || '');
+    }
+  }, [config?.id]);
+
   const currentProvider = PROVIDERS.find(p => p.value === provider);
   const fields = currentProvider?.fields || [];
 
+  // Sanitize credentials (strip whitespace + accidental "Bearer " prefix)
+  const cleanCreds = () => ({
+    rcs_provider: provider,
+    rcs_api_key: apiKey.trim().replace(/^Bearer\s+/i, ''),
+    rcs_sender_id: senderId.trim(),
+    rcs_api_endpoint: apiEndpoint.trim(),
+  });
+
   const handleTest = async () => {
     setTesting(true);
+    const creds = cleanCreds();
     const res = await base44.functions.invoke('testMessagingConnection', {
       channel: 'rcs',
-      test_recipient: testRecipient,
-      config: { rcs_provider: provider, rcs_api_key: apiKey, rcs_sender_id: senderId, rcs_api_endpoint: apiEndpoint }
+      test_recipient: testRecipient.trim(),
+      config: creds
     });
-    if (res.data.success) toast.success(res.data.message);
-    else toast.error(res.data.error || 'Connection failed');
+    if (res.data.success) {
+      toast.success(res.data.message);
+      setApiKey(creds.rcs_api_key);
+      setSenderId(creds.rcs_sender_id);
+      setApiEndpoint(creds.rcs_api_endpoint);
+      await onSave({ ...creds, rcs_status: 'connected', rcs_last_tested: new Date().toISOString() });
+    } else {
+      toast.error(res.data.error || 'Connection failed', { duration: 8000 });
+      await onSave({ ...creds, rcs_status: 'error', rcs_last_tested: new Date().toISOString() });
+    }
     setTesting(false);
   };
 
   const handleSave = async () => {
     setSaving(true);
+    const creds = cleanCreds();
+    setApiKey(creds.rcs_api_key);
+    setSenderId(creds.rcs_sender_id);
+    setApiEndpoint(creds.rcs_api_endpoint);
     await onSave({
-      rcs_provider: provider,
-      rcs_api_key: apiKey,
-      rcs_sender_id: senderId,
-      rcs_api_endpoint: apiEndpoint,
+      ...creds,
       rcs_status: provider === 'none' ? 'disconnected' : config?.rcs_status || 'disconnected',
     });
     setSaving(false);
