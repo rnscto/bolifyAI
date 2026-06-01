@@ -22,7 +22,7 @@ const PROVIDERS = [
 ];
 
 const FIELD_LABELS = {
-  api_key: { meta_cloud: 'Access Token', gupshup: 'API Key', twilio: 'Auth Token', default: 'API Key / Token' },
+  api_key: { meta_cloud: 'Access Token', gupshup: 'API Key', twilio: 'Auth Token', rcs_digital: 'Bearer Token / API Key', default: 'API Key / Token' },
   phone_number_id: { meta_cloud: 'Phone Number ID', rcs_digital: 'Phone Number ID', twilio: 'WhatsApp Number (+91...)', default: 'Sender Phone Number' },
   business_id: { meta_cloud: 'WhatsApp Business Account ID', rcs_digital: 'WhatsApp Business Account ID', twilio: 'Account SID', gupshup: 'App Name', default: 'Business / App ID' },
   api_endpoint: { default: 'API Endpoint URL' },

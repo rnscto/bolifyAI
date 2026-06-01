@@ -43,14 +43,19 @@ Deno.serve(async (req) => {
         try { validateData = JSON.parse(rawText); } catch (_) { validateData = { raw: rawText }; }
         console.log(`[testMessagingConnection/rcs_digital] ← HTTP ${validateRes.status} ${validateRes.statusText}`);
         console.log(`[testMessagingConnection/rcs_digital] ← Response body: ${rawText.substring(0, 1500)}`);
-        if (validateRes.ok) {
+        // RCS Digital sometimes returns HTTP 200 with an error envelope { isValid: false, response: [...] }
+        const isErrorEnvelope = validateData?.isValid === false;
+        if (validateRes.ok && !isErrorEnvelope) {
           return Response.json({
             success: true,
             message: `RCS Digital connected — phone ${validateData.display_phone_number || phoneNumberId}`,
             details: validateData
           });
         }
-        return Response.json({ success: false, error: validateData.error?.message || JSON.stringify(validateData) });
+        const errMsg = isErrorEnvelope
+          ? (validateData.response?.[0]?.message || 'RCS Digital rejected the request')
+          : (validateData.error?.message || validateData.response?.[0]?.message || JSON.stringify(validateData));
+        return Response.json({ success: false, error: errMsg });
       }
 
       if (provider === 'meta_cloud') {
