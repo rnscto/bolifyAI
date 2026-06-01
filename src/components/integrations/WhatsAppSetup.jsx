@@ -47,16 +47,20 @@ export default function WhatsAppSetup({ config, onSave }) {
   const currentProvider = PROVIDERS.find(p => p.value === provider);
   const fields = currentProvider?.fields || [];
 
-  // Re-sync local state when config prop arrives or changes (config is null during initial page load)
+  // Re-sync local state when config prop arrives (config is null during initial page load).
+  // Only sync on initial mount (when id first becomes available) — DO NOT re-sync on every config
+  // change, otherwise typing a new value would get overwritten when parent re-renders.
+  const [hasSynced, setHasSynced] = useState(false);
   useEffect(() => {
-    if (config) {
+    if (config && !hasSynced) {
       setProvider(config.whatsapp_provider || 'none');
       setApiKey(config.whatsapp_api_key || '');
       setPhoneNumberId(config.whatsapp_phone_number_id || '');
       setBusinessId(config.whatsapp_business_id || '');
       setApiEndpoint(config.whatsapp_api_endpoint || '');
+      setHasSynced(true);
     }
-  }, [config?.id]);
+  }, [config, hasSynced]);
 
   // Load approved templates when Meta Cloud is selected and credentials exist
   useEffect(() => {

@@ -41,9 +41,16 @@ export default function ClientIntegrations() {
 
   const handleSave = async (updates) => {
     if (!config) return;
-    await base44.entities.ClientMessagingConfig.update(config.id, updates);
-    setConfig({ ...config, ...updates });
-    toast.success('Integration saved');
+    try {
+      await base44.entities.ClientMessagingConfig.update(config.id, updates);
+      // Re-fetch from DB to confirm what was actually persisted (handles RLS / silent failures)
+      const fresh = await base44.entities.ClientMessagingConfig.get(config.id);
+      setConfig(fresh);
+      toast.success('Integration saved');
+    } catch (err) {
+      console.error('[ClientIntegrations] Save failed:', err);
+      toast.error(`Save failed: ${err.message || 'Permission denied'}`, { duration: 8000 });
+    }
   };
 
   if (loading) {

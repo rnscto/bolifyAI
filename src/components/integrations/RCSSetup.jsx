@@ -28,15 +28,18 @@ export default function RCSSetup({ config, onSave }) {
   const [saving, setSaving] = useState(false);
   const [showKey, setShowKey] = useState(false);
 
-  // Re-sync local state when config prop arrives or changes (config is null during initial page load)
+  // Re-sync local state only on initial mount when config first arrives.
+  // DO NOT re-sync on every config change — that would overwrite the user's typed value.
+  const [hasSynced, setHasSynced] = useState(false);
   useEffect(() => {
-    if (config) {
+    if (config && !hasSynced) {
       setProvider(config.rcs_provider || 'none');
       setApiKey(config.rcs_api_key || '');
       setSenderId(config.rcs_sender_id || '');
       setApiEndpoint(config.rcs_api_endpoint || '');
+      setHasSynced(true);
     }
-  }, [config?.id]);
+  }, [config, hasSynced]);
 
   const currentProvider = PROVIDERS.find(p => p.value === provider);
   const fields = currentProvider?.fields || [];
