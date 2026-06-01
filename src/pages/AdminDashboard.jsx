@@ -21,14 +21,31 @@ export default function AdminDashboard() {
   }, []);
 
   const loadStats = async () => {
+    // Verify admin role before calling admin-only endpoints
+    try {
+      const me = await base44.auth.me();
+      if (me?.role !== 'admin') {
+        console.warn('[AdminDashboard] Non-admin user attempted access');
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      console.warn('[AdminDashboard] Auth check failed:', e.message);
+      setLoading(false);
+      return;
+    }
+
     const [clientsRes, dids, calls, subscriptions, payments] = await Promise.all([
-      base44.functions.invoke('adminListClients', { action: 'list' }),
-      base44.entities.DID.list(),
-      base44.entities.CallLog.list('-created_date', 5000),
-      base44.entities.Subscription.list('-created_date'),
-      base44.entities.Payment.list('-created_date', 10),
+      base44.functions.invoke('adminListClients', { action: 'list' }).catch(err => {
+        console.error('[AdminDashboard] adminListClients failed:', err.message);
+        return { data: { clients: [] } };
+      }),
+      base44.entities.DID.list().catch(() => []),
+      base44.entities.CallLog.list('-created_date', 5000).catch(() => []),
+      base44.entities.Subscription.list('-created_date').catch(() => []),
+      base44.entities.Payment.list('-created_date', 10).catch(() => []),
     ]);
-    const clients = clientsRes.data.clients || [];
+    const clients = clientsRes.data?.clients || [];
 
     const today = new Date().toISOString().split('T')[0];
     const callsToday = calls.filter(c => c.created_date?.startsWith(today)).length;
