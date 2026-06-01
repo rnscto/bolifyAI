@@ -35,17 +35,23 @@ export default function AdminDashboard() {
       return;
     }
 
-    const [clientsRes, dids, calls, subscriptions, payments] = await Promise.all([
-      base44.functions.invoke('adminListClients', { action: 'list' }).catch(err => {
-        console.error('[AdminDashboard] adminListClients failed:', err.message);
-        return { data: { clients: [] } };
-      }),
-      base44.entities.DID.list().catch(() => []),
-      base44.entities.CallLog.list('-created_date', 5000).catch(() => []),
-      base44.entities.Subscription.list('-created_date').catch(() => []),
-      base44.entities.Payment.list('-created_date', 10).catch(() => []),
-    ]);
-    const clients = clientsRes.data?.clients || [];
+    let clientsRes = { data: { clients: [] } };
+    let dids = [], calls = [], subscriptions = [], payments = [];
+    try {
+      [clientsRes, dids, calls, subscriptions, payments] = await Promise.all([
+        base44.functions.invoke('adminListClients', { action: 'list' }).catch(err => {
+          console.error('[AdminDashboard] adminListClients failed:', err?.message || err);
+          return { data: { clients: [] } };
+        }),
+        base44.entities.DID.list().catch(() => []),
+        base44.entities.CallLog.list('-created_date', 5000).catch(() => []),
+        base44.entities.Subscription.list('-created_date').catch(() => []),
+        base44.entities.Payment.list('-created_date', 10).catch(() => []),
+      ]);
+    } catch (err) {
+      console.error('[AdminDashboard] Failed to load dashboard data:', err?.message || err);
+    }
+    const clients = clientsRes?.data?.clients || [];
 
     const today = new Date().toISOString().split('T')[0];
     const callsToday = calls.filter(c => c.created_date?.startsWith(today)).length;
@@ -103,6 +109,15 @@ export default function AdminDashboard() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  if (!stats) {
+    return (
+      <div className="flex flex-col items-center justify-center h-64 text-gray-500">
+        <AlertTriangle className="w-10 h-10 text-amber-500 mb-2" />
+        <p className="text-sm">Unable to load admin dashboard. Please ensure you're logged in as an administrator.</p>
       </div>
     );
   }
