@@ -37,6 +37,8 @@ import LeadScoreBadge from '../components/leads/LeadScoreBadge';
 import LeadGroupManager from '../components/leads/LeadGroupManager';
 import { Checkbox } from '@/components/ui/checkbox';
 import { exportToExcel, formatDateTime } from '../lib/exportToExcel';
+import PhoneMaskToggle from '../components/PhoneMaskToggle';
+import { usePhoneMask } from '../lib/phoneMask';
 
 export default function ClientLeads() {
   const [leads, setLeads] = useState([]);
@@ -57,6 +59,7 @@ export default function ClientLeads() {
   const [bulkRescoring, setBulkRescoring] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const { mask: maskPhoneNumber } = usePhoneMask();
 
   const toggleSelect = (id) => {
     setSelectedIds(prev => {
@@ -286,6 +289,7 @@ export default function ClientLeads() {
           <p className="text-gray-600 mt-1">Manage your lead database</p>
         </div>
         <div className="flex gap-2 flex-wrap">
+          <PhoneMaskToggle />
           <Button variant="outline" onClick={() => setGroupManagerOpen(true)}>
             <FolderOpen className="w-4 h-4 mr-2" /> Groups
           </Button>
@@ -591,7 +595,7 @@ export default function ClientLeads() {
                         {lead.email && <p className="text-xs text-gray-400">{lead.email}</p>}
                       </Link>
                     </TableCell>
-                    <TableCell>{lead.phone}</TableCell>
+                    <TableCell>{maskPhoneNumber(lead.phone)}</TableCell>
                     <TableCell>
                       {(() => {
                         const g = groups.find(gr => gr.id === lead.group_id);

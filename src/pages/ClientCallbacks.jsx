@@ -12,6 +12,7 @@ import CallbackStats from '../components/callbacks/CallbackStats';
 import CallbackList from '../components/callbacks/CallbackList';
 import CallbackCalendar from '../components/callbacks/CallbackCalendar';
 import HumanTasksTab from '../components/callbacks/HumanTasksTab';
+import { toast } from 'sonner';
 
 export default function ClientCallbacks() {
   const [callbacks, setCallbacks] = useState([]);
@@ -21,6 +22,7 @@ export default function ClientCallbacks() {
   const [filter, setFilter] = useState('all');
   const [clientId, setClientId] = useState(null);
   const [activeTab, setActiveTab] = useState('callbacks');
+  const [callingLeadId, setCallingLeadId] = useState(null);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [allClients, setAllClients] = useState([]);
@@ -75,8 +77,43 @@ export default function ClientCallbacks() {
   };
 
   const handleCall = async (item) => {
-    // Navigate to lead or trigger call
-    window.open(`/ClientLeads?lead_id=${item.lead_id}`, '_self');
+    if (!item?.lead_id || !clientId) {
+      toast.error('Lead not linked — cannot call');
+      return;
+    }
+    if (callingLeadId) return;
+
+    setCallingLeadId(item.lead_id);
+    try {
+      // Find an active agent for this client
+      const agents = await base44.entities.Agent.filter({ client_id: clientId, status: 'active' });
+      if (!agents || agents.length === 0) {
+        toast.error('No active agent available. Activate an agent first.');
+        setCallingLeadId(null);
+        return;
+      }
+
+      const response = await base44.functions.invoke('initiateCall', {
+        lead_id: item.lead_id,
+        agent_id: agents[0].id,
+        phone_number: item.lead_phone
+      });
+
+      if (response.data?.success) {
+        toast.success(`Calling ${item.lead_name || item.lead_phone}...`);
+        setTimeout(() => {
+          setCallingLeadId(null);
+          fetchCallbacks(clientId);
+        }, 5000);
+      } else {
+        setCallingLeadId(null);
+        toast.error(response.data?.error || 'Failed to initiate call');
+      }
+    } catch (err) {
+      console.error('Callback call failed:', err);
+      setCallingLeadId(null);
+      toast.error(err.message || 'Failed to initiate call');
+    }
   };
 
   const filterCounts = {

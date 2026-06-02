@@ -13,6 +13,8 @@ import {
 import { toast } from 'sonner';
 import CallScriptEditor from './CallScriptEditor';
 import CampaignWhatsAppRules from './CampaignWhatsAppRules';
+import PhoneMaskToggle from '../PhoneMaskToggle';
+import { usePhoneMask } from '../../lib/phoneMask';
 
 export default function CreateCampaignDialog({ open, onOpenChange, client, onCreated }) {
   const [agents, setAgents] = useState([]);
@@ -25,6 +27,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
   const [loading, setLoading] = useState(false);
   const [scheduleEnabled, setScheduleEnabled] = useState(false);
   const [scheduledDate, setScheduledDate] = useState('');
+  const { mask: maskPhoneNumber } = usePhoneMask();
   const [form, setForm] = useState({
     name: '',
     type: 'cold_call',
@@ -367,6 +370,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
                     <SelectItem value="not_answered">Not Answered ({notAnsweredIds.size})</SelectItem>
                   </SelectContent>
                 </Select>
+                <PhoneMaskToggle />
                 <Button type="button" size="sm" variant="outline" onClick={selectAll}>
                   {selectedLeads.length === filteredLeads.length ? 'Deselect All' : 'Select All'}
                 </Button>
@@ -379,8 +383,8 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
                 filteredLeads.map(lead => (
                   <label key={lead.id} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
                     <Checkbox checked={selectedLeads.includes(lead.id)} onCheckedChange={() => toggleLead(lead.id)} />
-                    <span className="text-sm font-medium flex-1">{lead.name || lead.phone}</span>
-                    <span className="text-xs text-gray-500">{lead.phone}</span>
+                    <span className="text-sm font-medium flex-1">{lead.name || maskPhoneNumber(lead.phone)}</span>
+                    <span className="text-xs text-gray-500">{maskPhoneNumber(lead.phone)}</span>
                     <span className={`text-xs px-1.5 py-0.5 rounded ${lead.status === 'new' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
                       {lead.status}
                     </span>

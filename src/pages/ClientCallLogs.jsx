@@ -36,6 +36,8 @@ import { createPageUrl } from '../utils';
 import AudioPlayer from '../components/calls/AudioPlayer';
 import LiveCallActions from '../components/calls/LiveCallActions';
 import { exportToExcel, formatDateTime } from '../lib/exportToExcel';
+import PhoneMaskToggle from '../components/PhoneMaskToggle';
+import { usePhoneMask } from '../lib/phoneMask';
 
 export default function ClientCallLogs() {
   const [calls, setCall] = useState([]);
@@ -47,6 +49,7 @@ export default function ClientCallLogs() {
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [deleteTarget, setDeleteTarget] = useState(null); // { type: 'single'|'bulk', id?: string }
   const [deleting, setDeleting] = useState(false);
+  const { mask: maskPhoneNumber } = usePhoneMask();
 
   useEffect(() => {
     loadData();
@@ -165,6 +168,7 @@ export default function ClientCallLogs() {
         <p className="text-gray-600 mt-1">View all your call history and transcripts</p>
       </div>
       <div className="flex justify-end gap-2">
+        <PhoneMaskToggle />
         {selectedIds.size > 0 && (
           <Button variant="destructive" size="sm" onClick={() => setDeleteTarget({ type: 'bulk' })} className="gap-2">
             <Trash2 className="w-4 h-4" /> Delete Selected ({selectedIds.size})
@@ -305,7 +309,7 @@ export default function ClientCallLogs() {
                       </div>
                     </TableCell>
                     <TableCell className="font-medium">
-                      {call.direction === 'inbound' ? (call.caller_id || call.callee_number) : call.callee_number}
+                      {maskPhoneNumber(call.direction === 'inbound' ? (call.caller_id || call.callee_number) : call.callee_number)}
                     </TableCell>
                     <TableCell>
                       {call.lead_id ? (
@@ -391,7 +395,7 @@ export default function ClientCallLogs() {
                 <div>
                   <p className="text-sm text-gray-600">{selectedCall.direction === 'inbound' ? 'Caller Number' : 'Called Number'}</p>
                   <p className="font-medium">
-                    {selectedCall.direction === 'inbound' ? (selectedCall.caller_id || selectedCall.callee_number) : selectedCall.callee_number}
+                    {maskPhoneNumber(selectedCall.direction === 'inbound' ? (selectedCall.caller_id || selectedCall.callee_number) : selectedCall.callee_number)}
                   </p>
                 </div>
                 <div>

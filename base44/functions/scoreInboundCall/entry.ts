@@ -129,11 +129,37 @@ Respond with JSON.`,
     const newIntents = aiResult.intent_signals || [];
     const mergedIntents = Array.from(new Set([...prevIntents, ...newIntents])).slice(0, 20);
 
+    // Recompute qualification_tier from the updated score so Hot/Warm filters stay accurate.
+    // Thresholds match streamAudioInbound.saveCallRecord for consistency across both paths.
+    const sentiment = aiResult.sentiment || 'neutral';
+    let qualificationTier = 'cold';
+    let qualificationReason = '';
+    if (finalScore >= 75 && ['very_positive', 'positive'].includes(sentiment)) {
+      qualificationTier = 'hot';
+      qualificationReason = `Inbound score ${finalScore}/100, ${sentiment}`;
+    } else if (finalScore >= 50) {
+      qualificationTier = 'warm';
+      qualificationReason = `Inbound score ${finalScore}/100, ${sentiment}`;
+    } else if (finalScore >= 25) {
+      qualificationTier = 'nurture';
+      qualificationReason = `Inbound score ${finalScore}/100`;
+    } else if (['negative', 'very_negative'].includes(sentiment)) {
+      qualificationTier = 'disqualified';
+      qualificationReason = `Low inbound score ${finalScore}/100, ${sentiment}`;
+    }
+    // Never demote a 'converted' lead's tier
+    if (lead.status === 'converted') {
+      qualificationTier = 'hot';
+      qualificationReason = 'Converted';
+    }
+
     await base44.entities.Lead.update(lead.id, {
       score: finalScore,
-      sentiment: aiResult.sentiment || 'neutral',
+      sentiment,
       intent_signals: mergedIntents,
       score_breakdown: breakdown,
+      qualification_tier: qualificationTier,
+      qualification_reason: qualificationReason,
       last_call_date: callLog.call_end_time || callLog.call_start_time || new Date().toISOString(),
       last_engagement_date: new Date().toISOString(),
       engagement_count: (lead.engagement_count || 0) + 1
