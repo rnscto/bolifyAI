@@ -22,7 +22,14 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const cronSecret = url.searchParams.get('cron_secret');
-    const isCronCall = req.method === 'GET' && cronSecret && cronSecret === Deno.env.get('CRON_API_KEY');
+    const cronApiKey = url.searchParams.get('api_key');
+    const expectedSecret = Deno.env.get('SMARTFLO_WEBHOOK_SECRET');
+    const expectedCronKey = Deno.env.get('CRON_API_KEY');
+    const isCronCall = req.method === 'GET' && (
+      (expectedSecret && cronSecret === expectedSecret) ||
+      (expectedCronKey && cronApiKey === expectedCronKey) ||
+      (expectedCronKey && cronSecret === expectedCronKey)
+    );
 
     // ─── CRON MODE: Platform-wide backfill (no auth, secret-protected) ───
     if (isCronCall) {
