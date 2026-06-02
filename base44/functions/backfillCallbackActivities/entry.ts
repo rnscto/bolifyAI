@@ -37,22 +37,23 @@ Deno.serve(async (req) => {
       const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
 
       const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      // Scan only the last 24h of completed calls across the platform
-      const recentCalls = await svc.entities.CallLog.filter({ status: 'completed' }, '-created_date', 300);
+      // Scan only the last 24h of completed calls across the platform (cap 150)
+      const recentCalls = await svc.entities.CallLog.filter({ status: 'completed' }, '-created_date', 150);
       const eligible = recentCalls.filter(c =>
         c.created_date >= cutoffIso &&
         c.transcript && c.transcript.length > 100 &&
         c.client_id && c.client_id !== 'unknown'
       );
 
-      const toProcess = eligible.slice(0, 100);
+      // Hard cap to keep runtime under the function timeout. 30 calls × ~2s each ≈ 60s.
+      const toProcess = eligible.slice(0, 30);
       const result = { mode: 'cron', scanned: toProcess.length, skipped_already_scheduled: 0, extractor_invoked: 0, extractor_failed: 0 };
 
       // Pre-build a set of (lead_id) that already have a scheduled call/followup
-      // to skip cheaply. We batch by client_id to keep queries small.
+      // to skip cheaply. Fetch all client buckets in parallel.
       const clientIds = [...new Set(toProcess.map(c => c.client_id))];
       const scheduledLeadIds = new Set();
-      for (const cid of clientIds) {
+      await Promise.all(clientIds.map(async (cid) => {
         try {
           const [fa, ca] = await Promise.all([
             svc.entities.Activity.filter({ client_id: cid, type: 'followup', status: 'scheduled' }),
@@ -60,21 +61,31 @@ Deno.serve(async (req) => {
           ]);
           [...fa, ...ca].forEach(a => { if (a.lead_id) scheduledLeadIds.add(a.lead_id); });
         } catch (_) {}
-      }
+      }));
 
+      // Filter out already-scheduled leads BEFORE invoking extractor
+      const needsExtraction = [];
       for (const call of toProcess) {
         if (call.lead_id && scheduledLeadIds.has(call.lead_id)) {
           result.skipped_already_scheduled++;
-          continue;
+        } else {
+          needsExtraction.push(call);
         }
-        try {
-          await svc.functions.invoke('postCallActionExtractor', { call_log_id: call.id });
-          result.extractor_invoked++;
-          if (call.lead_id) scheduledLeadIds.add(call.lead_id);
-        } catch (e) {
-          result.extractor_failed++;
-          console.error(`[backfillCallbacks-cron] Failed call ${call.id}: ${e.message}`);
-        }
+      }
+
+      // Run extractor in parallel batches of 5 to balance speed vs LLM rate-limits
+      const BATCH = 5;
+      for (let i = 0; i < needsExtraction.length; i += BATCH) {
+        const batch = needsExtraction.slice(i, i + BATCH);
+        await Promise.all(batch.map(async (call) => {
+          try {
+            await svc.functions.invoke('postCallActionExtractor', { call_log_id: call.id });
+            result.extractor_invoked++;
+          } catch (e) {
+            result.extractor_failed++;
+            console.error(`[backfillCallbacks-cron] Failed call ${call.id}: ${e.message}`);
+          }
+        }));
       }
 
       console.log(`[backfillCallbacks-cron] Done: scanned=${result.scanned}, invoked=${result.extractor_invoked}, skipped=${result.skipped_already_scheduled}, failed=${result.extractor_failed}`);
