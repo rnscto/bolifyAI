@@ -4,17 +4,77 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
 // but never got an Activity created (e.g. calls from before postCallActionExtractor
 // was deployed, or calls that failed extraction).
 //
-// Strategy:
-//  1. Find recent completed CallLogs (last 30 days) for this client that have a transcript.
-//  2. Skip calls that already have any scheduled call/followup Activity for the same lead.
-//  3. Invoke postCallActionExtractor for each — it will create the Activity if a callback
-//     was requested in the transcript.
+// TWO MODES:
 //
-// Triggered manually from the ClientCallbacks page via the "Backfill" button.
-// Capped at 20 calls per run to fit cron/HTTP limits.
+// 1) MANUAL (POST, authenticated): triggered from the ClientCallbacks page for
+//    a single client. Body: { client_id }. Scans last 30 days, up to 20 calls.
+//
+// 2) CRON (GET, ?cron_secret=...): platform-wide safety net for ALL clients.
+//    Scans last 24h of completed calls across the platform and re-invokes
+//    postCallActionExtractor for any call that has a transcript but no
+//    scheduled call/followup Activity for its lead. Caps at 100 calls per run.
+//
+// This is the belt-and-braces guarantee: even if the hot-path inline invoke in
+// smartfloWebhook / streamAudioInbound ever misses a call, this cron will catch
+// it within 5 minutes (depending on the external cron schedule).
 
 Deno.serve(async (req) => {
   try {
+    const url = new URL(req.url);
+    const cronSecret = url.searchParams.get('cron_secret');
+    const isCronCall = req.method === 'GET' && cronSecret && cronSecret === Deno.env.get('CRON_API_KEY');
+
+    // ─── CRON MODE: Platform-wide backfill (no auth, secret-protected) ───
+    if (isCronCall) {
+      const { createClient } = await import('npm:@base44/sdk@0.8.25');
+      const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+
+      const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+      // Scan only the last 24h of completed calls across the platform
+      const recentCalls = await svc.entities.CallLog.filter({ status: 'completed' }, '-created_date', 300);
+      const eligible = recentCalls.filter(c =>
+        c.created_date >= cutoffIso &&
+        c.transcript && c.transcript.length > 100 &&
+        c.client_id && c.client_id !== 'unknown'
+      );
+
+      const toProcess = eligible.slice(0, 100);
+      const result = { mode: 'cron', scanned: toProcess.length, skipped_already_scheduled: 0, extractor_invoked: 0, extractor_failed: 0 };
+
+      // Pre-build a set of (lead_id) that already have a scheduled call/followup
+      // to skip cheaply. We batch by client_id to keep queries small.
+      const clientIds = [...new Set(toProcess.map(c => c.client_id))];
+      const scheduledLeadIds = new Set();
+      for (const cid of clientIds) {
+        try {
+          const [fa, ca] = await Promise.all([
+            svc.entities.Activity.filter({ client_id: cid, type: 'followup', status: 'scheduled' }),
+            svc.entities.Activity.filter({ client_id: cid, type: 'call', status: 'scheduled' })
+          ]);
+          [...fa, ...ca].forEach(a => { if (a.lead_id) scheduledLeadIds.add(a.lead_id); });
+        } catch (_) {}
+      }
+
+      for (const call of toProcess) {
+        if (call.lead_id && scheduledLeadIds.has(call.lead_id)) {
+          result.skipped_already_scheduled++;
+          continue;
+        }
+        try {
+          await svc.functions.invoke('postCallActionExtractor', { call_log_id: call.id });
+          result.extractor_invoked++;
+          if (call.lead_id) scheduledLeadIds.add(call.lead_id);
+        } catch (e) {
+          result.extractor_failed++;
+          console.error(`[backfillCallbacks-cron] Failed call ${call.id}: ${e.message}`);
+        }
+      }
+
+      console.log(`[backfillCallbacks-cron] Done: scanned=${result.scanned}, invoked=${result.extractor_invoked}, skipped=${result.skipped_already_scheduled}, failed=${result.extractor_failed}`);
+      return Response.json({ success: true, ...result });
+    }
+
+    // ─── MANUAL MODE: Per-client, user-triggered (existing behavior) ───
     const base44 = createClientFromRequest(req);
     const user = await base44.auth.me();
     if (!user) {
@@ -36,6 +96,7 @@ Deno.serve(async (req) => {
 
     const svc = base44.asServiceRole;
     const results = {
+      mode: 'manual',
       scanned: 0,
       skipped_already_scheduled: 0,
       skipped_no_transcript: 0,
