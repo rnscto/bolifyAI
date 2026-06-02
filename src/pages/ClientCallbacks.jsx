@@ -5,7 +5,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import {
   Phone, RefreshCw, Calendar as CalendarIcon, List,
-  AlertTriangle, Clock, CheckCircle2, ClipboardList
+  AlertTriangle, Clock, CheckCircle2, ClipboardList, Wand2
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CallbackStats from '../components/callbacks/CallbackStats';
@@ -23,6 +23,7 @@ export default function ClientCallbacks() {
   const [clientId, setClientId] = useState(null);
   const [activeTab, setActiveTab] = useState('callbacks');
   const [callingLeadId, setCallingLeadId] = useState(null);
+  const [backfilling, setBackfilling] = useState(false);
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [allClients, setAllClients] = useState([]);
@@ -74,6 +75,27 @@ export default function ClientCallbacks() {
 
   const handleRefresh = () => {
     if (clientId) fetchCallbacks(clientId);
+  };
+
+  const handleBackfill = async () => {
+    if (!clientId || backfilling) return;
+    setBackfilling(true);
+    try {
+      const res = await base44.functions.invoke('backfillCallbackActivities', { client_id: clientId });
+      const d = res.data || {};
+      if (d.success) {
+        toast.success(`Backfilled: scanned ${d.scanned || 0} calls, queued ${d.extractor_invoked || 0} for AI extraction`);
+        // Refresh after a short delay so newly-created Activities are picked up
+        setTimeout(() => fetchCallbacks(clientId), 2500);
+      } else {
+        toast.error(d.error || 'Backfill failed');
+      }
+    } catch (err) {
+      console.error('Backfill failed:', err);
+      toast.error(err.message || 'Backfill failed');
+    } finally {
+      setBackfilling(false);
+    }
   };
 
   const handleCall = async (item) => {
@@ -182,6 +204,9 @@ export default function ClientCallbacks() {
                 <CalendarIcon className="w-4 h-4" /> Calendar
               </button>
             </div>
+            <Button variant="outline" size="sm" onClick={handleBackfill} disabled={backfilling || loading} title="Scan past 30 days of calls and auto-schedule callbacks for any that requested one">
+              <Wand2 className={`w-4 h-4 mr-1 ${backfilling ? 'animate-spin' : ''}`} /> {backfilling ? 'Backfilling…' : 'Backfill Past Calls'}
+            </Button>
             <Button variant="outline" size="sm" onClick={handleRefresh} disabled={loading}>
               <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} /> Refresh
             </Button>

@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Phone, Clock, User, Building2, AlertTriangle, ChevronDown, ChevronUp,
-  Calendar as CalendarIcon, Star, MessageSquare, ArrowRight, ExternalLink
+  Calendar as CalendarIcon, Star, MessageSquare, ArrowRight, ExternalLink, Bot
 } from 'lucide-react';
 import moment from 'moment';
 
@@ -90,6 +90,14 @@ function CallbackCard({ item, onCall }) {
           <Badge className={confidenceStyles[ex.confidence] || confidenceStyles.low}>
             {ex.confidence} confidence
           </Badge>
+          {/* Auto-execution badge: shown when a scheduled call/followup Activity
+              exists for this lead — the engine will dial automatically at that time. */}
+          {item.auto_scheduled && item.auto_scheduled_at && (
+            <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 inline-flex items-center gap-1" variant="outline">
+              <Bot className="w-3 h-3" />
+              Auto-call scheduled · {moment(item.auto_scheduled_at).format('DD MMM, h:mm A')}
+            </Badge>
+          )}
         </div>
 
         {/* Reason */}

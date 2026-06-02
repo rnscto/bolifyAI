@@ -54,6 +54,19 @@ Deno.serve(async (req) => {
     const callActivities = await svc.entities.Activity.filter({ client_id, type: 'call', status: 'scheduled' });
     const activities = [...followupActivities, ...callActivities];
 
+    // Build a set of lead_ids that already have a scheduled callback Activity
+    // (so we can ALSO surface auto-scheduled callbacks where the Lead's status
+    // is NOT 'callback'/'interested' — e.g. status='contacted' but a call/followup
+    // activity is queued by the engine).
+    const activityLeadIds = new Set(activities.map(a => a.lead_id).filter(Boolean));
+    const extraLeadIds = [...activityLeadIds].filter(id => !allCallbackLeads.find(l => l.id === id));
+    if (extraLeadIds.length > 0) {
+      const extraLeads = await Promise.all(
+        extraLeadIds.map(id => svc.entities.Lead.get(id).catch(() => null))
+      );
+      for (const l of extraLeads) if (l) allCallbackLeads.push(l);
+    }
+
     // Fetch recent completed call logs for this client (batch instead of per-lead)
     const callLogs = await svc.entities.CallLog.filter({ client_id, status: 'completed' }, '-created_date', 200);
     
@@ -92,6 +105,13 @@ Deno.serve(async (req) => {
         existing_followup_date: lead.next_followup_date || matchingActivity?.scheduled_date || null,
         activity_id: matchingActivity?.id || null,
         activity_title: matchingActivity?.title || null,
+        activity_type: matchingActivity?.type || null,
+        // ─── Auto-execution flag ──────────────────────────────────────────
+        // The Follow-up Engine (executeScheduledActivities) auto-initiates
+        // calls for Activities of type 'call' or 'followup'. Flag these so
+        // the UI can show "🤖 Auto-call scheduled" instead of a manual badge.
+        auto_scheduled: !!(matchingActivity && ['call', 'followup'].includes(matchingActivity.type)),
+        auto_scheduled_at: matchingActivity && ['call', 'followup'].includes(matchingActivity.type) ? matchingActivity.scheduled_date : null,
         call_date: matchingLog?.call_start_time || matchingCL?.created_date || null,
         call_duration: matchingLog?.duration || matchingCL?.call_duration || 0,
         campaign_lead_id: matchingCL?.id || null,
