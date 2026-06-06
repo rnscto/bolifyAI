@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Sends an approved WhatsApp template message via Meta Cloud API.
 // Used both for manual sends from the UI and for automated linked-action sends.

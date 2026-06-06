@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 // Uses platform SMTP instead of ACS
 
 const TEMPLATES = {
@@ -122,7 +122,7 @@ Deno.serve(async (req) => {
       .replace(/\{\{demo_link\}\}/g, demoLink);
 
     // Send via platform's native email integration (noreply@bolifyai.com)
-    const { createClient } = await import('npm:@base44/sdk@0.8.20');
+    const { createClient } = await import('npm:@base44/sdk@0.8.31');
     const appId = Deno.env.get('BASE44_APP_ID');
     const svc = createClient({ appId, asServiceRole: true });
     await svc.integrations.Core.SendEmail({

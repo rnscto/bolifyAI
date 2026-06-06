@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Test the platform-level (admin) RCS Digital / Meta Cloud connection.
 // Updates PlatformMessagingConfig.whatsapp_status accordingly.

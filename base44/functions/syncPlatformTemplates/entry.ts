@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Pull approved/pending templates from the platform (admin) RCS Digital connection.
 // Stores them as WhatsAppTemplate records with client_id='PLATFORM' so admin lifecycle

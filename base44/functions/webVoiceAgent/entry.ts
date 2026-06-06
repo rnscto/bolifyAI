@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.18';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const VAANI_KNOWLEDGE_BASE = `
 === ABOUT VAANIAI ===
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
       const body = await req.json();
       log('info', `📋 POST action=${body.action}`);
       if (body.action === 'create_lead') {
-        const { createClient } = await import('npm:@base44/sdk@0.8.18');
+        const { createClient } = await import('npm:@base44/sdk@0.8.31');
         const appId = Deno.env.get('BASE44_APP_ID');
         const serviceClient = createClient({ appId, asServiceRole: true });
 

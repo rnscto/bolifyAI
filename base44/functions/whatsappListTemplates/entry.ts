@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Fetches WhatsApp templates from Meta Cloud API and syncs them to the WhatsAppTemplate entity.
 // Only supports Meta Cloud API (other providers don't have a unified template API).

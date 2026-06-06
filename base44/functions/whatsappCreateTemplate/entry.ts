@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Creates a new WhatsApp template via Meta Cloud API and stores it locally.
 // Meta will review the template (24-48 hours) — status will be PENDING initially.
