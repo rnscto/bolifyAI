@@ -1,8 +1,5 @@
 import React from 'react';
-import { Clock, ArrowRight, AlertTriangle } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Link } from 'react-router-dom';
-import { createPageUrl } from '../utils';
+import { Clock, AlertTriangle } from 'lucide-react';
 
 /**
  * Unified status banner. Renders for trial (with days-left countdown) and for
@@ -32,18 +29,14 @@ export default function AccountStatusBanner({ client }) {
     if (daysLeft <= 0) return null; // gate will handle this
     const urgent = daysLeft <= 2;
     return (
-      <div className={`${urgent ? 'bg-orange-50 border-orange-200' : 'bg-blue-50 border-blue-200'} border rounded-lg px-4 py-3 flex items-center justify-between mb-4`}>
+      <div className={`${urgent ? 'bg-orange-50 border-orange-200' : 'bg-blue-50 border-blue-200'} border rounded-lg px-4 py-3 flex items-center mb-4`}>
         <div className="flex items-center gap-2">
           <Clock className={`w-4 h-4 ${urgent ? 'text-orange-600' : 'text-blue-600'}`} />
           <span className={`text-sm font-medium ${urgent ? 'text-orange-800' : 'text-blue-800'}`}>
             Free trial: <strong>{daysLeft} day{daysLeft !== 1 ? 's' : ''} left</strong>
+            {urgent && <span className="ml-2 font-normal">— contact our team to activate a paid plan.</span>}
           </span>
         </div>
-        <Link to={createPageUrl('ClientSubscription')}>
-          <Button size="sm" variant="outline" className={urgent ? 'border-orange-300 text-orange-700 hover:bg-orange-100' : 'border-blue-300 text-blue-700 hover:bg-blue-100'}>
-            View Plans <ArrowRight className="w-3 h-3 ml-1" />
-          </Button>
-        </Link>
       </div>
     );
   }

@@ -220,7 +220,6 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Dashboard', path: 'PersonalDashboard', icon: ShieldCheck },
     { name: 'AI Assistant', path: 'PersonalAIAssistant', icon: Cpu },
     { name: 'Call Logs', path: 'ClientCallLogs', icon: PhoneCall },
-    { name: 'Subscription', path: 'ClientSubscription', icon: CreditCard },
     { name: 'Settings', path: 'ClientSettings', icon: UserCog },
     ];
 
@@ -242,7 +241,6 @@ export default function Layout({ children, currentPageName }) {
     { name: 'CRM Integration', path: 'ClientCRM', icon: Database },
     { name: 'Integrations', path: 'ClientIntegrations', icon: Activity },
     { name: 'WhatsApp Templates', path: 'ClientWhatsAppTemplates', icon: MessageSquare },
-    { name: 'Subscription', path: 'ClientSubscription', icon: CreditCard },
     { name: 'Settings', path: 'ClientSettings', icon: UserCog },
     { name: 'Partner Dashboard', path: 'PartnerDashboard', icon: Handshake },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },

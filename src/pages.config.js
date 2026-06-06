@@ -81,7 +81,6 @@ import ClientIntegrations from './pages/ClientIntegrations';
 import ClientKnowledgeBase from './pages/ClientKnowledgeBase';
 import ClientLeads from './pages/ClientLeads';
 import ClientSettings from './pages/ClientSettings';
-import ClientSubscription from './pages/ClientSubscription';
 import ConceptNote from './pages/ConceptNote';
 import Home from './pages/Home';
 import LeadDetail from './pages/LeadDetail';
@@ -129,7 +128,6 @@ export const PAGES = {
     "ClientKnowledgeBase": ClientKnowledgeBase,
     "ClientLeads": ClientLeads,
     "ClientSettings": ClientSettings,
-    "ClientSubscription": ClientSubscription,
     "ConceptNote": ConceptNote,
     "Home": Home,
     "LeadDetail": LeadDetail,

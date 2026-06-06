@@ -1,21 +1,19 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { createPageUrl } from '../utils';
-import { AlertTriangle, Lock, CreditCard, Clock, LogOut } from 'lucide-react';
+import { AlertTriangle, Lock, Clock, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { base44 } from '@/api/base44Client';
 
 /**
  * Full-screen lockout shown when a client account is not in a usable state.
  * States blocked: expired | suspended | activation_pending
- * Allowed escape pages: ClientSubscription, ClientSettings, ClientCallbacks (read-only billing/help)
+ * Allowed escape pages: ClientSettings (so user can see profile / contact info)
+ * Subscription / renewal / activation is admin-managed — contact support.
  */
 export default function AccountStatusGate({ client, currentPageName }) {
-  const location = useLocation();
   const status = client?.account_status;
 
-  // Pages the user is ALLOWED to visit even when locked (so they can pay/renew/see info)
-  const allowedPages = ['ClientSubscription', 'ClientSettings'];
+  // Pages the user is ALLOWED to visit even when locked
+  const allowedPages = ['ClientSettings'];
   if (allowedPages.includes(currentPageName)) return null;
 
   const config = {
@@ -23,22 +21,19 @@ export default function AccountStatusGate({ client, currentPageName }) {
       icon: Clock,
       color: 'red',
       title: 'Your trial has expired',
-      message: 'Your 7-day free trial has ended. Subscribe to a plan or top up your wallet to continue using the platform.',
-      cta: 'Subscribe Now',
+      message: 'Your 7-day free trial has ended. Please contact our team to activate a paid plan.',
     },
     suspended: {
       icon: Lock,
       color: 'red',
       title: 'Account suspended',
-      message: 'Your account has been suspended due to a pending renewal payment. Please renew your subscription to restore access.',
-      cta: 'Renew Subscription',
+      message: 'Your account has been suspended due to a pending renewal payment. Please contact our team to restore access.',
     },
     activation_pending: {
       icon: AlertTriangle,
       color: 'amber',
       title: 'Activation pending admin approval',
       message: 'Your payment proof has been submitted. Our team will activate your account shortly. You will receive an email once activated.',
-      cta: 'View Subscription',
     },
   }[status];
 
@@ -48,7 +43,6 @@ export default function AccountStatusGate({ client, currentPageName }) {
   const ringColor = config.color === 'amber' ? 'ring-amber-200' : 'ring-red-200';
   const iconBg = config.color === 'amber' ? 'bg-amber-100' : 'bg-red-100';
   const iconColor = config.color === 'amber' ? 'text-amber-600' : 'text-red-600';
-  const btnColor = config.color === 'amber' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-red-600 hover:bg-red-700';
 
   return (
     <div className="fixed inset-0 z-[100] bg-gray-50/95 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
@@ -68,12 +62,6 @@ export default function AccountStatusGate({ client, currentPageName }) {
         )}
 
         <div className="flex flex-col gap-3">
-          <Link to={createPageUrl('ClientSubscription')} state={{ from: location.pathname }}>
-            <Button className={`w-full ${btnColor} text-white`} size="lg">
-              <CreditCard className="w-4 h-4 mr-2" />
-              {config.cta}
-            </Button>
-          </Link>
           <Button
             variant="outline"
             className="w-full"
