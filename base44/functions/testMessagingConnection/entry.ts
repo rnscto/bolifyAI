@@ -128,7 +128,10 @@ Deno.serve(async (req) => {
         // A connection test = send an approved template. If no template_name is given we validate
         // the key by hitting the public message endpoint with a deliberately incomplete payload —
         // a 401 means bad key, anything else means the key authenticated.
-        const baseHost = String(config.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '') || 'https://api.interakt.ai';
+        // Guard against users pasting a dashboard URL (app.interakt.ai/...) into the endpoint field.
+        // Only honor a custom host if it's clearly an API host; otherwise force the correct default.
+        let baseHost = String(config.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '');
+        if (!baseHost || !/^https?:\/\/api\.interakt\.ai/i.test(baseHost)) baseHost = 'https://api.interakt.ai';
         const url = `${baseHost}/v1/public/message/`;
         const templateName = body.template_name;
         const templateLang = body.template_language || 'en';

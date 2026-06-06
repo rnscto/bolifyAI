@@ -80,7 +80,8 @@ Deno.serve(async (req) => {
     // Interakt has a distinct API: Basic auth, /v1/public/message/, split countryCode+phoneNumber,
     // and headerValues/bodyValues/buttonValues arrays instead of Meta's components structure.
     if (cfg.whatsapp_provider === 'interakt') {
-      const baseHost = String(cfg.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '') || 'https://api.interakt.ai';
+      let baseHost = String(cfg.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '');
+      if (!baseHost || !/^https?:\/\/api\.interakt\.ai/i.test(baseHost)) baseHost = 'https://api.interakt.ai';
       const url = `${baseHost}/v1/public/message/`;
 
       // Split recipient into countryCode + phoneNumber (no leading 0, no country code in phoneNumber)

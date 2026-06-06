@@ -178,9 +178,12 @@ export default function WhatsAppSetup({ config, onSave }) {
             )}
 
             {provider === 'interakt' && (
-              <p className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-md p-2">
-                Paste your <b>Secret Key</b> from app.interakt.ai → Settings → Developer Settings. Use the raw key only — do not add "Basic" or "Bearer". Interakt requires an <b>approved template</b> to send (Public APIs need a Growth plan or higher).
-              </p>
+              <div className="text-xs text-gray-600 bg-blue-50 border border-blue-100 rounded-md p-3 space-y-1.5">
+                <p>📍 Get your <b>Secret Key</b> from <b>app.interakt.ai → Settings → Developer Settings</b>.</p>
+                <p>⚠️ The API Key field must contain the <b>Secret Key</b> — NOT a web page link. Do not paste URLs like <code className="bg-white px-1 rounded">app.interakt.ai/contacts/list</code>.</p>
+                <p>✅ Leave <b>Custom API Host blank</b> (we use the official https://api.interakt.ai automatically).</p>
+                <p>📋 Interakt needs an <b>approved template</b> to send. Public APIs require a Growth plan or higher.</p>
+              </div>
             )}
 
             <div className="border-t pt-4 space-y-3">
