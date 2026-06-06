@@ -42,17 +42,20 @@ async function getSmartfloToken(forceRefresh = false) {
 function decodeMulaw(m) { const B=33;let u=~m&0xFF;return ((u&0x80)?-1:1)*((((u&0x0F)<<3)+B)<<((u>>4)&0x07))-B; }
 function encodeMulaw(s) { const M=32635,B=33;const sn=s<0?0x80:0;if(s<0)s=-s;if(s>M)s=M;s+=B;let e=7;for(;e>0;e--){if(s&0x4000)break;s<<=1;}return ~(sn|(e<<4)|((s>>10)&0x0F))&0xFF; }
 
-function mulawToBase64PCM16_24k(mb, ast) {
+// INPUT: Smartflo µ-law 8kHz → Gemini Live PCM16 16kHz (Google REQUIRES 16k input, NOT 24k).
+// Linear interpolation 8k→16k = 2× upsample (one interpolated sample between each pair).
+function mulawToBase64PCM16_16k(mb, ast) {
   const p8 = new Int16Array(mb.length);
   for(let i=0;i<mb.length;i++) p8[i] = decodeMulaw(mb[i]);
-  const p24 = new Int16Array(p8.length * 3);
+  const p16 = new Int16Array(p8.length * 2);
   for(let i=0;i<p8.length;i++) {
-    const s0 = i===0 ? ast.lastUpsampleValue : p8[i-1], s1 = p8[i], s2 = i<p8.length-1 ? p8[i+1] : s1;
-    p24[i*3] = s1; p24[i*3+1] = Math.round(s1+(s2-s0)/6); p24[i*3+2] = Math.round(s1+(s2-s0)/3);
+    const prev = i===0 ? ast.lastUpsampleValue : p8[i-1], cur = p8[i];
+    p16[i*2] = cur;
+    p16[i*2+1] = Math.round((cur + (i<p8.length-1 ? p8[i+1] : cur)) / 2);
   }
   if(p8.length>0) ast.lastUpsampleValue = p8[p8.length-1];
-  const buf = new Uint8Array(p24.length * 2), vw = new DataView(buf.buffer);
-  for(let i=0;i<p24.length;i++) vw.setInt16(i*2, p24[i], true);
+  const buf = new Uint8Array(p16.length * 2), vw = new DataView(buf.buffer);
+  for(let i=0;i<p16.length;i++) vw.setInt16(i*2, p16[i], true);
   let bin = ''; for(let i=0;i<buf.length;i++) bin += String.fromCharCode(buf[i]);
   return btoa(bin);
 }
@@ -351,13 +354,16 @@ Deno.serve(async (req) => {
     const noiseHandling = `\n[AUDIO RULES] You are on a PHONE CALL in India. Only respond to CLEAR human speech. Keep replies SHORT (1-2 sentences).\n`;
     let transferInstr = (session.humanTransferNumber && session.enableAutoTransfer) ? `\n\nUse transfer_to_human when caller asks for a human.` : '';
     const tools = buildGeminiTools();
-    const validGeminiVoices = ['Aoede', 'Charon', 'Fenrir', 'Kore', 'Puck'];
+    const validGeminiVoices = ['Aoede', 'Charon', 'Fenrir', 'Kore', 'Puck', 'Leda', 'Orus', 'Zephyr'];
     const voice = validGeminiVoices.includes(session.voiceType) ? session.voiceType : 'Aoede';
     const setupMsg = {
       setup: {
         model: "models/gemini-2.0-flash-live-001",
         generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
-        systemInstruction: { parts: [{ text: timeInjection + noiseHandling + session.systemPrompt + transferInstr }] }
+        systemInstruction: { parts: [{ text: timeInjection + noiseHandling + session.systemPrompt + transferInstr }] },
+        // Capture BOTH sides of the conversation so post-call analysis & lead scoring work.
+        inputAudioTranscription: {},
+        outputAudioTranscription: {}
       }
     };
     console.log(`[${reqId}] 📤 Sending Gemini setup (model=gemini-2.0-flash-live-001, voice=${voice})`);
@@ -392,13 +398,22 @@ Deno.serve(async (req) => {
       return;
     }
     if (msg.error) { console.error(`[${reqId}] ❌ Gemini error:`, JSON.stringify(msg.error)); return; }
+    // Customer speech transcript (from inputAudioTranscription) — required for lead scoring.
+    if (msg.serverContent?.inputTranscription?.text) {
+      const t = msg.serverContent.inputTranscription.text.trim();
+      if (t) session.transcript.push({ speaker: 'Customer', text: t });
+    }
+    // AI speech transcript (from outputAudioTranscription).
+    if (msg.serverContent?.outputTranscription?.text) {
+      const t = msg.serverContent.outputTranscription.text.trim();
+      if (t) session.transcript.push({ speaker: 'AI', text: t });
+    }
     if (msg.serverContent?.modelTurn) {
       for (const part of msg.serverContent.modelTurn.parts) {
         if (part.inlineData && part.inlineData.data) {
           session.isSpeaking = true;
           if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) sendMulawToSmartflo(base64PCM16_24kToMulaw(part.inlineData.data, session._audioState));
         }
-        if (part.text) session.transcript.push({ speaker: 'AI', text: part.text.trim() });
         if (part.functionCall) executeToolCall(part.functionCall.id, part.functionCall.name, JSON.stringify(part.functionCall.args || {}));
       }
     }
@@ -490,12 +505,12 @@ Deno.serve(async (req) => {
           session._mediaBufferFlushed = true;
           console.log(`[${reqId}] 🚀 Flushing ${session._mediaBuffer.length} buffered packets`);
           for (const b of session._mediaBuffer) {
-            sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=24000", data: mulawToBase64PCM16_24k(b, session._audioState) }] } });
+            sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: mulawToBase64PCM16_16k(b, session._audioState) }] } });
           }
           session._mediaBuffer = []; session._mediaBufferBytes = 0;
         }
-        const pcm16Base64 = mulawToBase64PCM16_24k(mulawBytes, session._audioState);
-        sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=24000", data: pcm16Base64 }] } });
+        const pcm16Base64 = mulawToBase64PCM16_16k(mulawBytes, session._audioState);
+        sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: pcm16Base64 }] } });
       }
       if (msg.event === 'stop') {
         session._callEnded = true;
