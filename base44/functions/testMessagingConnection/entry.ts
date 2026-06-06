@@ -150,10 +150,23 @@ Deno.serve(async (req) => {
         const countryCode = '+' + digits.slice(0, digits.length - 10);
         const phoneNumber = digits.slice(-10);
 
-        console.log(`[testMessagingConnection/interakt] → POST ${url} (cc=${countryCode}, phone=${phoneNumber}, template=${templateName})`);
+        // Interakt needs HTTP Basic with a base64-encoded credential. The key from the dashboard
+        // is already base64 (ends with ':' once decoded). Detect that and avoid double-encoding.
+        const looksBase64 = /^[A-Za-z0-9+/]+={0,2}$/.test(apiKey) && apiKey.length % 4 === 0;
+        let interaktBasic = apiKey;
+        if (looksBase64) {
+          try {
+            // valid base64 that decodes to "<key>:" → already encoded, use as-is
+            const decoded = atob(apiKey);
+            interaktBasic = decoded.includes(':') ? apiKey : btoa(apiKey + ':');
+          } catch (_) { interaktBasic = btoa(apiKey + ':'); }
+        } else {
+          interaktBasic = btoa(apiKey + ':');
+        }
+        console.log(`[testMessagingConnection/interakt] → POST ${url} (cc=${countryCode}, phone=${phoneNumber}, template=${templateName}, authLen=${interaktBasic.length})`);
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 'Authorization': `Basic ${apiKey}`, 'Content-Type': 'application/json' },
+          headers: { 'Authorization': `Basic ${interaktBasic}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             countryCode,
             phoneNumber,

@@ -24,6 +24,12 @@ Deno.serve(async (req) => {
     if (configs.length === 0) return Response.json({ error: 'No messaging config' }, { status: 404 });
     const cfg = configs[0];
 
+    if (cfg.whatsapp_provider === 'interakt') {
+      return Response.json({
+        error: 'Interakt has no list-templates API. Add your template manually: go to app.interakt.ai/templates/list → click your template → copy the "code name" from the URL (the part between /template/ and /view), then create it here as an APPROVED Interakt template.'
+      }, { status: 400 });
+    }
+
     if (!['meta_cloud', 'rcs_digital'].includes(cfg.whatsapp_provider)) {
       return Response.json({
         error: 'Templates are only supported for Meta Cloud API / RCS Digital. Your current provider: ' + (cfg.whatsapp_provider || 'none')
