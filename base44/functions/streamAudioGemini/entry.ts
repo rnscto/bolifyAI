@@ -13,7 +13,7 @@
 // • end_call guarded by min-duration AND customer goodbye phrase
 // ═══════════════════════════════════════════════════════════════════════
 
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // ─── Smartflo token cache (shared across WS sessions in this isolate) ───
 const SMARTFLO_TOKEN_TTL_MS = 50 * 60 * 1000;
@@ -126,7 +126,7 @@ function uint8ToBase64(bytes) {
 // ─── SDK pre-warm ───
 let _sdkModulePromise = null;
 function getSDKModule() {
-  if (!_sdkModulePromise) _sdkModulePromise = import('npm:@base44/sdk@0.8.25');
+  if (!_sdkModulePromise) _sdkModulePromise = import('npm:@base44/sdk@0.8.31');
   return _sdkModulePromise;
 }
 getSDKModule().catch(() => {});

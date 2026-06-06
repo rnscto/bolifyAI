@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.21';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Call Transfer / Monitor / Whisper / Barge-in via Smartflo API
 // Types: 1=Monitor, 2=Whisper, 3=Barge, 4=Transfer
@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
     }
 
     // Log the action
-    const { createClient } = await import('npm:@base44/sdk@0.8.21');
+    const { createClient } = await import('npm:@base44/sdk@0.8.31');
     const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
 
     // Update CallLog with transfer info

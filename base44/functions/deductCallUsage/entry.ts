@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Called after each call completes to deduct from wallet/free minutes
 // This is an ENTITY AUTOMATION on CallLog updates (status → completed)

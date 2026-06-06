@@ -1,4 +1,4 @@
-import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.31';
 
 // Send a WhatsApp template using the PLATFORM (admin) RCS Digital / Meta Cloud connection.
 // Used for lifecycle nudges and admin broadcasts.

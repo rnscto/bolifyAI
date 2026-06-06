@@ -1,4 +1,4 @@
-import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.31';
 
 // ─── Send email via platform's native integration (noreply@bolifyai.com) ───
 async function sendEmailViaACS({ to, fromName, subject, html }) {

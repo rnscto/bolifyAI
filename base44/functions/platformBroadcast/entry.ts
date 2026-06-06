@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Admin-only: send a one-off broadcast to a target audience using a platform template.
 // Payload: { template_id, audience: 'all' | 'trial' | 'active' | 'expired' | string[], variables_per_client?: {} }

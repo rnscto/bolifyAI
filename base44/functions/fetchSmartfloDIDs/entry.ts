@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.20';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // In-memory token cache (per-isolate) — prevents repeated logins that cause Smartflo lockouts.
 let cachedToken = null;

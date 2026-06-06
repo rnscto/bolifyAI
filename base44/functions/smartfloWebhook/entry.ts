@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.20';
+import { createClient } from 'npm:@base44/sdk@0.8.31';
 
 // v3: Bypass Base44 automations — directly invoke post-call functions inline.
 // This eliminates dependency on Base44 entity automations (which consume credits).

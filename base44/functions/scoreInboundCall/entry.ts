@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Scores an inbound call by analyzing its transcript with Azure OpenAI,
 // then updates the associated Lead's AI score, sentiment, intent signals

@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Probe which DID the SMARTFLO_API_KEY click-to-call token is mapped to
 Deno.serve(async (req) => {

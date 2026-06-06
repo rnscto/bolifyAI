@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.23';
+import { createClient } from 'npm:@base44/sdk@0.8.31';
 
 /**
  * CRM Fetch Data API — External CRMs pull data FROM this platform.

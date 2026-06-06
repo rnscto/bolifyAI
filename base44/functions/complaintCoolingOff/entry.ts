@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.20';
+import { createClient } from 'npm:@base44/sdk@0.8.31';
 
 // Entity automation: triggers on ComplaintLog create
 // Auto-suspends a DID if it receives 3+ unique complaints (TRAI TCCCPR)

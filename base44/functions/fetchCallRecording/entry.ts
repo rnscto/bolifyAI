@@ -1,4 +1,4 @@
-import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.31';
 
 // Fetch call recording URL from Smartflo CDR API for a given call
 // Can be called per-call or in bulk for recent calls missing recordings

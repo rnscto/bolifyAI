@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Paginated fetch: returns ALL CampaignLeads for a campaign (handles >1000 leads).
 // Base44's filter() defaults to 1000-record cap — using this avoids premature completion.

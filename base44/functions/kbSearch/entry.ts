@@ -1,4 +1,4 @@
-import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.31';
 
 // ─── Parse Azure connection string ───
 function parseConnectionString(cs) {

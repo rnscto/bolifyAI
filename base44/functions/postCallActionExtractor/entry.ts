@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Post-Call AI Action Extractor - v2: Force redeploy
 // Analyzes call transcripts to extract specific action items:

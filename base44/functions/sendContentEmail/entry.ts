@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.20';
+import { createClient } from 'npm:@base44/sdk@0.8.31';
 
 // Platform's native email integration — sends from noreply@bolifyai.com
 async function sendLeadEmail({ to, fromName, subject, html }) {

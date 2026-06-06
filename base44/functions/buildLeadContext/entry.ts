@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.31';
 
 // Builds a rich personalization context for AI voice calls
 // Returns { context_text, lead_data } where context_text is injected into agent system prompt

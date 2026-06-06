@@ -8,7 +8,7 @@
 //   POST { agent_id: "..." }     → process a single agent
 //   POST { extract_stuck: true } → re-extract all KB docs with status=processing/failed
 
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { extractText, getDocumentProxy } from 'npm:unpdf@0.12.1';
 import mammoth from 'npm:mammoth@1.8.0';
 

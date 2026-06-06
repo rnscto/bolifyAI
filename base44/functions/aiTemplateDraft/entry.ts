@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // AI-drafts a WhatsApp template body from a goal description.
 // Uses Azure OpenAI directly (no Base44 credits).

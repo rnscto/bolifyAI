@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.18';
+import { createClient } from 'npm:@base44/sdk@0.8.31';
 
 // DEPRECATED: This function duplicates updateCallLog's get_agent_config action.
 // Kept for backward compatibility but streamAudio now loads config directly from CallLog.agent_config_cache.

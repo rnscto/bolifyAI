@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // Backfill scheduled callback Activities for past calls that requested a callback
 // but never got an Activity created (e.g. calls from before postCallActionExtractor
@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
 
     // ─── CRON MODE: Platform-wide backfill (no auth, secret-protected) ───
     if (isCronCall) {
-      const { createClient } = await import('npm:@base44/sdk@0.8.25');
+      const { createClient } = await import('npm:@base44/sdk@0.8.31');
       const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
 
       const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();

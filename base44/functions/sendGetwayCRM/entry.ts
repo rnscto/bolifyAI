@@ -1,4 +1,4 @@
-import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.31';
 
 const BOLIFY_CRM_URL = 'https://login.getwaycrm.com/api/automations/69cb6ef8707f8/execute';
 

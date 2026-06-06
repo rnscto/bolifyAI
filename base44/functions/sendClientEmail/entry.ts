@@ -1,4 +1,4 @@
-import { createClient, createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClient, createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 /**
  * Centralized email sender that uses the CLIENT'S configured email provider

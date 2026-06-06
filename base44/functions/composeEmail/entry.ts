@@ -1,4 +1,4 @@
-import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.31';
 
 // Send email using client's configured provider via centralized sendClientEmail function
 // Falls back to platform SMTP if client has no email config

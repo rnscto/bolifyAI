@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // ─── Smartflo token cache (module-level, shared across WebSocket sessions in this isolate) ───
 // Smartflo locks the account if you log in too frequently. Cache the JWT and respect retry_after.
@@ -94,7 +94,7 @@ async function saveCallRecord(session, reqId, duration) {
 
   try {
     const transcript = session.transcript.map(t => `${t.speaker}: ${t.text}`).join('\n');
-    const sdkMod = session._sdkModule || await import('npm:@base44/sdk@0.8.23');
+    const sdkMod = session._sdkModule || await import('npm:@base44/sdk@0.8.31');
     const appId = Deno.env.get('BASE44_APP_ID');
     const serviceClient = sdkMod.createClient({ appId, asServiceRole: true });
     const rawEndpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT') || '';
@@ -392,7 +392,7 @@ Deno.serve(async (req) => {
     let isGemini = false;
     if (cid) {
       try {
-        const { createClient } = await import('npm:@base44/sdk@0.8.23');
+        const { createClient } = await import('npm:@base44/sdk@0.8.31');
         const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
         const callLog = await svc.entities.CallLog.get(cid);
         if (callLog?.agent_config_cache?.persona?.voice_engine === 'gemini_realtime') {
@@ -800,7 +800,7 @@ Deno.serve(async (req) => {
 
             // Update CallLog with transfer info (fire-and-forget)
             if (session.callLogId) {
-              const { createClient } = await import('npm:@base44/sdk@0.8.23');
+              const { createClient } = await import('npm:@base44/sdk@0.8.31');
               const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
               svc.entities.CallLog.update(session.callLogId, {
                 transferred_to: `Human agent (intercom: ${session.humanTransferNumber}, reason: ${reason})`
@@ -830,7 +830,7 @@ Deno.serve(async (req) => {
     if (functionName === 'search_knowledge_base' && session.agentId && session.kbFileUri) {
       try {
         const args = JSON.parse(argsStr);
-        const { createClient } = await import('npm:@base44/sdk@0.8.23');
+        const { createClient } = await import('npm:@base44/sdk@0.8.31');
         const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
         const kbResp = await svc.functions.invoke('kbSearch', {
           agent_id: session.agentId, query: args.query || '', top_k: 3, _internal: true
@@ -855,7 +855,7 @@ Deno.serve(async (req) => {
     if (functionName === 'shopify_lookup' && session.clientId) {
       try {
         const args = JSON.parse(argsStr);
-        const { createClient } = await import('npm:@base44/sdk@0.8.23');
+        const { createClient } = await import('npm:@base44/sdk@0.8.31');
         const appId = Deno.env.get('BASE44_APP_ID');
         const svc = createClient({ appId, asServiceRole: true });
 
@@ -1284,7 +1284,7 @@ Deno.serve(async (req) => {
     const tgT = Deno.env.get('TELEGRAM_BOT_TOKEN');
     if (!tgT || !session.callLogId) return;
     try {
-      const { createClient: cc } = await import('npm:@base44/sdk@0.8.23');
+      const { createClient: cc } = await import('npm:@base44/sdk@0.8.31');
       const svc = cc({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
       const cl = await svc.entities.Client.get(session._personalClientId);
       if (!cl?.telegram_connected || !cl?.telegram_chat_id || cl.dnd_enabled || cl.owner_notification_channel !== 'telegram') return;
@@ -1648,7 +1648,7 @@ Deno.serve(async (req) => {
    const t0 = Date.now();
    try {
       // Re-use pre-warmed service client, or create fresh
-      if (!session._sdkModule) session._sdkModule = await import('npm:@base44/sdk@0.8.23');
+      if (!session._sdkModule) session._sdkModule = await import('npm:@base44/sdk@0.8.31');
       const svc = session._warmSvc || session._sdkModule.createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
       let callLog = null;
       // ═══ EXACT LOOKUP — prevents agent config mixing across concurrent calls ═══
@@ -1801,7 +1801,7 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
 
   // ─── PRE-WARM: Connect to Azure Realtime + pre-import SDK immediately ───
   connectRealtime();
-  import('npm:@base44/sdk@0.8.23').then(mod => { session._sdkModule = mod; }).catch(() => {});
+  import('npm:@base44/sdk@0.8.31').then(mod => { session._sdkModule = mod; }).catch(() => {});
   console.log(`[${reqId}] 🚀 Pre-warming Azure Realtime + SDK import...`);
 
   // ─── Smartflo WebSocket Handlers ───

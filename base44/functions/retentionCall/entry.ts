@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.25';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 async function sendEmailViaSMTP({ to, fromName, subject, html }) {
   const { SMTPClient } = await import('npm:emailjs@4.0.3');

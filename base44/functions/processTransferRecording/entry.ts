@@ -1,4 +1,4 @@
-import { createClient } from 'npm:@base44/sdk@0.8.23';
+import { createClient } from 'npm:@base44/sdk@0.8.31';
 
 // ─── Smartflo token cache (module-level) ───
 const SMARTFLO_TOKEN_TTL_MS = 50 * 60 * 1000;

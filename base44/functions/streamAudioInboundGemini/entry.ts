@@ -1,4 +1,4 @@
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.23';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const SMARTFLO_TOKEN_TTL_MS = 50 * 60 * 1000;
 let _smartfloTokenCache = { token: null, expiresAt: 0, inFlight: null, blockedUntil: 0 };
@@ -83,7 +83,7 @@ async function saveCallRecord(session, reqId, duration) {
 
   try {
     const transcript = session.transcript.map(t => `${t.speaker}: ${t.text}`).join('\n');
-    const sdkMod = session._sdkModule || await import('npm:@base44/sdk@0.8.23');
+    const sdkMod = session._sdkModule || await import('npm:@base44/sdk@0.8.31');
     const serviceClient = sdkMod.createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
     
     let summary = '', leadStatus = 'contacted', sentiment = 'neutral', leadScore = 0;
@@ -314,7 +314,7 @@ Deno.serve(async (req) => {
           if (tr.ok) {
             result = { success: true, message: 'Transferring...' };
             if (session.callLogId) {
-              const { createClient } = await import('npm:@base44/sdk@0.8.23');
+              const { createClient } = await import('npm:@base44/sdk@0.8.31');
               createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true }).entities.CallLog.update(session.callLogId, { transferred_to: `Human (intercom: ${session.humanTransferNumber})` }).catch(()=>{});
             }
           } else { result = { error: 'Transfer failed' }; }
@@ -326,7 +326,7 @@ Deno.serve(async (req) => {
     if (functionName === 'search_knowledge_base' && session.agentId && session.kbFileUri) {
       try {
         const args = JSON.parse(argsStr);
-        const { createClient } = await import('npm:@base44/sdk@0.8.23');
+        const { createClient } = await import('npm:@base44/sdk@0.8.31');
         const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
         const kbResp = await svc.functions.invoke('kbSearch', { agent_id: session.agentId, query: args.query || '', top_k: 3, _internal: true });
         const data = kbResp?.data || {};
@@ -429,7 +429,7 @@ Deno.serve(async (req) => {
 
   async function loadInboundAgent() {
     try {
-      const { createClient } = await import('npm:@base44/sdk@0.8.23');
+      const { createClient } = await import('npm:@base44/sdk@0.8.31');
       const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
       const callerDID = (session.callerNumber || '').replace(/[^0-9]/g, '').slice(-10);
       const cleanCalleeDID = (session.calleeNumber || '').replace(/[^0-9]/g, '').slice(-10);
