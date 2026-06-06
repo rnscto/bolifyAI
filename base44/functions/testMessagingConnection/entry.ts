@@ -15,26 +15,6 @@ Deno.serve(async (req) => {
     const body = await req.json();
     const { channel, config, test_recipient } = body;
 
-    // Build the correct Interakt Basic-auth value from the Secret Key.
-    // Interakt's header must be: "Authorization: Basic <base64(secretKey + ':')>".
-    // - If the user pasted a value that is ALREADY valid base64 and decodes to something
-    //   ending in ":" (Interakt's copy button gives this), use it verbatim — don't double-encode.
-    // - Otherwise treat it as the raw secret key and base64-encode "<key>:".
-    function buildInteraktBasic(rawKey) {
-      const key = String(rawKey || '').trim().replace(/^Basic\s+/i, '');
-      if (!key) return '';
-      // Heuristic: looks like base64 and decodes to a credential ending with ":"
-      if (/^[A-Za-z0-9+/]+={0,2}$/.test(key) && key.length % 4 === 0) {
-        try {
-          const decoded = atob(key);
-          if (decoded.includes(':')) return key; // already encoded "secret:"
-        } catch (_) { /* not base64, fall through */ }
-      }
-      // Raw secret key — encode "<key>:" (Interakt uses key as username, empty password)
-      const withColon = key.endsWith(':') ? key : key + ':';
-      return btoa(withColon);
-    }
-
     if (!channel || !config) {
       return Response.json({ error: 'channel and config are required' }, { status: 400 });
     }
@@ -143,12 +123,13 @@ Deno.serve(async (req) => {
       }
 
       if (provider === 'interakt') {
-        // Interakt uses HTTP Basic auth. The Secret Key from Developer Settings must be
-        // Base64-encoded into the header: "Authorization: Basic <base64(secretKey)>".
-        // Interakt's own copy button gives the key WITH a trailing ":" already appended,
-        // so we encode it as-is. We also detect a value the user already Base64-encoded
-        // themselves (decodes cleanly and ends with ":") and use it directly to avoid double-encoding.
+        // Interakt uses HTTP Basic auth with the raw API Key as the credential (no base64,
+        // header literally "Authorization: Basic <API Key>"), and a /v1/public/message/ endpoint.
+        // A connection test = send an approved template. If no template_name is given we validate
+        // the key by hitting the public message endpoint with a deliberately incomplete payload —
+        // a 401 means bad key, anything else means the key authenticated.
         // Guard against users pasting a dashboard URL (app.interakt.ai/...) into the endpoint field.
+        // Only honor a custom host if it's clearly an API host; otherwise force the correct default.
         let baseHost = String(config.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '');
         if (!baseHost || !/^https?:\/\/api\.interakt\.ai/i.test(baseHost)) baseHost = 'https://api.interakt.ai';
         const url = `${baseHost}/v1/public/message/`;
@@ -169,11 +150,10 @@ Deno.serve(async (req) => {
         const countryCode = '+' + digits.slice(0, digits.length - 10);
         const phoneNumber = digits.slice(-10);
 
-        const interaktBasic = buildInteraktBasic(apiKey);
-        console.log(`[testMessagingConnection/interakt] → POST ${url} (cc=${countryCode}, phone=${phoneNumber}, template=${templateName}, authLen=${interaktBasic.length})`);
+        console.log(`[testMessagingConnection/interakt] → POST ${url} (cc=${countryCode}, phone=${phoneNumber}, template=${templateName})`);
         const res = await fetch(url, {
           method: 'POST',
-          headers: { 'Authorization': `Basic ${interaktBasic}`, 'Content-Type': 'application/json' },
+          headers: { 'Authorization': `Basic ${apiKey}`, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             countryCode,
             phoneNumber,
