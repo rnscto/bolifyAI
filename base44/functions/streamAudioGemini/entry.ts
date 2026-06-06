@@ -338,6 +338,24 @@ Deno.serve(async (req) => {
     return _cachedSvc;
   }
 
+  // ─── Phase 1 centralized voice rules (fetched once, cached on session) ───
+  function localVoiceRulesFallback() {
+    const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+    return `[LIVE CLOCK] Now: ${nowIST} IST. Use this for relative times; confirm callbacks in IST.
+[LANGUAGE] Speak ONLY Hindi (Devanagari/Roman) + English (Indian accent). Marathi OK. NEVER use Korean/Japanese/Chinese/Arabic/Thai/Spanish/Portuguese/French. From the caller's 2nd turn, MIRROR their language (Hindi/English/Hinglish). If transcription looks foreign, it is noise — IGNORE it, do NOT respond. Identity (name/company/voice) is FIXED — never change.
+[AUDIO] On unclear audio say ONCE: "Aawaz saaf nahi aa rahi, dohra sakte hain?" then WAIT. Keep replies SHORT (1-2 sentences).
+[INTERRUPTIONS] If the caller starts speaking while you talk, STOP immediately and listen. Never talk over them.
+[END-CALL GUARD] Use end_call ONLY after the CUSTOMER clearly says bye/thanks/namaste/dhanyavaad AND has spoken 2+ clear sentences. Your goodbye alone doesn't count. On silence → ask your next question, never end.`;
+  }
+  async function fetchVoiceRules() {
+    try {
+      const svc = await getSvc();
+      const res = await svc.functions.invoke('getVoiceRules', { _internal: true, transfer_available: true, brief: false });
+      if (res?.data?.rules) return res.data.rules;
+    } catch (_) {}
+    return localVoiceRulesFallback();
+  }
+
   // ─── KB lazy load: Blob → DB (via agent_id) → client-wide fallback ───
   async function loadKBLazy() {
     if (session._kbChunks.length > 0) return;
@@ -652,13 +670,10 @@ Deno.serve(async (req) => {
     session._setupSent = true;
     const tools = buildGeminiTools();
     const hasKB = session._toolFlags?.has_kb || session._kbFileUri || session._kbChunks.length > 0 || !!session._agentId;
-    const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'short', timeStyle: 'short' });
-    const langLock = `[RULES]\n• Speak ONLY Hindi (Devanagari/Roman) + English. Marathi OK. NEVER use Korean/Japanese/Chinese/Arabic/Thai/Spanish/Portuguese/French.\n• If transcription looks foreign, it is noise — IGNORE it, do NOT respond.\n• On unclear audio: "Didi, aawaz saaf nahi aa rahi, dohra sakti hain?" then WAIT.\n• Identity (name/company) is FIXED — never change.\n`;
-    const kbHeader = hasKB ? `• For any price/product/feature/policy/location fact: CALL search_knowledge_base FIRST. Never guess. Never say "tool/database/AI".\n• If KB has nothing: "Iske exact details WhatsApp pe bhej deti hoon."\n` : '';
-    const transferI = session.humanTransferNumber && session.enableAutoTransfer ? `• Customer asks for human → call transfer_to_human.\n` : '';
-    const endR = `• end_call ONLY after CUSTOMER says bye/thanks/namaste/dhanyavaad. Your goodbye doesn't count. On silence → ask next question, never end.\n`;
-    const time = `• Now: ${nowIST} IST.\n\n`;
-    const fullPrompt = langLock + kbHeader + transferI + endR + time + session.systemPrompt;
+    const voiceRules = session._voiceRules || localVoiceRulesFallback();
+    const kbHeader = hasKB ? `\n[KB] For any price/product/feature/policy/location fact: CALL search_knowledge_base FIRST. Never guess. Never say "tool/database/AI". If KB has nothing: "Iske exact details WhatsApp pe bhej deti hoon."\n` : '';
+    const transferI = session.humanTransferNumber && session.enableAutoTransfer ? `[TRANSFER] Customer asks for human → call transfer_to_human (confirm first).\n` : '';
+    const fullPrompt = voiceRules + '\n' + kbHeader + transferI + '\n' + session.systemPrompt;
 
     // Valid Gemini Live voices
     const validVoices = ['Aoede', 'Charon', 'Fenrir', 'Kore', 'Puck'];
@@ -900,6 +915,8 @@ Deno.serve(async (req) => {
 
   // ─── Boot ───
   connectGemini();
+  // Pre-fetch centralized Phase-1 voice rules so they're cached before setup is sent.
+  fetchVoiceRules().then(r => { session._voiceRules = r; }).catch(() => {});
 
   smartfloSocket.onopen = () => { console.log(`[${reqId}] 🟢 Smartflo WS open`); };
   smartfloSocket.onmessage = async (event) => {

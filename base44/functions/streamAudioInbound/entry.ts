@@ -66,6 +66,31 @@ async function getSmartfloToken(forceRefresh = false) {
 // not this one — this function will reject them.
 // ═══════════════════════════════════════════════════════════════
 
+// ─── Phase 1 voice rules (centralized via getVoiceRules backend function) ───
+// Fetched ONCE per call and cached on the session. Fallback used if not ready.
+function localVoiceRulesFallback({ transferAvailable = false } = {}) {
+  const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+  const clock = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}. Use this for relative times and confirm callbacks in IST.\n`;
+  const transfer = transferAvailable ? '\nUse transfer_to_human ONLY when the caller explicitly asks for a human. Tell them before transferring.' : '';
+  return `${clock}
+[AUDIO RULES] You are on a PHONE CALL in India. ONLY respond to clear human speech. IGNORE background noise, TV, traffic, or garbled/short syllables. NEVER end the call based on noise.
+[LANGUAGE] Start in the agent's primary language. From the caller's 2nd turn, MIRROR their language (English / Hindi / Hinglish). Keep your voice and tone constant.
+[INTERRUPTIONS] If the caller starts speaking while you are talking, STOP immediately and listen. Never talk over them.
+[END-CALL GUARD] Only use end_call after a clear, MUTUAL goodbye with 2+ clear caller sentences. Never end on a single unclear word.
+Keep replies SHORT (1-2 sentences).${transfer}`;
+}
+
+async function fetchVoiceRules(session, { transferAvailable }) {
+  try {
+    if (!session._sdkModule) session._sdkModule = await import('npm:@base44/sdk@0.8.31');
+    const svc = session._warmSvc || session._sdkModule.createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+    const res = await svc.functions.invoke('getVoiceRules', { _internal: true, transfer_available: transferAvailable, brief: false });
+    const rules = res?.data?.rules;
+    if (rules) return rules;
+  } catch (_) {}
+  return localVoiceRulesFallback({ transferAvailable });
+}
+
 // ─── Audio Bridging (NATIVE G.711 µ-LAW 8kHz — NO CONVERSION) ───
 // Azure Realtime supports g711_ulaw natively; Smartflo streams g711_ulaw natively.
 // Pass mu-law through both directions verbatim — eliminates resampling artifacts that
@@ -598,11 +623,7 @@ Deno.serve(async (req) => {
       synthesizeWithAzureSpeech(greeting);
       applySessionConfig();
     } else if (session.voiceEngine === 'gemini_realtime') {
-      const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
-      const timeInjection = `\n[LIVE CLOCK] Current IST: ${nowIST}.\n`;
-      const noiseHandling = `\n[AUDIO RULES] Phone call. Only respond to clear speech. Ignore garbled/short utterances. Keep replies 1-2 sentences.\n`;
-      let transferInstr = '';
-      if (session.humanTransferNumber && session.enableAutoTransfer) transferInstr = `\n\nUse transfer_to_human when caller explicitly asks for a human.`;
+      const voiceRules = session._voiceRules || localVoiceRulesFallback({ transferAvailable: !!(session.humanTransferNumber && session.enableAutoTransfer) });
       const tools = buildGeminiTools();
       const setupMsg = {
         setup: {
@@ -611,7 +632,7 @@ Deno.serve(async (req) => {
             responseModalities: ["AUDIO"],
             speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: session.voiceType || "Aoede" } } }
           },
-          systemInstruction: { parts: [{ text: timeInjection + noiseHandling + session.systemPrompt + transferInstr }] }
+          systemInstruction: { parts: [{ text: voiceRules + '\n\n' + session.systemPrompt }] }
         }
       };
       if (tools.length > 0) setupMsg.setup.tools = tools;
@@ -625,13 +646,7 @@ Deno.serve(async (req) => {
       // VOICE LOCK: send the FULL Phase-2 config (voice + final instructions + tools) in a
       // SINGLE session.update BEFORE any assistant audio is generated. After this, Azure
       // refuses voice changes ("cannot_update_voice").
-      const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
-      const timeInjection = `\n[LIVE CLOCK] Current IST: ${nowIST}.\n`;
-      const noiseHandling = `\n[AUDIO RULES] Phone call. Only respond to clear speech. Ignore garbled/short utterances. Keep replies 1-2 sentences.\n`;
-      let transferInstr = '';
-      if (session.humanTransferNumber && session.enableAutoTransfer) {
-        transferInstr = `\n\nUse transfer_to_human when caller explicitly asks for a human or for complex issues. Confirm before transferring.`;
-      }
+      const voiceRules = session._voiceRules || localVoiceRulesFallback({ transferAvailable: !!(session.humanTransferNumber && session.enableAutoTransfer) });
       const tools = buildToolDefinitions();
       // NATIVE TELEPHONY FORMAT: g711_ulaw 8kHz both directions (matches Smartflo exactly).
       const fullCfg = {
@@ -639,7 +654,7 @@ Deno.serve(async (req) => {
         voice: session.voiceType,
         input_audio_format: 'g711_ulaw',
         output_audio_format: 'g711_ulaw',
-        instructions: timeInjection + noiseHandling + session.systemPrompt + transferInstr
+        instructions: voiceRules + '\n\n' + session.systemPrompt
       };
       if (tools.length > 0) { fullCfg.tools = tools; fullCfg.tool_choice = 'auto'; }
       sendToRealtime({ type: 'session.update', session: fullCfg });
@@ -660,25 +675,21 @@ Deno.serve(async (req) => {
     }
     const isHybrid = session.voiceEngine === 'azure_speech';
     const tools = buildToolDefinitions();
-    const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
-    const timeInjection = `\n[LIVE CLOCK] Current IST: ${nowIST}.\n`;
-    const noiseHandling = `\n[AUDIO RULES] You are on a phone call. ONLY respond to clear, directed speech. Ignore garbled/short utterances. Never end the call based on a single unclear word. Keep responses 1-2 sentences.\n`;
-    let transferInstructions = '';
-    if (session.humanTransferNumber && session.enableAutoTransfer) {
-      transferInstructions = `\n\n--- HUMAN TRANSFER AVAILABLE ---\nUse transfer_to_human when customer explicitly asks for a human or for complex issues. Always confirm: "Let me connect you to a human agent. Please hold."`;
-    }
+    const transferAvail = !!(session.humanTransferNumber && session.enableAutoTransfer);
+    const voiceRules = session._voiceRules || localVoiceRulesFallback({ transferAvailable: transferAvail });
     const greetingGuard = session._greetingSent ? '\n\nIMPORTANT: You have ALREADY greeted. Do NOT greet again.' : '';
+    const fullInstructions = voiceRules + '\n\n' + session.systemPrompt + greetingGuard;
     // CRITICAL: keep g711_ulaw end-to-end (Smartflo native format). Switching to pcm16 here
     // while caller audio is still mu-law causes Azure VAD to never trigger → 20s silence.
     const sessionConfig = { input_audio_format: 'g711_ulaw', output_audio_format: 'g711_ulaw', input_audio_transcription: { model: 'whisper-1', language: 'hi' }, turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } };
     if (isHybrid) {
       sessionConfig.instructions = 'You are a transcription-only assistant. Do not respond.';
       sessionConfig.modalities = ['text']; sessionConfig.voice = 'alloy';
-      session.chatHistory = [{ role: 'system', content: timeInjection + noiseHandling + session.systemPrompt + transferInstructions + greetingGuard }];
+      session.chatHistory = [{ role: 'system', content: fullInstructions }];
       if (session._greetingSent && session.greetingMessage) session.chatHistory.push({ role: 'assistant', content: session.greetingMessage });
     } else {
       sessionConfig.modalities = ['text', 'audio'];
-      sessionConfig.instructions = timeInjection + noiseHandling + session.systemPrompt + transferInstructions + greetingGuard;
+      sessionConfig.instructions = fullInstructions;
       sessionConfig.input_audio_format = 'g711_ulaw';
       sessionConfig.output_audio_format = 'g711_ulaw';
       // VOICE STABILITY FIX: only include `voice` on the FIRST session.update of this connection.
@@ -1249,6 +1260,8 @@ Deno.serve(async (req) => {
   // ─── PRE-WARM ───
   connectRealtime();
   import('npm:@base44/sdk@0.8.31').then(mod => { session._sdkModule = mod; }).catch(() => {});
+  // Pre-fetch centralized Phase-1 voice rules (transfer-aware text; safe even if no transfer tool).
+  fetchVoiceRules(session, { transferAvailable: true }).then(r => { session._voiceRules = r; }).catch(() => {});
 
   // ─── Smartflo WebSocket Handlers ───
   smartfloSocket.onopen = () => {

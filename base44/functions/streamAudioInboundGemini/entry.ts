@@ -279,6 +279,25 @@ Deno.serve(async (req) => {
     return null;
   }
 
+  // ─── Phase 1 centralized voice rules (fetched once, cached on session) ───
+  function localVoiceRulesFallback() {
+    const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+    return `[LIVE CLOCK] Now: ${nowIST} IST. Use this for relative times; confirm callbacks in IST.
+[LANGUAGE] Start in the agent's primary language. From the caller's 2nd turn, MIRROR their language (Hindi/English/Hinglish). Identity and voice are FIXED — never change.
+[AUDIO] You are on a PHONE CALL in India. ONLY respond to clear human speech. Ignore noise/garbled audio. Keep replies SHORT (1-2 sentences).
+[INTERRUPTIONS] If the caller starts speaking while you talk, STOP immediately and listen. Never talk over them.
+[END-CALL GUARD] Use end_call ONLY after a clear, MUTUAL goodbye with 2+ clear caller sentences. Never end on a single unclear word.`;
+  }
+  async function fetchVoiceRules() {
+    try {
+      const { createClient } = await import('npm:@base44/sdk@0.8.31');
+      const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+      const res = await svc.functions.invoke('getVoiceRules', { _internal: true, transfer_available: true, brief: false });
+      if (res?.data?.rules) return res.data.rules;
+    } catch (_) {}
+    return localVoiceRulesFallback();
+  }
+
   function buildGeminiTools() {
     const tools = [];
     tools.push({ name: 'end_call', description: 'End the call.', parameters: { type: 'OBJECT', properties: { reason: { type: 'STRING' } }, required: ['reason'] } });
@@ -349,10 +368,7 @@ Deno.serve(async (req) => {
     session._greetingSent = true;
     if (greeting) session.transcript.push({ speaker: 'AI', text: greeting });
     
-    const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
-    const timeInjection = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}.\n`;
-    const noiseHandling = `\n[AUDIO RULES] You are on a PHONE CALL in India. Only respond to CLEAR human speech. Keep replies SHORT (1-2 sentences).\n`;
-    let transferInstr = (session.humanTransferNumber && session.enableAutoTransfer) ? `\n\nUse transfer_to_human when caller asks for a human.` : '';
+    const voiceRules = session._voiceRules || localVoiceRulesFallback();
     const tools = buildGeminiTools();
     const validGeminiVoices = ['Aoede', 'Charon', 'Fenrir', 'Kore', 'Puck', 'Leda', 'Orus', 'Zephyr'];
     const voice = validGeminiVoices.includes(session.voiceType) ? session.voiceType : 'Aoede';
@@ -360,7 +376,7 @@ Deno.serve(async (req) => {
       setup: {
         model: "models/gemini-2.0-flash-live-001",
         generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } } },
-        systemInstruction: { parts: [{ text: timeInjection + noiseHandling + session.systemPrompt + transferInstr }] },
+        systemInstruction: { parts: [{ text: voiceRules + '\n\n' + session.systemPrompt }] },
         // Capture BOTH sides of the conversation so post-call analysis & lead scoring work.
         inputAudioTranscription: {},
         outputAudioTranscription: {}
@@ -475,6 +491,8 @@ Deno.serve(async (req) => {
   }
 
   connectRealtime();
+  // Pre-fetch centralized Phase-1 voice rules so they're cached before Gemini setup is sent.
+  fetchVoiceRules().then(r => { session._voiceRules = r; }).catch(() => {});
 
   smartfloSocket.onopen = () => {};
   smartfloSocket.onmessage = async (event) => {
