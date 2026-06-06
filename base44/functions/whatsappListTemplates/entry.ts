@@ -24,9 +24,11 @@ Deno.serve(async (req) => {
     if (configs.length === 0) return Response.json({ error: 'No messaging config' }, { status: 404 });
     const cfg = configs[0];
 
+    // Interakt has no public template-listing API (confirmed against their official API docs).
+    // Templates are added manually via the "Add Interakt Template" form in the UI.
     if (cfg.whatsapp_provider === 'interakt') {
       return Response.json({
-        error: 'Interakt has no list-templates API. Add your template manually: go to app.interakt.ai/templates/list → click your template → copy the "code name" from the URL (the part between /template/ and /view), then create it here as an APPROVED Interakt template.'
+        error: 'Interakt does not offer an API to list templates. Use "Add Interakt Template" to register an approved template by its code name (from app.interakt.ai → Templates → open template → the part of the URL between /template/ and /view).'
       }, { status: 400 });
     }
 

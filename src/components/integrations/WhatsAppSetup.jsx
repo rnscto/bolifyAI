@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MessageSquare, CheckCircle2, XCircle, Loader2, Send, Eye, EyeOff } from 'lucide-react';
 import { toast } from 'sonner';
+import AddInteraktTemplateForm from './AddInteraktTemplateForm';
 
 const PROVIDERS = [
   { value: 'none', label: 'Not Connected' },
@@ -63,13 +64,17 @@ export default function WhatsAppSetup({ config, onSave }) {
   }, [config, hasSynced]);
 
   // Load approved templates when Meta Cloud is selected and credentials exist
+  const loadTemplates = () => {
+    if (!config?.client_id) return;
+    setLoadingTemplates(true);
+    base44.entities.WhatsAppTemplate.filter({ client_id: config.client_id, status: 'APPROVED' }, '-created_date', 100)
+      .then(setTemplates)
+      .catch(() => setTemplates([]))
+      .finally(() => setLoadingTemplates(false));
+  };
   useEffect(() => {
-    if ((provider === 'meta_cloud' || provider === 'rcs_digital' || provider === 'interakt') && config?.client_id) {
-      setLoadingTemplates(true);
-      base44.entities.WhatsAppTemplate.filter({ client_id: config.client_id, status: 'APPROVED' }, '-created_date', 100)
-        .then(setTemplates)
-        .catch(() => setTemplates([]))
-        .finally(() => setLoadingTemplates(false));
+    if (provider === 'meta_cloud' || provider === 'rcs_digital' || provider === 'interakt') {
+      loadTemplates();
     }
   }, [provider, config?.client_id]);
 
@@ -217,13 +222,23 @@ export default function WhatsAppSetup({ config, onSave }) {
                     </SelectContent>
                   </Select>
                   <p className="text-xs text-gray-400 mt-1">
-                    Meta requires a pre-approved template for the first message. Without one, we only validate your credentials.
+                    {provider === 'interakt'
+                      ? 'Interakt requires an approved template to send. Add yours by its code name below.'
+                      : 'Meta requires a pre-approved template for the first message. Without one, we only validate your credentials.'}
                   </p>
+                  {provider === 'interakt' && config?.client_id && (
+                    <div className="mt-2">
+                      <AddInteraktTemplateForm
+                        clientId={config.client_id}
+                        onAdded={(t) => { loadTemplates(); setSelectedTemplate(t.id); }}
+                      />
+                    </div>
+                  )}
                 </div>
               )}
 
               <div className="flex gap-2">
-                <Button variant="outline" onClick={handleTest} disabled={testing || !apiKey} className="gap-2 flex-1">
+                <Button variant="outline" onClick={handleTest} disabled={testing || !apiKey || (provider === 'interakt' && !selectedTemplate)} className="gap-2 flex-1">
                   {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   {(provider === 'meta_cloud' || provider === 'rcs_digital') && !selectedTemplate ? 'Validate Credentials' : 'Send Test Message'}
                 </Button>
