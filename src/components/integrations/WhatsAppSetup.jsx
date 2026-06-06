@@ -16,16 +16,16 @@ const PROVIDERS = [
   { value: 'gupshup', label: 'Gupshup', fields: ['api_key', 'phone_number_id', 'business_id'] },
   { value: 'aisensy', label: 'AiSensy', fields: ['api_key', 'phone_number_id', 'api_endpoint'] },
   { value: 'wati', label: 'WATI', fields: ['api_key', 'phone_number_id', 'api_endpoint'] },
-  { value: 'interakt', label: 'Interakt', fields: ['api_key', 'phone_number_id', 'api_endpoint'] },
+  { value: 'interakt', label: 'Interakt', fields: ['api_key', 'api_endpoint'] },
   { value: 'twilio', label: 'Twilio', fields: ['api_key', 'phone_number_id', 'business_id'] },
   { value: 'valuefirst', label: 'ValueFirst', fields: ['api_key', 'phone_number_id', 'api_endpoint'] },
 ];
 
 const FIELD_LABELS = {
-  api_key: { meta_cloud: 'Access Token', gupshup: 'API Key', twilio: 'Auth Token', rcs_digital: 'Bearer Token / API Key', default: 'API Key / Token' },
+  api_key: { meta_cloud: 'Access Token', gupshup: 'API Key', twilio: 'Auth Token', rcs_digital: 'Bearer Token / API Key', interakt: 'Interakt Secret Key (Developer Settings)', default: 'API Key / Token' },
   phone_number_id: { meta_cloud: 'Phone Number ID', rcs_digital: 'Phone Number ID', twilio: 'WhatsApp Number (+91...)', default: 'Sender Phone Number' },
   business_id: { meta_cloud: 'WhatsApp Business Account ID', rcs_digital: 'WhatsApp Business Account ID', twilio: 'Account SID', gupshup: 'App Name', default: 'Business / App ID' },
-  api_endpoint: { rcs_digital: 'Custom API Host (optional, e.g. https://icpaas.in)', default: 'API Endpoint URL' },
+  api_endpoint: { rcs_digital: 'Custom API Host (optional, e.g. https://icpaas.in)', interakt: 'Custom API Host (optional, default https://api.interakt.ai)', default: 'API Endpoint URL' },
 };
 
 const getLabel = (field, provider) => FIELD_LABELS[field]?.[provider] || FIELD_LABELS[field]?.default || field;
@@ -64,7 +64,7 @@ export default function WhatsAppSetup({ config, onSave }) {
 
   // Load approved templates when Meta Cloud is selected and credentials exist
   useEffect(() => {
-    if ((provider === 'meta_cloud' || provider === 'rcs_digital') && config?.client_id) {
+    if ((provider === 'meta_cloud' || provider === 'rcs_digital' || provider === 'interakt') && config?.client_id) {
       setLoadingTemplates(true);
       base44.entities.WhatsAppTemplate.filter({ client_id: config.client_id, status: 'APPROVED' }, '-created_date', 100)
         .then(setTemplates)
@@ -90,7 +90,7 @@ export default function WhatsAppSetup({ config, onSave }) {
       channel: 'whatsapp',
       test_recipient: testRecipient.trim(),
       template_name: tmpl?.name || '',
-      template_language: tmpl?.language || 'en_US',
+      template_language: tmpl?.language || (provider === 'interakt' ? 'en' : 'en_US'),
       config: creds
     });
     if (res.data.success) {
@@ -173,8 +173,14 @@ export default function WhatsAppSetup({ config, onSave }) {
             {fields.includes('api_endpoint') && (
               <div>
                 <Label>{getLabel('api_endpoint', provider)}</Label>
-                <Input value={apiEndpoint} onChange={e => setApiEndpoint(e.target.value)} placeholder="https://api.provider.com/v1/messages" />
+                <Input value={apiEndpoint} onChange={e => setApiEndpoint(e.target.value)} placeholder={provider === 'interakt' ? 'https://api.interakt.ai (leave blank for default)' : 'https://api.provider.com/v1/messages'} />
               </div>
+            )}
+
+            {provider === 'interakt' && (
+              <p className="text-xs text-gray-500 bg-blue-50 border border-blue-100 rounded-md p-2">
+                Paste your <b>Secret Key</b> from app.interakt.ai → Settings → Developer Settings. Use the raw key only — do not add "Basic" or "Bearer". Interakt requires an <b>approved template</b> to send (Public APIs need a Growth plan or higher).
+              </p>
             )}
 
             <div className="border-t pt-4 space-y-3">
@@ -183,7 +189,7 @@ export default function WhatsAppSetup({ config, onSave }) {
                 <Input value={testRecipient} onChange={e => setTestRecipient(e.target.value)} placeholder="e.g. 919876543210" />
               </div>
 
-              {(provider === 'meta_cloud' || provider === 'rcs_digital') && (
+              {(provider === 'meta_cloud' || provider === 'rcs_digital' || provider === 'interakt') && (
                 <div>
                   <Label className="text-xs text-gray-500">
                     Pick a template to test

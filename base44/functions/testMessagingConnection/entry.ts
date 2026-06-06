@@ -122,7 +122,55 @@ Deno.serve(async (req) => {
         return Response.json({ success: false, error: data.message || JSON.stringify(data) });
       }
 
-      if (provider === 'aisensy' || provider === 'wati' || provider === 'interakt') {
+      if (provider === 'interakt') {
+        // Interakt uses HTTP Basic auth with the raw API Key as the credential (no base64,
+        // header literally "Authorization: Basic <API Key>"), and a /v1/public/message/ endpoint.
+        // A connection test = send an approved template. If no template_name is given we validate
+        // the key by hitting the public message endpoint with a deliberately incomplete payload —
+        // a 401 means bad key, anything else means the key authenticated.
+        const baseHost = String(config.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '') || 'https://api.interakt.ai';
+        const url = `${baseHost}/v1/public/message/`;
+        const templateName = body.template_name;
+        const templateLang = body.template_language || 'en';
+
+        if (!templateName) {
+          return Response.json({ success: false, error: 'Interakt requires an approved template to test sending. Select a template, or sync your Interakt templates first. (Interakt has no credentials-only validation endpoint.)' });
+        }
+        if (!test_recipient) {
+          return Response.json({ success: false, error: 'A test recipient phone number is required for Interakt.' });
+        }
+
+        // Split recipient into countryCode + phoneNumber (Interakt wants them separate, no leading 0)
+        let digits = String(test_recipient).replace(/[^0-9]/g, '');
+        if (digits.length === 10) digits = '91' + digits;
+        else if (digits.length === 11 && digits.startsWith('0')) digits = '91' + digits.slice(1);
+        const countryCode = '+' + digits.slice(0, digits.length - 10);
+        const phoneNumber = digits.slice(-10);
+
+        console.log(`[testMessagingConnection/interakt] → POST ${url} (cc=${countryCode}, phone=${phoneNumber}, template=${templateName})`);
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: { 'Authorization': `Basic ${apiKey}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            countryCode,
+            phoneNumber,
+            type: 'Template',
+            template: { name: templateName, languageCode: templateLang }
+          })
+        });
+        const rawText = await res.text();
+        let data; try { data = JSON.parse(rawText); } catch (_) { data = { raw: rawText }; }
+        console.log(`[testMessagingConnection/interakt] ← HTTP ${res.status}: ${rawText.substring(0, 800)}`);
+        if (res.ok && data.result === true) {
+          return Response.json({ success: true, message: `WhatsApp (Interakt) connected! Template "${templateName}" sent.`, details: data });
+        }
+        if (res.status === 401) {
+          return Response.json({ success: false, error: 'Interakt authentication failed — invalid API Key. Get it from app.interakt.ai → Settings → Developer Settings (use the raw key, no "Basic" prefix).' });
+        }
+        return Response.json({ success: false, error: data.message || rawText || `Interakt rejected the request (HTTP ${res.status})` });
+      }
+
+      if (provider === 'aisensy' || provider === 'wati') {
         // Generic API-key based providers
         const endpoint = config.whatsapp_api_endpoint;
         if (!endpoint) return Response.json({ success: false, error: 'API endpoint URL is required for this provider' });

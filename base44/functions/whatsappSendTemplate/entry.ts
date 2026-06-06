@@ -34,8 +34,8 @@ Deno.serve(async (req) => {
     if (configs.length === 0) return Response.json({ error: 'No messaging config' }, { status: 404 });
     const cfg = configs[0];
 
-    if (!['meta_cloud', 'rcs_digital'].includes(cfg.whatsapp_provider)) {
-      return Response.json({ error: 'Only Meta Cloud / RCS Digital supported for template sends' }, { status: 400 });
+    if (!['meta_cloud', 'rcs_digital', 'interakt'].includes(cfg.whatsapp_provider)) {
+      return Response.json({ error: 'Only Meta Cloud / RCS Digital / Interakt supported for template sends' }, { status: 400 });
     }
 
     // Phone normalization helper — handles 10-digit Indian, leading-0, and already-prefixed formats
@@ -73,6 +73,76 @@ Deno.serve(async (req) => {
         .replace(/\{\{email\}\}/gi, lead.email || '');
     };
 
+    // Sanitize API key (shared by all providers): strip whitespace + accidental prefix
+    const apiKeyRaw = String(cfg.whatsapp_api_key || '').trim().replace(/^(Bearer|Basic)\s+/i, '');
+
+    // ===== INTERAKT BRANCH =====
+    // Interakt has a distinct API: Basic auth, /v1/public/message/, split countryCode+phoneNumber,
+    // and headerValues/bodyValues/buttonValues arrays instead of Meta's components structure.
+    if (cfg.whatsapp_provider === 'interakt') {
+      const baseHost = String(cfg.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '') || 'https://api.interakt.ai';
+      const url = `${baseHost}/v1/public/message/`;
+
+      // Split recipient into countryCode + phoneNumber (no leading 0, no country code in phoneNumber)
+      let digits = normalizePhone(recipient);
+      if (digits.length < 11 || digits.length > 15) {
+        return Response.json({ error: `Invalid phone number after normalization: ${digits}` }, { status: 400 });
+      }
+      const countryCode = '+' + digits.slice(0, digits.length - 10);
+      const phoneNumber = digits.slice(-10);
+
+      const bodyValues = (variables || []).map(v => interpolate(v));
+      const tmpl = { name: template.name, languageCode: template.language || 'en' };
+      if (bodyValues.length > 0) tmpl.bodyValues = bodyValues;
+
+      // Media header → headerValues holds the media URL
+      const hType = (template.header_type || 'NONE').toUpperCase();
+      if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(hType)) {
+        if (!template.header_media_url) {
+          return Response.json({ error: `Template "${template.name}" has a ${hType} header but no header_media_url is set.` }, { status: 400 });
+        }
+        tmpl.headerValues = [template.header_media_url];
+        if (hType === 'DOCUMENT') tmpl.fileName = (template.name || 'document') + '.pdf';
+      }
+
+      console.log(`[whatsappSendTemplate/interakt] → POST ${url} (cc=${countryCode}, phone=${phoneNumber}, template=${template.name})`);
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Authorization': `Basic ${apiKeyRaw}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ countryCode, phoneNumber, type: 'Template', callbackData: call_log_id || lead_id || '', template: tmpl })
+      });
+      const rawText = await res.text();
+      let data; try { data = JSON.parse(rawText); } catch (_) { data = { raw: rawText }; }
+      console.log(`[whatsappSendTemplate/interakt] ← HTTP ${res.status}: ${rawText.substring(0, 400)}`);
+
+      const ok = res.ok && data.result === true;
+      const messageId = data.id || null;
+
+      try {
+        await svc.entities.OutreachLog.create({
+          client_id: template.client_id,
+          lead_id: lead_id || lead?.id || null,
+          call_log_id: call_log_id || null,
+          channel: 'whatsapp', direction: 'outbound', vendor: 'interakt',
+          vendor_message_id: messageId, template_id, template_name: template.name,
+          recipient_phone: phoneNumber, body: template.body_text || '',
+          outreach_type: outreach_type || 'lead_followup',
+          status: ok ? 'sent' : 'failed',
+          error_message: ok ? '' : (data.message || rawText)
+        });
+      } catch (_) {}
+
+      if (!ok) {
+        let friendly = data.message || rawText || 'Interakt send failed';
+        if (res.status === 401) friendly = 'Interakt authentication failed — invalid API Key. Get the raw key from app.interakt.ai → Settings → Developer Settings.';
+        else if (res.status === 429) friendly = 'Interakt rate limit exceeded. Please retry shortly.';
+        return Response.json({ error: friendly, details: data }, { status: 400 });
+      }
+
+      await svc.entities.WhatsAppTemplate.update(template_id, { send_count: (template.send_count || 0) + 1 });
+      return Response.json({ success: true, message_id: messageId, details: data });
+    }
+
     const components = [];
 
     // Header component: required when template has IMAGE/VIDEO/DOCUMENT header
@@ -107,7 +177,7 @@ Deno.serve(async (req) => {
     }
 
     // Sanitize: strip whitespace + remove accidental "Bearer " prefix
-    const apiKey = String(cfg.whatsapp_api_key).trim().replace(/^Bearer\s+/i, '');
+    const apiKey = apiKeyRaw;
     const phoneNumberId = String(cfg.whatsapp_phone_number_id || '').trim();
     if (!phoneNumberId) {
       return Response.json({ error: 'Phone Number ID is not configured. Please add it in Integrations.' }, { status: 400 });
