@@ -236,34 +236,44 @@ Deno.serve(async (req) => {
       const tk = await getSmartfloToken();
       if (tk) {
         const liveCallId = await findLiveCallId(tk);
-        const candidates = [...new Set([liveCallId, session.smartfloCallId, session.callSid].filter(Boolean))];
-        for (const cid of candidates) {
+        if (liveCallId) {
           const hr = await fetch('https://api-smartflo.tatateleservices.com/v1/call/hangup', {
             method: 'POST', headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': `Bearer ${tk}` },
-            body: JSON.stringify({ call_id: cid })
+            body: JSON.stringify({ call_id: liveCallId })
           });
-          if (hr.ok && (await hr.json().catch(()=>({}))).success !== false) break;
+          if (!hr.ok) console.error(`[${reqId}] ⚠️ Hangup failed: ${hr.status} (call_id=${liveCallId})`);
+        } else {
+          console.error(`[${reqId}] ⚠️ Hangup skipped — no live call_id resolved`);
         }
       }
     } catch (e) {}
     if (session.realtimeWs?.readyState === WebSocket.OPEN) session.realtimeWs.close();
   }
 
-  async function findLiveCallId(token) {
-    try {
-      const r = await fetch('https://api-smartflo.tatateleservices.com/v1/live_calls', { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
-      if (!r.ok) return null;
-      const d = await r.json();
-      const calls = Array.isArray(d) ? d : (d.data || []);
-      const ce = (session.calleeNumber || '').replace(/\D/g, '').slice(-10);
-      const cr = (session.callerNumber || '').replace(/\D/g, '').slice(-10);
-      const m = calls.find(c => {
-        const cn = (c.customer_number || '').replace(/\D/g, '').slice(-10);
-        const did = (c.did || '').replace(/\D/g, '').slice(-10);
-        return (ce && (cn === ce || did === ce)) || (cr && (cn === cr || did === cr));
-      });
-      return m?.call_id || null;
-    } catch (_) { return null; }
+  // Resolve the LIVE Smartflo call_id from live_calls — the ONLY valid source for hangup/
+  // transfer (session.callSid/ref_id are rejected with 422 "Invalid Call ID"). Prefers the
+  // "Voice Streaming" leg and retries briefly until the call appears in live_calls.
+  async function findLiveCallId(token, retries = 3) {
+    const ce = (session.calleeNumber || '').replace(/\D/g, '').slice(-10);
+    const cr = (session.callerNumber || '').replace(/\D/g, '').slice(-10);
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        const r = await fetch('https://api-smartflo.tatateleservices.com/v1/live_calls', { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
+        if (r.ok) {
+          const d = await r.json();
+          const calls = Array.isArray(d) ? d : (d.data || []);
+          const matches = calls.filter(c => {
+            const cn = (c.customer_number || '').replace(/\D/g, '').slice(-10);
+            const did = (c.did || '').replace(/\D/g, '').slice(-10);
+            return (ce && (cn === ce || did === ce)) || (cr && (cn === cr || did === cr));
+          });
+          const best = matches.find(c => (c.type || '').toLowerCase().includes('voice streaming')) || matches[0];
+          if (best?.call_id) return best.call_id;
+        }
+      } catch (_) {}
+      if (attempt < retries - 1) await new Promise(res => setTimeout(res, 700));
+    }
+    return null;
   }
 
   function buildGeminiTools() {
@@ -292,8 +302,8 @@ Deno.serve(async (req) => {
     if (functionName === 'transfer_to_human' && session.humanTransferNumber) {
       try {
         const tk = await getSmartfloToken();
-        if (tk) {
-          const liveCallId = await findLiveCallId(tk) || session.smartfloCallId || session.callSid;
+        const liveCallId = tk ? await findLiveCallId(tk) : null;
+        if (tk && liveCallId) {
           const tr = await fetch('https://api-smartflo.tatateleservices.com/v1/call/options', {
             method: 'POST', headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': `Bearer ${tk}` },
             body: JSON.stringify({ type: 4, call_id: liveCallId, intercom: String(session.humanTransferNumber) })
@@ -305,7 +315,7 @@ Deno.serve(async (req) => {
               createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true }).entities.CallLog.update(session.callLogId, { transferred_to: `Human (intercom: ${session.humanTransferNumber})` }).catch(()=>{});
             }
           } else { result = { error: 'Transfer failed' }; }
-        } else { result = { error: 'Auth failed' }; }
+        } else { result = { error: liveCallId ? 'Auth failed' : 'No live call resolved' }; }
       } catch (err) { result = { error: err.message }; }
       sendToRealtime({ toolResponse: { functionResponses: [{ id: callId, name: functionName, response: result }] } });
       return;

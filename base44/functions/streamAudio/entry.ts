@@ -594,33 +594,22 @@ Deno.serve(async (req) => {
     try {
       const tk = await getSmartfloToken();
       if (tk) {
-        {
-          // Step 1: Find real PBX call_id via live_calls API
-          const liveCallId = await findLiveCallId(tk);
-
-          // Step 2: Try hangup using the dedicated /v1/call/hangup endpoint
-          // Docs: https://docs.smartflo.tatatelebusiness.com/reference/v1callhangup
-          const callIdCandidates = [];
-          if (liveCallId) callIdCandidates.push(liveCallId);
-          if (session.smartfloCallId) callIdCandidates.push(session.smartfloCallId);
-          if (session.callSid) callIdCandidates.push(session.callSid);
-          // Deduplicate
-          const uniqueCandidates = [...new Set(callIdCandidates)];
-
-          let hungUp = false;
-          for (const candidateId of uniqueCandidates) {
-            if (hungUp) break;
-            const hr = await fetch('https://api-smartflo.tatateleservices.com/v1/call/hangup', {
-              method: 'POST',
-              headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': `Bearer ${tk}` },
-              body: JSON.stringify({ call_id: candidateId })
-            });
-            const hBody = await hr.json().catch(() => ({}));
-            const success = hr.ok && hBody.success !== false;
-            console.log(`[${reqId}] 📴 Hangup id=${String(candidateId).substring(0, 40)}: ${hr.status} ${JSON.stringify(hBody).substring(0, 200)}`);
-            if (success) { hungUp = true; break; }
-          }
-          if (!hungUp) console.error(`[${reqId}] ❌ All hangup attempts failed for candidates: ${uniqueCandidates.join(', ')}`);
+        // The ONLY valid call_id for hangup is the live PBX id from live_calls
+        // (e.g. "CAGE011-T8-1780735307.142"). session.callSid / smartfloCallId are
+        // rejected with 422 "Invalid Call ID", so we never fall back to them.
+        const liveCallId = await findLiveCallId(tk);
+        if (liveCallId) {
+          const hr = await fetch('https://api-smartflo.tatateleservices.com/v1/call/hangup', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': `Bearer ${tk}` },
+            body: JSON.stringify({ call_id: liveCallId })
+          });
+          const hBody = await hr.json().catch(() => ({}));
+          const success = hr.ok && hBody.success !== false;
+          console.log(`[${reqId}] 📴 Hangup id=${String(liveCallId).substring(0, 40)}: ${hr.status} ${JSON.stringify(hBody).substring(0, 200)}`);
+          if (!success) console.error(`[${reqId}] ❌ Hangup failed for call_id=${liveCallId}`);
+        } else {
+          console.error(`[${reqId}] ⚠️ Hangup skipped — no live call_id resolved from live_calls`);
         }
       } else {
         console.error(`[${reqId}] ⚠️ Smartflo token unavailable for hangup`);
@@ -629,24 +618,31 @@ Deno.serve(async (req) => {
     if (session.realtimeWs?.readyState === WebSocket.OPEN) session.realtimeWs.close();
   }
 
-  // Helper: find real PBX call_id from Smartflo live_calls API by matching phone numbers
-  async function findLiveCallId(token) {
-    try {
-      const r = await fetch('https://api-smartflo.tatateleservices.com/v1/live_calls', {
-        headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
-      });
-      if (!r.ok) return null;
-      const d = await r.json();
-      const calls = Array.isArray(d) ? d : (d.data || []);
-      const ce = (session.calleeNumber || '').replace(/\D/g, '').slice(-10);
-      const cr = (session.callerNumber || '').replace(/\D/g, '').slice(-10);
-      const m = calls.find(c => {
-        const cn = (c.customer_number || '').replace(/\D/g, '').slice(-10);
-        const did = (c.did || '').replace(/\D/g, '').slice(-10);
-        return (ce && (cn === ce || did === ce)) || (cr && (cn === cr || did === cr));
-      });
-      if (m?.call_id) { console.log(`[${reqId}] 🔍 Live call_id: ${m.call_id}`); return m.call_id; }
-    } catch (_) {}
+  // Helper: find the real PBX call_id from Smartflo live_calls by matching phone numbers.
+  // This is the ONLY valid id source for hangup/transfer. Prefers the "Voice Streaming"
+  // leg (our AI bridge) and retries briefly until the call appears in live_calls.
+  async function findLiveCallId(token, retries = 3) {
+    const ce = (session.calleeNumber || '').replace(/\D/g, '').slice(-10);
+    const cr = (session.callerNumber || '').replace(/\D/g, '').slice(-10);
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        const r = await fetch('https://api-smartflo.tatateleservices.com/v1/live_calls', {
+          headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' }
+        });
+        if (r.ok) {
+          const d = await r.json();
+          const calls = Array.isArray(d) ? d : (d.data || []);
+          const matches = calls.filter(c => {
+            const cn = (c.customer_number || '').replace(/\D/g, '').slice(-10);
+            const did = (c.did || '').replace(/\D/g, '').slice(-10);
+            return (ce && (cn === ce || did === ce)) || (cr && (cn === cr || did === cr));
+          });
+          const best = matches.find(c => (c.type || '').toLowerCase().includes('voice streaming')) || matches[0];
+          if (best?.call_id) { console.log(`[${reqId}] 🔍 Live call_id: ${best.call_id}`); return best.call_id; }
+        }
+      } catch (_) {}
+      if (attempt < retries - 1) await new Promise(res => setTimeout(res, 700));
+    }
     return null;
   }
 
@@ -773,14 +769,18 @@ Deno.serve(async (req) => {
           return;
         }
         {
-          // Use live_calls to find real PBX call_id for transfer (REQUIRED — call_sid won't work)
+          // Use live_calls to find the real PBX call_id for transfer (REQUIRED — call_sid
+          // is rejected with 422 "Invalid Call ID"). No fallback: abort if we can't resolve it.
           const liveCallId = await findLiveCallId(smartfloToken);
-          const txCallId = liveCallId || session.smartfloCallId || session.callSid;
           if (!liveCallId) {
-            console.warn(`[${reqId}] ⚠️ No live_calls match — using fallback id=${txCallId}. Transfer may fail if call_sid != PBX call_id.`);
+            console.error(`[${reqId}] ❌ Transfer aborted — no live call_id resolved from live_calls`);
+            result = { error: 'Transfer not available — could not locate the live call. Inform the customer and offer to take a message.' };
+            sendToRealtime({ type: 'conversation.item.create', item: { type: 'function_call_output', call_id: callId, output: JSON.stringify(result) } });
+            sendToRealtime({ type: 'response.create' });
+            return;
           }
 
-          const transferBody = { type: 4, call_id: txCallId, intercom: String(session.humanTransferNumber).trim() };
+          const transferBody = { type: 4, call_id: liveCallId, intercom: String(session.humanTransferNumber).trim() };
           console.log(`[${reqId}] 📞 Transfer body: ${JSON.stringify(transferBody)}`);
 
           const transferResp = await fetch('https://api-smartflo.tatateleservices.com/v1/call/options', {

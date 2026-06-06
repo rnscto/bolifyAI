@@ -477,7 +477,8 @@ Deno.serve(async (req) => {
       try {
         const tk = await getSmartfloToken();
         if (!tk) return { error: 'Smartflo auth failed' };
-        const liveCallId = await findLiveCallId(tk) || session.smartfloCallId || session.callSid;
+        const liveCallId = await findLiveCallId(tk);
+        if (!liveCallId) return { error: 'Could not resolve live call for transfer' };
         const tr = await fetch('https://api-smartflo.tatateleservices.com/v1/call/options', {
           method: 'POST', headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': `Bearer ${tk}` },
           body: JSON.stringify({ type: 4, call_id: liveCallId, intercom: String(session.humanTransferNumber) })
@@ -516,21 +517,33 @@ Deno.serve(async (req) => {
   }
 
   // ─── Smartflo helpers ───
-  async function findLiveCallId(token) {
-    try {
-      const r = await fetch('https://api-smartflo.tatateleservices.com/v1/live_calls', { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
-      if (!r.ok) return null;
-      const d = await r.json();
-      const calls = Array.isArray(d) ? d : (d.data || []);
-      const ce = (session.calleeNumber || '').replace(/\D/g, '').slice(-10);
-      const cr = (session.callerNumber || '').replace(/\D/g, '').slice(-10);
-      const m = calls.find(c => {
-        const cn = (c.customer_number || '').replace(/\D/g, '').slice(-10);
-        const did = (c.did || '').replace(/\D/g, '').slice(-10);
-        return (ce && (cn === ce || did === ce)) || (cr && (cn === cr || did === cr));
-      });
-      return m?.call_id || null;
-    } catch (_) { return null; }
+  // Resolve the LIVE Smartflo call_id (format e.g. "CAGE011-T8-1780735307.142") from
+  // the live_calls API. This is the ONLY valid source for hangup/transfer — session.callSid
+  // and Smartflo's ref_id are NOT accepted by /v1/call/hangup or /v1/call/options (they 422
+  // "Invalid Call ID"). Matches on customer_number OR did, preferring "Voice Streaming" calls.
+  // Retries briefly because the call may take a moment to appear in live_calls.
+  async function findLiveCallId(token, retries = 3) {
+    const ce = (session.calleeNumber || '').replace(/\D/g, '').slice(-10);
+    const cr = (session.callerNumber || '').replace(/\D/g, '').slice(-10);
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        const r = await fetch('https://api-smartflo.tatateleservices.com/v1/live_calls', { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } });
+        if (r.ok) {
+          const d = await r.json();
+          const calls = Array.isArray(d) ? d : (d.data || []);
+          const matches = calls.filter(c => {
+            const cn = (c.customer_number || '').replace(/\D/g, '').slice(-10);
+            const did = (c.did || '').replace(/\D/g, '').slice(-10);
+            return (ce && (cn === ce || did === ce)) || (cr && (cn === cr || did === cr));
+          });
+          // Prefer the active Voice Streaming call (our AI bridge) over any other leg
+          const best = matches.find(c => (c.type || '').toLowerCase().includes('voice streaming')) || matches[0];
+          if (best?.call_id) return best.call_id;
+        }
+      } catch (_) {}
+      if (attempt < retries - 1) await new Promise(res => setTimeout(res, 700));
+    }
+    return null;
   }
 
   async function hangupCall(reason) {
@@ -539,13 +552,14 @@ Deno.serve(async (req) => {
       const tk = await getSmartfloToken();
       if (tk) {
         const liveCallId = await findLiveCallId(tk);
-        const candidates = [...new Set([liveCallId, session.smartfloCallId, session.callSid].filter(Boolean))];
-        for (const cid of candidates) {
+        if (liveCallId) {
           const hr = await fetch('https://api-smartflo.tatateleservices.com/v1/call/hangup', {
             method: 'POST', headers: { 'Accept': 'application/json', 'Content-Type': 'application/json', 'Authorization': `Bearer ${tk}` },
-            body: JSON.stringify({ call_id: cid })
+            body: JSON.stringify({ call_id: liveCallId })
           });
-          if (hr.ok) break;
+          if (!hr.ok) console.error(`[${reqId}] ⚠️ Hangup failed: ${hr.status} (call_id=${liveCallId})`);
+        } else {
+          console.error(`[${reqId}] ⚠️ Hangup skipped — no live call_id resolved`);
         }
       }
     } catch (_) {}
