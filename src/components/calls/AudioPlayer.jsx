@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Play, Pause, Volume2, VolumeX, RotateCcw } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, RotateCcw, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 
@@ -94,6 +94,16 @@ export default function AudioPlayer({ url }) {
       <Button size="icon" variant="ghost" className="h-7 w-7" onClick={restart}>
         <RotateCcw className="w-3.5 h-3.5" />
       </Button>
+      <a
+        href={url}
+        download
+        target="_blank"
+        rel="noopener noreferrer"
+        title="Download recording"
+        className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-accent hover:text-accent-foreground"
+      >
+        <Download className="w-3.5 h-3.5" />
+      </a>
       {muted && audioRef.current && (audioRef.current.muted = true)}
       {!muted && audioRef.current && (audioRef.current.muted = false)}
     </div>
