@@ -505,12 +505,12 @@ Deno.serve(async (req) => {
           session._mediaBufferFlushed = true;
           console.log(`[${reqId}] 🚀 Flushing ${session._mediaBuffer.length} buffered packets`);
           for (const b of session._mediaBuffer) {
-            sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: mulawToBase64PCM16_16k(b, session._audioState) }] } });
+            sendToRealtime({ realtimeInput: { audio: { data: mulawToBase64PCM16_16k(b, session._audioState), mimeType: "audio/pcm;rate=16000" } } });
           }
           session._mediaBuffer = []; session._mediaBufferBytes = 0;
         }
         const pcm16Base64 = mulawToBase64PCM16_16k(mulawBytes, session._audioState);
-        sendToRealtime({ realtimeInput: { mediaChunks: [{ mimeType: "audio/pcm;rate=16000", data: pcm16Base64 }] } });
+        sendToRealtime({ realtimeInput: { audio: { data: pcm16Base64, mimeType: "audio/pcm;rate=16000" } } });
       }
       if (msg.event === 'stop') {
         session._callEnded = true;
