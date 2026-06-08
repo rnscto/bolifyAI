@@ -243,45 +243,26 @@ Deno.serve(async (req) => {
               if (lead?.phone) {
                 const template = await base44.entities.WhatsAppTemplate.get(wa.missed_call_template_id);
                 if (template && template.status === 'APPROVED') {
-                  const placeholderCount = (template.body_text || '').match(/\{\{\d+\}\}/g)?.length || 0;
+                  // Build variables matching the template's placeholders (named tokens pass through
+                  // for interpolation; numbered ones fall back to the lead name — never empty).
+                  const tplBody = template.body_text || '';
+                  const namedTokens = (tplBody.match(/\{\{(name|company|phone|email)\}\}/gi) || []);
+                  const numberedCount = (tplBody.match(/\{\{\d+\}\}/g) || []).length;
                   const variables = [];
-                  for (let i = 0; i < placeholderCount; i++) {
-                    variables.push(i === 0 ? (lead.name || 'Sir/Madam') : '');
-                  }
-                  const configs = await base44.entities.ClientMessagingConfig.filter({ client_id: campaign.client_id });
-                  if (configs.length > 0 && ['meta_cloud', 'rcs_digital'].includes(configs[0].whatsapp_provider)) {
-                    const cfg = configs[0];
-                    let cleanPhone = String(lead.phone).replace(/[^0-9]/g, '');
-                    if (cleanPhone.length === 10) cleanPhone = '91' + cleanPhone;
-                    else if (cleanPhone.length === 11 && cleanPhone.startsWith('0')) cleanPhone = '91' + cleanPhone.slice(1);
-                    const components = variables.length > 0 ? [{ type: 'body', parameters: variables.map(v => ({ type: 'text', text: String(v || '') })) }] : [];
-                    const baseUrl = cfg.whatsapp_provider === 'rcs_digital'
-                      ? `https://rcsdigital.in/v23.0/${cfg.whatsapp_phone_number_id}/messages`
-                      : `https://graph.facebook.com/v20.0/${cfg.whatsapp_phone_number_id}/messages`;
-                    const waRes = await fetch(baseUrl, {
-                      method: 'POST',
-                      headers: { 'Authorization': `Bearer ${cfg.whatsapp_api_key}`, 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanPhone,
-                        type: 'template',
-                        template: { name: template.name, language: { code: template.language || 'en' }, ...(components.length > 0 ? { components } : {}) }
-                      })
-                    });
-                    const waData = await waRes.json();
-                    const messageId = waData.messages?.[0]?.id;
-                    await base44.entities.OutreachLog.create({
-                      client_id: campaign.client_id, lead_id: campaignLead.lead_id, call_log_id: callLogId,
-                      channel: 'whatsapp', direction: 'outbound', vendor: cfg.whatsapp_provider,
-                      vendor_message_id: messageId || null, template_id: template.id, template_name: template.name,
-                      recipient_phone: cleanPhone, body: template.body_text || '',
-                      outreach_type: 'lead_followup', status: waRes.ok ? 'sent' : 'failed',
-                      error_message: waRes.ok ? '' : (waData.error?.message || JSON.stringify(waData))
-                    });
-                    if (waRes.ok) {
-                      await base44.entities.WhatsAppTemplate.update(template.id, { send_count: (template.send_count || 0) + 1 });
-                    }
-                    console.log(`[campaignPostCall] 📵 Missed-call WhatsApp ${waRes.ok ? 'sent' : 'failed'} to ${cleanPhone} (when=${when}, attempt=${attemptNumber})`);
-                  }
+                  if (namedTokens.length > 0) namedTokens.forEach(t => variables.push(t));
+                  else for (let i = 0; i < numberedCount; i++) variables.push(lead.name || 'Sir/Madam');
+
+                  // Delegate to the shared sender for correct RCS Digital host + interpolation + logging
+                  const waResult = await base44.functions.invoke('whatsappSendTemplate', {
+                    template_id: template.id,
+                    recipient: lead.phone,
+                    variables,
+                    lead_id: campaignLead.lead_id,
+                    call_log_id: callLogId,
+                    outreach_type: 'lead_followup'
+                  });
+                  const sent = !!waResult?.data?.success;
+                  console.log(`[campaignPostCall] 📵 Missed-call WhatsApp ${sent ? 'sent' : 'failed'} to ${lead.phone} (when=${when}, attempt=${attemptNumber})${sent ? '' : ' err=' + (waResult?.data?.error || 'unknown')}`);
                 }
               }
             }

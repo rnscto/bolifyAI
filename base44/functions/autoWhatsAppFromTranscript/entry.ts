@@ -1,4 +1,4 @@
-import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.31';
+import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
 async function azureLLM(prompt, systemPrompt, jsonSchema) {
@@ -25,97 +25,28 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
   return JSON.parse(data.choices[0].message.content);
 }
 
-// ─── Send WhatsApp template directly via provider API (no SDK auth needed for service role) ───
+// ─── Send WhatsApp template by delegating to the shared whatsappSendTemplate function ───
+// This guarantees identical behavior to manual sends: correct RCS Digital host handling,
+// {{name}}/{{company}} interpolation, media headers, OutreachLog + send_count, and all
+// provider branches (meta_cloud / rcs_digital / interakt). No duplicated sender logic.
 async function sendWhatsAppDirect(svc, { template_id, recipient, variables, lead_id, call_log_id }) {
-  const template = await svc.entities.WhatsAppTemplate.get(template_id);
-  if (!template) throw new Error('Template not found');
-  if (template.status !== 'APPROVED') throw new Error(`Template is ${template.status}, not APPROVED`);
-
-  const configs = await svc.entities.ClientMessagingConfig.filter({ client_id: template.client_id });
-  if (configs.length === 0) throw new Error('No messaging config');
-  const cfg = configs[0];
-
-  if (!['meta_cloud', 'rcs_digital'].includes(cfg.whatsapp_provider)) {
-    throw new Error('Provider not supported for template sends');
-  }
-
-  // Phone normalization
-  let cleanRecipient = String(recipient).replace(/[^0-9]/g, '');
-  if (cleanRecipient.length === 10) cleanRecipient = '91' + cleanRecipient;
-  else if (cleanRecipient.length === 11 && cleanRecipient.startsWith('0')) cleanRecipient = '91' + cleanRecipient.slice(1);
-
-  // Build components
-  const components = [];
-  const vars = variables || [];
-  if (vars.length > 0) {
-    components.push({
-      type: 'body',
-      parameters: vars.map(v => ({ type: 'text', text: String(v || '') }))
-    });
-  }
-
-  const baseUrl = cfg.whatsapp_provider === 'rcs_digital'
-    ? `https://rcsdigital.in/v23.0/${cfg.whatsapp_phone_number_id}/messages`
-    : `https://graph.facebook.com/v20.0/${cfg.whatsapp_phone_number_id}/messages`;
-
-  const res = await fetch(baseUrl, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${cfg.whatsapp_api_key}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      messaging_product: 'whatsapp',
-      recipient_type: 'individual',
-      to: cleanRecipient,
-      type: 'template',
-      template: {
-        name: template.name,
-        language: { code: template.language || 'en' },
-        ...(components.length > 0 ? { components } : {})
-      }
-    })
+  const res = await svc.functions.invoke('whatsappSendTemplate', {
+    template_id,
+    recipient,
+    variables: variables || [],
+    lead_id: lead_id || null,
+    call_log_id: call_log_id || null,
+    outreach_type: 'lead_followup'
   });
-
-  const data = await res.json();
-  const messageId = data.messages?.[0]?.id;
-
-  // Log outreach
-  try {
-    await svc.entities.OutreachLog.create({
-      client_id: template.client_id,
-      lead_id: lead_id || null,
-      call_log_id: call_log_id || null,
-      channel: 'whatsapp',
-      direction: 'outbound',
-      vendor: cfg.whatsapp_provider,
-      vendor_message_id: messageId || null,
-      template_id,
-      template_name: template.name,
-      recipient_phone: cleanRecipient,
-      body: template.body_text || '',
-      outreach_type: 'lead_followup',
-      status: res.ok ? 'sent' : 'failed',
-      error_message: res.ok ? '' : (data.error?.error_user_msg || data.error?.message || JSON.stringify(data))
-    });
-  } catch (_) {}
-
-  if (res.ok) {
-    try {
-      await svc.entities.WhatsAppTemplate.update(template_id, {
-        send_count: (template.send_count || 0) + 1
-      });
-    } catch (_) {}
-  }
-
-  return { ok: res.ok, message_id: messageId, error: res.ok ? null : (data.error?.message || 'Send failed') };
+  const data = res?.data || {};
+  return { ok: !!data.success, message_id: data.message_id || null, error: data.success ? null : (data.error || 'Send failed') };
 }
 
 // MAIN: Analyze transcript → detect intent → send mapped template silently
 Deno.serve(async (req) => {
   try {
-    const appId = Deno.env.get('BASE44_APP_ID');
-    const svc = createClient({ appId, asServiceRole: true });
+    // Use request-scoped service role (valid auth) — NOT createClient(asServiceRole) which lacks a token.
+    const svc = createClientFromRequest(req).asServiceRole;
 
     const payload = await req.json();
     const { campaign_id, call_log_id, lead_id, transcript, summary } = payload;
@@ -207,12 +138,22 @@ Return:
       return Response.json({ skipped: 'template_missing', intent });
     }
 
-    // Auto-fill variables: count {{N}} placeholders, fill with lead.name then generic values
-    const placeholderCount = (template.body_text || '').match(/\{\{\d+\}\}/g)?.length || 0;
+    // Build variables matching the template's body placeholders.
+    // whatsappSendTemplate interpolates {{name}}/{{company}}/{{phone}}/{{email}} from the lead,
+    // so for those we pass the token through; numbered {{N}} placeholders get the lead name first,
+    // and any remaining slot falls back to the lead name (never empty — empty params get rejected).
+    const body = template.body_text || '';
+    const namedTokens = (body.match(/\{\{(name|company|phone|email)\}\}/gi) || []);
+    const numberedCount = (body.match(/\{\{\d+\}\}/g) || []).length;
     const variables = [];
-    for (let i = 0; i < placeholderCount; i++) {
-      if (i === 0) variables.push(lead.name || 'Sir/Madam');
-      else variables.push('');
+    if (namedTokens.length > 0) {
+      // Pass each named token through in order so whatsappSendTemplate resolves it from the lead
+      namedTokens.forEach(t => variables.push(t));
+    } else {
+      // Numbered placeholders: fill slot 1 with the name, the rest with the name as a safe non-empty value
+      for (let i = 0; i < numberedCount; i++) {
+        variables.push(lead.name || 'Sir/Madam');
+      }
     }
 
     const sendResult = await sendWhatsAppDirect(svc, {

@@ -5,8 +5,6 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 Deno.serve(async (req) => {
   try {
     const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
     const reqBody = await req.json();
     const { template_id, recipient, variables, lead_id, call_log_id, outreach_type } = reqBody;
@@ -14,12 +12,18 @@ Deno.serve(async (req) => {
       return Response.json({ error: 'template_id and recipient are required' }, { status: 400 });
     }
 
+    // Allow two callers: an authenticated user (manual UI send) OR an internal service-role
+    // invocation from another backend function (e.g. autoWhatsAppFromTranscript) which has no user session.
+    let user = null;
+    try { user = await base44.auth.me(); } catch (_) {}
+
     const svc = base44.asServiceRole;
     const template = await svc.entities.WhatsAppTemplate.get(template_id);
     if (!template) return Response.json({ error: 'Template not found' }, { status: 404 });
 
-    // Ownership check
-    if (user.role !== 'admin') {
+    // Ownership check — only applies to authenticated end-users. Internal service-role
+    // invocations (user === null) are trusted and skip this check.
+    if (user && user.role !== 'admin') {
       const clients = await base44.entities.Client.filter({ user_id: user.id });
       if (!clients.find(c => c.id === template.client_id)) {
         return Response.json({ error: 'Forbidden' }, { status: 403 });
