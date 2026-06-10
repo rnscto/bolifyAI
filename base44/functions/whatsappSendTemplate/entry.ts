@@ -57,17 +57,17 @@ Deno.serve(async (req) => {
     if (lead_id) {
       try { lead = await svc.entities.Lead.get(lead_id); } catch (_) {}
     }
-    if (!lead && template.client_id && template.client_id !== 'PLATFORM') {
-      // recipient may be a lead phone — try multiple formats since DB may store +91/91/raw 10-digit
+    // Only attempt phone-based lead lookup when we actually need interpolation
+    // (i.e. the body uses {{name}}/{{company}}/{{phone}}/{{email}} tokens). Scanning ALL
+    // leads on every manual send is the main cause of Base44 429 rate-limit errors.
+    const needsLeadLookup = /\{\{(name|company|phone|email)\}\}/i.test(template.body_text || '');
+    if (!lead && needsLeadLookup && template.client_id && template.client_id !== 'PLATFORM') {
       const normalized = normalizePhone(recipient);
       const last10 = normalized.slice(-10);
-      const candidates = [recipient, normalized, last10, '+' + normalized, '91' + last10];
       try {
-        const allLeads = await svc.entities.Lead.filter({ client_id: template.client_id });
-        lead = allLeads.find(l => {
-          const lp = String(l.phone || '').replace(/[^0-9]/g, '');
-          return candidates.some(c => String(c).replace(/[^0-9]/g, '') === lp || lp.endsWith(last10));
-        }) || null;
+        // Targeted filter instead of full-table scan
+        const matches = await svc.entities.Lead.filter({ client_id: template.client_id, phone: recipient }, '-updated_date', 1);
+        lead = matches[0] || null;
       } catch (_) {}
     }
     const interpolate = (val) => {
@@ -146,7 +146,7 @@ Deno.serve(async (req) => {
         return Response.json({ error: friendly, details: data }, { status: 400 });
       }
 
-      await svc.entities.WhatsAppTemplate.update(template_id, { send_count: (template.send_count || 0) + 1 });
+      try { await svc.entities.WhatsAppTemplate.update(template_id, { send_count: (template.send_count || 0) + 1 }); } catch (_) {}
       return Response.json({ success: true, message_id: messageId, details: data });
     }
 
@@ -253,10 +253,12 @@ Deno.serve(async (req) => {
       return Response.json({ error: friendly, details: data }, { status: 400 });
     }
 
-    // Increment send count
-    await svc.entities.WhatsAppTemplate.update(template_id, {
-      send_count: (template.send_count || 0) + 1
-    });
+    // Increment send count (non-fatal — a rate-limited write must not fail a successful send)
+    try {
+      await svc.entities.WhatsAppTemplate.update(template_id, {
+        send_count: (template.send_count || 0) + 1
+      });
+    } catch (_) {}
 
     return Response.json({ success: true, message_id: messageId, details: data });
   } catch (e) {
