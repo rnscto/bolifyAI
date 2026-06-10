@@ -1,24 +1,5 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-// Paginated fetch: returns ALL CampaignLeads for a campaign (handles >1000 leads).
-// Base44's filter() defaults to 1000-record cap — using this avoids premature completion.
-async function fetchAllCampaignLeads(svc, campaignId) {
-  const PAGE = 500;
-  let all = [];
-  let skip = 0;
-  while (true) {
-    const batch = await svc.entities.CampaignLead.filter(
-      { campaign_id: campaignId }, 'created_date', PAGE, skip
-    );
-    if (!batch || batch.length === 0) break;
-    all = all.concat(batch);
-    if (batch.length < PAGE) break;
-    skip += PAGE;
-    if (skip > 100000) break; // safety hard-cap at 100k leads
-  }
-  return all;
-}
-
 // Paginated fetch of leads in a single status — used to compute counts without
 // pulling the campaign's entire lead table into memory every poll cycle.
 async function fetchLeadsByStatus(svc, campaignId, status) {
@@ -76,7 +57,13 @@ Deno.serve(async (req) => {
 
     const base44 = createClientFromRequest(req);
     const svc = base44.asServiceRole;
-    const results = { campaigns_processed: 0, stuck_fixed: 0, batches_triggered: 0, completed: 0, scheduled_started: 0, auto_paused: 0, auto_resumed: 0, errors: [] };
+    const results = { campaigns_processed: 0, stuck_fixed: 0, batches_triggered: 0, completed: 0, scheduled_started: 0, auto_paused: 0, auto_resumed: 0, campaigns_skipped_time_budget: 0, errors: [] };
+
+    // Per-run time budget: stop processing campaigns gracefully before the platform's
+    // hard execution cap so we never time out. Remaining campaigns are picked up by the
+    // next 5-minute cron run (campaigns are independent per loop iteration).
+    const RUN_START = Date.now();
+    const TIME_BUDGET_MS = 150 * 1000; // 150s — leaves headroom under the platform limit
 
     // === TRAI WINDOW CHECK (9 AM – 9 PM IST) ===
     const { inWindow, istString } = getISTWindowStatus();
@@ -193,6 +180,13 @@ Deno.serve(async (req) => {
     console.log(`[campaignPoller] Found ${runningCampaigns.length} running campaigns (${autoStarted} just auto-started, ${autoResumed} auto-resumed)`);
 
     for (const campaign of runningCampaigns) {
+      // Time-budget guard: if we're running low on time, stop and let the next run continue.
+      if (Date.now() - RUN_START > TIME_BUDGET_MS) {
+        const remaining = runningCampaigns.length - results.campaigns_processed;
+        results.campaigns_skipped_time_budget = remaining;
+        console.log(`[campaignPoller] Time budget (${TIME_BUDGET_MS / 1000}s) reached — stopping after ${results.campaigns_processed} campaigns, ${remaining} deferred to next run.`);
+        break;
+      }
       try {
         results.campaigns_processed++;
         const campaignId = campaign.id;
@@ -284,43 +278,48 @@ Deno.serve(async (req) => {
         }
 
         // === STEP 2: Check if campaign should be completed ===
-        // OPTIMIZATION: previously this paginated EVERY lead (2000+ rows) per campaign per run
-        // just to compute counts. We only need status counts + outcome tallies + the
-        // ready-vs-retry-later split among pending leads — so fetch only what we need.
+        // OPTIMIZATION: mega-campaigns have thousands of pending leads. Fully paginating them
+        // every run was the main driver of 429 rate-limits. We DON'T need exact pending counts —
+        // only "are there calling slots in use?" and "are any pending leads ready now?".
+        // So: fully count only the small in-flight statuses (calling/processing), and probe
+        // pending leads with a single bounded page instead of paginating the whole table.
         const now = new Date();
-        const [callingLeads, completedLeads, failedLeads, pendingLeads] = await Promise.all([
+        const PROBE = 200;
+        const [callingLeads, processingLeads, pendingProbe] = await Promise.all([
           fetchLeadsByStatus(svc, campaignId, 'calling'),
-          fetchLeadsByStatus(svc, campaignId, 'completed'),
-          fetchLeadsByStatus(svc, campaignId, 'failed'),
-          fetchLeadsByStatus(svc, campaignId, 'pending'),
+          fetchLeadsByStatus(svc, campaignId, 'processing'),
+          svc.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'pending' }, 'created_date', PROBE),
         ]);
-        const processingLeads = await fetchLeadsByStatus(svc, campaignId, 'processing');
 
-        const pendingCount = pendingLeads.length;
         const callingCount = callingLeads.length + processingLeads.length;
-        const completedCount = completedLeads.length;
-        const failedCount = failedLeads.length;
+        // Bounded probe: enough to know whether work remains and to feed the dial batch below.
+        const pendingCount = pendingProbe.length;
 
-        // Outcome tally only needs completed/failed leads (pending/calling have no final outcome yet)
-        const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0, converted: 0, do_not_call: 0 };
-        [...completedLeads, ...failedLeads].forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
-        await svc.entities.Campaign.update(campaignId, {
-          calls_completed: completedCount, calls_failed: failedCount, outcomes_summary: outcomes
-        });
-
-        // Split pending leads into ready-now vs waiting-for-retry
-        const pendingReadyCount = pendingLeads.filter(l => 
+        const pendingReadyLeads = pendingProbe.filter(l => 
           !l.followup_call_date || new Date(l.followup_call_date) <= now
-        ).length;
-        const pendingRetryLaterCount = pendingLeads.filter(l => 
+        );
+        const pendingReadyCount = pendingReadyLeads.length;
+        const pendingRetryLaterCount = pendingProbe.filter(l => 
           l.followup_call_date && new Date(l.followup_call_date) > now
         ).length;
 
-        if (pendingReadyCount === 0 && callingCount === 0 && pendingRetryLaterCount === 0) {
+        // Only treat the campaign as "empty" when the probe genuinely returned zero pending leads.
+        const noPendingAtAll = pendingProbe.length === 0;
+
+        if (noPendingAtAll && callingCount === 0) {
+          // Campaign is finishing — now (and only now) compute final stats from the small
+          // completed/failed sets. This avoids paginating them every poll for running campaigns.
+          const [completedLeads, failedLeads] = await Promise.all([
+            fetchLeadsByStatus(svc, campaignId, 'completed'),
+            fetchLeadsByStatus(svc, campaignId, 'failed'),
+          ]);
+          const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0, converted: 0, do_not_call: 0 };
+          [...completedLeads, ...failedLeads].forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
           await svc.entities.Campaign.update(campaignId, {
-            status: 'completed', completed_at: new Date().toISOString()
+            status: 'completed', completed_at: new Date().toISOString(),
+            calls_completed: completedLeads.length, calls_failed: failedLeads.length, outcomes_summary: outcomes
           });
-          console.log(`[campaignPoller] Campaign "${campaign.name}" completed: ${completedCount} done, ${failedCount} failed`);
+          console.log(`[campaignPoller] Campaign "${campaign.name}" completed: ${completedLeads.length} done, ${failedLeads.length} failed`);
           results.completed++;
           continue;
         }
@@ -349,13 +348,8 @@ Deno.serve(async (req) => {
             const kbFileUri = agent.kb_file_uri || '';
 
             const slotsAvailable = Math.max(0, maxConcurrent - callingCount);
-            const pendingBatchRaw = await svc.entities.CampaignLead.filter(
-              { campaign_id: campaignId, status: 'pending' }, 'created_date', 200
-            );
-            // Only pick leads that are ready to call (no future retry date)
-            const pendingBatch = pendingBatchRaw.filter(l => 
-              !l.followup_call_date || new Date(l.followup_call_date) <= now
-            ).slice(0, slotsAvailable);
+            // Reuse the ready leads already fetched by the probe above — no extra query needed.
+            const pendingBatch = pendingReadyLeads.slice(0, slotsAvailable);
 
             for (let i = 0; i < pendingBatch.length; i++) {
               const cl = pendingBatch[i];
