@@ -259,7 +259,8 @@ Deno.serve(async (req) => {
                     variables,
                     lead_id: campaignLead.lead_id,
                     call_log_id: callLogId,
-                    outreach_type: 'lead_followup'
+                    outreach_type: 'lead_followup',
+                    internal_service: true
                   });
                   const sent = !!waResult?.data?.success;
                   console.log(`[campaignPostCall] 📵 Missed-call WhatsApp ${sent ? 'sent' : 'failed'} to ${lead.phone} (when=${when}, attempt=${attemptNumber})${sent ? '' : ' err=' + (waResult?.data?.error || 'unknown')}`);
@@ -335,25 +336,20 @@ Deno.serve(async (req) => {
     // ============================================================
     if (callLog.transcript && callLog.transcript.length > 30 && outcome !== 'not_answered') {
       try {
-        const appId = Deno.env.get('BASE44_APP_ID');
-        const cronKey = Deno.env.get('CRON_API_KEY');
-        fetch(`https://app.base44.com/api/apps/${appId}/functions/autoWhatsAppFromTranscript`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Internal-Secret': cronKey || '',
-            'Base44-App-Id': appId || ''
-          },
-          body: JSON.stringify({
-            campaign_id: campaignId,
-            call_log_id: callLogId,
-            lead_id: campaignLead.lead_id,
-            transcript: callLog.transcript,
-            summary: aiResult.outcome ? (aiResult.summary || summary) : summary
-          })
-        }).catch(err => console.error(`[campaignPostCall] auto-whatsapp dispatch failed: ${err.message}`));
+        // FIX: invoke via the SDK (service-role, properly authenticated) instead of a raw
+        // fetch with X-Internal-Secret — autoWhatsAppFromTranscript uses createClientFromRequest
+        // and was silently rejected at the auth layer, so WhatsApp never sent. Awaited so the
+        // result is logged (we're already past the next-batch trigger, so this doesn't delay dialing).
+        const waResp = await base44.functions.invoke('autoWhatsAppFromTranscript', {
+          campaign_id: campaignId,
+          call_log_id: callLogId,
+          lead_id: campaignLead.lead_id,
+          transcript: callLog.transcript,
+          summary: aiResult.outcome ? (aiResult.summary || summary) : summary
+        });
+        console.log(`[campaignPostCall] auto-whatsapp result: ${JSON.stringify(waResp?.data || {}).substring(0, 300)}`);
       } catch (waErr) {
-        console.error(`[campaignPostCall] auto-whatsapp setup failed: ${waErr.message}`);
+        console.error(`[campaignPostCall] auto-whatsapp dispatch failed: ${waErr.message}`);
       }
     }
 

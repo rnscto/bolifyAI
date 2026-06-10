@@ -25,21 +25,120 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
   return JSON.parse(data.choices[0].message.content);
 }
 
-// ─── Send WhatsApp template by delegating to the shared whatsappSendTemplate function ───
-// This guarantees identical behavior to manual sends: correct RCS Digital host handling,
-// {{name}}/{{company}} interpolation, media headers, OutreachLog + send_count, and all
-// provider branches (meta_cloud / rcs_digital / interakt). No duplicated sender logic.
-async function sendWhatsAppDirect(svc, { template_id, recipient, variables, lead_id, call_log_id }) {
-  const res = await svc.functions.invoke('whatsappSendTemplate', {
-    template_id,
-    recipient,
-    variables: variables || [],
-    lead_id: lead_id || null,
-    call_log_id: call_log_id || null,
-    outreach_type: 'lead_followup'
-  });
-  const data = res?.data || {};
-  return { ok: !!data.success, message_id: data.message_id || null, error: data.success ? null : (data.error || 'Send failed') };
+// ─── Send WhatsApp template INLINE using the service-role client ───
+// Previously this delegated to whatsappSendTemplate via functions.invoke, but cross-function
+// invocation from a service-role context was rejected (403) at the transport layer, so the
+// auto-send silently failed. We now send directly here using the same provider logic
+// (meta_cloud / rcs_digital / interakt) + OutreachLog + send_count — no fragile inter-function hop.
+function normalizePhone(p) {
+  let n = String(p || '').replace(/[^0-9]/g, '');
+  if (n.length === 10) n = '91' + n;
+  else if (n.length === 11 && n.startsWith('0')) n = '91' + n.slice(1);
+  return n;
+}
+
+async function sendWhatsAppDirect(svc, { template, recipient, variables, lead, lead_id, call_log_id }) {
+  const configs = await svc.entities.ClientMessagingConfig.filter({ client_id: template.client_id });
+  if (configs.length === 0) return { ok: false, error: 'No messaging config' };
+  const cfg = configs[0];
+  if (!['meta_cloud', 'rcs_digital', 'interakt'].includes(cfg.whatsapp_provider)) {
+    return { ok: false, error: `Provider ${cfg.whatsapp_provider} not supported for template sends` };
+  }
+
+  const interpolate = (val) => {
+    if (!lead) return String(val);
+    return String(val)
+      .replace(/\{\{name\}\}/gi, lead.name || '')
+      .replace(/\{\{company\}\}/gi, lead.company || '')
+      .replace(/\{\{phone\}\}/gi, lead.phone || '')
+      .replace(/\{\{email\}\}/gi, lead.email || '');
+  };
+
+  const apiKeyRaw = String(cfg.whatsapp_api_key || '').trim().replace(/^(Bearer|Basic)\s+/i, '');
+  const vars = variables || [];
+  let ok = false, messageId = null, errMsg = '';
+  let recipientPhone = normalizePhone(recipient);
+
+  // ===== INTERAKT BRANCH =====
+  if (cfg.whatsapp_provider === 'interakt') {
+    let baseHost = String(cfg.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '');
+    if (!baseHost || !/^https?:\/\/api\.interakt\.ai/i.test(baseHost)) baseHost = 'https://api.interakt.ai';
+    const url = `${baseHost}/v1/public/message/`;
+    let digits = normalizePhone(recipient);
+    if (digits.length < 11 || digits.length > 15) return { ok: false, error: `Invalid phone: ${digits}` };
+    const countryCode = '+' + digits.slice(0, digits.length - 10);
+    const phoneNumber = digits.slice(-10);
+    recipientPhone = phoneNumber;
+    const tmpl = { name: template.name, languageCode: template.language || 'en' };
+    const bodyValues = vars.map(v => interpolate(v));
+    if (bodyValues.length > 0) tmpl.bodyValues = bodyValues;
+    const hType = (template.header_type || 'NONE').toUpperCase();
+    if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(hType) && template.header_media_url) {
+      tmpl.headerValues = [template.header_media_url];
+      if (hType === 'DOCUMENT') tmpl.fileName = (template.name || 'document') + '.pdf';
+    }
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Authorization': `Basic ${apiKeyRaw}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ countryCode, phoneNumber, type: 'Template', callbackData: call_log_id || lead_id || '', template: tmpl })
+    });
+    const rawText = await res.text();
+    let data; try { data = JSON.parse(rawText); } catch (_) { data = { raw: rawText }; }
+    console.log(`[autoWhatsAppFromTranscript/interakt] ← HTTP ${res.status}: ${rawText.substring(0, 300)}`);
+    ok = res.ok && data.result === true;
+    messageId = data.id || null;
+    errMsg = ok ? '' : (data.message || rawText);
+  } else {
+    // ===== META CLOUD / RCS DIGITAL BRANCH =====
+    const components = [];
+    const headerType = (template.header_type || 'NONE').toUpperCase();
+    if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(headerType) && template.header_media_url) {
+      const mediaKey = headerType.toLowerCase();
+      components.push({ type: 'header', parameters: [{ type: mediaKey, [mediaKey]: { link: template.header_media_url } }] });
+    }
+    if (vars.length > 0) {
+      components.push({ type: 'body', parameters: vars.map(v => ({ type: 'text', text: interpolate(v) })) });
+    }
+    const cleanRecipient = normalizePhone(recipient);
+    recipientPhone = cleanRecipient;
+    if (cleanRecipient.length < 11 || cleanRecipient.length > 15) return { ok: false, error: `Invalid phone: ${cleanRecipient}` };
+    const phoneNumberId = String(cfg.whatsapp_phone_number_id || '').trim();
+    if (!phoneNumberId) return { ok: false, error: 'Phone Number ID not configured' };
+    const customHost = String(cfg.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '');
+    const url = cfg.whatsapp_provider === 'rcs_digital'
+      ? `${customHost || 'https://rcsdigital.in'}/v23.0/${phoneNumberId}/messages`
+      : `${customHost || 'https://graph.facebook.com/v20.0'}/${phoneNumberId}/messages`.replace('/v20.0//', '/v20.0/');
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${apiKeyRaw}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp', recipient_type: 'individual', to: cleanRecipient,
+        type: 'template',
+        template: { name: template.name, language: { code: template.language || 'en' }, ...(components.length > 0 ? { components } : {}) }
+      })
+    });
+    const data = await res.json();
+    console.log(`[autoWhatsAppFromTranscript/${cfg.whatsapp_provider}] ← HTTP ${res.status}: ${JSON.stringify(data).substring(0, 300)}`);
+    ok = res.ok;
+    messageId = data.messages?.[0]?.id || null;
+    errMsg = ok ? '' : (data.error?.error_user_msg || data.error?.message || JSON.stringify(data));
+  }
+
+  // Log outreach + bump send_count (mirrors whatsappSendTemplate behavior)
+  try {
+    await svc.entities.OutreachLog.create({
+      client_id: template.client_id, lead_id: lead_id || lead?.id || null, call_log_id: call_log_id || null,
+      channel: 'whatsapp', direction: 'outbound', vendor: cfg.whatsapp_provider,
+      vendor_message_id: messageId, template_id: template.id, template_name: template.name,
+      recipient_phone: recipientPhone, body: template.body_text || '',
+      outreach_type: 'lead_followup', status: ok ? 'sent' : 'failed', error_message: errMsg
+    });
+  } catch (_) {}
+  if (ok) {
+    try { await svc.entities.WhatsAppTemplate.update(template.id, { send_count: (template.send_count || 0) + 1 }); } catch (_) {}
+  }
+
+  return { ok, message_id: messageId, error: ok ? null : errMsg };
 }
 
 // MAIN: Analyze transcript → detect intent → send mapped template silently
@@ -137,6 +236,9 @@ Return:
     if (!template) {
       return Response.json({ skipped: 'template_missing', intent });
     }
+    if (template.status !== 'APPROVED') {
+      return Response.json({ skipped: 'template_not_approved', intent, template_status: template.status });
+    }
 
     // Build variables matching the template's body placeholders.
     // whatsappSendTemplate interpolates {{name}}/{{company}}/{{phone}}/{{email}} from the lead,
@@ -157,9 +259,10 @@ Return:
     }
 
     const sendResult = await sendWhatsAppDirect(svc, {
-      template_id: templateId,
+      template,
       recipient: lead.phone,
       variables,
+      lead,
       lead_id: lead.id,
       call_log_id
     });

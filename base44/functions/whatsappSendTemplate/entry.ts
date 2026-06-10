@@ -7,13 +7,15 @@ Deno.serve(async (req) => {
     const base44 = createClientFromRequest(req);
 
     const reqBody = await req.json();
-    const { template_id, recipient, variables, lead_id, call_log_id, outreach_type } = reqBody;
+    const { template_id, recipient, variables, lead_id, call_log_id, outreach_type, internal_service } = reqBody;
     if (!template_id || !recipient) {
       return Response.json({ error: 'template_id and recipient are required' }, { status: 400 });
     }
 
     // Allow two callers: an authenticated user (manual UI send) OR an internal service-role
-    // invocation from another backend function (e.g. autoWhatsAppFromTranscript) which has no user session.
+    // invocation from another backend function (e.g. autoWhatsAppFromTranscript / campaignPostCall).
+    // Internal callers pass internal_service:true — these are trusted automated sends with no
+    // end-user session and MUST skip the per-user ownership check.
     let user = null;
     try { user = await base44.auth.me(); } catch (_) {}
 
@@ -21,9 +23,9 @@ Deno.serve(async (req) => {
     const template = await svc.entities.WhatsAppTemplate.get(template_id);
     if (!template) return Response.json({ error: 'Template not found' }, { status: 404 });
 
-    // Ownership check — only applies to authenticated end-users. Internal service-role
-    // invocations (user === null) are trusted and skip this check.
-    if (user && user.role !== 'admin') {
+    // Ownership check — only applies to authenticated end-users on manual sends.
+    // Internal automated sends (internal_service) and missing sessions are trusted.
+    if (!internal_service && user && user.role !== 'admin') {
       const clients = await base44.entities.Client.filter({ user_id: user.id });
       if (!clients.find(c => c.id === template.client_id)) {
         return Response.json({ error: 'Forbidden' }, { status: 403 });
