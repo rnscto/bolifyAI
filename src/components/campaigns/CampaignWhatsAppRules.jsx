@@ -80,6 +80,12 @@ export default function CampaignWhatsAppRules({ clientId, value, onChange }) {
             </div>
           ) : (
             <>
+              {Object.values(intentMap).filter(Boolean).length === 0 && (
+                <div className="flex items-start gap-2 p-3 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+                  <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span><strong>Auto-send is ON but no templates are mapped.</strong> No WhatsApp will be sent until you map at least one intent below to an approved template.</span>
+                </div>
+              )}
               <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Map intents → templates</Label>
               <div className="space-y-2">
                 {INTENTS.map(intent => (
