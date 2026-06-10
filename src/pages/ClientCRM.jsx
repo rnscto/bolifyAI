@@ -11,7 +11,11 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Database, CheckCircle, XCircle, RefreshCw, Copy, Eye, EyeOff } from 'lucide-react';
+import { Plus, Database, CheckCircle, XCircle, RefreshCw, Copy, Eye, EyeOff, Trash2 } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
@@ -55,6 +59,12 @@ export default function ClientCRM() {
     toast.success('CRM integration created');
     setDialogOpen(false);
     setFormData({ crm_type: '', webhook_url: '', api_key: '', api_endpoint: '', sync_direction: 'push' });
+    loadData();
+  };
+
+  const handleDelete = async (id) => {
+    await base44.entities.CRMIntegration.delete(id);
+    toast.success('CRM integration deleted');
     loadData();
   };
 
@@ -186,7 +196,30 @@ export default function ClientCRM() {
                     <CardTitle className="text-lg capitalize">{i.crm_type.replace('_', ' ')}</CardTitle>
                     <p className="text-sm text-gray-500 mt-1 capitalize">{i.sync_direction} sync</p>
                   </div>
-                  <Badge className={statusColors[i.status]}>{i.status}</Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge className={statusColors[i.status]}>{i.status}</Badge>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <button className="text-gray-400 hover:text-red-600" title="Delete integration">
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete CRM integration?</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This removes the {i.crm_type.replace('_', ' ')} integration permanently. This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction className="bg-red-600 hover:bg-red-700" onClick={() => handleDelete(i.id)}>
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent className="space-y-2">
