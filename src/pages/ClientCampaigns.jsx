@@ -16,7 +16,10 @@ export default function ClientCampaigns() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 30000);
+    // Pause background polling while the tab is hidden to avoid wasted refreshes.
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') loadData();
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 

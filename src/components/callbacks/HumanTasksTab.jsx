@@ -127,12 +127,13 @@ export default function HumanTasksTab({ clientId }) {
     const allTasks = [...scheduled, ...overdue].filter(a => humanTypes.includes(a.type));
     setTasks(allTasks);
 
-    // Load leads
+    // Load leads in parallel (avoids N+1 sequential round-trips that blocked render)
     const leadIds = [...new Set(allTasks.map(t => t.lead_id).filter(Boolean))];
     const leadMap = {};
-    for (const lid of leadIds) {
-      try { leadMap[lid] = await svc.entities.Lead.get(lid); } catch (_) {}
-    }
+    const fetched = await Promise.all(
+      leadIds.map(lid => svc.entities.Lead.get(lid).catch(() => null))
+    );
+    leadIds.forEach((lid, i) => { if (fetched[i]) leadMap[lid] = fetched[i]; });
     setLeads(leadMap);
     setLoading(false);
   };

@@ -33,7 +33,7 @@ export default function ClientAnalytics() {
       setClient(c);
       const [callsData, leadsData, campaignsData] = await Promise.all([
         base44.entities.CallLog.filter({ client_id: c.id }, '-created_date', 500),
-        base44.entities.Lead.filter({ client_id: c.id }),
+        base44.entities.Lead.filter({ client_id: c.id }, '-created_date', 1000),
         base44.entities.Campaign.filter({ client_id: c.id }),
       ]);
       setCalls(callsData);
