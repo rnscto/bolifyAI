@@ -1,34 +1,11 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-// ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───
-async function azureLLM(prompt, systemPrompt, jsonSchema) {
-  let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  const oIdx = baseUrl.indexOf('/openai/'); if (oIdx > 0) baseUrl = baseUrl.substring(0, oIdx);
-  const pIdx = baseUrl.indexOf('/api/projects'); if (pIdx > 0) baseUrl = baseUrl.substring(0, pIdx);
-  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messages: [
-        { role: 'system', content: systemPrompt || 'You are a helpful assistant. Always respond in valid JSON.' },
-        { role: 'user', content: prompt + (jsonSchema ? '\n\nRespond in JSON matching this schema: ' + JSON.stringify(jsonSchema) : '') }
-      ],
-      max_completion_tokens: 1200,
-      response_format: { type: "json_object" }
-    })
-  });
-  if (!res.ok) throw new Error(`Azure OpenAI error: ${res.status} ${await res.text()}`);
-  const data = await res.json();
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) {
-    console.warn('[parseCallbacks] Azure returned empty content, returning empty object');
-    return {};
-  }
-  return JSON.parse(content);
-}
+// parseCallbacks — FAST READ-ONLY version.
+// Returns callbacks instantly from already-stored Lead / Activity / CallLog data.
+// NO live LLM call on page load (that was the 2-minute bottleneck).
+// AI re-extraction of callback timing is handled separately by the
+// "Backfill Past Calls" button → backfillCallbackActivities → postCallActionExtractor,
+// which writes results onto the Lead (next_followup_date) and Activity records that we read here.
 
 Deno.serve(async (req) => {
   try {
@@ -43,21 +20,19 @@ Deno.serve(async (req) => {
     const callbackLeads = await svc.entities.Lead.filter({ client_id, status: 'callback' });
     const interestedLeads = await svc.entities.Lead.filter({ client_id, status: 'interested' });
     const allCallbackLeads = [...callbackLeads, ...interestedLeads];
-    
+
     // Fetch recent campaign leads with callback or interested outcome
     const campaignCallbacks = await svc.entities.CampaignLead.filter({ client_id, outcome: 'callback' });
     const campaignInterested = await svc.entities.CampaignLead.filter({ client_id, outcome: 'interested' });
     const campaignLeads = [...campaignCallbacks, ...campaignInterested];
-    
+
     // Fetch scheduled followup activities (all types that need action)
     const followupActivities = await svc.entities.Activity.filter({ client_id, type: 'followup', status: 'scheduled' });
     const callActivities = await svc.entities.Activity.filter({ client_id, type: 'call', status: 'scheduled' });
     const activities = [...followupActivities, ...callActivities];
 
-    // Build a set of lead_ids that already have a scheduled callback Activity
-    // (so we can ALSO surface auto-scheduled callbacks where the Lead's status
-    // is NOT 'callback'/'interested' — e.g. status='contacted' but a call/followup
-    // activity is queued by the engine).
+    // Also surface auto-scheduled callbacks where the Lead's status is NOT
+    // 'callback'/'interested' but a call/followup activity is queued.
     const activityLeadIds = new Set(activities.map(a => a.lead_id).filter(Boolean));
     const extraLeadIds = [...activityLeadIds].filter(id => !allCallbackLeads.find(l => l.id === id));
     if (extraLeadIds.length > 0) {
@@ -67,10 +42,8 @@ Deno.serve(async (req) => {
       for (const l of extraLeads) if (l) allCallbackLeads.push(l);
     }
 
-    // Fetch recent completed call logs for this client (batch instead of per-lead)
+    // Fetch recent completed call logs for this client (batch, lightweight indexing)
     const callLogs = await svc.entities.CallLog.filter({ client_id, status: 'completed' }, '-created_date', 200);
-    
-    // Index by lead_id (keep only the most recent per lead)
     const callLogByLead = {};
     for (const log of callLogs) {
       if (log.lead_id && !callLogByLead[log.lead_id]) {
@@ -78,19 +51,25 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Use LLM to extract callback details from transcripts
-    const callbackItems = [];
+    const fmtIST = (d) => new Date(d).toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short'
+    });
 
+    const callbackItems = [];
     for (const lead of allCallbackLeads) {
       const matchingLog = callLogByLead[lead.id];
       const matchingCL = campaignLeads.find(cl => cl.lead_id === lead.id);
       const matchingActivity = activities.find(a => a.lead_id === lead.id);
 
-      const transcript = matchingCL?.transcript || matchingLog?.transcript || '';
-      const summary = matchingCL?.conversation_summary || matchingLog?.conversation_summary || '';
+      const summary = (matchingCL?.conversation_summary || matchingLog?.conversation_summary || '').split('\n---')[0].trim();
 
-      // Build the base callback item from existing data
-      const item = {
+      // Use the callback datetime that was already extracted at call time and
+      // stored on the Lead / scheduled Activity — no LLM needed.
+      const callbackDatetime = lead.next_followup_date || matchingActivity?.scheduled_date || null;
+
+      const isAuto = !!(matchingActivity && ['call', 'followup'].includes(matchingActivity.type));
+
+      callbackItems.push({
         lead_id: lead.id,
         lead_name: lead.name || 'Unknown',
         lead_phone: lead.phone,
@@ -100,106 +79,28 @@ Deno.serve(async (req) => {
         qualification_tier: lead.qualification_tier || 'cold',
         sentiment: lead.sentiment || 'neutral',
         intent_signals: lead.intent_signals || [],
-        summary: summary.split('\n---')[0].trim(),
-        transcript_snippet: transcript.length > 500 ? transcript.slice(-500) : transcript,
-        existing_followup_date: lead.next_followup_date || matchingActivity?.scheduled_date || null,
+        summary,
+        existing_followup_date: callbackDatetime,
         activity_id: matchingActivity?.id || null,
         activity_title: matchingActivity?.title || null,
         activity_type: matchingActivity?.type || null,
-        // ─── Auto-execution flag ──────────────────────────────────────────
-        // The Follow-up Engine (executeScheduledActivities) auto-initiates
-        // calls for Activities of type 'call' or 'followup'. Flag these so
-        // the UI can show "🤖 Auto-call scheduled" instead of a manual badge.
-        auto_scheduled: !!(matchingActivity && ['call', 'followup'].includes(matchingActivity.type)),
-        auto_scheduled_at: matchingActivity && ['call', 'followup'].includes(matchingActivity.type) ? matchingActivity.scheduled_date : null,
+        auto_scheduled: isAuto,
+        auto_scheduled_at: isAuto ? matchingActivity.scheduled_date : null,
         call_date: matchingLog?.call_start_time || matchingCL?.created_date || null,
         call_duration: matchingLog?.duration || matchingCL?.call_duration || 0,
         campaign_lead_id: matchingCL?.id || null,
-        extracted: null, // Will be filled by AI
-      };
-
-      callbackItems.push(item);
-    }
-
-    // Batch AI extraction for items that have transcripts
-    const itemsWithTranscripts = callbackItems.filter(i => i.transcript_snippet && i.transcript_snippet.length > 20);
-    
-    if (itemsWithTranscripts.length > 0) {
-      const batchPrompt = itemsWithTranscripts.map((item, idx) => {
-        return `--- LEAD #${idx + 1}: ${item.lead_name} ---\nCall Date: ${item.call_date || 'Unknown'}\nSummary: ${item.summary}\nTranscript (last part):\n${item.transcript_snippet}\n`;
-      }).join('\n\n');
-
-      const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' });
-
-      const aiResult = await azureLLM(
-        `You are a call analysis assistant. Current date/time (IST): ${nowIST}.
-
-For each lead below, extract the callback/follow-up details mentioned in the conversation. Look for:
-1. When to call back (specific date/time, relative time like "tomorrow 2 PM", "after 30 minutes", "next week", etc.)
-2. Why they want a callback (reason/context)
-3. Any specific requests they made (demo, pricing, meeting with senior person, etc.)
-
-If no specific callback time was mentioned, estimate based on context (e.g., "busy now" = try again in a few hours).
-
-${batchPrompt}`,
-        'You are a call analysis assistant. Always respond in valid JSON.',
-        {
-          type: "object",
-          properties: {
-            leads: {
-              type: "array",
-              items: {
-                type: "object",
-                properties: {
-                  lead_index: { type: "number" },
-                  callback_datetime_ist: { type: "string" },
-                  callback_time_description: { type: "string" },
-                  reason: { type: "string" },
-                  specific_requests: { type: "array", items: { type: "string" } },
-                  confidence: { type: "string" },
-                  urgency: { type: "string" }
-                }
-              }
-            }
-          }
-        }
-      );
-
-      // Merge AI results back
-      if (aiResult?.leads) {
-        for (const aiLead of aiResult.leads) {
-          const idx = (aiLead.lead_index || 1) - 1;
-          if (idx >= 0 && idx < itemsWithTranscripts.length) {
-            const targetItem = callbackItems.find(i => i.lead_id === itemsWithTranscripts[idx].lead_id);
-            if (targetItem) {
-              targetItem.extracted = {
-                callback_datetime: aiLead.callback_datetime_ist || null,
-                callback_description: aiLead.callback_time_description || 'No specific time mentioned',
-                reason: aiLead.reason || 'Follow-up requested',
-                specific_requests: aiLead.specific_requests || [],
-                confidence: aiLead.confidence || 'low',
-                urgency: aiLead.urgency || 'medium',
-              };
-            }
-          }
-        }
-      }
-    }
-
-    // Fill defaults for items without AI extraction
-    for (const item of callbackItems) {
-      if (!item.extracted) {
-        item.extracted = {
-          callback_datetime: item.existing_followup_date || null,
-          callback_description: item.existing_followup_date
-            ? new Date(item.existing_followup_date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })
+        extracted: {
+          callback_datetime: callbackDatetime,
+          callback_description: callbackDatetime
+            ? fmtIST(callbackDatetime)
             : 'No specific time — needs scheduling',
-          reason: item.summary || 'Follow-up requested during call',
-          specific_requests: [],
-          confidence: 'low',
-          urgency: 'low',
-        };
-      }
+          reason: summary || lead.qualification_reason || 'Follow-up requested during call',
+          specific_requests: lead.intent_signals || [],
+          confidence: callbackDatetime ? 'high' : 'low',
+          urgency: lead.qualification_tier === 'hot' ? 'high'
+            : lead.qualification_tier === 'warm' ? 'medium' : 'low',
+        },
+      });
     }
 
     // Sort by urgency: high first, then by callback datetime
@@ -213,8 +114,8 @@ ${batchPrompt}`,
       return dA - dB;
     });
 
-    return Response.json({ 
-      success: true, 
+    return Response.json({
+      success: true,
       callbacks: callbackItems,
       total: callbackItems.length,
       parsed_at: new Date().toISOString()
