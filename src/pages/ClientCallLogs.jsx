@@ -53,7 +53,11 @@ export default function ClientCallLogs() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 30000);
+    // Refresh periodically so live calls update, but pause while the tab is hidden
+    // to avoid repeatedly downloading large CallLog payloads in the background.
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') loadData();
+    }, 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -69,7 +73,7 @@ export default function ClientCallLogs() {
         const callsData = await base44.entities.CallLog.filter(
           { client_id: clientData.id },
           '-created_date',
-          5000
+          1000
         );
         setCall(callsData);
       }

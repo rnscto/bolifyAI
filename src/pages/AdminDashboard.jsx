@@ -44,7 +44,9 @@ export default function AdminDashboard() {
           return { data: { clients: [] } };
         }),
         base44.entities.DID.list().catch(() => []),
-        base44.entities.CallLog.list('-created_date', 5000).catch(() => []),
+        // Only need recent calls for "today" count + a total estimate. Each CallLog row carries
+        // a heavy agent_config_cache (full prompts/scripts), so pulling 5000 was downloading tens of MB.
+        base44.entities.CallLog.list('-created_date', 500).catch(() => []),
         base44.entities.Subscription.list('-created_date').catch(() => []),
         base44.entities.Payment.list('-created_date', 10).catch(() => []),
       ]);
@@ -126,7 +128,7 @@ export default function AdminDashboard() {
     { title: 'Total Clients', value: stats.totalClients, subtitle: `${stats.activeClients} active, ${stats.trialClients} trial`, icon: Users, color: 'text-blue-600', bgColor: 'bg-blue-50' },
     { title: 'Monthly Revenue', value: `₹${stats.totalMRR.toLocaleString()}`, subtitle: 'Active subscriptions', icon: TrendingUp, color: 'text-green-600', bgColor: 'bg-green-50' },
     { title: 'DIDs Assigned', value: `${stats.assignedDIDs}/${stats.totalDIDs}`, subtitle: `${stats.totalDIDs - stats.assignedDIDs} available`, icon: Phone, color: 'text-purple-600', bgColor: 'bg-purple-50' },
-    { title: 'Calls Today', value: stats.callsToday, subtitle: `${stats.totalCalls} total`, icon: PhoneCall, color: 'text-orange-600', bgColor: 'bg-orange-50' },
+    { title: 'Calls Today', value: stats.callsToday, subtitle: `${stats.totalCalls}+ recent`, icon: PhoneCall, color: 'text-orange-600', bgColor: 'bg-orange-50' },
   ];
 
   const accountColors = {

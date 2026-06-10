@@ -115,7 +115,11 @@ export default function ClientLeads() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 60000);
+    // Pause the periodic refresh while the tab is hidden to avoid re-paginating
+    // the full lead database in the background.
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') loadData();
+    }, 60000);
     return () => clearInterval(interval);
   }, []);
 

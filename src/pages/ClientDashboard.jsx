@@ -23,8 +23,6 @@ export default function ClientDashboard() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 60000);
-    return () => clearInterval(interval);
   }, []);
 
   const loadData = async () => {
@@ -38,20 +36,21 @@ export default function ClientDashboard() {
         setClient(clientData);
 
         // Fetch today's calls directly via date filter (avoids 100-row cap on /list).
-        // For "total calls" we pull a large window (recent 5000) — good enough for dashboard display.
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
         const todayStartISO = todayStart.toISOString();
 
+        // NOTE: each CallLog row carries a heavy agent_config_cache (full prompts/scripts).
+        // For dashboard counts we only need a bounded window, not the full history.
         const [agents, leads, todaysCalls, recentCalls, activities, subs] = await Promise.all([
           base44.entities.Agent.filter({ client_id: clientData.id }),
           base44.entities.Lead.filter({ client_id: clientData.id }),
           base44.entities.CallLog.filter(
             { client_id: clientData.id, created_date: { $gte: todayStartISO } },
             '-created_date',
-            5000
+            500
           ),
-          base44.entities.CallLog.filter({ client_id: clientData.id }, '-created_date', 5000),
+          base44.entities.CallLog.filter({ client_id: clientData.id }, '-created_date', 500),
           base44.entities.Activity.filter({ client_id: clientData.id }),
           base44.entities.Subscription.filter({ client_id: clientData.id, status: 'active' }, '-created_date', 1)
         ]);
@@ -99,7 +98,7 @@ export default function ClientDashboard() {
     {
       title: 'Calls Today',
       value: stats.callsToday,
-      subtitle: `${stats.totalCalls} total calls`,
+      subtitle: `${stats.totalCalls}+ recent calls`,
       icon: PhoneCall,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
