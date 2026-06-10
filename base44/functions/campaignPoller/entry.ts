@@ -19,6 +19,25 @@ async function fetchAllCampaignLeads(svc, campaignId) {
   return all;
 }
 
+// Paginated fetch of leads in a single status — used to compute counts without
+// pulling the campaign's entire lead table into memory every poll cycle.
+async function fetchLeadsByStatus(svc, campaignId, status) {
+  const PAGE = 500;
+  let all = [];
+  let skip = 0;
+  while (true) {
+    const batch = await svc.entities.CampaignLead.filter(
+      { campaign_id: campaignId, status }, 'created_date', PAGE, skip
+    );
+    if (!batch || batch.length === 0) break;
+    all = all.concat(batch);
+    if (batch.length < PAGE) break;
+    skip += PAGE;
+    if (skip > 100000) break; // safety hard-cap
+  }
+  return all;
+}
+
 // This function runs every 5 minutes to:
 // 1. Fix stuck "calling" leads (calls that never got a webhook callback)
 // 2. Automatically trigger next batch of calls for running campaigns
@@ -265,26 +284,36 @@ Deno.serve(async (req) => {
         }
 
         // === STEP 2: Check if campaign should be completed ===
-        // Paginated fetch — handles campaigns with >1000 leads (previously capped at 1000)
-        const allLeads = await fetchAllCampaignLeads(svc, campaignId);
-        const pendingCount = allLeads.filter(l => l.status === 'pending').length;
-        const callingCount = allLeads.filter(l => ['calling', 'processing'].includes(l.status)).length;
-        const completedCount = allLeads.filter(l => l.status === 'completed').length;
-        const failedCount = allLeads.filter(l => l.status === 'failed').length;
+        // OPTIMIZATION: previously this paginated EVERY lead (2000+ rows) per campaign per run
+        // just to compute counts. We only need status counts + outcome tallies + the
+        // ready-vs-retry-later split among pending leads — so fetch only what we need.
+        const now = new Date();
+        const [callingLeads, completedLeads, failedLeads, pendingLeads] = await Promise.all([
+          fetchLeadsByStatus(svc, campaignId, 'calling'),
+          fetchLeadsByStatus(svc, campaignId, 'completed'),
+          fetchLeadsByStatus(svc, campaignId, 'failed'),
+          fetchLeadsByStatus(svc, campaignId, 'pending'),
+        ]);
+        const processingLeads = await fetchLeadsByStatus(svc, campaignId, 'processing');
 
+        const pendingCount = pendingLeads.length;
+        const callingCount = callingLeads.length + processingLeads.length;
+        const completedCount = completedLeads.length;
+        const failedCount = failedLeads.length;
+
+        // Outcome tally only needs completed/failed leads (pending/calling have no final outcome yet)
         const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0, converted: 0, do_not_call: 0 };
-        allLeads.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
+        [...completedLeads, ...failedLeads].forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
         await svc.entities.Campaign.update(campaignId, {
           calls_completed: completedCount, calls_failed: failedCount, outcomes_summary: outcomes
         });
 
-        // Filter out leads with future retry dates
-        const now = new Date();
-        const pendingReadyCount = allLeads.filter(l => 
-          l.status === 'pending' && (!l.followup_call_date || new Date(l.followup_call_date) <= now)
+        // Split pending leads into ready-now vs waiting-for-retry
+        const pendingReadyCount = pendingLeads.filter(l => 
+          !l.followup_call_date || new Date(l.followup_call_date) <= now
         ).length;
-        const pendingRetryLaterCount = allLeads.filter(l => 
-          l.status === 'pending' && l.followup_call_date && new Date(l.followup_call_date) > now
+        const pendingRetryLaterCount = pendingLeads.filter(l => 
+          l.followup_call_date && new Date(l.followup_call_date) > now
         ).length;
 
         if (pendingReadyCount === 0 && callingCount === 0 && pendingRetryLaterCount === 0) {
@@ -347,11 +376,12 @@ Deno.serve(async (req) => {
                 const callSid = `camp_${campaignId.slice(-8)}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
 
                 let leadContext = '';
+                // Fetch the lead ONCE and reuse for both context and greeting (was fetched twice)
+                let lead = null;
+                if (cl.lead_id) {
+                  try { lead = await svc.entities.Lead.get(cl.lead_id); } catch (_) {}
+                }
                 try {
-                  let lead = null;
-                  if (cl.lead_id) {
-                    try { lead = await svc.entities.Lead.get(cl.lead_id); } catch (_) {}
-                  }
                   if (lead) {
                     const ctxParts = [`CUSTOMER PROFILE:`, `- Name: ${lead.name || cl.lead_name || 'Unknown'}`];
                     if (lead.phone) ctxParts.push(`- Phone: ${lead.phone}`);
@@ -379,8 +409,7 @@ Deno.serve(async (req) => {
                 // Use campaign script's "opening" as greeting if present (overrides agent default)
                 let campaignGreeting = agent.greeting_message || '';
                 if (campaign.call_script?.opening && campaign.call_script.opening.trim()) {
-                  let leadCompany = '';
-                  if (cl.lead_id) { try { leadCompany = (await svc.entities.Lead.get(cl.lead_id))?.company || ''; } catch (_) {} }
+                  const leadCompany = lead?.company || '';
                   campaignGreeting = campaign.call_script.opening
                     .replace(/\{\{name\}\}/gi, cl.lead_name || 'Sir/Madam')
                     .replace(/\{\{company\}\}/gi, leadCompany)
