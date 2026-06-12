@@ -1080,6 +1080,23 @@ async function triggerNextCampaignCall(base44, campaignId) {
     }
 
     const selectedDID = agentDIDs[0];
+
+    // ── VALIDATE CALLEE NUMBER before dialing ──
+    // Corrupt imports (letters in number, two numbers merged) produce invalid digit strings
+    // Smartflo silently rejects → instant 'failed'. Skip these leads with a clear reason.
+    const callee10 = (cl.lead_phone || '').replace(/[^0-9]/g, '').slice(-10);
+    if (!/^[6-9]\d{9}$/.test(callee10)) {
+      await base44.entities.CampaignLead.update(cl.id, {
+        status: 'completed', outcome: 'do_not_call', call_status: 'not_answered',
+        conversation_summary: `Invalid phone number "${cl.lead_phone}" — skipped (not a valid 10-digit Indian mobile).`
+      });
+      console.warn(`[smartfloWebhook] Skipped ${cl.lead_name}: invalid phone "${cl.lead_phone}"`);
+      // Move on to the next lead
+      await triggerNextCampaignCall(base44, campaignId);
+      return;
+    }
+    const dialNumber = '91' + callee10;
+
     await base44.entities.CampaignLead.update(cl.id, {
       status: 'calling', attempt_count: (cl.attempt_count || 0) + 1
     });
@@ -1151,7 +1168,7 @@ async function triggerNextCampaignCall(base44, campaignId) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         api_key: smartfloApiKey,
-        customer_number: cleanPhone,
+        customer_number: dialNumber,
         caller_id: cleanCallerID,
         custom_identifier: newCallLog.id,
         async: 1

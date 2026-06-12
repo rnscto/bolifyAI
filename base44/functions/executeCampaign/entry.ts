@@ -276,6 +276,20 @@ Deno.serve(async (req) => {
         const selectedDID = agentDIDs[didIndex % agentDIDs.length];
         didIndex++;
 
+        // ── VALIDATE CALLEE NUMBER before dialing ──
+        // Corrupt imports (letters in number, two numbers merged) get rejected by Smartflo
+        // → instant 'failed'. Skip these with a clear reason instead of wasting an API call.
+        const callee10 = (cl.lead_phone || '').replace(/[^0-9]/g, '').slice(-10);
+        if (!/^[6-9]\d{9}$/.test(callee10)) {
+          await svc.entities.CampaignLead.update(cl.id, {
+            status: 'completed', outcome: 'do_not_call', call_status: 'not_answered',
+            conversation_summary: `Invalid phone number "${cl.lead_phone}" — skipped (not a valid 10-digit Indian mobile).`
+          });
+          console.warn(`[campaign] Skipped ${cl.lead_name}: invalid phone "${cl.lead_phone}"`);
+          continue;
+        }
+        const dialNumber = '91' + callee10;
+
         await svc.entities.CampaignLead.update(cl.id, {
           status: 'calling', attempt_count: (cl.attempt_count || 0) + 1
         });
@@ -367,7 +381,7 @@ Deno.serve(async (req) => {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             api_key: smartfloApiKey,
-            customer_number: cleanPhone,
+            customer_number: dialNumber,
             caller_id: cleanCallerID,
             custom_identifier: callLog.id,
             async: 1

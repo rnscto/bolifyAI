@@ -379,6 +379,25 @@ IMPORTANT RULES:
     const cleanPhoneNumber = phone_number.replace(/[^0-9]/g, '');
     console.log(`Cleaned caller_id: ${cleanCallerID}, callee: ${cleanPhoneNumber}`);
 
+    // ── VALIDATE CALLEE NUMBER ──
+    // Corrupt imports (e.g. "989e279458", "0932241781009833058559") produce invalid
+    // digit strings that Smartflo silently rejects → call fails instantly with no duration.
+    // Normalize to a valid Indian mobile (last 10 digits, must start 6-9) before dialing.
+    const callee10 = cleanPhoneNumber.slice(-10);
+    const validIndianMobile = /^[6-9]\d{9}$/.test(callee10);
+    if (!validIndianMobile) {
+      await svc.entities.CallLog.update(callLog.id, {
+        status: 'failed',
+        conversation_summary: `Invalid phone number "${phone_number}" — not a valid 10-digit Indian mobile. Call not placed.`,
+        lead_status_updated: 'do_not_call'
+      });
+      return Response.json({
+        success: false,
+        error: `Invalid phone number "${phone_number}". Must be a valid 10-digit Indian mobile (starting 6-9). Please fix this lead's phone.`
+      }, { status: 400 });
+    }
+    const dialNumber = '91' + callee10;
+
     // Demo agents always use the global/base API key; production agents use their own token
     const smartfloApiKey = isDemoAgent 
       ? Deno.env.get('SMARTFLO_API_KEY') 
@@ -399,7 +418,7 @@ IMPORTANT RULES:
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         api_key: smartfloApiKey,
-        customer_number: cleanPhoneNumber,
+        customer_number: dialNumber,
         caller_id: cleanCallerID,
         custom_identifier: callLog.id,
         async: 1
@@ -409,9 +428,12 @@ IMPORTANT RULES:
     const smartfloData = await smartfloResponse.json();
     console.log('Smartflo response:', JSON.stringify(smartfloData));
 
-    if (!smartfloResponse.ok || smartfloData.success === false || smartfloData.caller_id) {
-      // Smartflo returns {caller_id: "Provide a vaild caller_id."} when the DID is not mapped to the API token's channel
-      const errorMsg = smartfloData.caller_id 
+    // Smartflo returns {caller_id: "Provide a vaild caller_id."} (a NON-numeric validation
+    // message) when the DID is not mapped to the API token's channel. But a SUCCESS response
+    // may also echo back a numeric caller_id — so only treat a non-numeric caller_id as an error.
+    const callerIdError = smartfloData.caller_id && !/^\d+$/.test(String(smartfloData.caller_id).replace(/[^0-9]/g, '')) ? true : (typeof smartfloData.caller_id === 'string' && /[a-zA-Z]/.test(smartfloData.caller_id));
+    if (!smartfloResponse.ok || smartfloData.success === false || callerIdError) {
+      const errorMsg = callerIdError 
         ? `Invalid caller_id: DID ${callerDID} is not mapped to this API token's Smartflo channel. Please verify the DID is assigned to this token in Smartflo dashboard.`
         : (smartfloData.message || smartfloData.error || JSON.stringify(smartfloData));
       console.error('Smartflo API error:', errorMsg);
