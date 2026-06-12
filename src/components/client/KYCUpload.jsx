@@ -80,9 +80,23 @@ export default function KYCUpload({ client }) {
 
   const handleFileUpload = async (field, file) => {
     if (!file) return;
+    // Basic client-side size guard (10MB) for clearer errors
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error('File too large. Please upload a file under 10MB.');
+      return;
+    }
     setUploading(prev => ({ ...prev, [field]: true }));
     try {
-      const { file_url } = await base44.integrations.Core.UploadFile({ file });
+      // Upload directly to our own Azure Blob storage (private container) instead of
+      // Base44's credit-gated Core.UploadFile. This keeps KYC uploads working regardless
+      // of integration-credit limits and keeps sensitive docs in the private container.
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('visibility', 'private');
+      fd.append('folder', `kyc/${client.id}`);
+      const resp = await base44.functions.invoke('azureBlobUpload', fd);
+      const file_url = resp.data?.file_uri;
+      if (!file_url) throw new Error(resp.data?.error || 'Upload failed');
       if (kycDoc) {
         await base44.entities.KYCDocument.update(kycDoc.id, { [field]: file_url });
         setKycDoc(prev => ({ ...prev, [field]: file_url }));
@@ -132,12 +146,12 @@ export default function KYCUpload({ client }) {
     });
     await base44.entities.Client.update(client.id, { kyc_status: 'under_review' });
 
-    // Notify admin
+    // Notify admin (best-effort, via our own email function — not credit-gated)
     try {
-      await base44.integrations.Core.SendEmail({
+      await base44.functions.invoke('sendClientEmail', {
         to: 'yadav.nandkishor73@gmail.com',
         subject: `[KYC Submitted] ${client.company_name}`,
-        body: `<p>Client <strong>${client.company_name}</strong> has submitted KYC documents for review.</p>`,
+        html: `<p>Client <strong>${client.company_name}</strong> has submitted KYC documents for review.</p>`,
       });
     } catch (e) { console.log('Admin email fail:', e); }
 
@@ -326,6 +340,23 @@ export default function KYCUpload({ client }) {
 }
 
 function DocumentUploadField({ label, field, existingUrl, uploading, onUpload, disabled, extra, hideLabel }) {
+  const [opening, setOpening] = useState(false);
+
+  // Private Azure blobs require a short-lived signed URL to view.
+  const openDocument = async () => {
+    if (!existingUrl) return;
+    setOpening(true);
+    try {
+      const resp = await base44.functions.invoke('azureBlobSignedUrl', { file_uri: existingUrl });
+      const signed = resp.data?.signed_url || existingUrl;
+      window.open(signed, '_blank', 'noopener,noreferrer');
+    } catch (_) {
+      window.open(existingUrl, '_blank', 'noopener,noreferrer');
+    } finally {
+      setOpening(false);
+    }
+  };
+
   return (
     <div>
       {!hideLabel && label && <Label className="font-medium">{label}</Label>}
@@ -333,9 +364,10 @@ function DocumentUploadField({ label, field, existingUrl, uploading, onUpload, d
         {existingUrl ? (
           <div className="flex items-center gap-2 flex-1 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
             <FileCheck className="w-4 h-4 text-green-600" />
-            <a href={existingUrl} target="_blank" rel="noopener noreferrer" className="text-sm text-green-700 hover:underline truncate">
+            <button type="button" onClick={openDocument} disabled={opening} className="text-sm text-green-700 hover:underline truncate flex items-center gap-1">
+              {opening && <Loader2 className="w-3 h-3 animate-spin" />}
               Document uploaded
-            </a>
+            </button>
           </div>
         ) : (
           <div className="flex-1 text-sm text-gray-400">No document uploaded</div>

@@ -96,14 +96,15 @@ export default function AdminKYCManagement() {
     if (doc.client_id) {
       await base44.entities.Client.update(doc.client_id, { kyc_status: 'rejected' });
     }
-    // Notify client
+    // Notify client (via our own email function — not credit-gated)
     const cl = clientMap[doc.client_id];
     if (cl?.email) {
       try {
-        await base44.integrations.Core.SendEmail({
+        await base44.functions.invoke('sendClientEmail', {
+          client_id: doc.client_id,
           to: cl.email,
           subject: `[Action Required] KYC Verification Rejected — VaaniAI`,
-          body: `<p>Dear ${cl.company_name},</p><p>Your KYC documents have been rejected.</p><p><strong>Reason:</strong> ${rejectionReason}</p><p>Please re-upload corrected documents from your Settings → KYC tab.</p>`,
+          html: `<p>Dear ${cl.company_name},</p><p>Your KYC documents have been rejected.</p><p><strong>Reason:</strong> ${rejectionReason}</p><p>Please re-upload corrected documents from your Settings → KYC tab.</p>`,
         });
       } catch (e) { console.log('Email fail:', e); }
     }
@@ -294,14 +295,31 @@ export default function AdminKYCManagement() {
 }
 
 function DocLink({ label, url }) {
+  const [opening, setOpening] = useState(false);
+
+  // Private Azure blobs need a short-lived signed URL. Older docs use direct (public)
+  // Base44 URLs — for those the signed-URL call fails and we fall back to the raw URL.
+  const openDoc = async () => {
+    if (!url) return;
+    setOpening(true);
+    try {
+      const resp = await base44.functions.invoke('azureBlobSignedUrl', { file_uri: url });
+      window.open(resp.data?.signed_url || url, '_blank', 'noopener,noreferrer');
+    } catch (_) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } finally {
+      setOpening(false);
+    }
+  };
+
   return (
     <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2">
       {url ? <FileCheck className="w-4 h-4 text-green-600" /> : <Clock className="w-4 h-4 text-gray-400" />}
       <span className="text-sm flex-1">{label}</span>
       {url ? (
-        <a href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline flex items-center gap-1">
-          View <ExternalLink className="w-3 h-3" />
-        </a>
+        <button type="button" onClick={openDoc} disabled={opening} className="text-sm text-blue-600 hover:underline flex items-center gap-1">
+          {opening ? <Loader2 className="w-3 h-3 animate-spin" /> : <>View <ExternalLink className="w-3 h-3" /></>}
+        </button>
       ) : (
         <span className="text-xs text-gray-400">Not uploaded</span>
       )}
