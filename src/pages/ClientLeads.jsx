@@ -59,6 +59,8 @@ export default function ClientLeads() {
   const [bulkRescoring, setBulkRescoring] = useState(false);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [page, setPage] = useState(1);
+  const PAGE_SIZE = 100;
   const { mask: maskPhoneNumber } = usePhoneMask();
 
   const toggleSelect = (id) => {
@@ -122,6 +124,12 @@ export default function ClientLeads() {
     }, 60000);
     return () => clearInterval(interval);
   }, []);
+
+  // Reset to the first page whenever a filter or search changes so the user
+  // always sees results from the top.
+  useEffect(() => {
+    setPage(1);
+  }, [tierFilter, statusFilter, sourceFilter, groupFilter, searchTerm]);
 
   // Paginated fetch — the SDK caps `.filter()` at 1000 records per call,
   // so we page through all leads to support clients with 10k+ leads.
@@ -527,6 +535,13 @@ export default function ClientLeads() {
                        (l.phone || '').includes(s) ||
                        (l.company || '').toLowerCase().includes(s);
               });
+            // Only render the current page of rows. Rendering thousands of DOM
+            // rows at once freezes the browser — paginate to keep it responsive.
+            const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+            const safePage = Math.min(page, totalPages);
+            const pageStart = (safePage - 1) * PAGE_SIZE;
+            const pageRows = filtered.slice(pageStart, pageStart + PAGE_SIZE);
+
             const allFilteredSelected = filtered.length > 0 && filtered.every(l => selectedIds.has(l.id));
             const someFilteredSelected = filtered.some(l => selectedIds.has(l.id));
             const toggleAll = () => {
@@ -584,7 +599,7 @@ export default function ClientLeads() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((lead) => (
+                pageRows.map((lead) => (
                   <TableRow key={lead.id} className={lead.qualification_tier === 'disqualified' ? 'opacity-50' : ''}>
                     <TableCell className="w-10">
                       <Checkbox
@@ -665,6 +680,24 @@ export default function ClientLeads() {
               )}
                 </TableBody>
               </Table>
+              {filtered.length > PAGE_SIZE && (
+                <div className="flex items-center justify-between gap-3 pt-4 flex-wrap">
+                  <span className="text-sm text-gray-600">
+                    Showing {pageStart + 1}–{Math.min(pageStart + PAGE_SIZE, filtered.length)} of {filtered.length}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <Button size="sm" variant="outline" disabled={safePage <= 1}
+                      onClick={() => setPage(p => Math.max(1, p - 1))}>
+                      Previous
+                    </Button>
+                    <span className="text-sm text-gray-700">Page {safePage} of {totalPages}</span>
+                    <Button size="sm" variant="outline" disabled={safePage >= totalPages}
+                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
+                      Next
+                    </Button>
+                  </div>
+                </div>
+              )}
             </>
             );
           })()}

@@ -64,6 +64,8 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
     setNotAnsweredIds(new Set(notAnsweredCLs.map(cl => cl.lead_id)));
   };
 
+  const [leadSearch, setLeadSearch] = useState('');
+
   const filteredLeads = leads.filter(l => {
     if (leadFilter === 'not_answered') {
       if (!notAnsweredIds.has(l.id)) return false;
@@ -72,8 +74,20 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
     }
     if (groupFilter === 'ungrouped' && l.group_id) return false;
     if (groupFilter !== 'all' && groupFilter !== 'ungrouped' && l.group_id !== groupFilter) return false;
+    if (leadSearch) {
+      const s = leadSearch.toLowerCase();
+      if (!((l.name || '').toLowerCase().includes(s) || (l.phone || '').includes(s))) return false;
+    }
     return true;
   });
+
+  // O(1) selection lookups — `.includes()` on a large array inside each rendered
+  // row is O(n²) and locks up the UI with thousands of leads.
+  const selectedSet = React.useMemo(() => new Set(selectedLeads), [selectedLeads]);
+
+  // Only render the first N rows so the DOM never holds thousands of checkboxes.
+  const RENDER_CAP = 200;
+  const visibleLeads = filteredLeads.slice(0, RENDER_CAP);
 
   const toggleLead = (id) => {
     setSelectedLeads(prev => {
@@ -376,13 +390,19 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
                 </Button>
               </div>
             </div>
+            <Input
+              placeholder="Search leads by name or phone..."
+              value={leadSearch}
+              onChange={e => setLeadSearch(e.target.value)}
+              className="h-8 text-sm"
+            />
             <div className="max-h-48 overflow-y-auto space-y-1">
               {filteredLeads.length === 0 ? (
                 <p className="text-sm text-gray-500 text-center py-4">No leads found</p>
               ) : (
-                filteredLeads.map(lead => (
+                visibleLeads.map(lead => (
                   <label key={lead.id} className="flex items-center gap-3 px-2 py-1.5 rounded hover:bg-gray-50 cursor-pointer">
-                    <Checkbox checked={selectedLeads.includes(lead.id)} onCheckedChange={() => toggleLead(lead.id)} />
+                    <Checkbox checked={selectedSet.has(lead.id)} onCheckedChange={() => toggleLead(lead.id)} />
                     <span className="text-sm font-medium flex-1">{lead.name || maskPhoneNumber(lead.phone)}</span>
                     <span className="text-xs text-gray-500">{maskPhoneNumber(lead.phone)}</span>
                     <span className={`text-xs px-1.5 py-0.5 rounded ${lead.status === 'new' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-600'}`}>
@@ -390,6 +410,11 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
                     </span>
                   </label>
                 ))
+              )}
+              {filteredLeads.length > RENDER_CAP && (
+                <p className="text-xs text-gray-400 text-center py-2">
+                  Showing first {RENDER_CAP} of {filteredLeads.length}. Use search to narrow, or "Select All" to include every matching lead.
+                </p>
               )}
             </div>
           </div>
