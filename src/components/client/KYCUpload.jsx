@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Upload, FileCheck, AlertTriangle, Clock, CheckCircle2, XCircle, Loader2, Shield } from 'lucide-react';
 import { toast } from 'sonner';
+import { uploadPrivateFile } from '@/lib/azureBlob';
 
 const COMPANY_TYPE_LABELS = {
   proprietorship: 'Proprietorship',
@@ -87,16 +88,12 @@ export default function KYCUpload({ client }) {
     }
     setUploading(prev => ({ ...prev, [field]: true }));
     try {
-      // Upload directly to our own Azure Blob storage (private container) instead of
-      // Base44's credit-gated Core.UploadFile. This keeps KYC uploads working regardless
-      // of integration-credit limits and keeps sensitive docs in the private container.
-      const fd = new FormData();
-      fd.append('file', file);
-      fd.append('visibility', 'private');
-      fd.append('folder', `kyc/${client.id}`);
-      const resp = await base44.functions.invoke('azureBlobUpload', fd);
-      const file_url = resp.data?.file_uri;
-      if (!file_url) throw new Error(resp.data?.error || 'Upload failed');
+      // Upload to our own Azure Blob storage (private container) using the shared helper,
+      // which POSTs proper multipart form-data. (base44.functions.invoke serializes the
+      // body as JSON and corrupts FormData — that was breaking KYC uploads.)
+      const { file_uri } = await uploadPrivateFile(file, `kyc/${client.id}`);
+      const file_url = file_uri;
+      if (!file_url) throw new Error('Upload failed');
       if (kycDoc) {
         await base44.entities.KYCDocument.update(kycDoc.id, { [field]: file_url });
         setKycDoc(prev => ({ ...prev, [field]: file_url }));

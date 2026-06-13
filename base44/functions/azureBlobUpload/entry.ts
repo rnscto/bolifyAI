@@ -54,14 +54,49 @@ Deno.serve(async (req) => {
     const user = await base44.auth.me();
     if (!user) return Response.json({ error: 'Unauthorized' }, { status: 401 });
 
-    const formData = await req.formData();
-    const file = formData.get('file');
-    const visibility = (formData.get('visibility') || 'public').toString();
-    const folder = (formData.get('folder') || '').toString().replace(/[^a-zA-Z0-9_\-/]/g, '');
+    // Support two payload styles:
+    //  1) multipart/form-data (file field) — when called via raw fetch
+    //  2) JSON { file_base64, file_name, content_type, visibility, folder } — when
+    //     called via base44.functions.invoke (which sends JSON, not multipart).
+    let fileBytes;       // ArrayBuffer
+    let fileName = 'file';
+    let providedContentType = '';
+    let visibility = 'public';
+    let folder = '';
 
-    if (!file || !(file instanceof File)) {
-      return Response.json({ error: 'file required' }, { status: 400 });
+    const reqContentType = (req.headers.get('content-type') || '').toLowerCase();
+
+    if (reqContentType.includes('multipart/form-data')) {
+      const formData = await req.formData();
+      const file = formData.get('file');
+      visibility = (formData.get('visibility') || 'public').toString();
+      folder = (formData.get('folder') || '').toString();
+      if (!file || !(file instanceof File)) {
+        return Response.json({ error: 'file required' }, { status: 400 });
+      }
+      fileBytes = await file.arrayBuffer();
+      fileName = file.name || 'file';
+      providedContentType = file.type || '';
+    } else {
+      let body;
+      try { body = await req.json(); } catch { body = {}; }
+      const { file_base64, file_name, content_type } = body;
+      visibility = (body.visibility || 'public').toString();
+      folder = (body.folder || '').toString();
+      if (!file_base64) {
+        return Response.json({ error: 'file required' }, { status: 400 });
+      }
+      // Accept both raw base64 and data URLs (data:...;base64,XXXX)
+      const b64 = file_base64.includes(',') ? file_base64.split(',').pop() : file_base64;
+      const binary = atob(b64);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+      fileBytes = bytes.buffer;
+      fileName = file_name || 'file';
+      providedContentType = content_type || '';
     }
+
+    folder = folder.replace(/[^a-zA-Z0-9_\-/]/g, '');
 
     const cs = Deno.env.get('AZURE_STORAGE_CONNECTION_STRING');
     const containerPublic = Deno.env.get('AZURE_STORAGE_CONTAINER_PUBLIC');
@@ -74,14 +109,14 @@ Deno.serve(async (req) => {
     const container = visibility === 'private' ? containerPrivate : containerPublic;
 
     // Build blob name: folder/timestamp-random-safename
-    const safeName = (file.name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
+    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
     const ts = Date.now();
     const rand = Math.random().toString(36).slice(2, 10);
     const blobName = (folder ? `${folder}/` : '') + `${ts}-${rand}-${safeName}`;
 
-    const arrayBuffer = await file.arrayBuffer();
+    const arrayBuffer = fileBytes;
     const contentLength = arrayBuffer.byteLength;
-    const contentType = file.type || 'application/octet-stream';
+    const contentType = providedContentType || 'application/octet-stream';
     const dateStr = new Date().toUTCString();
 
     const auth = await buildAuthHeader('PUT', accountName, accountKey, container, blobName, contentLength, contentType, dateStr);
