@@ -85,7 +85,10 @@ Deno.serve(async (req) => {
       } catch (_) {}
     }
 
-    // 3. Active subscription whose billing_end_date has passed with no follow-up
+    // 3. Active subscription whose billing_end_date has passed with no follow-up.
+    // We only act on subs still marked 'active' here. Once a sub is flipped to
+    // 'overdue' it has already triggered a suspension — re-processing it would
+    // re-suspend a client that an admin has manually reactivated, creating a loop.
     const activeSubs = await base44.entities.Subscription.filter({ status: 'active' });
     for (const sub of activeSubs) {
       if (!sub.billing_end_date) continue;
