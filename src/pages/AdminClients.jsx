@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Edit, Trash2, FileText, CreditCard } from 'lucide-react';
+import { Plus, Edit, Trash2, FileText, CreditCard, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import ClientAgreementTemplateEditor from '../components/admin/ClientAgreementTemplateEditor';
 import AdminSignedAgreements from '../components/admin/AdminSignedAgreements';
@@ -46,6 +46,7 @@ export default function AdminClients() {
   const [activateClient, setActivateClient] = useState(null);
   const [overrideClient, setOverrideClient] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('all');
   const [formData, setFormData] = useState({
     company_name: '',
     email: '',
@@ -135,6 +136,42 @@ export default function AdminClients() {
     cancelled: 'bg-red-100 text-red-800'
   };
 
+  const filteredClients = statusFilter === 'all'
+    ? clients
+    : clients.filter((c) => c.account_status === statusFilter);
+
+  const handleExportCSV = () => {
+    if (filteredClients.length === 0) {
+      toast.error('No clients to export');
+      return;
+    }
+    const headers = ['Company', 'Email', 'Phone', 'Billing Type', 'Per Min Rate', 'Wallet Balance', 'Free Minutes', 'Account Status', 'KYC Status', 'Status', 'Activated (Paid)', 'Next Billing'];
+    const rows = filteredClients.map((c) => [
+      c.company_name || '',
+      c.email || '',
+      c.phone || '',
+      c.billing_type || '',
+      c.per_minute_rate ?? '',
+      c.wallet_balance ?? '',
+      c.free_minutes_remaining ?? '',
+      c.account_status || '',
+      c.kyc_status || '',
+      c.status || '',
+      c.activation_date ? new Date(c.activation_date).toLocaleDateString() : '',
+      c.next_billing_date ? new Date(c.next_billing_date).toLocaleDateString() : '',
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `clients-${statusFilter}-${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -161,7 +198,27 @@ export default function AdminClients() {
         </TabsList>
 
         <TabsContent value="clients">
-      <div className="flex items-center justify-end">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-52">
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="trial">Trial</SelectItem>
+              <SelectItem value="activation_pending">Activation in progress</SelectItem>
+              <SelectItem value="onboarding">Onboarding</SelectItem>
+              <SelectItem value="expired">Expired</SelectItem>
+              <SelectItem value="suspended">Suspended</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" onClick={handleExportCSV}>
+            <Download className="w-4 h-4 mr-2" />
+            Export CSV
+          </Button>
+        </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -253,7 +310,7 @@ export default function AdminClients() {
 
       <Card>
         <CardHeader>
-          <CardTitle>All Clients ({clients.length})</CardTitle>
+          <CardTitle>All Clients ({filteredClients.length})</CardTitle>
         </CardHeader>
         <CardContent>
           <Table>
@@ -273,14 +330,14 @@ export default function AdminClients() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {clients.length === 0 ? (
+              {filteredClients.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={12} className="text-center text-gray-500">
-                    No clients found. Add your first client to get started.
+                    No clients found.
                   </TableCell>
                 </TableRow>
               ) : (
-                clients.map((client) => (
+                filteredClients.map((client) => (
                   <TableRow key={client.id}>
                     <TableCell className="font-medium">{client.company_name}</TableCell>
                     <TableCell>{client.email}</TableCell>
