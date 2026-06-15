@@ -13,9 +13,6 @@ import OutboundWebhookCard from '@/components/api-docs/OutboundWebhookCard';
 export default function APIDocs() {
   const [denoUrl, setDenoUrl] = useState('Loading...');
   const [loading, setLoading] = useState(true);
-  const [crmApiKey, setCrmApiKey] = useState(null);
-  const [showKey, setShowKey] = useState(false);
-  const [keyLoading, setKeyLoading] = useState(true);
   const [authKey, setAuthKey] = useState(null);
   const [showAuthKey, setShowAuthKey] = useState(false);
   const [authKeyLoading, setAuthKeyLoading] = useState(true);
@@ -23,7 +20,6 @@ export default function APIDocs() {
 
   useEffect(() => {
     fetchDenoUrl();
-    fetchCrmApiKey();
     fetchAuthKey();
   }, []);
 
@@ -68,23 +64,6 @@ export default function APIDocs() {
       toast.error('Failed to generate key');
     } finally {
       setGeneratingKey(false);
-    }
-  };
-
-  const fetchCrmApiKey = async () => {
-    try {
-      const user = await base44.auth.me();
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
-      if (clients.length > 0) {
-        const integrations = await base44.entities.CRMIntegration.filter({ client_id: clients[0].id, status: 'active' });
-        if (integrations.length > 0 && integrations[0].api_key) {
-          setCrmApiKey(integrations[0].api_key);
-        }
-      }
-    } catch (e) {
-      console.error('Error fetching CRM API key:', e);
-    } finally {
-      setKeyLoading(false);
     }
   };
 
@@ -210,7 +189,7 @@ export default function APIDocs() {
               <Badge className="bg-green-100 text-green-800">POST</Badge>
               <code className="text-sm">/api/functions/initiateCall</code>
             </div>
-            <p className="text-sm text-gray-600 mb-2">Initiate an outbound call. Supports <code className="bg-gray-200 px-1 rounded text-xs">x-auth-key</code> (platform key) or <code className="bg-gray-200 px-1 rounded text-xs">x-api-key</code> (CRM key) headers for external API access.</p>
+            <p className="text-sm text-gray-600 mb-2">Initiate an outbound call. Use the <code className="bg-gray-200 px-1 rounded text-xs">x-auth-key</code> header (your platform <code className="bg-gray-200 px-1 rounded text-xs">gwk_…</code> key) for external API access.</p>
             <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-3 text-sm text-yellow-800">
               <strong>💡 Flexible identifiers:</strong> You can use either record IDs or phone numbers:
               <ul className="ml-4 mt-1 list-disc space-y-0.5">
@@ -219,7 +198,7 @@ export default function APIDocs() {
               </ul>
             </div>
             <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-{`Headers: { "x-auth-key": "your-platform-key" }  // or x-api-key
+{`Headers: { "x-auth-key": "your-platform-key" }
 
 // Option 1: Using phone numbers (recommended for CRM integrations)
 {
@@ -291,7 +270,7 @@ export default function APIDocs() {
       {/* ─── CRM API SECTION ─── */}
       <div id="auth-keys" className="pt-4">
         <h2 className="text-2xl font-bold text-gray-900 mb-1">CRM Integration APIs</h2>
-        <p className="text-gray-600 mb-4">Connect any external CRM to push/pull data via JSON REST APIs. <strong>Use the <code className="bg-gray-100 px-1 rounded">x-auth-key</code> header for all requests.</strong></p>
+        <p className="text-gray-600 mb-4">Connect any external CRM to push/pull data via JSON REST APIs. <strong>Use your Platform Authorization Key (<code className="bg-gray-100 px-1 rounded">gwk_…</code>) in the <code className="bg-gray-100 px-1 rounded">x-auth-key</code> header for all requests.</strong></p>
       </div>
 
       {/* Platform Authorization Key */}
@@ -304,7 +283,7 @@ export default function APIDocs() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-emerald-800">
-            Use this key in the <code className="bg-white px-1.5 py-0.5 rounded border border-emerald-200 text-xs">x-auth-key</code> header when integrating Bolify AI into your CRM or any third-party system.
+            This is the <strong>only key</strong> you need. Use it in the <code className="bg-white px-1.5 py-0.5 rounded border border-emerald-200 text-xs">x-auth-key</code> header for <strong>all</strong> API requests (call initiation and CRM push/pull) when integrating Bolify AI into your CRM or any third-party system. It starts with <code className="bg-white px-1.5 py-0.5 rounded border border-emerald-200 text-xs">gwk_</code>.
           </p>
           {authKeyLoading ? (
             <div className="flex items-center gap-2">
@@ -342,64 +321,21 @@ export default function APIDocs() {
         </CardContent>
       </Card>
 
-      {/* Your API Key */}
-      <Card className="border-green-200 bg-green-50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Key className="w-5 h-5 text-green-700" />
-            Your CRM API Key
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {keyLoading ? (
-            <div className="flex items-center gap-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-green-600"></div>
-              <span className="text-sm text-green-700">Loading...</span>
-            </div>
-          ) : crmApiKey ? (
-            <div className="flex items-center gap-2">
-              <code className="flex-1 bg-white p-3 rounded text-sm border border-green-300 font-mono break-all">
-                {showKey ? crmApiKey : '••••••••••••••••••••••••'}
-              </code>
-              <button onClick={() => setShowKey(!showKey)} className="px-2 py-2 bg-white border border-green-300 rounded hover:bg-green-50">
-                {showKey ? <EyeOff className="w-4 h-4 text-green-700" /> : <Eye className="w-4 h-4 text-green-700" />}
-              </button>
-              <button onClick={() => copyToClipboard(crmApiKey)} className="px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1">
-                <Copy className="w-4 h-4" /> Copy
-              </button>
-            </div>
-          ) : (
-            <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
-              <strong>No API key found.</strong> Go to <strong>CRM Integration</strong> page → Add Integration → Generate an API key.
-            </div>
-          )}
-          <p className="text-xs text-green-700">Use this key in the <code className="bg-white px-1 rounded">x-api-key</code> header for all CRM API calls.</p>
-        </CardContent>
-      </Card>
-
       <Card className="border-purple-200">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Badge className="bg-purple-100 text-purple-800">CRM Auth</Badge>
-            API Key Authentication
+            Authentication
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-gray-600">
-            All CRM API endpoints use an <strong>API key</strong> passed in the <code className="bg-gray-100 px-1 rounded">x-api-key</code> header. 
-            The key is matched against your CRM Integration settings (CRM Integration → API Key field). Each key is scoped to a single client account.
+            All CRM API endpoints authenticate using your <strong>Platform Authorization Key</strong> (the <code className="bg-gray-100 px-1 rounded">gwk_…</code> key shown above) passed in the <code className="bg-gray-100 px-1 rounded">x-auth-key</code> header. Each key is scoped to a single client account.
           </p>
           <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
-{`// Option 1: Platform Authorization Key (recommended)
-{
+{`{
   "Content-Type": "application/json",
   "x-auth-key": "${authKey || 'your-platform-auth-key'}"
-}
-
-// Option 2: CRM Integration API Key
-{
-  "Content-Type": "application/json",
-  "x-api-key": "${crmApiKey || 'your-crm-api-key'}"
 }`}
           </pre>
         </CardContent>
@@ -429,7 +365,7 @@ export default function APIDocs() {
             <h4 className="font-semibold text-sm mb-1">Create Lead</h4>
             <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
 {`POST /functions/crmInbound
-Headers: { "x-api-key": "your-key" }
+Headers: { "x-auth-key": "your-platform-key" }
 Body:
 {
   "action": "create_lead",
@@ -526,7 +462,7 @@ Body:
             <h4 className="font-semibold text-sm mb-1">Fetch Leads (with filters)</h4>
             <pre className="bg-gray-100 p-3 rounded text-sm overflow-x-auto">
 {`POST /functions/crmFetchData
-Headers: { "x-api-key": "your-key" }
+Headers: { "x-auth-key": "your-platform-key" }
 Body:
 {
   "entity": "leads",
