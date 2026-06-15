@@ -267,6 +267,7 @@ export default function AdminClients() {
                 <TableHead>Account</TableHead>
                 <TableHead>KYC</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead>Activated (Paid)</TableHead>
                 <TableHead>Next Billing</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
@@ -274,7 +275,7 @@ export default function AdminClients() {
             <TableBody>
               {clients.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={11} className="text-center text-gray-500">
+                  <TableCell colSpan={12} className="text-center text-gray-500">
                     No clients found. Add your first client to get started.
                   </TableCell>
                 </TableRow>
@@ -332,6 +333,10 @@ export default function AdminClients() {
                       <Badge className={statusColors[client.status]}>
                         {client.status}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {client.activation_date ?
+                        new Date(client.activation_date).toLocaleDateString() : '-'}
                     </TableCell>
                     <TableCell>
                       {client.next_billing_date ? 
