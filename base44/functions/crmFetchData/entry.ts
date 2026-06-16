@@ -51,6 +51,7 @@ Deno.serve(async (req) => {
       clientRec = recs[0] || null;
     }
     const accessStatus = clientRec?.crm_api_access_status || 'not_requested';
+    console.log(`[crmFetchData] gate: clientId=${clientId} found=${!!clientRec} accessStatus=${accessStatus} via=${authKey ? 'auth-key' : 'api-key'}`);
     if (accessStatus !== 'active') {
       return Response.json({
         error: 'CRM Integration API access is not active for this account.',
