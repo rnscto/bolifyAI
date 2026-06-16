@@ -54,8 +54,17 @@ Deno.serve(async (req) => {
     if (!clientRec) {
       clientRec = await resolveClient(base44, clientId);
     }
-    const accessStatus = clientRec?.crm_api_access_status || 'not_requested';
-    console.log(`[crmInbound] gate: clientId=${clientId} found=${!!clientRec} accessStatus=${accessStatus} via=${authKey ? 'auth-key' : 'api-key'}`);
+    // If the client record could not be resolved at all, that's a lookup failure —
+    // don't masquerade it as "not_requested" (which is misleading to the client).
+    if (!clientRec) {
+      console.error(`[crmInbound] gate: could not resolve client record for clientId=${clientId} via=${authKey ? 'auth-key' : 'api-key'}`);
+      return Response.json({
+        error: 'Could not resolve your account record. Please retry; if this persists, contact support.',
+        access_status: 'lookup_failed'
+      }, { status: 503 });
+    }
+    const accessStatus = clientRec.crm_api_access_status || 'not_requested';
+    console.log(`[crmInbound] gate: clientId=${clientId} found=true accessStatus=${accessStatus} via=${authKey ? 'auth-key' : 'api-key'}`);
     if (accessStatus !== 'active') {
       return Response.json({
         error: 'CRM Integration API access is not active for this account.',
