@@ -55,8 +55,15 @@ export default function ClientCRM() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const integrationData = { ...formData, client_id: client.id, status: 'active' };
-    await base44.entities.CRMIntegration.create(integrationData);
-    toast.success('CRM integration created');
+    // Prevent duplicate active integrations of the same type — update existing instead of creating a new row.
+    const existing = integrations.find(i => i.crm_type === formData.crm_type);
+    if (existing) {
+      await base44.entities.CRMIntegration.update(existing.id, integrationData);
+      toast.success('CRM integration updated');
+    } else {
+      await base44.entities.CRMIntegration.create(integrationData);
+      toast.success('CRM integration created');
+    }
     setDialogOpen(false);
     setFormData({ crm_type: '', webhook_url: '', api_key: '', api_endpoint: '', sync_direction: 'push' });
     loadData();
