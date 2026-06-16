@@ -26,6 +26,7 @@ Deno.serve(async (req) => {
 
     let clientId;
     let integration = null;
+    let clientRec = null;
 
     if (authKey) {
       // Authenticate via client platform auth key
@@ -33,6 +34,7 @@ Deno.serve(async (req) => {
       if (clients.length === 0) {
         return Response.json({ error: 'Invalid authorization key' }, { status: 403 });
       }
+      clientRec = clients[0];
       clientId = clients[0].id;
       // Optionally load integration for field mapping
       const integrations = await base44.entities.CRMIntegration.filter({ client_id: clientId, status: 'active' });
@@ -48,7 +50,11 @@ Deno.serve(async (req) => {
     }
 
     // ─── CRM API access gate: admin must activate this client ───
-    const clientRec = await base44.entities.Client.get(clientId).catch(() => null);
+    // Reuse the record from auth if available; otherwise look it up by id via filter.
+    if (!clientRec) {
+      const recs = await base44.entities.Client.filter({ id: clientId });
+      clientRec = recs[0] || null;
+    }
     const accessStatus = clientRec?.crm_api_access_status || 'not_requested';
     if (accessStatus !== 'active') {
       return Response.json({

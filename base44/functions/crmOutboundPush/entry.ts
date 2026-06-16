@@ -200,7 +200,8 @@ Deno.serve(async (req) => {
     }
 
     // ─── CRM API access gate: admin must activate this client ───
-    const clientRec = await svc.entities.Client.get(client_id).catch(() => null);
+    const clientRecs = await svc.entities.Client.filter({ id: client_id });
+    const clientRec = clientRecs[0] || null;
     const accessStatus = clientRec?.crm_api_access_status || 'not_requested';
     if (accessStatus !== 'active') {
       return Response.json({
