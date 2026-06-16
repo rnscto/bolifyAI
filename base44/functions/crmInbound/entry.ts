@@ -50,12 +50,12 @@ Deno.serve(async (req) => {
     }
 
     // ─── CRM API access gate: admin must activate this client ───
-    // Reuse the record from auth if available; otherwise look it up by id via filter.
+    // Reuse the record from auth if available; otherwise resolve it reliably by id.
     if (!clientRec) {
-      const recs = await base44.entities.Client.filter({ id: clientId });
-      clientRec = recs[0] || null;
+      clientRec = await resolveClient(base44, clientId);
     }
     const accessStatus = clientRec?.crm_api_access_status || 'not_requested';
+    console.log(`[crmInbound] gate: clientId=${clientId} found=${!!clientRec} accessStatus=${accessStatus} via=${authKey ? 'auth-key' : 'api-key'}`);
     if (accessStatus !== 'active') {
       return Response.json({
         error: 'CRM Integration API access is not active for this account.',
@@ -215,6 +215,23 @@ Deno.serve(async (req) => {
     return Response.json({ error: error.message }, { status: 500 });
   }
 });
+
+// Reliably resolve a Client record by id across SDK quirks: try .get(), then filter by id.
+async function resolveClient(base44, clientId) {
+  try {
+    const rec = await base44.entities.Client.get(clientId);
+    if (rec) return rec;
+  } catch (e) {
+    console.log(`[resolveClient] .get() failed: ${e.message}`);
+  }
+  try {
+    const recs = await base44.entities.Client.filter({ id: clientId });
+    if (recs && recs.length > 0) return recs[0];
+  } catch (e) {
+    console.log(`[resolveClient] .filter({id}) failed: ${e.message}`);
+  }
+  return null;
+}
 
 // Apply field mapping: maps external CRM field names → internal field names
 function applyFieldMapping(data, mapping, action) {
