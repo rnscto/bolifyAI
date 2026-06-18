@@ -1,22 +1,39 @@
 import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.31';
 
-// Paginated fetch: returns ALL CampaignLeads for a campaign (handles >1000 leads).
-// Base44's filter() defaults to 1000-record cap — using this avoids premature completion.
-async function fetchAllCampaignLeads(base44, campaignId) {
-  const PAGE = 500;
-  let all = [];
-  let skip = 0;
-  while (true) {
-    const batch = await base44.entities.CampaignLead.filter(
-      { campaign_id: campaignId }, 'created_date', PAGE, skip
-    );
-    if (!batch || batch.length === 0) break;
-    all = all.concat(batch);
-    if (batch.length < PAGE) break;
-    skip += PAGE;
-    if (skip > 100000) break;
+// ─── Retry-with-backoff wrapper for entity reads/writes ───
+// Base44 throws on 429 (rate limit). Without retry, a transient 429 aborts processing
+// and a real connected call can get wrongly marked failed. Waits & retries before giving up.
+async function withRetry(fn, label = 'op') {
+  let lastErr;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const msg = String(e?.message || e);
+      const is429 = msg.includes('429') || /rate.?limit/i.test(msg);
+      lastErr = e;
+      if (!is429 || attempt === 3) throw e;
+      const wait = 250 * Math.pow(3, attempt); // 250, 750, 2250
+      console.warn(`[campaignPostCall] 429 on ${label} — retry ${attempt + 1}/3 in ${wait}ms`);
+      await new Promise(r => setTimeout(r, wait));
+    }
   }
-  return all;
+  throw lastErr;
+}
+
+// Counts each lead status for a campaign WITHOUT paginating the whole table.
+// Status-filtered reads are far cheaper and avoid the 429 storms the full scan caused.
+async function fetchStatusCounts(base44, campaignId) {
+  const statuses = ['pending', 'calling', 'processing', 'completed', 'failed'];
+  const results = await Promise.all(
+    statuses.map(s => withRetry(
+      () => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: s }, 'created_date', 1000),
+      `count_${s}`
+    ))
+  );
+  const map = {};
+  statuses.forEach((s, i) => { map[s] = results[i]; });
+  return map;
 }
 
 // ─── Resolve template variables from a lead, mapping each placeholder correctly ───
@@ -199,11 +216,19 @@ Deno.serve(async (req) => {
     let callStatus = 'answered';
     let summary = callLog.conversation_summary || '';
 
-    if (callLog.status === 'no_answer') {
+    // CONNECTED-CALL GUARD: a call with a transcript / recording / duration genuinely
+    // connected — NEVER mark it not_answered even if CallLog.status is failed/no_answer
+    // (Smartflo can report a terminal failed/busy after a real conversation, and a transient
+    //  429 can corrupt the status). Treat as a completed/neutral call instead.
+    const callConnected = (callLog.transcript && callLog.transcript.length > 20)
+      || !!callLog.recording_url
+      || (callLog.duration && callLog.duration > 0);
+
+    if (!callConnected && callLog.status === 'no_answer') {
       outcome = 'not_answered';
       callStatus = 'not_answered';
       summary = summary || 'Call was not answered.';
-    } else if (callLog.status === 'failed') {
+    } else if (!callConnected && callLog.status === 'failed') {
       outcome = 'not_answered';
       callStatus = 'not_answered';
       summary = summary || 'Call failed to connect.';
@@ -416,26 +441,23 @@ async function triggerNextBatch(base44, campaignId) {
     }
 
     const now = new Date();
-    // Paginated — handles campaigns with >1000 leads (previously capped at 1000)
-    const allLeads = await fetchAllCampaignLeads(base44, campaignId);
-    const pendingLeads = allLeads.filter(l => l.status === 'pending');
-    const callingLeads = allLeads.filter(l => l.status === 'calling');
+    // Bounded status-filtered reads instead of a full-table scan (was a major 429 driver).
+    const counts = await fetchStatusCounts(base44, campaignId);
+    const pendingLeads = counts.pending;
+    const callingLeads = counts.calling;
+    const processingLeads = counts.processing;
     const maxConcurrent = campaign.max_concurrent_calls || 5;
 
     // Separate ready-to-call vs retry-later pending leads
     const readyPending = pendingLeads.filter(l => !l.followup_call_date || new Date(l.followup_call_date) <= now);
     const retryLaterPending = pendingLeads.filter(l => l.followup_call_date && new Date(l.followup_call_date) > now);
 
-    const processingLeads = allLeads.filter(l => l.status === 'processing');
-
     // Check completion — only complete if NO pending, calling, or processing leads
     if (readyPending.length === 0 && callingLeads.length === 0 && retryLaterPending.length === 0 && processingLeads.length === 0) {
-      const completedCount = allLeads.filter(l => l.status === 'completed').length;
-      const failedCount = allLeads.filter(l => l.status === 'failed').length;
-      const outcomes = countOutcomes(allLeads);
+      const outcomes = countOutcomes([...counts.completed, ...counts.failed]);
       await base44.entities.Campaign.update(campaignId, {
         status: 'completed', completed_at: new Date().toISOString(),
-        calls_completed: completedCount, calls_failed: failedCount, outcomes_summary: outcomes
+        calls_completed: counts.completed.length, calls_failed: counts.failed.length, outcomes_summary: outcomes
       });
       return { completed: true };
     }
@@ -951,18 +973,12 @@ Reference specific topics discussed. Include a CTA. Under 200 words. HTML format
 // =====================================================
 async function updateCampaignStats(base44, campaignId) {
   try {
-    // Paginated — handles campaigns with >1000 leads (previously capped at 1000)
-    const allLeads = await fetchAllCampaignLeads(base44, campaignId);
-    const outcomes = countOutcomes(allLeads);
-    const completedCount = allLeads.filter(l => l.status === 'completed').length;
-    const failedCount = allLeads.filter(l => l.status === 'failed').length;
-    const pendingCount = allLeads.filter(l => l.status === 'pending').length;
-    const callingCount = allLeads.filter(l => l.status === 'calling').length;
-
-    const processingCount = allLeads.filter(l => l.status === 'processing').length;
-    const update = { outcomes_summary: outcomes, calls_completed: completedCount, calls_failed: failedCount };
+    // Bounded status-filtered reads instead of a full-table scan (was a major 429 driver).
+    const counts = await fetchStatusCounts(base44, campaignId);
+    const outcomes = countOutcomes([...counts.completed, ...counts.failed]);
+    const update = { outcomes_summary: outcomes, calls_completed: counts.completed.length, calls_failed: counts.failed.length };
     // Only mark completed if NO pending, NO calling, and NO processing leads
-    if (pendingCount === 0 && callingCount === 0 && processingCount === 0) {
+    if (counts.pending.length === 0 && counts.calling.length === 0 && counts.processing.length === 0) {
       update.status = 'completed';
       update.completed_at = new Date().toISOString();
     }

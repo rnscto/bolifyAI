@@ -6,6 +6,28 @@ import { createClient } from 'npm:@base44/sdk@0.8.31';
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
 
+// ─── Retry-with-backoff wrapper for entity reads/writes ───
+// Base44 throws on 429 (rate limit). Without retry, a transient 429 mid-call
+// aborts processing and a real connected call gets wrongly marked failed.
+// This waits and retries (250ms, 750ms, 1750ms) before giving up.
+async function withRetry(fn, label = 'op') {
+  let lastErr;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      return await fn();
+    } catch (e) {
+      const msg = String(e?.message || e);
+      const is429 = msg.includes('429') || /rate.?limit/i.test(msg);
+      lastErr = e;
+      if (!is429 || attempt === 3) throw e;
+      const wait = 250 * Math.pow(3, attempt) - (attempt === 0 ? 0 : 0); // 250, 750, 2250
+      console.warn(`[smartfloWebhook] 429 on ${label} — retry ${attempt + 1}/3 in ${wait}ms`);
+      await new Promise(r => setTimeout(r, wait));
+    }
+  }
+  throw lastErr;
+}
+
 // ─── Send Telegram notification directly (no function invoke) ───
 async function sendTelegramDirect(client, { caller_number, caller_name, category, urgency, summary, type }) {
   if (!client || !client.telegram_connected || !client.telegram_chat_id || !TELEGRAM_BOT_TOKEN) return;
@@ -768,11 +790,19 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
             let outcome = 'neutral';
             let clCallStatus = 'answered';
             let clSummary = latestCallLog.conversation_summary || '';
-            
-            if (latestCallLog.status === 'no_answer' || freshCallLog.status === 'no_answer') {
+
+            // CONNECTED-CALL GUARD: if the call has a transcript or recording, it genuinely
+            // connected — NEVER mark it not_answered/failed even if Smartflo reports a terminal
+            // failed/busy/cancelled status (those can arrive after a real conversation, or a
+            // transient 429 can corrupt the status). Treat as a completed/neutral call.
+            const callConnected = (latestCallLog.transcript && latestCallLog.transcript.length > 20)
+              || !!latestCallLog.recording_url
+              || (latestCallLog.duration && latestCallLog.duration > 0);
+
+            if (!callConnected && (latestCallLog.status === 'no_answer' || freshCallLog.status === 'no_answer')) {
               outcome = 'not_answered'; clCallStatus = 'not_answered';
               clSummary = clSummary || 'Call was not answered.';
-            } else if (latestCallLog.status === 'failed' || freshCallLog.status === 'failed') {
+            } else if (!callConnected && (latestCallLog.status === 'failed' || freshCallLog.status === 'failed')) {
               outcome = 'not_answered'; clCallStatus = 'not_answered';
               clSummary = clSummary || 'Call failed to connect.';
             } else if (latestCallLog.lead_status_updated) {
@@ -827,14 +857,15 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
             // TRIGGER NEXT CALL IMMEDIATELY (inline — no function invoke)
             await triggerNextCampaignCall(base44, campaignLead.campaign_id);
             
-            // Update campaign stats
-            const allCLs = await base44.entities.CampaignLead.filter({ campaign_id: campaignLead.campaign_id });
-            const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0, converted: 0, do_not_call: 0 };
-            allCLs.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
-            const completedCount = allCLs.filter(l => l.status === 'completed').length;
-            const failedCount = allCLs.filter(l => l.status === 'failed').length;
+            // Update campaign stats — bounded count reads instead of a full-table scan.
+            // (Detailed outcomes_summary is recomputed by campaignPostCall's slow path; here we
+            //  just keep the completed/failed counters fresh without paginating every webhook.)
+            const [completedSet, failedSet] = await Promise.all([
+              withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignLead.campaign_id, status: 'completed' }, 'created_date', 1000), 'stats_completed'),
+              withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignLead.campaign_id, status: 'failed' }, 'created_date', 1000), 'stats_failed'),
+            ]);
             await base44.entities.Campaign.update(campaignLead.campaign_id, {
-              outcomes_summary: outcomes, calls_completed: completedCount, calls_failed: failedCount
+              calls_completed: completedSet.length, calls_failed: failedSet.length
             });
           }
         } else {
@@ -1032,22 +1063,30 @@ async function triggerNextCampaignCall(base44, campaignId) {
     }
 
     const now = new Date();
-    const allLeads = await base44.entities.CampaignLead.filter({ campaign_id: campaignId }, 'created_date', 1000);
-    const callingLeads = allLeads.filter(l => l.status === 'calling');
-    const pendingLeads = allLeads.filter(l => l.status === 'pending');
-    const processingLeads = allLeads.filter(l => l.status === 'processing');
     const maxConcurrent = campaign.max_concurrent_calls || 5;
+
+    // BOUNDED reads instead of a full-table scan on every webhook (was the main 429 driver).
+    // We only need: in-flight counts (small) + a bounded page of pending leads to dial next.
+    const [callingLeads, processingLeads, pendingProbe] = await Promise.all([
+      withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'calling' }, 'created_date', 100), 'calling'),
+      withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'processing' }, 'created_date', 100), 'processing'),
+      withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'pending' }, 'created_date', 200), 'pending'),
+    ]);
+    const pendingLeads = pendingProbe;
 
     const readyPending = pendingLeads.filter(l => !l.followup_call_date || new Date(l.followup_call_date) <= now);
     const retryLaterPending = pendingLeads.filter(l => l.followup_call_date && new Date(l.followup_call_date) > now);
 
-    // Check if campaign should complete
-    if (readyPending.length === 0 && callingLeads.length === 0 && retryLaterPending.length === 0 && processingLeads.length === 0) {
-      const completedCount = allLeads.filter(l => l.status === 'completed').length;
-      const failedCount = allLeads.filter(l => l.status === 'failed').length;
+    // Check if campaign should complete — only when the bounded pending probe is genuinely empty.
+    if (readyPending.length === 0 && callingLeads.length === 0 && retryLaterPending.length === 0 && processingLeads.length === 0 && pendingProbe.length === 0) {
+      // Finishing — now (and only now) compute final stats from the completed/failed sets.
+      const [completedSet, failedSet] = await Promise.all([
+        withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'completed' }, 'created_date', 1000), 'completed'),
+        withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'failed' }, 'created_date', 1000), 'failed'),
+      ]);
       await base44.entities.Campaign.update(campaignId, {
         status: 'completed', completed_at: now.toISOString(),
-        calls_completed: completedCount, calls_failed: failedCount
+        calls_completed: completedSet.length, calls_failed: failedSet.length
       });
       console.log(`[smartfloWebhook] Campaign "${campaign.name}" completed`);
       return;
