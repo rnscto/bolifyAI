@@ -116,7 +116,16 @@ export default function ClientKnowledgeBase() {
       }
 
       const kbDoc = await base44.entities.KnowledgeBase.create(docData);
-      
+
+      // For uploaded files, extract text content directly (no automation / integration credits needed)
+      if (inputMode === 'file') {
+        try {
+          await base44.functions.invoke('extractKBContent', { kb_id: kbDoc.id });
+        } catch (extractErr) {
+          console.error('KB extraction failed:', extractErr);
+        }
+      }
+
       // Auto-sync with assigned agent
       if (agent) {
         const currentKbIds = agent.knowledge_base_ids || [];
