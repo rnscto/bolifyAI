@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import FeatureGate from '../components/FeatureGate';
 import CampaignCard from '../components/campaigns/CampaignCard';
 import CreateCampaignDialog from '../components/campaigns/CreateCampaignDialog';
+import { useCampaignLiveStats } from '../components/campaigns/useCampaignLiveStats';
 import { Plus, Megaphone } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -13,6 +14,9 @@ export default function ClientCampaigns() {
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
+
+  // Live stats computed from CampaignLead records (does NOT depend on integration credits)
+  const liveStats = useCampaignLiveStats(campaigns);
 
   useEffect(() => {
     loadData();
@@ -80,9 +84,12 @@ export default function ClientCampaigns() {
     );
   }
 
-  const running = campaigns.filter(c => c.status === 'running').length;
-  const completed = campaigns.filter(c => c.status === 'completed').length;
-  const totalLeads = campaigns.reduce((s, c) => s + (c.total_leads || 0), 0);
+  // Merge live (credit-independent) stats over the stored counters
+  const enrichedCampaigns = campaigns.map(c => liveStats[c.id] ? { ...c, ...liveStats[c.id] } : c);
+
+  const running = enrichedCampaigns.filter(c => c.status === 'running').length;
+  const completed = enrichedCampaigns.filter(c => c.status === 'completed').length;
+  const totalLeads = enrichedCampaigns.reduce((s, c) => s + (c.total_leads || 0), 0);
 
   return (
     <FeatureGate client={client} featureName="Campaigns">
@@ -128,7 +135,7 @@ export default function ClientCampaigns() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {campaigns.map(c => (
+            {enrichedCampaigns.map(c => (
               <CampaignCard key={c.id} campaign={c} onStart={handleStart} onPause={handlePause} />
             ))}
           </div>
