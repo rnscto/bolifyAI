@@ -185,6 +185,10 @@
             }
           }
         },
+        "template_variable_map": {
+          "type": "object",
+          "description": "Explicit variable mappings per template ID. Keyed by WhatsAppTemplate ID \u2192 array of slot definitions (index order = {{1}},{{2}}\u2026). Each slot is { source: 'lead_name'|'lead_company'|'lead_phone'|'lead_email'|'static', value?: string } where value holds the static text when source==='static'."
+        },
         "missed_call_enabled": {
           "type": "boolean",
           "default": false,

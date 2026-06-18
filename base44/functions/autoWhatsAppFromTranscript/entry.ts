@@ -163,7 +163,7 @@ async function sendWhatsAppDirect(svc, { template, recipient, variables, lead, l
 // placeholders ({{1}},{{2}}…). For numbered slots we map slot 1 → lead name, then resolve
 // the rest from the lead fields hinted by the template's approved body_examples, falling
 // back to the example value the client already registered (never a blind name dump, never empty).
-function buildTemplateVariables(template, lead) {
+function buildTemplateVariables(template, lead, slotMap) {
   const body = template.body_text || '';
   const leadName = (lead && lead.name) || 'Sir/Madam';
 
@@ -177,7 +177,21 @@ function buildTemplateVariables(template, lead) {
   const maxSlot = Math.max(...numbers);
   const examples = Array.isArray(template.body_examples) ? template.body_examples : [];
 
+  // Explicit per-slot mapping configured in the campaign UI takes priority.
+  const fromSlotMap = (idx) => {
+    const m = Array.isArray(slotMap) ? slotMap[idx] : null;
+    if (!m || !m.source) return undefined;
+    if (m.source === 'static') return m.value || examples[idx] || leadName;
+    if (m.source === 'lead_name') return (lead && lead.name) || leadName;
+    if (m.source === 'lead_company') return (lead && lead.company) || examples[idx] || '';
+    if (m.source === 'lead_phone') return (lead && lead.phone) || examples[idx] || '';
+    if (m.source === 'lead_email') return (lead && lead.email) || examples[idx] || '';
+    return undefined;
+  };
+
   const resolveSlot = (idx) => {
+    const mapped = fromSlotMap(idx);
+    if (mapped !== undefined) return mapped;
     // idx is 0-based (slot {{1}} → idx 0)
     if (idx === 0) return leadName; // convention: first variable is the recipient name
     const hint = String(examples[idx] || '').toLowerCase();
@@ -296,8 +310,10 @@ Return:
       return Response.json({ skipped: 'template_not_approved', intent, template_status: template.status });
     }
 
-    // Build variables matching the template's body placeholders.
-    const variables = buildTemplateVariables(template, lead);
+    // Build variables matching the template's body placeholders. Explicit per-slot
+    // mappings configured in the campaign UI take priority over auto-resolution.
+    const slotMap = (campaign.whatsapp_auto_send.template_variable_map || {})[templateId];
+    const variables = buildTemplateVariables(template, lead, slotMap);
 
     const sendResult = await sendWhatsAppDirect(svc, {
       template,

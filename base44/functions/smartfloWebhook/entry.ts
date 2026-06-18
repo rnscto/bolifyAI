@@ -96,7 +96,7 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
 // interpolation in whatsappSendTemplate. Numbered placeholders {{1}}…{{N}} map slot 1 → lead
 // name, then resolve remaining slots from lead fields hinted by the template's approved
 // body_examples, falling back to the example value (never empty — Meta rejects param mismatch).
-function buildMissedCallVariables(template, lead) {
+function buildMissedCallVariables(template, lead, slotMap) {
   if (!template) return [];
   const body = template.body_text || '';
   const leadName = (lead && lead.name) || 'Sir/Madam';
@@ -106,7 +106,20 @@ function buildMissedCallVariables(template, lead) {
   if (numbers.length === 0) return [];
   const maxSlot = Math.max(...numbers);
   const examples = Array.isArray(template.body_examples) ? template.body_examples : [];
+  // Explicit per-slot mapping configured in the campaign UI takes priority.
+  const fromSlotMap = (idx) => {
+    const m = Array.isArray(slotMap) ? slotMap[idx] : null;
+    if (!m || !m.source) return undefined;
+    if (m.source === 'static') return m.value || examples[idx] || leadName;
+    if (m.source === 'lead_name') return (lead && lead.name) || leadName;
+    if (m.source === 'lead_company') return (lead && lead.company) || examples[idx] || '';
+    if (m.source === 'lead_phone') return (lead && lead.phone) || examples[idx] || '';
+    if (m.source === 'lead_email') return (lead && lead.email) || examples[idx] || '';
+    return undefined;
+  };
   const resolveSlot = (idx) => {
+    const mapped = fromSlotMap(idx);
+    if (mapped !== undefined) return mapped;
     if (idx === 0) return leadName;
     const hint = String(examples[idx] || '').toLowerCase();
     if (lead) {
@@ -909,7 +922,8 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
                       const lead = await base44.entities.Lead.get(campaignLead.lead_id);
                       if (lead?.phone) {
                         const mcTemplate = await base44.entities.WhatsAppTemplate.get(wa.missed_call_template_id);
-                        const variables = buildMissedCallVariables(mcTemplate, lead);
+                        const slotMap = (wa.template_variable_map || {})[wa.missed_call_template_id];
+                        const variables = buildMissedCallVariables(mcTemplate, lead, slotMap);
                         const waResult = await base44.functions.invoke('whatsappSendTemplate', {
                           template_id: wa.missed_call_template_id,
                           recipient: lead.phone,

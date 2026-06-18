@@ -41,7 +41,7 @@ async function fetchStatusCounts(base44, campaignId) {
 // interpolation. Numbered placeholders {{1}}…{{N}} map slot 1 → lead name, then resolve
 // remaining slots from lead fields hinted by the template's approved body_examples,
 // falling back to the example value (never blind name-dump, never empty).
-function buildTemplateVariables(template, lead) {
+function buildTemplateVariables(template, lead, slotMap) {
   const body = template.body_text || '';
   const leadName = (lead && lead.name) || 'Sir/Madam';
   const namedTokens = body.match(/\{\{(name|company|phone|email)\}\}/gi) || [];
@@ -50,7 +50,20 @@ function buildTemplateVariables(template, lead) {
   if (numbers.length === 0) return [];
   const maxSlot = Math.max(...numbers);
   const examples = Array.isArray(template.body_examples) ? template.body_examples : [];
+  // Explicit per-slot mapping configured in the campaign UI takes priority.
+  const fromSlotMap = (idx) => {
+    const m = Array.isArray(slotMap) ? slotMap[idx] : null;
+    if (!m || !m.source) return undefined;
+    if (m.source === 'static') return m.value || examples[idx] || leadName;
+    if (m.source === 'lead_name') return (lead && lead.name) || leadName;
+    if (m.source === 'lead_company') return (lead && lead.company) || examples[idx] || '';
+    if (m.source === 'lead_phone') return (lead && lead.phone) || examples[idx] || '';
+    if (m.source === 'lead_email') return (lead && lead.email) || examples[idx] || '';
+    return undefined;
+  };
   const resolveSlot = (idx) => {
+    const mapped = fromSlotMap(idx);
+    if (mapped !== undefined) return mapped;
     if (idx === 0) return leadName;
     const hint = String(examples[idx] || '').toLowerCase();
     if (lead) {
@@ -298,9 +311,11 @@ Deno.serve(async (req) => {
               if (lead?.phone) {
                 const template = await base44.entities.WhatsAppTemplate.get(wa.missed_call_template_id);
                 if (template && template.status === 'APPROVED') {
-                  // Build variables matching the template's placeholders (named tokens pass through
-                  // for interpolation; numbered ones resolve per-slot from lead fields / approved examples).
-                  const variables = buildTemplateVariables(template, lead);
+                  // Build variables matching the template's placeholders. Explicit per-slot
+                  // mappings (configured in the campaign UI) take priority; otherwise named tokens
+                  // pass through and numbered ones resolve from lead fields / approved examples.
+                  const slotMap = (wa.template_variable_map || {})[template.id];
+                  const variables = buildTemplateVariables(template, lead, slotMap);
 
                   // Delegate to the shared sender for correct RCS Digital host + interpolation + logging
                   const waResult = await base44.functions.invoke('whatsappSendTemplate', {

@@ -6,6 +6,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { MessageSquare, AlertCircle } from 'lucide-react';
+import TemplateVariableMapper from './TemplateVariableMapper';
 
 const INTENTS = [
   { key: 'pricing_details', label: 'Pricing / Cost', hint: 'Customer asks "send me pricing"' },
@@ -23,6 +24,7 @@ export default function CampaignWhatsAppRules({ clientId, value, onChange }) {
 
   const enabled = value?.enabled || false;
   const intentMap = value?.intent_template_map || {};
+  const varMap = value?.template_variable_map || {};
   const missedEnabled = value?.missed_call_enabled || false;
   const missedWhen = value?.missed_call_when || 'after_final_retry';
   const missedTemplateId = value?.missed_call_template_id || '';
@@ -30,11 +32,17 @@ export default function CampaignWhatsAppRules({ clientId, value, onChange }) {
   const merge = (patch) => onChange({
     enabled,
     intent_template_map: intentMap,
+    template_variable_map: varMap,
     missed_call_enabled: missedEnabled,
     missed_call_when: missedWhen,
     missed_call_template_id: missedTemplateId,
     ...patch
   });
+
+  const templateById = (id) => templates.find(t => t.id === id);
+  const setVarMapping = (templateId, slots) => {
+    merge({ template_variable_map: { ...varMap, [templateId]: slots } });
+  };
 
   useEffect(() => {
     if (!clientId) return;
@@ -89,29 +97,38 @@ export default function CampaignWhatsAppRules({ clientId, value, onChange }) {
               <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Map intents → templates</Label>
               <div className="space-y-2">
                 {INTENTS.map(intent => (
-                  <div key={intent.key} className="grid grid-cols-5 gap-2 items-center">
-                    <div className="col-span-2">
-                      <p className="text-sm font-medium text-gray-800">{intent.label}</p>
-                      <p className="text-xs text-gray-500">{intent.hint}</p>
+                  <div key={intent.key} className="space-y-1">
+                    <div className="grid grid-cols-5 gap-2 items-center">
+                      <div className="col-span-2">
+                        <p className="text-sm font-medium text-gray-800">{intent.label}</p>
+                        <p className="text-xs text-gray-500">{intent.hint}</p>
+                      </div>
+                      <div className="col-span-3">
+                        <Select
+                          value={intentMap[intent.key] || '__none__'}
+                          onValueChange={(v) => setMapping(intent.key, v)}
+                        >
+                          <SelectTrigger className="h-9">
+                            <SelectValue placeholder="-- not mapped --" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">— Not mapped (skip) —</SelectItem>
+                            {templates.map(t => (
+                              <SelectItem key={t.id} value={t.id}>
+                                {t.name} ({t.language})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
-                    <div className="col-span-3">
-                      <Select
-                        value={intentMap[intent.key] || '__none__'}
-                        onValueChange={(v) => setMapping(intent.key, v)}
-                      >
-                        <SelectTrigger className="h-9">
-                          <SelectValue placeholder="-- not mapped --" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="__none__">— Not mapped (skip) —</SelectItem>
-                          {templates.map(t => (
-                            <SelectItem key={t.id} value={t.id}>
-                              {t.name} ({t.language})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {intentMap[intent.key] && (
+                      <TemplateVariableMapper
+                        template={templateById(intentMap[intent.key])}
+                        mapping={varMap[intentMap[intent.key]]}
+                        onChange={(slots) => setVarMapping(intentMap[intent.key], slots)}
+                      />
+                    )}
                   </div>
                 ))}
               </div>
@@ -174,6 +191,13 @@ export default function CampaignWhatsAppRules({ clientId, value, onChange }) {
                       ))}
                     </SelectContent>
                   </Select>
+                  {missedTemplateId && (
+                    <TemplateVariableMapper
+                      template={templateById(missedTemplateId)}
+                      mapping={varMap[missedTemplateId]}
+                      onChange={(slots) => setVarMapping(missedTemplateId, slots)}
+                    />
+                  )}
                 </div>
               </>
             )}
