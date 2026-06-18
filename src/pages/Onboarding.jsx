@@ -58,23 +58,43 @@ export default function Onboarding() {
     loadUser();
   }, []);
 
-  const loadUser = async () => {
-    const currentUser = await base44.auth.me();
-    setUser(currentUser);
-    setProfileData(prev => ({
-      ...prev,
-      email: currentUser.email,
-    }));
-
-    // Check if already has a client account (by user_id, or fallback to email)
-    let clients = await base44.entities.Client.filter({ user_id: currentUser.id });
-    if (clients.length === 0) {
-      const byEmail = await base44.entities.Client.filter({ email: currentUser.email });
-      if (byEmail.length > 0) {
-        await base44.entities.Client.update(byEmail[0].id, { user_id: currentUser.id });
-        clients = byEmail;
+  // Retry wrapper that backs off on Base44 rate-limit (429) errors instead of crashing the page.
+  const withRetry = async (fn, label = 'op') => {
+    let lastErr;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        return await fn();
+      } catch (e) {
+        const msg = String(e?.message || e);
+        const is429 = msg.includes('429') || /rate.?limit/i.test(msg);
+        lastErr = e;
+        if (!is429 || attempt === 3) throw e;
+        const wait = 400 * Math.pow(2, attempt); // 400, 800, 1600
+        console.warn(`[Onboarding] Rate limited on ${label} — retry ${attempt + 1}/3 in ${wait}ms`);
+        await new Promise(r => setTimeout(r, wait));
       }
     }
+    throw lastErr;
+  };
+
+  const loadUser = async () => {
+    try {
+      const currentUser = await withRetry(() => base44.auth.me(), 'auth.me');
+      setUser(currentUser);
+      setProfileData(prev => ({
+        ...prev,
+        email: currentUser.email,
+      }));
+
+      // Check if already has a client account (by user_id, or fallback to email)
+      let clients = await withRetry(() => base44.entities.Client.filter({ user_id: currentUser.id }), 'Client.filter user_id');
+      if (clients.length === 0) {
+        const byEmail = await withRetry(() => base44.entities.Client.filter({ email: currentUser.email }), 'Client.filter email');
+        if (byEmail.length > 0) {
+          await withRetry(() => base44.entities.Client.update(byEmail[0].id, { user_id: currentUser.id }), 'Client.update');
+          clients = byEmail;
+        }
+      }
     if (clients.length > 0) {
       if (clients[0].onboarding_completed) {
         navigate(createPageUrl('ClientDashboard'));
@@ -88,8 +108,12 @@ export default function Onboarding() {
         phone: clients[0].phone || '',
       });
       if (clients[0].industry) setIndustry(clients[0].industry);
+      }
+    } catch (e) {
+      console.error('[Onboarding] loadUser failed:', e.message);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleComplete = async (agrDataParam) => {
