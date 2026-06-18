@@ -27,28 +27,15 @@ async function sendViaPlatformSMTP({ to, subject, html, fromName }) {
     throw new Error('Platform SMTP secrets (PLATFORM_SMTP_HOST/USER/PASS) are not configured');
   }
   const { SMTPClient } = await import('npm:emailjs@4.0.3');
-  console.log(`[sendClientEmail] Platform SMTP → host=${host} port=${port} user=${user} from=${fromAddress}`);
-  // Try the configured port first; if the TLS/SSL mode is wrong the connection fails,
-  // so fall back to the opposite mode (465↔587) before giving up.
-  const buildClient = (p, mode) => new SMTPClient(
-    mode === 'ssl'
-      ? { user, password: pass, host, port: p, ssl: true, timeout: 15000 }
-      : { user, password: pass, host, port: p, tls: true, timeout: 15000 }
-  );
-  const sendWith = async (p, mode) => {
-    const c = buildClient(p, mode);
-    return c.sendAsync({ from: `${displayName} <${fromAddress}>`, to, subject, attachment: [{ data: html, alternative: true }] });
-  };
-  const primaryMode = port === 465 ? 'ssl' : 'starttls';
-  try {
-    await sendWith(port, primaryMode);
-  } catch (e1) {
-    console.warn(`[sendClientEmail] Primary SMTP (${port}/${primaryMode}) failed: ${e1.message}. Trying fallback.`);
-    // Flip mode + port: 587 STARTTLS ↔ 465 SSL
-    const fbPort = port === 465 ? 587 : 465;
-    const fbMode = port === 465 ? 'starttls' : 'ssl';
-    await sendWith(fbPort, fbMode);
-  }
+  // Mirror the proven config in retentionCall: port 465 → implicit SSL, else STARTTLS (tls:true).
+  const client = port === 465
+    ? new SMTPClient({ user, password: pass, host, port, ssl: true, timeout: 15000 })
+    : new SMTPClient({ user, password: pass, host, port, tls: true, timeout: 15000 });
+  await client.sendAsync({
+    from: `${displayName} <${fromAddress}>`,
+    to, subject,
+    attachment: [{ data: html, alternative: true }]
+  });
   return { provider: 'platform_smtp', status: 'sent', from: fromAddress };
 }
 
