@@ -55,6 +55,16 @@ async function sendWhatsAppDirect(svc, { template, recipient, variables, lead, l
   };
 
   const apiKeyRaw = String(cfg.whatsapp_api_key || '').trim().replace(/^(Bearer|Basic)\s+/i, '');
+  // Interakt Basic auth must be base64-encoded "<key>:" — must match testMessagingConnection,
+  // otherwise accounts that tested OK fail real sends with 401.
+  const interaktBasicCredential = (rawKey) => {
+    const looksBase64 = /^[A-Za-z0-9+/]+={0,2}$/.test(rawKey) && rawKey.length % 4 === 0;
+    if (looksBase64) {
+      try { const decoded = atob(rawKey); return decoded.includes(':') ? rawKey : btoa(rawKey + ':'); }
+      catch (_) { return btoa(rawKey + ':'); }
+    }
+    return btoa(rawKey + ':');
+  };
   const vars = variables || [];
   let ok = false, messageId = null, errMsg = '';
   let recipientPhone = normalizePhone(recipient);
@@ -79,7 +89,7 @@ async function sendWhatsAppDirect(svc, { template, recipient, variables, lead, l
     }
     const res = await fetch(url, {
       method: 'POST',
-      headers: { 'Authorization': `Basic ${apiKeyRaw}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Basic ${interaktBasicCredential(apiKeyRaw)}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ countryCode, phoneNumber, type: 'Template', callbackData: call_log_id || lead_id || '', template: tmpl })
     });
     const rawText = await res.text();

@@ -82,6 +82,20 @@ Deno.serve(async (req) => {
     // Sanitize API key (shared by all providers): strip whitespace + accidental prefix
     const apiKeyRaw = String(cfg.whatsapp_api_key || '').trim().replace(/^(Bearer|Basic)\s+/i, '');
 
+    // Interakt requires HTTP Basic with a base64-encoded "<key>:" credential. The dashboard key
+    // may already be base64 (decodes to "<key>:") — detect that to avoid double-encoding.
+    // This MUST match testMessagingConnection exactly, otherwise tested-OK accounts fail to send.
+    const interaktBasicCredential = (rawKey) => {
+      const looksBase64 = /^[A-Za-z0-9+/]+={0,2}$/.test(rawKey) && rawKey.length % 4 === 0;
+      if (looksBase64) {
+        try {
+          const decoded = atob(rawKey);
+          return decoded.includes(':') ? rawKey : btoa(rawKey + ':');
+        } catch (_) { return btoa(rawKey + ':'); }
+      }
+      return btoa(rawKey + ':');
+    };
+
     // ===== INTERAKT BRANCH =====
     // Interakt has a distinct API: Basic auth, /v1/public/message/, split countryCode+phoneNumber,
     // and headerValues/bodyValues/buttonValues arrays instead of Meta's components structure.
@@ -115,7 +129,7 @@ Deno.serve(async (req) => {
       console.log(`[whatsappSendTemplate/interakt] → POST ${url} (cc=${countryCode}, phone=${phoneNumber}, template=${template.name})`);
       const res = await fetch(url, {
         method: 'POST',
-        headers: { 'Authorization': `Basic ${apiKeyRaw}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Basic ${interaktBasicCredential(apiKeyRaw)}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ countryCode, phoneNumber, type: 'Template', callbackData: call_log_id || lead_id || '', template: tmpl })
       });
       const rawText = await res.text();
