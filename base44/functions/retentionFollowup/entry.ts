@@ -1,14 +1,14 @@
 import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.31';
 
-// Platform's native email integration — sends from noreply@bolifyai.com
+// Send via platform raw SMTP (sendClientEmail with no client_id) — zero integration credits
 async function sendEmail({ to, subject, html, displayName }) {
   const appId = Deno.env.get('BASE44_APP_ID');
   const svc = createClient({ appId, asServiceRole: true });
-  await svc.integrations.Core.SendEmail({
+  const result = await svc.functions.invoke('sendClientEmail', {
     from_name: displayName || 'Bolify AI',
-    to, subject, body: html
+    to, subject, html
   });
-  return { provider: 'platform_integration', status: 'sent' };
+  return result.data || { provider: 'platform_smtp', status: 'sent' };
 }
 
 Deno.serve(async (req) => {

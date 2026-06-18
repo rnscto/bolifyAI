@@ -121,15 +121,15 @@ Deno.serve(async (req) => {
       .replace(/\{\{trial_link\}\}/g, trialLink)
       .replace(/\{\{demo_link\}\}/g, demoLink);
 
-    // Send via platform's native email integration (noreply@bolifyai.com)
+    // Send via platform raw SMTP (sendClientEmail with no client_id) — zero integration credits
     const { createClient } = await import('npm:@base44/sdk@0.8.31');
     const appId = Deno.env.get('BASE44_APP_ID');
     const svc = createClient({ appId, asServiceRole: true });
-    await svc.integrations.Core.SendEmail({
+    await svc.functions.invoke('sendClientEmail', {
       from_name: 'Bolify AI',
       to: email,
       subject: template.subject,
-      body: finalBody
+      html: finalBody
     });
 
     console.log(`✅ Email sent: ${template_type} → ${email}`);

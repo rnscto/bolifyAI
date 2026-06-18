@@ -1,13 +1,15 @@
 import { createClient } from 'npm:@base44/sdk@0.8.31';
 
-// Platform's native email integration — sends from noreply@bolifyai.com
-async function sendLeadEmail({ to, fromName, subject, html }) {
+// Send via client's configured email provider (raw SMTP fallback) — zero integration credits
+async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
   const appId = Deno.env.get('BASE44_APP_ID');
   const svc = createClient({ appId, asServiceRole: true });
-  return await svc.integrations.Core.SendEmail({
+  const result = await svc.functions.invoke('sendClientEmail', {
+    client_id: clientId || null,
     from_name: fromName || 'Bolify AI',
-    to, subject, body: html
+    to, subject, html
   });
+  return result.data;
 }
 
 // Azure OpenAI helper
@@ -301,7 +303,8 @@ INSTRUCTIONS:
       to: recipientEmail,
       fromName: client.company_name || 'VaaniAI',
       subject: contentAnalysis.subject,
-      html: emailHtml
+      html: emailHtml,
+      clientId: clientId
     });
 
     // Log the outreach

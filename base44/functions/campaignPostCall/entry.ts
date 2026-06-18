@@ -99,14 +99,13 @@ async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
       console.warn(`[campaignPostCall] sendClientEmail failed, falling back to platform SMTP: ${e.message}`);
     }
   }
-  // Fallback: platform's native email integration (noreply@bolifyai.com)
+  // Fallback: platform raw SMTP (via sendClientEmail with no client_id) — zero integration credits
   const appId = Deno.env.get('BASE44_APP_ID');
   const svcBase44 = createClient({ appId, asServiceRole: true });
-  await svcBase44.integrations.Core.SendEmail({
-    from_name: fromName || 'Bolify AI',
-    to, subject, body: html
+  const result = await svcBase44.functions.invoke('sendClientEmail', {
+    to, subject, html, from_name: fromName || 'Bolify AI'
   });
-  return { provider: 'platform_integration', status: 'sent' };
+  return result.data || { provider: 'platform_smtp', status: 'sent' };
 }
 
 // ─── Azure OpenAI helper (uses own keys, zero Base44 credits) ───

@@ -20,12 +20,12 @@ async function sendEmail({ to, subject, html, displayName, clientId }) {
       console.warn(`[composeEmail] sendClientEmail failed, falling back to platform SMTP: ${e.message}`);
     }
   }
-  // Fallback: platform's native email integration (noreply@bolifyai.com)
+  // Fallback: platform raw SMTP via sendClientEmail (no client_id) — zero integration credits
   const base44_fb = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
-  await base44_fb.integrations.Core.SendEmail({
-    to, subject, body: html, from_name: displayName || 'Bolify AI'
+  const result = await base44_fb.functions.invoke('sendClientEmail', {
+    to, subject, html, from_name: displayName || 'Bolify AI'
   });
-  return { provider: 'platform_integration', status: 'sent' };
+  return result.data || { provider: 'platform_smtp', status: 'sent' };
 }
 
 // Azure OpenAI helper

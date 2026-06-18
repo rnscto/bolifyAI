@@ -1,11 +1,12 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 async function sendEmail({ to, subject, html, svc }) {
-  // Use platform's native email integration (noreply@bolifyai.com)
-  return await svc.integrations.Core.SendEmail({
+  // Send via platform raw SMTP (sendClientEmail with no client_id) — zero integration credits
+  const result = await svc.functions.invoke('sendClientEmail', {
     from_name: 'Bolify AI Tasks',
-    to, subject, body: html
+    to, subject, html
   });
+  return result.data;
 }
 
 // Daily digest: emails each client admin about pending tasks requiring human attention

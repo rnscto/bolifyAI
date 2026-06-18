@@ -15,16 +15,41 @@ import { createClient, createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
  * }
  */
 
-// ─── Platform default: native email integration (noreply@bolifyai.com) ───
+// ─── Platform default: raw SMTP via PLATFORM_SMTP_* secrets (zero integration credits) ───
 async function sendViaPlatformSMTP({ to, subject, html, fromName }) {
   const displayName = fromName || 'Bolify AI';
-  const appId = Deno.env.get('BASE44_APP_ID');
-  const svc = createClient({ appId, asServiceRole: true });
-  await svc.integrations.Core.SendEmail({
-    from_name: displayName,
-    to, subject, body: html
-  });
-  return { provider: 'platform_integration', status: 'sent', from: 'noreply@bolifyai.com' };
+  const host = Deno.env.get('PLATFORM_SMTP_HOST');
+  const port = parseInt(Deno.env.get('PLATFORM_SMTP_PORT') || '587');
+  const user = Deno.env.get('PLATFORM_SMTP_USER');
+  const pass = Deno.env.get('PLATFORM_SMTP_PASS');
+  const fromAddress = Deno.env.get('PLATFORM_SMTP_FROM') || user;
+  if (!host || !user || !pass) {
+    throw new Error('Platform SMTP secrets (PLATFORM_SMTP_HOST/USER/PASS) are not configured');
+  }
+  const { SMTPClient } = await import('npm:emailjs@4.0.3');
+  console.log(`[sendClientEmail] Platform SMTP → host=${host} port=${port} user=${user} from=${fromAddress}`);
+  // Try the configured port first; if the TLS/SSL mode is wrong the connection fails,
+  // so fall back to the opposite mode (465↔587) before giving up.
+  const buildClient = (p, mode) => new SMTPClient(
+    mode === 'ssl'
+      ? { user, password: pass, host, port: p, ssl: true, timeout: 15000 }
+      : { user, password: pass, host, port: p, tls: true, timeout: 15000 }
+  );
+  const sendWith = async (p, mode) => {
+    const c = buildClient(p, mode);
+    return c.sendAsync({ from: `${displayName} <${fromAddress}>`, to, subject, attachment: [{ data: html, alternative: true }] });
+  };
+  const primaryMode = port === 465 ? 'ssl' : 'starttls';
+  try {
+    await sendWith(port, primaryMode);
+  } catch (e1) {
+    console.warn(`[sendClientEmail] Primary SMTP (${port}/${primaryMode}) failed: ${e1.message}. Trying fallback.`);
+    // Flip mode + port: 587 STARTTLS ↔ 465 SSL
+    const fbPort = port === 465 ? 587 : 465;
+    const fbMode = port === 465 ? 'starttls' : 'ssl';
+    await sendWith(fbPort, fbMode);
+  }
+  return { provider: 'platform_smtp', status: 'sent', from: fromAddress };
 }
 
 // ─── Client provider: SMTP ───
