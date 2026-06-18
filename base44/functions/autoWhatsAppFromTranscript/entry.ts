@@ -141,6 +141,45 @@ async function sendWhatsAppDirect(svc, { template, recipient, variables, lead, l
   return { ok, message_id: messageId, error: ok ? null : errMsg };
 }
 
+// ─── Resolve template variables from a lead, mapping each placeholder correctly ───
+// Handles BOTH named tokens ({{name}}/{{company}}/{{phone}}/{{email}}) and numbered
+// placeholders ({{1}},{{2}}…). For numbered slots we map slot 1 → lead name, then resolve
+// the rest from the lead fields hinted by the template's approved body_examples, falling
+// back to the example value the client already registered (never a blind name dump, never empty).
+function buildTemplateVariables(template, lead) {
+  const body = template.body_text || '';
+  const leadName = (lead && lead.name) || 'Sir/Madam';
+
+  // Named tokens: pass through so the downstream interpolate() resolves them from the lead.
+  const namedTokens = body.match(/\{\{(name|company|phone|email)\}\}/gi) || [];
+  if (namedTokens.length > 0) return namedTokens.map(t => t);
+
+  // Numbered placeholders {{1}}…{{N}} — resolve each slot intelligently.
+  const numbers = (body.match(/\{\{\d+\}\}/g) || []).map(m => parseInt(m.replace(/[^\d]/g, ''), 10));
+  if (numbers.length === 0) return [];
+  const maxSlot = Math.max(...numbers);
+  const examples = Array.isArray(template.body_examples) ? template.body_examples : [];
+
+  const resolveSlot = (idx) => {
+    // idx is 0-based (slot {{1}} → idx 0)
+    if (idx === 0) return leadName; // convention: first variable is the recipient name
+    const hint = String(examples[idx] || '').toLowerCase();
+    if (lead) {
+      if (/company|firm|business|organisation|organization/.test(hint) && lead.company) return lead.company;
+      if (/email|mail/.test(hint) && lead.email) return lead.email;
+      if (/phone|mobile|number|contact/.test(hint) && lead.phone) return lead.phone;
+      if (/name/.test(hint) && lead.name) return lead.name;
+    }
+    // Fall back to the client-approved example value so the message still reads correctly;
+    // never empty (Meta/RCS reject empty params).
+    return examples[idx] || leadName;
+  };
+
+  const variables = [];
+  for (let i = 0; i < maxSlot; i++) variables.push(resolveSlot(i));
+  return variables;
+}
+
 // MAIN: Analyze transcript → detect intent → send mapped template silently
 Deno.serve(async (req) => {
   try {
@@ -241,22 +280,7 @@ Return:
     }
 
     // Build variables matching the template's body placeholders.
-    // whatsappSendTemplate interpolates {{name}}/{{company}}/{{phone}}/{{email}} from the lead,
-    // so for those we pass the token through; numbered {{N}} placeholders get the lead name first,
-    // and any remaining slot falls back to the lead name (never empty — empty params get rejected).
-    const body = template.body_text || '';
-    const namedTokens = (body.match(/\{\{(name|company|phone|email)\}\}/gi) || []);
-    const numberedCount = (body.match(/\{\{\d+\}\}/g) || []).length;
-    const variables = [];
-    if (namedTokens.length > 0) {
-      // Pass each named token through in order so whatsappSendTemplate resolves it from the lead
-      namedTokens.forEach(t => variables.push(t));
-    } else {
-      // Numbered placeholders: fill slot 1 with the name, the rest with the name as a safe non-empty value
-      for (let i = 0; i < numberedCount; i++) {
-        variables.push(lead.name || 'Sir/Madam');
-      }
-    }
+    const variables = buildTemplateVariables(template, lead);
 
     const sendResult = await sendWhatsAppDirect(svc, {
       template,

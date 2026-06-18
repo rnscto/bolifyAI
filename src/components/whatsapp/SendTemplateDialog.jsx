@@ -19,10 +19,15 @@ export default function SendTemplateDialog({ template, open, onOpenChange }) {
 
   useEffect(() => {
     if (template) {
-      setVariables(Array(placeholderCount).fill(''));
+      // Pre-fill each slot with the client-approved example value so variables are never
+      // sent empty (Meta/RCS reject empty params). User can edit before sending.
+      const examples = Array.isArray(template.body_examples) ? template.body_examples : [];
+      setVariables(Array.from({ length: placeholderCount }, (_, i) => examples[i] || ''));
       setRecipient('');
     }
   }, [template, placeholderCount]);
+
+  const examples = Array.isArray(template?.body_examples) ? template.body_examples : [];
 
   if (!template) return null;
 
@@ -83,7 +88,9 @@ export default function SendTemplateDialog({ template, open, onOpenChange }) {
               <Label>Variables ({placeholderCount} placeholders detected)</Label>
               {variables.map((v, i) => (
                 <div key={i}>
-                  <Label className="text-xs text-gray-500">{`{{${i + 1}}}`}</Label>
+                  <Label className="text-xs text-gray-500">
+                    {`{{${i + 1}}}`}{examples[i] ? ` — e.g. "${examples[i]}"` : ''}
+                  </Label>
                   <Input
                     value={v}
                     onChange={e => {
@@ -91,7 +98,7 @@ export default function SendTemplateDialog({ template, open, onOpenChange }) {
                       next[i] = e.target.value;
                       setVariables(next);
                     }}
-                    placeholder={`Value for {{${i + 1}}}`}
+                    placeholder={examples[i] ? `Value for {{${i + 1}}} (e.g. ${examples[i]})` : `Value for {{${i + 1}}}`}
                   />
                 </div>
               ))}

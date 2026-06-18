@@ -19,6 +19,36 @@ async function fetchAllCampaignLeads(base44, campaignId) {
   return all;
 }
 
+// ─── Resolve template variables from a lead, mapping each placeholder correctly ───
+// Named tokens ({{name}}/{{company}}/{{phone}}/{{email}}) pass through for downstream
+// interpolation. Numbered placeholders {{1}}…{{N}} map slot 1 → lead name, then resolve
+// remaining slots from lead fields hinted by the template's approved body_examples,
+// falling back to the example value (never blind name-dump, never empty).
+function buildTemplateVariables(template, lead) {
+  const body = template.body_text || '';
+  const leadName = (lead && lead.name) || 'Sir/Madam';
+  const namedTokens = body.match(/\{\{(name|company|phone|email)\}\}/gi) || [];
+  if (namedTokens.length > 0) return namedTokens.map(t => t);
+  const numbers = (body.match(/\{\{\d+\}\}/g) || []).map(m => parseInt(m.replace(/[^\d]/g, ''), 10));
+  if (numbers.length === 0) return [];
+  const maxSlot = Math.max(...numbers);
+  const examples = Array.isArray(template.body_examples) ? template.body_examples : [];
+  const resolveSlot = (idx) => {
+    if (idx === 0) return leadName;
+    const hint = String(examples[idx] || '').toLowerCase();
+    if (lead) {
+      if (/company|firm|business|organisation|organization/.test(hint) && lead.company) return lead.company;
+      if (/email|mail/.test(hint) && lead.email) return lead.email;
+      if (/phone|mobile|number|contact/.test(hint) && lead.phone) return lead.phone;
+      if (/name/.test(hint) && lead.name) return lead.name;
+    }
+    return examples[idx] || leadName;
+  };
+  const variables = [];
+  for (let i = 0; i < maxSlot; i++) variables.push(resolveSlot(i));
+  return variables;
+}
+
 // ─── Send email using CLIENT's configured provider (via sendClientEmail function) ───
 // Falls back to platform SMTP if client has no email config
 async function sendLeadEmail({ to, fromName, subject, html, clientId }) {
@@ -244,13 +274,8 @@ Deno.serve(async (req) => {
                 const template = await base44.entities.WhatsAppTemplate.get(wa.missed_call_template_id);
                 if (template && template.status === 'APPROVED') {
                   // Build variables matching the template's placeholders (named tokens pass through
-                  // for interpolation; numbered ones fall back to the lead name — never empty).
-                  const tplBody = template.body_text || '';
-                  const namedTokens = (tplBody.match(/\{\{(name|company|phone|email)\}\}/gi) || []);
-                  const numberedCount = (tplBody.match(/\{\{\d+\}\}/g) || []).length;
-                  const variables = [];
-                  if (namedTokens.length > 0) namedTokens.forEach(t => variables.push(t));
-                  else for (let i = 0; i < numberedCount; i++) variables.push(lead.name || 'Sir/Madam');
+                  // for interpolation; numbered ones resolve per-slot from lead fields / approved examples).
+                  const variables = buildTemplateVariables(template, lead);
 
                   // Delegate to the shared sender for correct RCS Digital host + interpolation + logging
                   const waResult = await base44.functions.invoke('whatsappSendTemplate', {
