@@ -91,6 +91,37 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
   return JSON.parse(data.choices[0].message.content);
 }
 
+// ─── Build WhatsApp template variables for a missed-call template ───
+// Named tokens ({{name}}/{{company}}/{{phone}}/{{email}}) pass through for downstream
+// interpolation in whatsappSendTemplate. Numbered placeholders {{1}}…{{N}} map slot 1 → lead
+// name, then resolve remaining slots from lead fields hinted by the template's approved
+// body_examples, falling back to the example value (never empty — Meta rejects param mismatch).
+function buildMissedCallVariables(template, lead) {
+  if (!template) return [];
+  const body = template.body_text || '';
+  const leadName = (lead && lead.name) || 'Sir/Madam';
+  const namedTokens = body.match(/\{\{(name|company|phone|email)\}\}/gi) || [];
+  if (namedTokens.length > 0) return namedTokens.map(t => t);
+  const numbers = (body.match(/\{\{\d+\}\}/g) || []).map(m => parseInt(m.replace(/[^\d]/g, ''), 10));
+  if (numbers.length === 0) return [];
+  const maxSlot = Math.max(...numbers);
+  const examples = Array.isArray(template.body_examples) ? template.body_examples : [];
+  const resolveSlot = (idx) => {
+    if (idx === 0) return leadName;
+    const hint = String(examples[idx] || '').toLowerCase();
+    if (lead) {
+      if (/company|firm|business|organisation|organization/.test(hint) && lead.company) return lead.company;
+      if (/email|mail/.test(hint) && lead.email) return lead.email;
+      if (/phone|mobile|number|contact/.test(hint) && lead.phone) return lead.phone;
+      if (/name/.test(hint) && lead.name) return lead.name;
+    }
+    return examples[idx] || leadName;
+  };
+  const variables = [];
+  for (let i = 0; i < maxSlot; i++) variables.push(resolveSlot(i));
+  return variables;
+}
+
 // Map Smartflo call statuses to internal statuses
 const STATUS_MAP = {
   'ringing': 'ringing',
@@ -839,6 +870,8 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
               
               const campaign = await base44.entities.Campaign.get(campaignLead.campaign_id);
               const rules = campaign?.followup_rules || {};
+              const attemptNumber = (campaignLead.attempt_count || 0) + 1;
+              let isFinalAttempt = true;
               if (rules.no_answer_retry !== false) {
                 const maxRetries = rules.no_answer_max_retries || 3;
                 const currentAttempts = (campaignLead.attempt_count || 0) + 1;
@@ -850,7 +883,50 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
                     followup_call_date: new Date(Date.now() + retryHours * 3600000).toISOString()
                   });
                   console.log(`[smartfloWebhook] No-answer retry ${currentAttempts}/${maxRetries} queued`);
+                  isFinalAttempt = false;
                 }
+              }
+
+              // ── MISSED-CALL WhatsApp (runs here in the webhook — does NOT need integration credits) ──
+              // This was previously ONLY in campaignPostCall (an entity automation), which is blocked
+              // when the workspace runs out of integration credits. Sending it inline here via the
+              // client's own RCS Digital / Meta API keeps missed-call WhatsApp working regardless.
+              try {
+                const wa = campaign?.whatsapp_auto_send || {};
+                if (wa.missed_call_enabled && wa.missed_call_template_id && campaignLead.lead_id) {
+                  const when = wa.missed_call_when || 'after_final_retry';
+                  const shouldSend =
+                    when === 'every_miss' ||
+                    (when === 'first_miss' && attemptNumber === 1) ||
+                    (when === 'after_final_retry' && isFinalAttempt);
+                  if (shouldSend) {
+                    // Idempotency: don't re-send for the same call
+                    const existing = await base44.entities.OutreachLog.filter({
+                      call_log_id: callLog.id, channel: 'whatsapp', client_id: campaign.client_id
+                    }, '-created_date', 5);
+                    const alreadySent = existing.some(o => o.template_id === wa.missed_call_template_id && o.status === 'sent');
+                    if (!alreadySent) {
+                      const lead = await base44.entities.Lead.get(campaignLead.lead_id);
+                      if (lead?.phone) {
+                        const mcTemplate = await base44.entities.WhatsAppTemplate.get(wa.missed_call_template_id);
+                        const variables = buildMissedCallVariables(mcTemplate, lead);
+                        const waResult = await base44.functions.invoke('whatsappSendTemplate', {
+                          template_id: wa.missed_call_template_id,
+                          recipient: lead.phone,
+                          variables,
+                          lead_id: campaignLead.lead_id,
+                          call_log_id: callLog.id,
+                          outreach_type: 'lead_followup',
+                          internal_service: true
+                        });
+                        const sent = !!waResult?.data?.success;
+                        console.log(`[smartfloWebhook] 📵 Missed-call WhatsApp ${sent ? 'sent' : 'failed'} to ${lead.phone} (when=${when}, attempt=${attemptNumber}, final=${isFinalAttempt})${sent ? '' : ' err=' + (waResult?.data?.error || 'unknown')}`);
+                      }
+                    }
+                  }
+                }
+              } catch (mcErr) {
+                console.error(`[smartfloWebhook] missed-call WhatsApp failed: ${mcErr.message}`);
               }
             }
             
