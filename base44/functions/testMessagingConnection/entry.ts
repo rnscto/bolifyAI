@@ -32,8 +32,13 @@ Deno.serve(async (req) => {
         // RCS Digital is Meta-compatible. Default host is rcsdigital.in, but some tenants
         // (e.g. icpaas.in) use a different base URL — allow override via whatsapp_api_endpoint.
         if (!phoneNumberId) return Response.json({ success: false, error: 'Phone Number ID required' });
-        const customHost = String(config.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '');
-        const baseHost = customHost || 'https://rcsdigital.in';
+        // Clients often paste the FULL message URL or a trailing slash here — reduce to origin
+        // so test matches the real send path exactly.
+        const rawEndpoint = String(config.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '');
+        let baseHost = rawEndpoint || 'https://rcsdigital.in';
+        if (rawEndpoint) {
+          try { baseHost = new URL(rawEndpoint).origin; } catch (_) { baseHost = rawEndpoint.replace(/\/v\d+\.\d+\/.*$/i, ''); }
+        }
         const tokenPreview = apiKey.length > 12 ? `${apiKey.slice(0, 6)}...${apiKey.slice(-4)} (len=${apiKey.length})` : `(len=${apiKey.length})`;
         const fullUrl = `${baseHost}/v23.0/${phoneNumberId}?fields=verified_name,display_phone_number`;
         console.log(`[testMessagingConnection/rcs_digital] → GET ${fullUrl}`);

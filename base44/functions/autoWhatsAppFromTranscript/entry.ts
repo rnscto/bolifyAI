@@ -114,9 +114,16 @@ async function sendWhatsAppDirect(svc, { template, recipient, variables, lead, l
     if (cleanRecipient.length < 11 || cleanRecipient.length > 15) return { ok: false, error: `Invalid phone: ${cleanRecipient}` };
     const phoneNumberId = String(cfg.whatsapp_phone_number_id || '').trim();
     if (!phoneNumberId) return { ok: false, error: 'Phone Number ID not configured' };
-    const customHost = String(cfg.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '');
+    const rawEndpoint = String(cfg.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '');
+    // For RCS Digital, reduce a pasted full URL / trailing-slash endpoint to just the origin
+    // so we don't build a doubled /v23.0/.../messages path.
+    let rcsHost = rawEndpoint;
+    if (cfg.whatsapp_provider === 'rcs_digital' && rawEndpoint) {
+      try { rcsHost = new URL(rawEndpoint).origin; } catch (_) { rcsHost = rawEndpoint.replace(/\/v\d+\.\d+\/.*$/i, ''); }
+    }
+    const customHost = rawEndpoint;
     const url = cfg.whatsapp_provider === 'rcs_digital'
-      ? `${customHost || 'https://rcsdigital.in'}/v23.0/${phoneNumberId}/messages`
+      ? `${rcsHost || 'https://rcsdigital.in'}/v23.0/${phoneNumberId}/messages`
       : `${customHost || 'https://graph.facebook.com/v20.0'}/${phoneNumberId}/messages`.replace('/v20.0//', '/v20.0/');
     const res = await fetch(url, {
       method: 'POST',

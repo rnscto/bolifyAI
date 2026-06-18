@@ -205,9 +205,17 @@ Deno.serve(async (req) => {
     }
     // RCS Digital tenants vary by host (rcsdigital.in, icpaas.in, etc.) — honor the
     // configured whatsapp_api_endpoint when provided, otherwise fall back to defaults.
-    const customHost = String(cfg.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '');
+    // IMPORTANT: clients often paste the FULL message URL (e.g. https://rcsdigital.in/v23.0/<id>/messages)
+    // or a trailing slash into this field. For RCS Digital we must reduce it to just the origin
+    // (scheme+host), otherwise we'd build a doubled path and the send 404s.
+    const rawEndpoint = String(cfg.whatsapp_api_endpoint || '').trim().replace(/\/+$/, '');
+    let rcsHost = rawEndpoint;
+    if (cfg.whatsapp_provider === 'rcs_digital' && rawEndpoint) {
+      try { rcsHost = new URL(rawEndpoint).origin; } catch (_) { rcsHost = rawEndpoint.replace(/\/v\d+\.\d+\/.*$/i, ''); }
+    }
+    const customHost = rawEndpoint;
     const baseUrl = cfg.whatsapp_provider === 'rcs_digital'
-      ? `${customHost || 'https://rcsdigital.in'}/v23.0/${phoneNumberId}/messages`
+      ? `${rcsHost || 'https://rcsdigital.in'}/v23.0/${phoneNumberId}/messages`
       : `${customHost || 'https://graph.facebook.com/v20.0'}/${phoneNumberId}/messages`.replace('/v20.0//', '/v20.0/');
     const url = baseUrl;
     console.log(`[whatsappSendTemplate] → POST ${url} (to=${cleanRecipient}, template=${template.name})`);
