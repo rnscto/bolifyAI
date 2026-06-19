@@ -24,21 +24,40 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 // `brief` returns a shorter variant for the latency-sensitive greeting phase.
 // ─────────────────────────────────────────────────────────────────────
 
-function buildVoiceRules({ transferAvailable = false, greetingAlreadySent = false, brief = false } = {}) {
+// Map known voice IDs → speaking gender so we can instruct the model to keep a
+// consistent, matching persona (e.g. a female voice should refer to itself in feminine Hindi forms).
+function genderForVoice(voiceType = '') {
+  const v = String(voiceType).toLowerCase();
+  const female = ['shimmer', 'coral', 'sage', 'marin', 'aoede', 'surbhi', 'vaani', 'neerja', 'swara'];
+  const male = ['ash', 'ballad', 'echo', 'verse', 'cedar', 'onyx', 'prabhat', 'madhur', 'arjun'];
+  if (female.some(f => v.includes(f))) return 'female';
+  if (male.some(m => v.includes(m))) return 'male';
+  return '';
+}
+
+function buildVoiceRules({ transferAvailable = false, greetingAlreadySent = false, brief = false, voiceType = '' } = {}) {
   const nowIST = new Date().toLocaleString('en-IN', {
     timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short'
   });
 
   const clock = `\n[LIVE CLOCK] Current date and time in India (IST): ${nowIST}. Use this for any relative time ("tomorrow", "in 2 hours") and always confirm callback times in IST.\n`;
 
+  const gender = genderForVoice(voiceType);
+  const genderRule = gender
+    ? `\n[VOICE & GENDER TONE]
+- Your voice is ${gender.toUpperCase()}. Speak and refer to yourself consistently as a ${gender} person throughout the call.
+- In Hindi/Hinglish, use the correct gendered verb forms for yourself: ${gender === 'female' ? 'feminine (e.g. "main bol rahi hoon", "main samajh gayi", "kar rahi hoon")' : 'masculine (e.g. "main bol raha hoon", "main samajh gaya", "kar raha hoon")'}.
+- Keep a warm, natural ${gender} Indian conversational tone. Never switch gender mid-call.\n`
+    : '';
+
   if (brief) {
     // Short variant for the latency-sensitive greeting (Phase 1) injection.
     const transfer = transferAvailable
       ? '\nUse transfer_to_human ONLY when the caller explicitly asks for a human. Tell them before transferring.'
       : '';
-    return `${clock}
+    return `${clock}${genderRule}
 [AUDIO RULES] You are on a PHONE CALL in India. ONLY respond to clear human speech. IGNORE background noise, TV, traffic, or garbled/short syllables. NEVER end the call based on noise.
-[LANGUAGE] Start in the agent's primary language. From the caller's 2nd turn, MIRROR their language (English / Hindi / Hinglish). Keep your voice and tone constant.
+[LANGUAGE] Start in the agent's primary language. From the caller's 2nd turn, MIRROR their language (English / Hindi / Hinglish). Speak in a natural Indian accent. Keep your voice and tone constant.
 [INTERRUPTIONS] If the caller starts speaking while you are talking, STOP immediately and listen. Never talk over them.
 [END-CALL GUARD] Only use end_call after a clear, MUTUAL goodbye with 2+ clear caller sentences. Never end on a single unclear word.
 Keep replies SHORT (1-2 sentences).${transfer}`;
@@ -82,7 +101,7 @@ Keep replies SHORT (1-2 sentences).${transfer}`;
     ? `\n[GREETING] You have ALREADY greeted the caller. Do NOT greet again — wait for the caller to speak.\n`
     : '';
 
-  return `${clock}${noise}${language}${interruptions}${endCall}${transfer}${greetingGuard}`;
+  return `${clock}${genderRule}${noise}${language}${interruptions}${endCall}${transfer}${greetingGuard}`;
 }
 
 Deno.serve(async (req) => {
@@ -102,7 +121,8 @@ Deno.serve(async (req) => {
     const rules = buildVoiceRules({
       transferAvailable: !!body.transfer_available,
       greetingAlreadySent: !!body.greeting_already_sent,
-      brief: !!body.brief
+      brief: !!body.brief,
+      voiceType: body.voice_type || ''
     });
 
     return Response.json({ success: true, rules, generated_at: new Date().toISOString() });

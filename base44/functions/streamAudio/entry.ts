@@ -69,11 +69,11 @@ function localVoiceRulesFallback({ transferAvailable = false, brief = true } = {
 Keep replies SHORT (1-2 sentences).${transfer}`;
 }
 
-async function fetchVoiceRules(session, { transferAvailable, greetingAlreadySent, brief }) {
+async function fetchVoiceRules(session, { transferAvailable, greetingAlreadySent, brief, voiceType }) {
   try {
     if (!session._sdkModule) session._sdkModule = await import('npm:@base44/sdk@0.8.31');
     const svc = session._warmSvc || session._sdkModule.createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
-    const res = await svc.functions.invoke('getVoiceRules', { _internal: true, transfer_available: transferAvailable, greeting_already_sent: greetingAlreadySent, brief });
+    const res = await svc.functions.invoke('getVoiceRules', { _internal: true, transfer_available: transferAvailable, greeting_already_sent: greetingAlreadySent, brief, voice_type: voiceType || '' });
     const rules = res?.data?.rules;
     if (rules) return rules;
   } catch (_) {}
@@ -1141,7 +1141,11 @@ Deno.serve(async (req) => {
           sessionConfig.voice = 'alloy';
         } else {
           sessionConfig.modalities = ['text', 'audio'];
-          sessionConfig.instructions = timeInjection + session.systemPrompt;
+          // Re-apply the FULL voice rules (mirroring, India accent, gender tone, end-call guard)
+          // on reconnect — previously only systemPrompt was re-sent, so all behavioural rules
+          // were silently dropped after any mid-call Azure reconnect.
+          const reconnectRules = session._voiceRules || localVoiceRulesFallback({ transferAvailable: !!(session.humanTransferNumber && session.enableAutoTransfer), brief: false });
+          sessionConfig.instructions = reconnectRules + timeInjection + '\n\n' + session.systemPrompt;
           // Set voice on reconnect (new connection = new session = needs voice).
           sessionConfig.voice = session.voiceType;
           sessionConfig.input_audio_format = 'g711_ulaw';
@@ -1776,6 +1780,13 @@ Deno.serve(async (req) => {
         }
       }
       console.log(`[${reqId}] 🎙️ FAST config: engine=${session.voiceEngine}, voice=${session.voiceType}, greeting=${!!session.greetingMessage}, kb=${!!session.kbFileUri}`);
+
+      // Re-fetch voice rules now that we know the actual voice (for the gender/tone rule).
+      // The pre-warm fetch ran before voiceType was known, so refresh the cache here.
+      fetchVoiceRules(session, {
+        transferAvailable: !!(session.humanTransferNumber && session.enableAutoTransfer),
+        greetingAlreadySent: false, brief: false, voiceType: session.voiceType
+      }).then(r => { if (r) session._voiceRules = r; }).catch(() => {});
 
       // ── If pre-warmed for Azure but Agent uses Gemini, switch connection ──
       if (session.voiceEngine === 'gemini_realtime' && session.realtimeWs && session.realtimeWs.url && session.realtimeWs.url.includes('openai')) {
