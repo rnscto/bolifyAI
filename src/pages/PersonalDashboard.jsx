@@ -21,9 +21,34 @@ export default function PersonalDashboard() {
 
   useEffect(() => {
     loadData();
-    const interval = setInterval(loadData, 60000);
-    return () => clearInterval(interval);
   }, []);
+
+  // Live updates via WebSocket subscriptions — replaces the old 60s polling loop.
+  // No integration credits, no repeated reads. Patches calls + voicemails in place.
+  useEffect(() => {
+    if (!client?.id) return;
+    const unsubCalls = base44.entities.CallLog.subscribe((event) => {
+      if (event.data?.client_id !== client.id) return;
+      if (event.type === 'create') {
+        setCalls(prev => (prev.some(c => c.id === event.id) ? prev : [event.data, ...prev]));
+      } else if (event.type === 'update') {
+        setCalls(prev => prev.map(c => (c.id === event.id ? { ...c, ...event.data } : c)));
+      } else if (event.type === 'delete') {
+        setCalls(prev => prev.filter(c => c.id !== event.id));
+      }
+    });
+    const unsubVoicemails = base44.entities.VoicemailMessage.subscribe((event) => {
+      if (event.data?.client_id !== client.id) return;
+      if (event.type === 'create') {
+        setMessages(prev => (prev.some(m => m.id === event.id) ? prev : [event.data, ...prev]));
+      } else if (event.type === 'update') {
+        setMessages(prev => prev.map(m => (m.id === event.id ? { ...m, ...event.data } : m)));
+      } else if (event.type === 'delete') {
+        setMessages(prev => prev.filter(m => m.id !== event.id));
+      }
+    });
+    return () => { unsubCalls(); unsubVoicemails(); };
+  }, [client?.id]);
 
   const loadData = async () => {
     try {

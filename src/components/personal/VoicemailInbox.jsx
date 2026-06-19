@@ -26,8 +26,9 @@ export default function VoicemailInbox({ messages, onRefresh }) {
 
   const handleMarkRead = async (msg) => {
     if (msg.is_read) return;
+    // The parent subscribes to VoicemailMessage updates, so the state patches live —
+    // no need to force a full reload here.
     await base44.entities.VoicemailMessage.update(msg.id, { is_read: true });
-    onRefresh?.();
   };
 
   const unreadCount = messages.filter(m => !m.is_read).length;

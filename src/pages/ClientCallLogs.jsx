@@ -4,12 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import FeatureGate from '../components/FeatureGate';
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
   Table,
   TableBody,
   TableCell,
@@ -33,8 +27,9 @@ import {
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
-import AudioPlayer from '../components/calls/AudioPlayer';
 import LiveCallActions from '../components/calls/LiveCallActions';
+import CallStatsCards from '../components/calls/CallStatsCards';
+import CallDetailDialog from '../components/calls/CallDetailDialog';
 import { exportToExcel, formatDateTime } from '../lib/exportToExcel';
 import PhoneMaskToggle from '../components/PhoneMaskToggle';
 import { usePhoneMask } from '../lib/phoneMask';
@@ -220,58 +215,7 @@ export default function ClientCallLogs() {
         </Button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <PhoneCall className="w-8 h-8 text-blue-600" />
-              <div>
-                <p className="text-2xl font-bold">{calls.length}</p>
-                <p className="text-sm text-gray-600">Total Calls</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <PhoneOutgoing className="w-8 h-8 text-green-600" />
-              <div>
-                <p className="text-2xl font-bold">
-                  {calls.filter(c => c.direction === 'outbound').length}
-                </p>
-                <p className="text-sm text-gray-600">Outbound</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <PhoneIncoming className="w-8 h-8 text-purple-600" />
-              <div>
-                <p className="text-2xl font-bold">
-                  {calls.filter(c => c.direction === 'inbound').length}
-                </p>
-                <p className="text-sm text-gray-600">Inbound</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3">
-              <PhoneCall className="w-8 h-8 text-orange-600" />
-              <div>
-                <p className="text-2xl font-bold">
-                  {calls.filter(c => c.status === 'completed').length}
-                </p>
-                <p className="text-sm text-gray-600">Completed</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <CallStatsCards calls={calls} />
 
       <Card>
         <CardHeader>
@@ -396,100 +340,13 @@ export default function ClientCallLogs() {
         </CardContent>
       </Card>
 
-      <Dialog open={!!selectedCall} onOpenChange={() => setSelectedCall(null)}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Call Details</DialogTitle>
-          </DialogHeader>
-          {selectedCall && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-600">Direction</p>
-                  <p className="font-medium capitalize">{selectedCall.direction}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">{selectedCall.direction === 'inbound' ? 'Caller Number' : 'Called Number'}</p>
-                  <p className="font-medium">
-                    {maskPhoneNumber(selectedCall.direction === 'inbound' ? (selectedCall.caller_id || selectedCall.callee_number) : selectedCall.callee_number)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Duration</p>
-                  <p className="font-medium">{formatDuration(selectedCall.duration)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-600">Status</p>
-                  <Badge className={statusColors[selectedCall.status]}>
-                    {selectedCall.status}
-                  </Badge>
-                </div>
-              </div>
-
-              {selectedCall.lead_status_updated && (
-                <div>
-                  <p className="text-sm text-gray-600">Call Outcome</p>
-                  <Badge className="bg-blue-100 text-blue-800 mt-1">{selectedCall.lead_status_updated}</Badge>
-                </div>
-              )}
-              
-              {selectedCall.conversation_summary && (
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">Summary</p>
-                  <p className="text-sm bg-blue-50 p-3 rounded-lg border border-blue-100">
-                    {(() => {
-                      const raw = selectedCall.conversation_summary;
-                      // Strip polluted lead context that was accidentally stored as summary
-                      if (raw.startsWith('[LEAD CONTEXT]') || raw.startsWith('CUSTOMER PROFILE:')) {
-                        return 'Summary not available — call data is being reprocessed.';
-                      }
-                      return raw;
-                    })()}
-                  </p>
-                </div>
-              )}
-
-              {selectedCall.transcript ? (
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">Transcript</p>
-                  <div className="text-sm bg-gray-50 p-3 rounded-lg max-h-72 overflow-y-auto border border-gray-200 space-y-2">
-                    {selectedCall.transcript.split('\n').map((line, i) => {
-                      const isAI = line.startsWith('AI:');
-                      const isCustomer = line.startsWith('Customer:');
-                      return line.trim() ? (
-                        <div key={i} className={`px-2 py-1 rounded ${isAI ? 'bg-blue-50 text-blue-900' : isCustomer ? 'bg-green-50 text-green-900' : 'text-gray-700'}`}>
-                          {line}
-                        </div>
-                      ) : null;
-                    })}
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <p className="text-sm font-medium text-gray-700 mb-2">Transcript</p>
-                  <p className="text-sm text-gray-400 italic bg-gray-50 p-3 rounded-lg border border-gray-200">
-                    No transcript available for this call.
-                  </p>
-                </div>
-              )}
-
-              <div>
-                <p className="text-sm text-gray-600 mb-2">Call Recording</p>
-                {selectedCall.recording_url ? (
-                  <AudioPlayer url={selectedCall.recording_url} />
-                ) : selectedCall.status === 'completed' ? (
-                  <Button variant="outline" size="sm" onClick={() => fetchRecording(selectedCall.id)} disabled={fetchingRecording === selectedCall.id} className="gap-2">
-                    {fetchingRecording === selectedCall.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                    {fetchingRecording === selectedCall.id ? 'Fetching...' : 'Fetch Recording from Smartflo'}
-                  </Button>
-                ) : (
-                  <p className="text-sm text-gray-400 italic">No recording available</p>
-                )}
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <CallDetailDialog
+        call={selectedCall}
+        maskPhoneNumber={maskPhoneNumber}
+        fetchingRecording={fetchingRecording}
+        onFetchRecording={fetchRecording}
+        onClose={() => setSelectedCall(null)}
+      />
 
       <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <AlertDialogContent>
