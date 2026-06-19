@@ -53,13 +53,25 @@ export default function ClientCallLogs() {
 
   useEffect(() => {
     loadData();
-    // Refresh periodically so live calls update, but pause while the tab is hidden
-    // to avoid repeatedly downloading large CallLog payloads in the background.
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') loadData();
-    }, 60000);
-    return () => clearInterval(interval);
   }, []);
+
+  // Live updates via WebSocket subscription — replaces the old 60s polling loop.
+  // No integration credits, no repeated 1000-row reads. Patches rows in place.
+  useEffect(() => {
+    if (!client?.id) return;
+    const unsub = base44.entities.CallLog.subscribe((event) => {
+      if (event.data?.client_id !== client.id) return;
+      if (event.type === 'create') {
+        setCall(prev => (prev.some(c => c.id === event.id) ? prev : [event.data, ...prev]));
+      } else if (event.type === 'update') {
+        setCall(prev => prev.map(c => (c.id === event.id ? { ...c, ...event.data } : c)));
+        setSelectedCall(prev => (prev?.id === event.id ? { ...prev, ...event.data } : prev));
+      } else if (event.type === 'delete') {
+        setCall(prev => prev.filter(c => c.id !== event.id));
+      }
+    });
+    return () => unsub();
+  }, [client?.id]);
 
   const loadData = async () => {
     try {
