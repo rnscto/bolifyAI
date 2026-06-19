@@ -179,7 +179,13 @@ Deno.serve(async (req) => {
     const runningCampaigns = await svc.entities.Campaign.filter({ status: 'running' });
     console.log(`[campaignPoller] Found ${runningCampaigns.length} running campaigns (${autoStarted} just auto-started, ${autoResumed} auto-resumed)`);
 
-    for (const campaign of runningCampaigns) {
+    for (let _ci = 0; _ci < runningCampaigns.length; _ci++) {
+      const campaign = runningCampaigns[_ci];
+      // SHARED-BUCKET COURTESY: yield ~300ms between campaigns so this background poller
+      // never bursts entity ops back-to-back. Live call writes share ONE workspace rate-limit
+      // bucket, so spacing background work out leaves headroom for live calls. (Skip before the
+      // first campaign.) Pure timing change — does not touch any live-call code path.
+      if (_ci > 0) await new Promise(r => setTimeout(r, 300));
       // Time-budget guard: if we're running low on time, stop and let the next run continue.
       if (Date.now() - RUN_START > TIME_BUDGET_MS) {
         const remaining = runningCampaigns.length - results.campaigns_processed;

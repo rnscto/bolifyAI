@@ -95,8 +95,10 @@ Deno.serve(async (req) => {
         stoppedEarly = true;
         break;
       }
-      // Light throttle — 200ms is enough to stay under Base44 rate limit without burning time budget
-      if (i > 0) await sleep(200);
+      // SHARED-BUCKET COURTESY: 350ms between activities. Live call writes share ONE workspace
+      // rate-limit bucket with this background engine, so spacing activities out leaves headroom
+      // for live calls. Still fits the 22s deadline (max 8 activities/run).
+      if (i > 0) await sleep(350);
       // ── Per-activity try/catch so one failure doesn't kill the whole run ──
       try {
         const scheduledDate = new Date(activity.scheduled_date);
