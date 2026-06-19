@@ -1125,6 +1125,11 @@ Deno.serve(async (req) => {
       if (isReconnect) {
         // Reconnection — re-apply full config WITHOUT re-triggering the greeting
         console.log(`[${reqId}] 🔄 Reconnected — re-applying session config (no greeting)`);
+        // STUCK-FLAG FIX: the dropped socket may have left _responseInFlight=true (its
+        // response.done never arrived). Clearing it prevents the agent going permanently
+        // silent after a mid-call reconnect (subsequent response.create calls were suppressed).
+        session._responseInFlight = false;
+        session.isSpeaking = false;
         const isHybrid = session.voiceEngine === 'azure_speech';
         const tools = buildToolDefinitions();
         const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });

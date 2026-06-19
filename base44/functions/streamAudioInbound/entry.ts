@@ -80,11 +80,11 @@ function localVoiceRulesFallback({ transferAvailable = false } = {}) {
 Keep replies SHORT (1-2 sentences).${transfer}`;
 }
 
-async function fetchVoiceRules(session, { transferAvailable }) {
+async function fetchVoiceRules(session, { transferAvailable, voiceType }) {
   try {
     if (!session._sdkModule) session._sdkModule = await import('npm:@base44/sdk@0.8.31');
     const svc = session._warmSvc || session._sdkModule.createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
-    const res = await svc.functions.invoke('getVoiceRules', { _internal: true, transfer_available: transferAvailable, brief: false });
+    const res = await svc.functions.invoke('getVoiceRules', { _internal: true, transfer_available: transferAvailable, brief: false, voice_type: voiceType || '' });
     const rules = res?.data?.rules;
     if (rules) return rules;
   } catch (_) {}
@@ -709,14 +709,22 @@ Deno.serve(async (req) => {
       session.realtimeReady = true;
       const isReconnect = session._agentConfigReady && session.transcript.length > 0;
       if (isReconnect) {
+        // STUCK-FLAG FIX: the dropped socket may have left _responseInFlight=true (its
+        // response.done never arrived). Clearing it here prevents the agent going
+        // permanently silent after a mid-call reconnect.
+        session._responseInFlight = false;
+        session.isSpeaking = false;
         const isHybrid = session.voiceEngine === 'azure_speech';
         const tools = buildToolDefinitions();
-        const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+        // Re-apply the FULL voice rules (mirroring, India accent, gender tone, end-call guard)
+        // on reconnect — previously only a short clock + systemPrompt was re-sent, dropping all rules.
+        const reconnectRules = session._voiceRules || localVoiceRulesFallback({ transferAvailable: !!(session.humanTransferNumber && session.enableAutoTransfer) });
         const sessionConfig = { input_audio_format: 'g711_ulaw', input_audio_transcription: { model: 'whisper-1', language: 'hi' }, turn_detection: { type: 'server_vad', threshold: 0.7, prefix_padding_ms: 300, silence_duration_ms: 700 } };
         if (isHybrid) { sessionConfig.instructions = 'You are a transcription-only assistant.'; sessionConfig.modalities = ['text']; sessionConfig.voice = 'alloy'; }
-        else { sessionConfig.modalities = ['text', 'audio']; sessionConfig.instructions = `\n[LIVE CLOCK] Current IST: ${nowIST}.\n` + session.systemPrompt; sessionConfig.voice = session.voiceType; sessionConfig.input_audio_format = 'g711_ulaw'; sessionConfig.output_audio_format = 'g711_ulaw'; session._voiceLocked = true; }
+        else { sessionConfig.modalities = ['text', 'audio']; sessionConfig.instructions = reconnectRules + '\n\n' + session.systemPrompt; sessionConfig.voice = session.voiceType; sessionConfig.input_audio_format = 'g711_ulaw'; sessionConfig.output_audio_format = 'g711_ulaw'; session._voiceLocked = true; }
         if (tools.length > 0) { sessionConfig.tools = tools; sessionConfig.tool_choice = 'auto'; }
         sendToRealtime({ type: 'session.update', session: sessionConfig });
+        console.log(`[${reqId}] 🔄 Reconnected mid-call — rules re-applied, flags cleared`);
       } else if (session._fastConfigReady) {
         triggerPhase1Greeting();
       } else {
@@ -1242,6 +1250,13 @@ Deno.serve(async (req) => {
       }
 
       console.log(`[${reqId}] ✅ Inbound config loaded in ${Date.now() - t0}ms: engine=${session.voiceEngine}, voice=${session.voiceType}`);
+
+      // Refresh voice rules now that the real voice is known (adds gender/tone rule).
+      // Async + non-blocking — never delays the greeting (which uses the cached rules / fallback).
+      fetchVoiceRules(session, {
+        transferAvailable: !!(session.humanTransferNumber && session.enableAutoTransfer),
+        voiceType: session.voiceType
+      }).then(r => { if (r) session._voiceRules = r; }).catch(() => {});
       
       if (session.voiceEngine === 'gemini_realtime' && session.realtimeWs && session.realtimeWs.url && session.realtimeWs.url.includes('openai')) {
         console.log(`[${reqId}] 🔄 Switching pre-warmed connection from Azure to Gemini`);
