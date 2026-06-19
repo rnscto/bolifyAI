@@ -75,7 +75,14 @@ function buildTemplateVariables(template, lead, slotMap) {
     return examples[idx] || leadName;
   };
   const variables = [];
-  for (let i = 0; i < maxSlot; i++) variables.push(resolveSlot(i));
+  // CRITICAL: Meta/RCS reject the whole message with (#131008) if ANY body param is empty.
+  // A mapped lead field (e.g. lead_email) can resolve to "" when the lead has no email.
+  // Coerce every slot to a non-empty value so the send never fails.
+  for (let i = 0; i < maxSlot; i++) {
+    let v = resolveSlot(i);
+    if (v === undefined || v === null || String(v).trim() === '') v = examples[i] || '-';
+    variables.push(v);
+  }
   return variables;
 }
 
