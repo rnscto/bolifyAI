@@ -28,11 +28,15 @@ export default function CampaignWhatsAppRules({ clientId, value, onChange }) {
   const missedEnabled = value?.missed_call_enabled || false;
   const missedWhen = value?.missed_call_when || 'after_final_retry';
   const missedTemplateId = value?.missed_call_template_id || '';
+  const answeredEnabled = value?.answered_call_enabled || false;
+  const answeredTemplateId = value?.answered_call_template_id || '';
 
   const merge = (patch) => onChange({
     enabled,
     intent_template_map: intentMap,
     template_variable_map: varMap,
+    answered_call_enabled: answeredEnabled,
+    answered_call_template_id: answeredTemplateId,
     missed_call_enabled: missedEnabled,
     missed_call_when: missedWhen,
     missed_call_template_id: missedTemplateId,
@@ -136,6 +140,61 @@ export default function CampaignWhatsAppRules({ clientId, value, onChange }) {
           )}
         </div>
       )}
+
+      {/* === ANSWERED CALL (fixed template, no AI) section === */}
+      <div className="pt-3 mt-3 border-t border-emerald-200/60">
+        <div className="flex items-center gap-2">
+          <Checkbox
+            checked={answeredEnabled}
+            onCheckedChange={(v) => merge({ answered_call_enabled: !!v })}
+            id="wa-answered-toggle"
+          />
+          <label htmlFor="wa-answered-toggle" className="font-semibold text-sm text-gray-700 cursor-pointer">
+            ✅ Send WhatsApp after EVERY answered call
+          </label>
+        </div>
+        <p className="text-xs text-gray-500 mt-1">
+          Sends a fixed template to every lead who picked up — no AI needed, works even when AI credits are exhausted.
+        </p>
+
+        {answeredEnabled && (
+          <div className="space-y-3 mt-3 pl-6">
+            {templates.length === 0 ? (
+              <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                <span>No APPROVED WhatsApp templates found. Sync templates from the WhatsApp Templates page first.</span>
+              </div>
+            ) : (
+              <div>
+                <Label className="text-xs font-semibold text-gray-700 uppercase tracking-wide">Template to send</Label>
+                <Select
+                  value={answeredTemplateId || '__none__'}
+                  onValueChange={(v) => merge({ answered_call_template_id: v === '__none__' ? '' : v })}
+                >
+                  <SelectTrigger className="h-9 mt-1">
+                    <SelectValue placeholder="-- select template --" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— Select template —</SelectItem>
+                    {templates.map(t => (
+                      <SelectItem key={t.id} value={t.id}>
+                        {t.name} ({t.language})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {answeredTemplateId && (
+                  <TemplateVariableMapper
+                    template={templateById(answeredTemplateId)}
+                    mapping={varMap[answeredTemplateId]}
+                    onChange={(slots) => setVarMapping(answeredTemplateId, slots)}
+                  />
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* === MISSED CALL section === */}
       <div className="pt-3 mt-3 border-t border-emerald-200/60">
