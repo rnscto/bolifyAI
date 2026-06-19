@@ -1051,9 +1051,19 @@ Deno.serve(async (req) => {
       session._phase2Sent = true;
       console.log(`[${reqId}] 🔒 Voice locked: ${session.voiceType}, prompt=${session.systemPrompt.length}ch, tools=${tools.length}`);
 
-      // Now inject the greeting and trigger response.
-      sendToRealtime({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '[SYSTEM: Say this exact greeting: "' + greeting + '"]' }] } });
-      sendToRealtime({ type: 'response.create' });
+      // CRITICAL: Wait for Azure to ACKNOWLEDGE the session.update (which carries the system
+      // prompt instructions) BEFORE injecting the greeting + response.create. Firing the
+      // greeting back-to-back means Azure can generate the first response on the OLD/empty
+      // instructions, so the agent ignores the system prompt. We stash the greeting and let
+      // the `session.updated` handler fire it once the instructions are confirmed active.
+      session._pendingGreeting = greeting;
+      // Safety net: if the ack never arrives within 1.2s, fire the greeting anyway.
+      session._pendingGreetingTimer = setTimeout(() => {
+        if (session._pendingGreeting) {
+          console.log(`[${reqId}] ⏱️ session.updated ack timeout — firing greeting anyway`);
+          fireRealtimeGreeting();
+        }
+      }, 1200);
     }
   }
 
@@ -1162,6 +1172,8 @@ Deno.serve(async (req) => {
 
     if (type === 'session.updated') {
       console.log(`[${reqId}] ✅ Realtime session updated`);
+      // System-prompt instructions are now confirmed active — safe to fire the greeting.
+      if (session._pendingGreeting) fireRealtimeGreeting();
       return;
     }
 
@@ -1454,6 +1466,17 @@ Deno.serve(async (req) => {
         sendToRealtime({ type: 'response.create' });
       }
     }
+  }
+
+  // ─── Fire the deferred greeting once Azure confirms the system-prompt session.update ───
+  function fireRealtimeGreeting() {
+    if (!session._pendingGreeting) return;
+    const greeting = session._pendingGreeting;
+    session._pendingGreeting = null;
+    if (session._pendingGreetingTimer) { clearTimeout(session._pendingGreetingTimer); session._pendingGreetingTimer = null; }
+    sendToRealtime({ type: 'conversation.item.create', item: { type: 'message', role: 'user', content: [{ type: 'input_text', text: '[SYSTEM: Say this exact greeting: "' + greeting + '"]' }] } });
+    sendToRealtime({ type: 'response.create' });
+    console.log(`[${reqId}] 🎙️ Greeting fired after session.updated ack`);
   }
 
   // ─── Send message to Azure Realtime API ───
