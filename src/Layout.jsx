@@ -241,6 +241,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'CRM Integration', path: 'ClientCRM', icon: Database },
     { name: 'Integrations', path: 'ClientIntegrations', icon: Activity },
     { name: 'WhatsApp Templates', path: 'ClientWhatsAppTemplates', icon: MessageSquare },
+    { name: 'WhatsApp History', path: 'ClientWhatsAppHistory', icon: MessageSquare },
     { name: 'Settings', path: 'ClientSettings', icon: UserCog },
     { name: 'Partner Dashboard', path: 'PartnerDashboard', icon: Handshake },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },

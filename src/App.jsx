@@ -22,6 +22,7 @@ import AdminPlatformMessaging from './pages/AdminPlatformMessaging';
 import AdminAnnouncements from './pages/AdminAnnouncements';
 import AdminClientLifecycle from './pages/AdminClientLifecycle';
 import AdminPaymentApprovals from './pages/AdminPaymentApprovals';
+import ClientWhatsAppHistory from './pages/ClientWhatsAppHistory';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -138,6 +139,11 @@ const AuthenticatedApp = () => {
       <Route path="/AdminPaymentApprovals" element={
         <LayoutWrapper currentPageName="AdminPaymentApprovals">
           <AdminPaymentApprovals />
+        </LayoutWrapper>
+      } />
+      <Route path="/ClientWhatsAppHistory" element={
+        <LayoutWrapper currentPageName="ClientWhatsAppHistory">
+          <ClientWhatsAppHistory />
         </LayoutWrapper>
       } />
       <Route path="*" element={<PageNotFound />} />
