@@ -5,6 +5,31 @@ import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 const SMARTFLO_TOKEN_TTL_MS = 50 * 60 * 1000;
 let _smartfloTokenCache = { token: null, expiresAt: 0, inFlight: null, blockedUntil: 0 };
 
+// ── SHARED TOKEN STORE (entity-backed) — see streamAudio for rationale. All entity access
+// is wrapped so any failure falls back to a normal login (behavior identical to before). ──
+async function readSharedSmartfloToken() {
+  try {
+    const mod = await import('npm:@base44/sdk@0.8.31');
+    const svc = mod.createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+    const rows = await svc.entities.SmartfloAuth.list('-updated_date', 1);
+    const row = rows && rows[0];
+    if (row && row.token && row.expires_at && new Date(row.expires_at).getTime() > Date.now() + 60000) {
+      return row.token;
+    }
+  } catch (_) {}
+  return null;
+}
+async function writeSharedSmartfloToken(token) {
+  try {
+    const mod = await import('npm:@base44/sdk@0.8.31');
+    const svc = mod.createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+    const expiresAt = new Date(Date.now() + SMARTFLO_TOKEN_TTL_MS).toISOString();
+    const rows = await svc.entities.SmartfloAuth.list('-updated_date', 1);
+    if (rows && rows[0]) await svc.entities.SmartfloAuth.update(rows[0].id, { token, expires_at: expiresAt, blocked_until: null });
+    else await svc.entities.SmartfloAuth.create({ token, expires_at: expiresAt });
+  } catch (_) {}
+}
+
 async function getSmartfloToken(forceRefresh = false) {
   const now = Date.now();
   if (!forceRefresh && _smartfloTokenCache.token && _smartfloTokenCache.expiresAt > now) {
@@ -17,6 +42,11 @@ async function getSmartfloToken(forceRefresh = false) {
     return null;
   }
   if (_smartfloTokenCache.inFlight) return _smartfloTokenCache.inFlight;
+  // Before logging in, reuse the shared entity-backed token if a valid one exists.
+  if (!forceRefresh) {
+    const shared = await readSharedSmartfloToken();
+    if (shared) { _smartfloTokenCache.token = shared; _smartfloTokenCache.expiresAt = now + SMARTFLO_TOKEN_TTL_MS; return shared; }
+  }
   const sfE = Deno.env.get('SMARTFLO_EMAIL'), sfP = Deno.env.get('SMARTFLO_PASSWORD');
   if (!sfE || !sfP) return null;
   _smartfloTokenCache.inFlight = (async () => {
@@ -46,6 +76,7 @@ async function getSmartfloToken(forceRefresh = false) {
       _smartfloTokenCache.token = tk;
       _smartfloTokenCache.expiresAt = Date.now() + SMARTFLO_TOKEN_TTL_MS;
       _smartfloTokenCache.blockedUntil = 0;
+      writeSharedSmartfloToken(tk); // share with all other isolates/functions
       console.log(`[Smartflo] ✅ New token cached (valid 50min)`);
       return tk;
     } catch (e) { console.error(`[Smartflo] Login error: ${e.message}`); return null; }

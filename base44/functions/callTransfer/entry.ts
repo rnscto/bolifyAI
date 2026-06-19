@@ -42,6 +42,35 @@ async function performSmartfloLogin() {
   return token;
 }
 
+// ── SHARED TOKEN STORE (entity-backed) ──
+// The Smartflo JWT is valid platform-wide. Persisting it in the single SmartfloAuth row lets
+// EVERY function/isolate reuse one token instead of each logging in separately — drastically
+// fewer logins (which is what triggers Smartflo account lockouts). All entity access is wrapped
+// so any failure transparently falls back to a normal login (behavior identical to before).
+async function readSharedSmartfloToken() {
+  try {
+    const { createClient } = await import('npm:@base44/sdk@0.8.31');
+    const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+    const rows = await svc.entities.SmartfloAuth.list('-updated_date', 1);
+    const row = rows && rows[0];
+    if (row && row.token && row.expires_at && new Date(row.expires_at).getTime() > Date.now() + 60000) {
+      return row.token;
+    }
+  } catch (_) { /* fall through to live login */ }
+  return null;
+}
+
+async function writeSharedSmartfloToken(token) {
+  try {
+    const { createClient } = await import('npm:@base44/sdk@0.8.31');
+    const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
+    const expiresAt = new Date(Date.now() + TOKEN_TTL_MS).toISOString();
+    const rows = await svc.entities.SmartfloAuth.list('-updated_date', 1);
+    if (rows && rows[0]) await svc.entities.SmartfloAuth.update(rows[0].id, { token, expires_at: expiresAt, blocked_until: null });
+    else await svc.entities.SmartfloAuth.create({ token, expires_at: expiresAt });
+  } catch (_) { /* non-fatal — in-memory cache still serves this isolate */ }
+}
+
 async function getSmartfloToken(forceRefresh = false) {
   const now = Date.now();
   if (!forceRefresh && cachedToken && (now - cachedAt) < TOKEN_TTL_MS) {
@@ -51,10 +80,15 @@ async function getSmartfloToken(forceRefresh = false) {
     const waitSec = Math.ceil((blockedUntil - now) / 1000);
     throw new Error(`Smartflo login is rate-limited — retry in ${waitSec}s`);
   }
+  // Before logging in, try the shared entity-backed token (populated by any other isolate).
+  if (!forceRefresh) {
+    const shared = await readSharedSmartfloToken();
+    if (shared) { cachedToken = shared; cachedAt = Date.now(); return shared; }
+  }
   // Mutex: only one login in flight at a time
   if (!loginPromise) {
     loginPromise = performSmartfloLogin()
-      .then(t => { cachedToken = t; cachedAt = Date.now(); blockedUntil = 0; return t; })
+      .then(t => { cachedToken = t; cachedAt = Date.now(); blockedUntil = 0; writeSharedSmartfloToken(t); return t; })
       .finally(() => { loginPromise = null; });
   }
   return await loginPromise;

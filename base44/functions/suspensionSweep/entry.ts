@@ -30,9 +30,15 @@ Deno.serve(async (req) => {
 
     const results = { trial_expired: [], suspended_pending: [], suspended_overdue: [] };
 
+    // SHARED-BUCKET COURTESY: this daily sweep shares ONE workspace rate-limit bucket with live
+    // call writes, so yield briefly between records to leave headroom for live calls.
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
     // 1. Trial → Expired
     const trials = await base44.entities.Client.filter({ account_status: 'trial' });
-    for (const c of trials) {
+    for (let _ti = 0; _ti < trials.length; _ti++) {
+      const c = trials[_ti];
+      if (_ti > 0) await sleep(250);
       if (!c.trial_end_date) continue;
       const end = new Date(c.trial_end_date);
       if (end < now) {
@@ -56,7 +62,9 @@ Deno.serve(async (req) => {
 
     // 2. Subscription pending payment → suspend client immediately (no grace)
     const pendingSubs = await base44.entities.Subscription.filter({ status: 'pending' });
-    for (const sub of pendingSubs) {
+    for (let _pi = 0; _pi < pendingSubs.length; _pi++) {
+      const sub = pendingSubs[_pi];
+      if (_pi > 0) await sleep(250);
       // Mark sub overdue
       await base44.entities.Subscription.update(sub.id, { status: 'overdue', payment_status: 'failed' });
 
@@ -90,7 +98,9 @@ Deno.serve(async (req) => {
     // 'overdue' it has already triggered a suspension — re-processing it would
     // re-suspend a client that an admin has manually reactivated, creating a loop.
     const activeSubs = await base44.entities.Subscription.filter({ status: 'active' });
-    for (const sub of activeSubs) {
+    for (let _ai = 0; _ai < activeSubs.length; _ai++) {
+      const sub = activeSubs[_ai];
+      if (_ai > 0) await sleep(250);
       if (!sub.billing_end_date) continue;
       const end = new Date(sub.billing_end_date);
       if (end >= now) continue;

@@ -26,7 +26,13 @@ Deno.serve(async (req) => {
     // Get all clients with active CRM
     const clients = await base44.entities.Client.filter({ has_custom_crm: true });
 
-    for (const client of clients) {
+    // SHARED-BUCKET COURTESY: yield between clients so this background scan never bursts
+    // entity ops back-to-back. Live call writes share ONE workspace rate-limit bucket.
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+    for (let _ci = 0; _ci < clients.length; _ci++) {
+      const client = clients[_ci];
+      if (_ci > 0) await sleep(300);
       // Get leads that haven't been engaged in 48h
       const leads = await base44.entities.Lead.filter({
         client_id: client.id,
