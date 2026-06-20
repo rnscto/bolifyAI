@@ -950,7 +950,46 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
                 console.error(`[smartfloWebhook] missed-call WhatsApp failed: ${mcErr.message}`);
               }
             }
-            
+
+            // ── ANSWERED-CALL WhatsApp (runs inline in the webhook — credit-free) ──
+            // Previously this lived ONLY in campaignPostCall (invoked async via functions.invoke),
+            // which is unreliable and blocked when integration credits run out. Sending it inline
+            // here via the client's own WhatsApp provider makes answered-call WhatsApp work reliably.
+            if (outcome !== 'not_answered' && clCallStatus === 'answered') {
+              try {
+                const campaign = await base44.entities.Campaign.get(campaignLead.campaign_id);
+                const wa = campaign?.whatsapp_auto_send || {};
+                if (wa.answered_call_enabled && wa.answered_call_template_id && campaignLead.lead_id) {
+                  // Idempotency: don't re-send for the same call
+                  const existing = await base44.entities.OutreachLog.filter({
+                    call_log_id: callLog.id, channel: 'whatsapp', client_id: campaign.client_id
+                  }, '-created_date', 5);
+                  const alreadySent = existing.some(o => o.template_id === wa.answered_call_template_id && o.status === 'sent');
+                  if (!alreadySent) {
+                    const lead = await base44.entities.Lead.get(campaignLead.lead_id);
+                    if (lead?.phone) {
+                      const acTemplate = await base44.entities.WhatsAppTemplate.get(wa.answered_call_template_id);
+                      const slotMap = (wa.template_variable_map || {})[wa.answered_call_template_id];
+                      const variables = buildMissedCallVariables(acTemplate, lead, slotMap);
+                      const waResult = await base44.functions.invoke('whatsappSendTemplate', {
+                        template_id: wa.answered_call_template_id,
+                        recipient: lead.phone,
+                        variables,
+                        lead_id: campaignLead.lead_id,
+                        call_log_id: callLog.id,
+                        outreach_type: 'lead_followup',
+                        internal_service: true
+                      });
+                      const sent = !!waResult?.data?.success;
+                      console.log(`[smartfloWebhook] ✅ Answered-call WhatsApp ${sent ? 'sent' : 'failed'} to ${lead.phone}${sent ? '' : ' err=' + (waResult?.data?.error || 'unknown')}`);
+                    }
+                  }
+                }
+              } catch (acErr) {
+                console.error(`[smartfloWebhook] answered-call WhatsApp failed: ${acErr.message}`);
+              }
+            }
+
             // TRIGGER NEXT CALL IMMEDIATELY (inline — no function invoke)
             await triggerNextCampaignCall(base44, campaignLead.campaign_id);
             

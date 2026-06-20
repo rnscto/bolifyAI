@@ -352,47 +352,8 @@ Deno.serve(async (req) => {
     const nextBatchResult = await triggerNextBatch(base44, campaignId);
     console.log(`[campaignPostCall] Next batch: ${JSON.stringify(nextBatchResult)}`);
 
-    // =====================================================
-    // STEP 4.5: ANSWERED-CALL WhatsApp send (fixed template, NO AI — credit-free)
-    // Fires for every answered call when enabled in the campaign. Uses the client's own
-    // WhatsApp provider via whatsappSendTemplate, so it works even when AI credits are out.
-    // =====================================================
-    if (callStatus === 'answered' && outcome !== 'not_answered') {
-      try {
-        const campaign = await base44.entities.Campaign.get(campaignId);
-        const wa = campaign?.whatsapp_auto_send || {};
-        if (wa.answered_call_enabled && wa.answered_call_template_id && campaignLead.lead_id) {
-          // Idempotency: don't re-send for same call_log_id
-          const existing = await base44.entities.OutreachLog.filter({
-            call_log_id: callLogId, channel: 'whatsapp', client_id: campaign.client_id
-          }, '-created_date', 5);
-          const alreadySent = existing.some(o => o.template_id === wa.answered_call_template_id && o.status === 'sent');
-          if (!alreadySent) {
-            const lead = await base44.entities.Lead.get(campaignLead.lead_id);
-            if (lead?.phone) {
-              const template = await base44.entities.WhatsAppTemplate.get(wa.answered_call_template_id);
-              if (template && template.status === 'APPROVED') {
-                const slotMap = (wa.template_variable_map || {})[template.id];
-                const variables = buildTemplateVariables(template, lead, slotMap);
-                const waResult = await base44.functions.invoke('whatsappSendTemplate', {
-                  template_id: template.id,
-                  recipient: lead.phone,
-                  variables,
-                  lead_id: campaignLead.lead_id,
-                  call_log_id: callLogId,
-                  outreach_type: 'lead_followup',
-                  internal_service: true
-                });
-                const sent = !!waResult?.data?.success;
-                console.log(`[campaignPostCall] ✅ Answered-call WhatsApp ${sent ? 'sent' : 'failed'} to ${lead.phone}${sent ? '' : ' err=' + (waResult?.data?.error || 'unknown')}`);
-              }
-            }
-          }
-        }
-      } catch (acErr) {
-        console.error(`[campaignPostCall] answered-call WhatsApp failed: ${acErr.message}`);
-      }
-    }
+    // NOTE: Answered-call WhatsApp is now sent INLINE in smartfloWebhook (credit-free, reliable),
+    // not here — this avoids depending on this function being invoked when credits are out.
 
     // =====================================================
     // STEP 5: SLOW — AI analysis, scoring, emails, activities
