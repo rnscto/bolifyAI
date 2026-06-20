@@ -18,14 +18,26 @@ export default function ClientCampaigns() {
   // Live stats computed from CampaignLead records (does NOT depend on integration credits)
   const liveStats = useCampaignLiveStats(campaigns);
 
+  useEffect(() => { loadData(); }, []);
+
+  // Realtime updates via WebSocket — replaces the old 30s polling that hit rate limits.
+  // Patches campaign rows in place as they change (status, counters, etc.).
   useEffect(() => {
-    loadData();
-    // Pause background polling while the tab is hidden to avoid wasted refreshes.
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') loadData();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!client) return;
+    const unsubscribe = base44.entities.Campaign.subscribe((event) => {
+      const row = event.data;
+      if (!row || row.client_id !== client.id) return;
+      setCampaigns(prev => {
+        if (event.type === 'delete') return prev.filter(c => c.id !== event.id);
+        const exists = prev.some(c => c.id === row.id);
+        if (event.type === 'update' || exists) {
+          return prev.map(c => (c.id === row.id ? row : c));
+        }
+        return [row, ...prev];
+      });
+    });
+    return unsubscribe;
+  }, [client]);
 
   const loadData = async () => {
     try {
