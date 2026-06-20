@@ -52,15 +52,18 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
   }, [open, client]);
 
   const loadData = async () => {
-    const [agentsData, leadsData, groupsData, notAnsweredCLs] = await Promise.all([
-      base44.entities.Agent.filter({ client_id: client.id }),
-      base44.entities.Lead.filter({ client_id: client.id }, '-created_date', 10000),
-      base44.entities.LeadGroup.filter({ client_id: client.id }, '-created_date', 100),
-      base44.entities.CampaignLead.filter({ client_id: client.id, call_status: 'not_answered' }, '-created_date', 5000)
-    ]);
+    // Sequential (not Promise.all) so 4 big reads don't fire simultaneously and trip
+    // Base44's per-second rate limit. Page sizes are capped to what the picker uses.
+    const agentsData = await base44.entities.Agent.filter({ client_id: client.id });
     setAgents(agentsData.filter(a => a.status === 'active'));
-    setLeads(leadsData);
+
+    const groupsData = await base44.entities.LeadGroup.filter({ client_id: client.id }, '-created_date', 100);
     setLeadGroups(groupsData);
+
+    const leadsData = await base44.entities.Lead.filter({ client_id: client.id }, '-created_date', 5000);
+    setLeads(leadsData);
+
+    const notAnsweredCLs = await base44.entities.CampaignLead.filter({ client_id: client.id, call_status: 'not_answered' }, '-created_date', 2000);
     setNotAnsweredIds(new Set(notAnsweredCLs.map(cl => cl.lead_id)));
   };
 
