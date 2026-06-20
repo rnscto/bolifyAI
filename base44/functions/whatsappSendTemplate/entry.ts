@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
       const hType = (template.header_type || 'NONE').toUpperCase();
       if (['IMAGE', 'VIDEO', 'DOCUMENT'].includes(hType)) {
         if (!template.header_media_url) {
-          return Response.json({ error: `Template "${template.name}" has a ${hType} header but no header_media_url is set.` }, { status: 400 });
+          return Response.json({ error: `Template "${template.name}" has a ${hType} header but no media URL set. Use a text-only template for automated sends, or add a media URL.` }, { status: 400 });
         }
         tmpl.headerValues = [template.header_media_url];
         if (hType === 'DOCUMENT') tmpl.fileName = (template.name || 'document') + '.pdf';
@@ -177,9 +177,24 @@ Deno.serve(async (req) => {
           parameters: [{ type: mediaKey, [mediaKey]: { link: mediaUrl } }]
         });
       } else {
-        return Response.json({
-          error: `Template "${template.name}" has a ${headerType} header but no header_media_url is set. Please edit the template and add a media URL.`
-        }, { status: 400 });
+        // A media-header template REQUIRES a media URL (Meta rejects body-only with #132012).
+        // Log the failure to OutreachLog so it's visible in WhatsApp History (instead of vanishing
+        // before the log was ever written), then return a clear error.
+        const errMsg = `Template "${template.name}" has a ${headerType} header but no media URL set. Use a text-only template for automated sends, or add a media URL.`;
+        try {
+          await svc.entities.OutreachLog.create({
+            client_id: template.client_id,
+            lead_id: lead_id || lead?.id || null,
+            call_log_id: call_log_id || null,
+            channel: 'whatsapp', direction: 'outbound', vendor: cfg.whatsapp_provider,
+            template_id, template_name: template.name,
+            recipient_phone: normalizePhone(recipient),
+            body: template.body_text || '',
+            outreach_type: outreach_type || 'lead_followup',
+            status: 'failed', error_message: errMsg
+          });
+        } catch (_) {}
+        return Response.json({ error: errMsg }, { status: 400 });
       }
     }
 
