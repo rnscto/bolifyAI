@@ -24,20 +24,42 @@ export default function ClientWhatsAppHistory() {
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState('all');
   const [search, setSearch] = useState('');
+  const [clientId, setClientId] = useState(null);
 
   useEffect(() => { loadData(); }, []);
+
+  // Realtime updates via WebSocket — no polling, avoids Base44 rate limits.
+  // Filters events to this client's WhatsApp logs and patches the list in place.
+  useEffect(() => {
+    if (!clientId) return;
+    const unsubscribe = base44.entities.OutreachLog.subscribe((event) => {
+      const row = event.data;
+      if (!row || row.client_id !== clientId || row.channel !== 'whatsapp') return;
+      setLogs(prev => {
+        if (event.type === 'delete') return prev.filter(l => l.id !== event.id);
+        const exists = prev.some(l => l.id === row.id);
+        if (event.type === 'update' || exists) {
+          return prev.map(l => (l.id === row.id ? row : l));
+        }
+        // new record → prepend (keeps newest-first ordering)
+        return [row, ...prev];
+      });
+    });
+    return unsubscribe;
+  }, [clientId]);
 
   const loadData = async () => {
     setLoading(true);
     const user = await base44.auth.me();
-    let clientId = user.client_id || user.data?.client_id;
-    if (!clientId) {
+    let cid = user.client_id || user.data?.client_id;
+    if (!cid) {
       const clients = await base44.entities.Client.filter({ email: user.email });
-      clientId = clients[0]?.id;
+      cid = clients[0]?.id;
     }
-    if (!clientId) { setLogs([]); setLoading(false); return; }
+    if (!cid) { setLogs([]); setLoading(false); return; }
+    setClientId(cid);
     const rows = await base44.entities.OutreachLog.filter(
-      { client_id: clientId, channel: 'whatsapp' }, '-created_date', 200
+      { client_id: cid, channel: 'whatsapp' }, '-created_date', 200
     );
     setLogs(rows);
     setLoading(false);
