@@ -164,6 +164,12 @@ export const base44 = {
         throw { type: 'auth_required' };
       }
     },
+    updateMe: async (updates) => {
+      return await apiFetch("/auth/me", {
+        method: "PUT",
+        body: JSON.stringify(updates),
+      });
+    },
     isAuthenticated: async () => {
       try {
         await apiFetch("/auth/me");

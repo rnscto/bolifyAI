@@ -86,9 +86,44 @@ authRouter.get("/me", async (c) => {
   try {
     const payload = await verify(token, JWT_SECRET, "HS256");
     
-    // Fetch full user and client details if needed, but returning payload is enough
-    return c.json(payload);
+    // Fetch full user details from DB
+    const userResult = await client.queryObject(`
+      SELECT id, display_name, role, client_id, email
+      FROM "user"
+      WHERE id = $1
+      LIMIT 1
+    `, [payload.id]);
+
+    if (userResult.rows.length === 0) {
+      return c.json({ error: "User not found" }, 404);
+    }
+
+    return c.json(userResult.rows[0]);
   } catch (e) {
+    return c.json({ error: "Invalid token" }, 401);
+  }
+});
+
+authRouter.put("/me", async (c) => {
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const token = authHeader.split(" ")[1];
+  try {
+    const payload = await verify(token, JWT_SECRET, "HS256");
+    const { display_name } = await c.req.json();
+
+    if (display_name) {
+      await client.queryObject(
+        `UPDATE "user" SET display_name = $1 WHERE id = $2`,
+        [display_name, payload.id]
+      );
+    }
+
+    return c.json({ success: true, display_name });
+  } catch (e: any) {
     return c.json({ error: "Invalid token" }, 401);
   }
 });
