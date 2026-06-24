@@ -35,15 +35,12 @@ jobs:
         uses: azure/container-apps-deploy-action@v2
         with:
           appSourcePath: ${{ github.workspace }}
-          _dockerfilePathKey_: _dockerfilePath_
-          _targetLabelKey_: _targetLabel_
+          dockerfilePath: Dockerfile
           registryUrl: codeastraregistry.azurecr.io
           registryUsername: ${{ secrets.BOLIFY_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.BOLIFY_REGISTRY_PASSWORD }}
           containerAppName: bolify
           resourceGroup: vaani-ai-prod
           imageToBuild: codeastraregistry.azurecr.io/bolify:${{ github.sha }}
-          _buildArgumentsKey_: |
-            _buildArgumentsValues_
 
 
