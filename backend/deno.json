@@ -1,7 +1,8 @@
 {
   "tasks": {
     "dev": "deno serve --allow-net --allow-env --allow-read --watch main.ts",
-    "start": "deno serve --unstable-cron --allow-net --allow-env --allow-read main.ts"
+    "start": "deno serve --unstable-cron --allow-net --allow-env --allow-read main.ts",
+    "migrate": "deno run -A scripts/migrate.ts"
   },
   "imports": {
     "hono": "npm:hono@^4.12.27",

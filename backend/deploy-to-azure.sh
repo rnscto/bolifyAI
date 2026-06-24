@@ -28,8 +28,16 @@ echo "Enter your Smartflo API Key:"
 read -p "Smartflo Key: " SMARTFLO_KEY
 
 echo ""
-echo "Enter your Gemini API Key:"
-read -p "Gemini Key: " GEMINI_KEY
+echo "Enter your Azure OpenAI Key:"
+read -p "Azure OpenAI Key: " AZURE_OPENAI_KEY
+
+echo ""
+echo "Enter your Azure OpenAI Endpoint (e.g., https://your-resource.openai.azure.com/):"
+read -p "Azure OpenAI Endpoint: " AZURE_OPENAI_ENDPOINT
+
+echo ""
+echo "Enter your Azure OpenAI Deployment Name (e.g., gpt-4o):"
+read -p "Azure OpenAI Deployment Name: " AZURE_OPENAI_DEPLOYMENT
 
 echo ""
 echo "Creating Resource Group ($RESOURCE_GROUP)..."
@@ -60,7 +68,7 @@ az containerapp create \
   --target-port 8000 \
   --ingress 'external' \
   --registry-server $REGISTRY_NAME.azurecr.io \
-  --env-vars "DATABASE_URL=$DB_URL" "JWT_SECRET=super_secret_bolifyai_key_production" "SMARTFLO_API_KEY=$SMARTFLO_KEY" "GEMINI_API_KEY=$GEMINI_KEY"
+  --env-vars "DATABASE_URL=$DB_URL" "JWT_SECRET=super_secret_bolifyai_key_production" "SMARTFLO_API_KEY=$SMARTFLO_KEY" "AZURE_OPENAI_KEY=$AZURE_OPENAI_KEY" "AZURE_OPENAI_ENDPOINT=$AZURE_OPENAI_ENDPOINT" "AZURE_OPENAI_DEPLOYMENT=$AZURE_OPENAI_DEPLOYMENT"
 
 echo ""
 echo "======================================================"
