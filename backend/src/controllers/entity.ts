@@ -179,7 +179,10 @@ entityRouter.put("/:entity/:id", async (c) => {
   const body = await c.req.json();
   const user = c.get("jwtPayload") as any;
   
+  console.log(`[PUT /api/entities/${entity}/${id}] Received payload:`, JSON.stringify(body).slice(0, 500));
+
   const validCols = await getValidColumns(entity);
+  console.log(`[PUT /api/entities/${entity}/${id}] Valid Columns:`, Array.from(validCols).join(", "));
   if (validCols.size === 0) {
     return c.json({ error: "Entity not found" }, 404);
   }

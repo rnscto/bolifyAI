@@ -1,5 +1,5 @@
 import { Pool } from "https://deno.land/x/postgres@v0.19.3/mod.ts";
-import { load } from "@std/dotenv";
+import { load } from "https://deno.land/std@0.224.0/dotenv/mod.ts";
 
 await load({ export: true, allowEmptyValues: true });
 

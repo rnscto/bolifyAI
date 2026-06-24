@@ -100,7 +100,7 @@ export default function PersonalAIAssistant() {
                 <p><span className="text-gray-500">Voice:</span> {agent.persona?.voice_type || 'Default'}</p>
                 <p><span className="text-gray-500">Tone:</span> <span className="capitalize">{agent.persona?.tone || 'Friendly'}</span></p>
                 <p><span className="text-gray-500">Language:</span> {agent.persona?.language === 'hi-IN' ? 'Hindi' : agent.persona?.language === 'bilingual' ? 'Bilingual' : 'English'}</p>
-                <p><span className="text-gray-500">Engine:</span> {agent.persona?.voice_engine === 'azure_speech' ? 'Azure Speech (400+ voices)' : 'Realtime (GPT-4o)'}</p>
+                <p><span className="text-gray-500">Engine:</span> Gemini Multimodal Live (Flash 3.0)</p>
               </div>
             </div>
             <div>

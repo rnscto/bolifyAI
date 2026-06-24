@@ -27,6 +27,7 @@ export async function triggerSmartfloOutboundCall(params: {
   });
 
   const smartfloData = await smartfloResp.json();
+  console.log("[Smartflo] Click-to-call response:", smartfloResp.status, smartfloData);
   if (smartfloResp.ok && smartfloData.success !== false) {
     const newCallSid = smartfloData.call_id || smartfloData.call_sid || smartfloData.ref_id;
     await base44.entities.CallLog.update(callLogId, { call_sid: newCallSid, status: 'ringing' });

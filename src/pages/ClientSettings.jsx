@@ -8,11 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { User, Building, Phone, Mail, Save, Loader2, Shield, FileText } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/lib/AuthContext';
 import ClientComplianceTab from '../components/compliance/ClientComplianceTab';
 import ClientAgreementViewer from '../components/client/ClientAgreementViewer';
 import KYCUpload from '../components/client/KYCUpload';
 
 export default function ClientSettings() {
+  const { checkAppState } = useAuth();
   const [user, setUser] = useState(null);
   const [client, setClient] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -49,15 +51,21 @@ export default function ClientSettings() {
 
   const handleSave = async () => {
     setSaving(true);
-    await base44.auth.updateMe({ display_name: formData.display_name });
-    if (client) {
-      await base44.entities.Client.update(client.id, {
-        company_name: formData.company_name,
-        phone: formData.phone,
-        registered_address: formData.registered_address,
-      });
+    try {
+      await base44.auth.updateMe({ display_name: formData.display_name });
+      if (client) {
+        await base44.entities.Client.update(client.id, {
+          company_name: formData.company_name,
+          phone: formData.phone,
+          registered_address: formData.registered_address,
+        });
+      }
+      toast.success('Settings saved');
+      await loadData(); // Reload local state
+      await checkAppState(); // Reload global AuthContext to update Header
+    } catch (error) {
+      toast.error('Failed to save settings');
     }
-    toast.success('Settings saved');
     setSaving(false);
   };
 

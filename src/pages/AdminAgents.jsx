@@ -118,7 +118,7 @@ export default function AdminAgents() {
   const [formData, setFormData] = useState({
     name: '',
     client_id: '',
-    voice_engine: 'realtime',
+    voice_engine: 'gemini_realtime',
     voice_type: 'alloy',
     tone: 'professional',
     language: 'en-US',
@@ -161,7 +161,7 @@ export default function AdminAgents() {
         name: formData.name,
         client_id: formData.client_id,
         persona: {
-          voice_engine: formData.voice_engine || 'realtime',
+          voice_engine: formData.voice_engine || 'gemini_realtime',
           voice_type: formData.voice_type || 'alloy',
           tone: formData.tone,
           language: formData.language
@@ -198,7 +198,7 @@ export default function AdminAgents() {
     setFormData({
       name: '',
       client_id: '',
-      voice_engine: 'realtime',
+      voice_engine: 'gemini_realtime',
       voice_type: 'alloy',
       tone: 'professional',
       language: 'en-US',
@@ -220,7 +220,7 @@ export default function AdminAgents() {
     setFormData({
       name: agent.name,
       client_id: agent.client_id,
-      voice_engine: agent.persona?.voice_engine || 'realtime',
+      voice_engine: agent.persona?.voice_engine || 'gemini_realtime',
       voice_type: agent.persona?.voice_type || 'alloy',
       tone: agent.persona?.tone || 'professional',
       language: agent.persona?.language || 'en-US',
@@ -329,32 +329,19 @@ export default function AdminAgents() {
                 <div>
                   <Label>Voice Engine</Label>
                   <Select
-                    value={formData.voice_engine}
+                    value={formData.voice_engine || 'gemini_realtime'}
                     onValueChange={(value) => {
-                      const defaultVoice = value === 'realtime' ? 'alloy' : (value === 'gemini_realtime' ? 'Aoede' : 'en-IN-NeerjaNeural');
-                      setFormData({ ...formData, voice_engine: value, voice_type: defaultVoice });
+                      setFormData({ ...formData, voice_engine: value, voice_type: 'Aoede' });
                     }}
                   >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="realtime">
-                        <span className="flex items-center gap-2">
-                          Realtime API
-                          <span className="text-xs text-gray-400">Low latency, 10 voices</span>
-                        </span>
-                      </SelectItem>
-                      <SelectItem value="azure_speech">
-                        <span className="flex items-center gap-2">
-                          GPT-5-nano + Azure TTS
-                          <span className="text-xs text-gray-400">400+ voices, custom</span>
-                        </span>
-                      </SelectItem>
                       <SelectItem value="gemini_realtime">
                         <span className="flex items-center gap-2">
-                          Gemini Realtime
-                          <span className="text-xs text-gray-400">Gemini 3.1 Flash Live</span>
+                          Gemini Multimodal Live
+                          <span className="text-xs text-gray-400">Gemini 3.0 Flash Live</span>
                         </span>
                       </SelectItem>
                     </SelectContent>
@@ -370,7 +357,7 @@ export default function AdminAgents() {
                       <SelectValue placeholder="Select voice" />
                     </SelectTrigger>
                     <SelectContent className="max-h-64">
-                      {(formData.voice_engine === 'azure_speech' ? AZURE_SPEECH_VOICES : (formData.voice_engine === 'gemini_realtime' ? GEMINI_VOICES : REALTIME_VOICES)).map((v) => (
+                      {GEMINI_VOICES.map((v) => (
                         <SelectItem key={v.name} value={v.name}>
                           <span className="flex items-center gap-2">
                             {v.name}
@@ -603,7 +590,7 @@ export default function AdminAgents() {
                     <TableCell className="text-sm">{agent.industry || '-'}</TableCell>
                     <TableCell className="text-sm">
                       <Badge variant="outline" className={agent.persona?.voice_engine === 'azure_speech' ? 'border-purple-300 text-purple-700' : 'border-blue-300 text-blue-700'}>
-                        {agent.persona?.voice_engine === 'azure_speech' ? 'GPT-5-nano' : 'Realtime'}
+                        {agent.persona?.voice_engine === 'gemini_realtime' ? 'Gemini Multimodal Live' : (agent.persona?.voice_engine || 'Gemini Multimodal Live')}
                       </Badge>
                       <span className="block text-xs text-gray-500 mt-1">{agent.persona?.voice_type || 'alloy'}</span>
                     </TableCell>

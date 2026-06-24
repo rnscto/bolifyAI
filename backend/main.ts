@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { serveStatic } from "hono/deno";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { connectDB } from "./src/db/index.ts";
@@ -13,6 +14,7 @@ import { whatsappRouter } from "./src/controllers/whatsapp.ts";
 import { telegramRouter } from "./src/controllers/telegram.ts";
 import { billingRouter } from "./src/controllers/billing.ts";
 import { agentsRouter } from "./src/controllers/agents.ts";
+import { functionsRouter } from "./src/controllers/functions.ts";
 import { initCampaignPoller } from "./src/cron/campaignPoller.ts";
 import { initCrmPoller } from "./src/cron/crmPoller.ts";
 import { initTrialExpiryCheck } from "./src/cron/trialExpiryCheck.ts";
@@ -38,8 +40,26 @@ app.use("*", async (c, next) => {
   })(c, next);
 });
 
-app.get("/", (c) => {
-  return c.text("BolifyAI Deno + PostgreSQL API is running");
+app.use('/assets/*', serveStatic({ root: './dist' }));
+
+app.get('*', async (c, next) => {
+  if (c.req.path.startsWith('/api/')) {
+    return await next();
+  }
+  try {
+    if (c.req.path !== '/' && c.req.path !== '') {
+      try {
+        const fileInfo = await Deno.stat(`./dist${c.req.path}`);
+        if (fileInfo.isFile) {
+           return await serveStatic({ root: './dist' })(c, next);
+        }
+      } catch { /* file not found, fallback to index.html */ }
+    }
+    const content = await Deno.readTextFile('./dist/index.html');
+    return c.html(content);
+  } catch (e) {
+    return c.text("BolifyAI API is running. Frontend dist/ not found.");
+  }
 });
 
 app.route("/api/auth", authRouter);
@@ -52,6 +72,7 @@ app.route("/api/whatsapp", whatsappRouter);
 app.route("/api/telegram", telegramRouter);
 app.route("/api/billing", billingRouter);
 app.route("/api/agents", agentsRouter);
+app.route("/api/functions", functionsRouter);
 
 // Initialize background scheduled tasks
 initCampaignPoller();

@@ -105,8 +105,16 @@ const functionsProxy = new Proxy({}, {
   get: function(target, prop) {
     if (prop === "invoke") {
       return async (functionName, args) => {
-        console.warn(`Mocking function invocation: ${functionName}`, args);
-        return { success: true, mocked: true };
+        try {
+          const res = await apiFetch(`/functions/${functionName}`, {
+            method: "POST",
+            body: JSON.stringify(args)
+          });
+          return res;
+        } catch (err) {
+          console.error(`Error invoking function ${functionName}:`, err);
+          return { data: { success: false, error: err.message } };
+        }
       };
     }
     return target[prop];

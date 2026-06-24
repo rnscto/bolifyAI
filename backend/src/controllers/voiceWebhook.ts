@@ -25,9 +25,12 @@ voiceWebhookRouter.post("/", async (c) => {
 
     const call_id = payload.call_id || payload.uuid;
     const status = payload.call_status || payload.status;
+    const duration = payload.duration || payload.billsec;
+    const recording_url = payload.recording_url;
     const direction = payload.direction;
     const caller_number = payload.caller_id_number || payload.caller_number || payload.from;
     const called_number = payload.call_to_number || payload.called_number || payload.to;
+    const hangup_cause = payload.hangup_cause_description || payload.reason_key || '';
 
     // INBOUND CALL HANDLING
     if (direction === "inbound" || payload.type === "inbound") {
@@ -62,18 +65,24 @@ voiceWebhookRouter.post("/", async (c) => {
 
     // OUTBOUND & STATUS UPDATES
     const mappedStatus =
-      status === "answered" || status === "up" ? "answered" :
+      status === "answered" || status === "up" || status === "Answered" ? "answered" :
       status === "ringing" || status === "early" ? "ringing" :
-      status === "completed" || status === "normal_clearing" || status === "hangup" || status === "Success" ? "completed" :
-      status === "no_answer" || status === "user_busy" || status === "cancel" || status === "NOANSWER" ? "no_answer" :
-      status === "failed" || status === "busy" || status === "FAILED" ? "failed" :
+      status === "completed" || status === "normal_clearing" || status === "hangup" || status === "Success" || status === "Completed" ? "completed" :
+      status === "no_answer" || status === "user_busy" || status === "cancel" || status === "NOANSWER" || status === "Missed" || status === "not_connected" ? "no_answer" :
+      status === "failed" || status === "busy" || status === "FAILED" || status === "Cancelled" ? "failed" :
       "initiated";
 
+    let effectiveStatus = mappedStatus;
+    if (mappedStatus === 'answered' && hangup_cause && parseInt(duration) > 0) {
+      console.log(`[smartfloWebhook] Detected "answered" with hangup_cause="${hangup_cause}" + duration=${duration} — treating as COMPLETED`);
+      effectiveStatus = 'completed';
+    }
+
     const customIdentifier = payload.custom_identifier || payload.customIdentifier || "";
-    let directLog = null;
+    let directLog: any = null;
     
     if (customIdentifier) {
-      directLog = await base44.entities.CallLog.get(customIdentifier);
+      try { directLog = await base44.entities.CallLog.get(customIdentifier); } catch(e) {}
       if (directLog && directLog.call_sid !== call_id) {
          await base44.entities.CallLog.update(directLog.id, { call_sid: call_id });
       }
@@ -85,17 +94,55 @@ voiceWebhookRouter.post("/", async (c) => {
     }
 
     if (directLog) {
-      if (directLog.status !== mappedStatus) {
-         const updateData: any = { status: mappedStatus };
-         if (mappedStatus === "answered") {
-            updateData.call_start_time = updateData.call_start_time || new Date().toISOString();
+      const updateData: any = {};
+      if (directLog.status !== effectiveStatus) {
+         updateData.status = effectiveStatus;
+         if (effectiveStatus === "answered") {
+            updateData.call_start_time = directLog.call_start_time || new Date().toISOString();
          }
-         if (mappedStatus === "completed" || mappedStatus === "failed" || mappedStatus === "no_answer") {
+         if (effectiveStatus === "completed" || effectiveStatus === "failed" || effectiveStatus === "no_answer") {
             updateData.call_end_time = new Date().toISOString();
          }
-         await base44.entities.CallLog.update(directLog.id, updateData);
-         console.log(`[smartfloWebhook] Updated CallLog ${directLog.id} to ${mappedStatus}`);
       }
+
+      if (duration) updateData.duration = parseInt(duration);
+      if (recording_url) updateData.recording_url = recording_url;
+
+      if (Object.keys(updateData).length > 0) {
+         await base44.entities.CallLog.update(directLog.id, updateData);
+         console.log(`[smartfloWebhook] Updated CallLog ${directLog.id}: ${JSON.stringify(updateData)}`);
+      }
+
+      // Check if call reached terminal status and needs post-processing
+      const terminalStatuses = ['completed', 'failed', 'no_answer'];
+      const justBecameTerminal = !terminalStatuses.includes(directLog.status) && terminalStatuses.includes(effectiveStatus);
+      const isTerminal = terminalStatuses.includes(effectiveStatus);
+
+      if (isTerminal || recording_url) {
+        // Check for campaign
+        const campaignLeads = await base44.entities.CampaignLead.filter({ call_log_id: directLog.id });
+        if (campaignLeads.length > 0) {
+           const cl = campaignLeads[0];
+           // Trigger campaignPostCall
+           try {
+             fetch(`http://localhost:8000/api/campaignPostCall`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ call_log_id: directLog.id, campaign_id: cl.campaign_id })
+             }).catch(e => console.error('Error triggering campaignPostCall:', e));
+           } catch(e) {}
+        } else if (effectiveStatus === 'completed') {
+           // Not a campaign call, trigger processTranscript
+           try {
+              fetch(`http://localhost:8000/api/processTranscript`, {
+                 method: 'POST',
+                 headers: { 'Content-Type': 'application/json' },
+                 body: JSON.stringify({ call_log_id: directLog.id, recording_url: recording_url || directLog.recording_url })
+              }).catch(e => console.error('Error triggering processTranscript:', e));
+           } catch(e) {}
+        }
+      }
+
       return c.json({ success: true, updated: true });
     }
 

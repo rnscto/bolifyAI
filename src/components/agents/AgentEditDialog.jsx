@@ -94,7 +94,7 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
     }));
   };
 
-  const voices = form.persona.voice_engine === 'realtime' ? REALTIME_VOICES : (form.persona.voice_engine === 'gemini_realtime' ? GEMINI_VOICES : AZURE_SPEECH_VOICES);
+  const voices = GEMINI_VOICES;
 
   const handleSave = async () => {
     if (!form.name.trim()) {
@@ -102,8 +102,9 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
       return;
     }
     setSaving(true);
-    const prevKBs = agent.knowledge_base_ids || [];
-    const kbChanged = JSON.stringify([...prevKBs].sort()) !== JSON.stringify([...selectedKBs].sort());
+    const prevKBs = Array.isArray(agent.knowledge_base_ids) ? agent.knowledge_base_ids : [];
+    const currentKBs = Array.isArray(selectedKBs) ? selectedKBs : [];
+    const kbChanged = JSON.stringify([...prevKBs].sort()) !== JSON.stringify([...currentKBs].sort());
     await base44.entities.Agent.update(agent.id, {
       name: form.name.trim(),
       industry: form.industry.trim(),
@@ -148,17 +149,13 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Voice Engine</Label>
-              <Select value={form.persona.voice_engine} onValueChange={v => {
+              <Select value={form.persona.voice_engine || 'gemini_realtime'} onValueChange={v => {
                 updatePersona('voice_engine', v);
-                updatePersona('voice_type', v === 'realtime' ? 'alloy' : (v === 'gemini_realtime' ? 'Aoede' : 'en-IN-NeerjaNeural'));
+                updatePersona('voice_type', 'Aoede');
               }}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="realtime">Realtime (GPT-4o built-in)</SelectItem>
-                  <SelectItem value="azure_speech">Azure Speech (400+ voices)</SelectItem>
-                  {isAdmin && (
-                    <SelectItem value="gemini_realtime">Gemini Realtime (Gemini 2.0 Flash Lite)</SelectItem>
-                  )}
+                  <SelectItem value="gemini_realtime">Gemini Multimodal Live (Flash 3.0)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
