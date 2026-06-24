@@ -9,7 +9,7 @@ on:
 
 env:
   CONTAINER_APP_NAME: 'bolifyai'
-  RESOURCE_GROUP: 'bolifyai-rg'
+  RESOURCE_GROUP: 'vaani-ai-prod'
   REGISTRY: 'ghcr.io'
   IMAGE_NAME: ${{ github.repository_owner }}/bolifyai-backend
 
