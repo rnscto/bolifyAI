@@ -1,0 +1,43 @@
+{
+  "name": "TrustedContact",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "name": {
+      "type": "string",
+      "description": "Contact name"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Contact phone number"
+    },
+    "relationship": {
+      "type": "string",
+      "enum": [
+        "family",
+        "friend",
+        "colleague",
+        "business",
+        "other"
+      ],
+      "default": "other",
+      "description": "Relationship to owner"
+    },
+    "always_connect": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether to auto-connect this contact without screening"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional notes about the contact"
+    }
+  },
+  "required": [
+    "client_id",
+    "phone"
+  ]
+}

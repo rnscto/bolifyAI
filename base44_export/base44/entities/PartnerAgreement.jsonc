@@ -1,0 +1,96 @@
+{
+  "name": "PartnerAgreement",
+  "type": "object",
+  "properties": {
+    "partner_id": {
+      "type": "string",
+      "description": "Partner ID"
+    },
+    "template_id": {
+      "type": "string",
+      "description": "Agreement template ID used"
+    },
+    "template_version": {
+      "type": "string",
+      "description": "Template version at time of signing"
+    },
+    "agreement_number": {
+      "type": "string",
+      "description": "Unique agreement number (e.g., VAANI-AGR-2026-001)"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending_signature",
+        "signed",
+        "expired",
+        "revoked"
+      ],
+      "default": "pending_signature",
+      "description": "Agreement status"
+    },
+    "partner_name": {
+      "type": "string",
+      "description": "Partner name at signing"
+    },
+    "partner_company": {
+      "type": "string",
+      "description": "Partner company name at signing"
+    },
+    "partner_email": {
+      "type": "string",
+      "description": "Partner email at signing"
+    },
+    "partner_address": {
+      "type": "string",
+      "description": "Partner address at signing"
+    },
+    "company_signatory_name": {
+      "type": "string",
+      "description": "Company signatory name"
+    },
+    "company_signatory_designation": {
+      "type": "string",
+      "description": "Company signatory designation"
+    },
+    "signature_image_url": {
+      "type": "string",
+      "description": "URL of the partner's drawn signature image"
+    },
+    "signature_name": {
+      "type": "string",
+      "description": "Typed full name as digital signature"
+    },
+    "signed_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the partner signed"
+    },
+    "signed_ip_address": {
+      "type": "string",
+      "description": "IP address at time of signing"
+    },
+    "pdf_url": {
+      "type": "string",
+      "description": "URL of the generated signed PDF"
+    },
+    "effective_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Agreement effective date"
+    },
+    "expiry_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Agreement expiry date (1 year from effective)"
+    },
+    "rendered_html": {
+      "type": "string",
+      "description": "Final rendered HTML with all placeholders filled"
+    }
+  },
+  "required": [
+    "partner_id",
+    "agreement_number"
+  ]
+}

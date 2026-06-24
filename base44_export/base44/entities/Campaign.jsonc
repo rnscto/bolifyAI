@@ -1,0 +1,266 @@
+{
+  "name": "Campaign",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "name": {
+      "type": "string",
+      "description": "Campaign name"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "cold_call",
+        "followup"
+      ],
+      "default": "cold_call",
+      "description": "Campaign type"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Agent assigned to make calls"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "scheduled",
+        "running",
+        "paused",
+        "completed",
+        "cancelled"
+      ],
+      "default": "draft",
+      "description": "Campaign status"
+    },
+    "total_leads": {
+      "type": "number",
+      "default": 0,
+      "description": "Total leads in campaign"
+    },
+    "calls_completed": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of calls completed"
+    },
+    "calls_failed": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of calls failed"
+    },
+    "max_concurrent_calls": {
+      "type": "number",
+      "default": 5,
+      "description": "Max simultaneous calls"
+    },
+    "call_script": {
+      "type": "object",
+      "properties": {
+        "opening": {
+          "type": "string",
+          "description": "Opening/greeting script"
+        },
+        "pitch": {
+          "type": "string",
+          "description": "Main pitch/value proposition script"
+        },
+        "objection_handling": {
+          "type": "string",
+          "description": "Common objections and responses"
+        },
+        "closing": {
+          "type": "string",
+          "description": "Closing/CTA script"
+        }
+      },
+      "description": "Structured call script for the campaign"
+    },
+    "scheduled_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When to start the campaign"
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Actual start time"
+    },
+    "completed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Completion time"
+    },
+    "followup_rules": {
+      "type": "object",
+      "properties": {
+        "interested_email": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send AI-personalized follow-up email when lead is interested"
+        },
+        "interested_callback_days": {
+          "type": "number",
+          "default": 2,
+          "description": "Days after interested outcome to schedule callback"
+        },
+        "interested_ai_email": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use AI to generate personalized email from transcript context"
+        },
+        "callback_email": {
+          "type": "boolean",
+          "default": true,
+          "description": "Send confirmation email for callback outcomes"
+        },
+        "callback_create_task": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-create agent task with AI talking points for callback"
+        },
+        "callback_ai_talking_points": {
+          "type": "boolean",
+          "default": true,
+          "description": "Generate AI talking points for callback tasks"
+        },
+        "not_interested_email": {
+          "type": "boolean",
+          "default": false,
+          "description": "Send email if not interested"
+        },
+        "no_answer_retry": {
+          "type": "boolean",
+          "default": true,
+          "description": "Auto-retry no-answer leads"
+        },
+        "no_answer_retry_hours": {
+          "type": "number",
+          "default": 4,
+          "description": "Hours to wait before retrying no-answer"
+        },
+        "no_answer_max_retries": {
+          "type": "number",
+          "default": 3,
+          "description": "Maximum retry attempts for no-answer leads"
+        }
+      },
+      "description": "AI-driven automated follow-up rules"
+    },
+    "whatsapp_auto_send": {
+      "type": "object",
+      "description": "Auto-send WhatsApp templates after call when AI detects intent in transcript",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Master toggle for auto-WhatsApp after call"
+        },
+        "intent_template_map": {
+          "type": "object",
+          "description": "Map of intent \u2192 WhatsAppTemplate ID to send when that intent is detected",
+          "properties": {
+            "pricing_details": {
+              "type": "string"
+            },
+            "brochure_request": {
+              "type": "string"
+            },
+            "demo_booking": {
+              "type": "string"
+            },
+            "callback_confirmation": {
+              "type": "string"
+            },
+            "location_address": {
+              "type": "string"
+            },
+            "payment_link": {
+              "type": "string"
+            },
+            "general_details": {
+              "type": "string"
+            }
+          }
+        },
+        "template_variable_map": {
+          "type": "object",
+          "description": "Explicit variable mappings per template ID. Keyed by WhatsAppTemplate ID \u2192 array of slot definitions (index order = {{1}},{{2}}\u2026). Each slot is { source: 'lead_name'|'lead_company'|'lead_phone'|'lead_email'|'static', value?: string } where value holds the static text when source==='static'."
+        },
+        "answered_call_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Send a fixed WhatsApp template after EVERY answered call (no AI needed, credit-free)"
+        },
+        "answered_call_template_id": {
+          "type": "string",
+          "description": "Approved WhatsAppTemplate ID to send after every answered call"
+        },
+        "missed_call_enabled": {
+          "type": "boolean",
+          "default": false,
+          "description": "Send WhatsApp template when call is not answered"
+        },
+        "missed_call_when": {
+          "type": "string",
+          "enum": [
+            "after_final_retry",
+            "first_miss",
+            "every_miss"
+          ],
+          "default": "after_final_retry",
+          "description": "When to send: after final retry, on first miss only, or every missed attempt"
+        },
+        "missed_call_template_id": {
+          "type": "string",
+          "description": "Approved WhatsAppTemplate ID to send for missed calls"
+        }
+      }
+    },
+    "outcomes_summary": {
+      "type": "object",
+      "properties": {
+        "neutral": {
+          "type": "number",
+          "default": 0
+        },
+        "interested": {
+          "type": "number",
+          "default": 0
+        },
+        "not_interested": {
+          "type": "number",
+          "default": 0
+        },
+        "not_answered": {
+          "type": "number",
+          "default": 0
+        },
+        "callback": {
+          "type": "number",
+          "default": 0
+        },
+        "converted": {
+          "type": "number",
+          "default": 0
+        },
+        "do_not_call": {
+          "type": "number",
+          "default": 0
+        }
+      },
+      "description": "Summary of call outcomes"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Campaign notes"
+    }
+  },
+  "required": [
+    "client_id",
+    "name",
+    "agent_id"
+  ]
+}

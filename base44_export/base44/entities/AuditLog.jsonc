@@ -1,0 +1,65 @@
+{
+  "name": "AuditLog",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Client ID"
+    },
+    "action_type": {
+      "type": "string",
+      "enum": [
+        "call_initiated",
+        "call_completed",
+        "agent_created",
+        "agent_updated",
+        "agent_suspended",
+        "campaign_started",
+        "campaign_paused",
+        "campaign_cancelled",
+        "did_assigned",
+        "did_unassigned",
+        "script_changed",
+        "emergency_takedown",
+        "data_erasure",
+        "consent_given",
+        "consent_revoked",
+        "login",
+        "export_data"
+      ],
+      "description": "Type of action logged"
+    },
+    "entity_type": {
+      "type": "string",
+      "description": "Entity involved (Agent, Campaign, DID, Lead, etc.)"
+    },
+    "entity_id": {
+      "type": "string",
+      "description": "ID of the entity involved"
+    },
+    "actor_email": {
+      "type": "string",
+      "description": "Email of user who performed the action"
+    },
+    "actor_role": {
+      "type": "string",
+      "description": "Role of actor (admin/user)"
+    },
+    "details": {
+      "type": "string",
+      "description": "Human-readable description of the action"
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Additional structured data (DID number, script content hash, etc.)"
+    },
+    "ip_address": {
+      "type": "string",
+      "description": "IP address if available"
+    }
+  },
+  "required": [
+    "action_type",
+    "details"
+  ]
+}

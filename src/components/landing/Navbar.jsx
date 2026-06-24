@@ -88,13 +88,13 @@ export default function Navbar() {
                 <Button
                   variant="ghost"
                   className={`font-medium ${scrolled ? 'text-gray-700 hover:text-[#00bcd4]' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
-                  onClick={() => base44.auth.redirectToLogin()}
+                  onClick={() => window.location.href = createPageUrl('Login')}
                 >
                   Log In
                 </Button>
                 <Button
                   className="bg-gradient-to-r from-[#00bcd4] to-[#0097a7] hover:from-[#0097a7] hover:to-[#00838f] text-white font-semibold shadow-md shadow-cyan-200"
-                  onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
+                  onClick={() => window.location.href = createPageUrl('Signup')}
                 >
                   Start Free Trial
                 </Button>
@@ -152,13 +152,13 @@ export default function Navbar() {
                   <Button
                     variant="outline"
                     className="flex-1 border-[#00bcd4] text-[#00bcd4]"
-                    onClick={() => base44.auth.redirectToLogin()}
+                    onClick={() => window.location.href = createPageUrl('Login')}
                   >
                     Log In
                   </Button>
                   <Button
                     className="flex-1 bg-gradient-to-r from-[#00bcd4] to-[#0097a7] text-white font-semibold"
-                    onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
+                    onClick={() => window.location.href = createPageUrl('Signup')}
                   >
                     Sign Up
                   </Button>

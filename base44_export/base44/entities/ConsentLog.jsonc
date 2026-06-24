@@ -1,0 +1,57 @@
+{
+  "name": "ConsentLog",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Client who gave consent"
+    },
+    "consent_type": {
+      "type": "string",
+      "enum": [
+        "platform_tos",
+        "dpdp_processing",
+        "ai_voice_usage",
+        "data_retention",
+        "marketing_communications",
+        "lead_data_collection"
+      ],
+      "description": "Type of consent"
+    },
+    "consent_given": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether consent was given or revoked"
+    },
+    "consent_text": {
+      "type": "string",
+      "description": "The exact text/version the user consented to"
+    },
+    "consent_version": {
+      "type": "string",
+      "default": "2.1",
+      "description": "Version of the consent policy"
+    },
+    "given_by_email": {
+      "type": "string",
+      "description": "Email of the person who gave consent"
+    },
+    "given_by_name": {
+      "type": "string",
+      "description": "Name of the person"
+    },
+    "ip_address": {
+      "type": "string",
+      "description": "IP address at time of consent"
+    },
+    "revoked_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When consent was revoked (if applicable)"
+    }
+  },
+  "required": [
+    "client_id",
+    "consent_type"
+  ]
+}

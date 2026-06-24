@@ -1,0 +1,446 @@
+import { createClientFromRequest, createClient } from 'npm:@base44/sdk@0.8.31';
+
+// Paginated fetch: returns ALL CampaignLeads for a campaign (handles >1000 leads).
+// Base44's filter() defaults to 1000-record cap — using this avoids premature completion.
+async function fetchAllCampaignLeads(svc, campaignId) {
+  const PAGE = 500;
+  let all = [];
+  let skip = 0;
+  while (true) {
+    const batch = await svc.entities.CampaignLead.filter(
+      { campaign_id: campaignId }, 'created_date', PAGE, skip
+    );
+    if (!batch || batch.length === 0) break;
+    all = all.concat(batch);
+    if (batch.length < PAGE) break;
+    skip += PAGE;
+    if (skip > 100000) break;
+  }
+  return all;
+}
+
+Deno.serve(async (req) => {
+  try {
+    const body = await req.json();
+    const { campaign_id, action, _internal } = body;
+    if (!campaign_id) return Response.json({ error: 'campaign_id required' }, { status: 400 });
+
+    let base44;
+    let user = null;
+
+    if (_internal) {
+      const appId = Deno.env.get('BASE44_APP_ID');
+      base44 = createClient({ appId, asServiceRole: true });
+    } else {
+      base44 = createClientFromRequest(req);
+      user = await base44.auth.me();
+      if (!user) {
+        return Response.json({ error: 'Unauthorized' }, { status: 401 });
+      }
+    }
+
+    const svc = _internal ? base44 : base44.asServiceRole;
+    const campaign = await svc.entities.Campaign.get(campaign_id);
+    if (!campaign) return Response.json({ error: 'Campaign not found' }, { status: 404 });
+
+    // Ownership check only for direct user calls
+    if (user && !_internal) {
+      if (user.role !== 'admin') {
+        const clients = await base44.entities.Client.filter({ user_id: user.id });
+        const clientIds = clients.map(c => c.id);
+        if (!clientIds.includes(campaign.client_id)) {
+          return Response.json({ error: 'Forbidden' }, { status: 403 });
+        }
+      }
+    }
+
+    // Handle pause/resume/cancel
+    if (action === 'pause') {
+      await svc.entities.Campaign.update(campaign_id, { status: 'paused' });
+      return Response.json({ success: true, status: 'paused' });
+    }
+    if (action === 'cancel') {
+      await svc.entities.Campaign.update(campaign_id, { status: 'cancelled' });
+      return Response.json({ success: true, status: 'cancelled' });
+    }
+
+    // === TRAI COMPLIANCE: 9 AM – 9 PM IST window enforcement ===
+    // Block manual start/resume of dialing outside the permitted window
+    const istMs = Date.now() + (5 * 60 + 30) * 60 * 1000;
+    const istDate = new Date(istMs);
+    const istHour = istDate.getUTCHours();
+    const istMin = istDate.getUTCMinutes();
+    const istString = `${String(istHour).padStart(2, '0')}:${String(istMin).padStart(2, '0')} IST`;
+    const inTRAIWindow = istHour >= 9 && istHour < 21;
+    if (!inTRAIWindow) {
+      // Block ALL dialing outside TRAI window — including internal/poller calls.
+      // Mark campaign as paused so the poller will auto-resume it at 9 AM IST.
+      await svc.entities.Campaign.update(campaign_id, {
+        status: 'paused',
+        notes: `${campaign.notes || ''}\n[${new Date().toISOString()}] Auto-paused: outside TRAI 9AM-9PM IST window (attempted at ${istString}). Will auto-resume next morning.`.trim()
+      });
+      return Response.json({
+        error: 'trai_window_closed',
+        message: `Calling is allowed only between 9 AM – 9 PM IST per TRAI guidelines. Current time: ${istString}. Campaign saved as paused — it will auto-resume at 9 AM IST.`,
+        current_ist: istString
+      }, { status: 423 });
+    }
+
+    // Guard: don't restart a completed/cancelled campaign via internal trigger
+    if (_internal && ['completed', 'cancelled'].includes(campaign.status)) {
+      return Response.json({ success: true, skipped: `campaign_${campaign.status}` });
+    }
+
+    // ── BALANCE CHECK before starting campaign (per-minute billing) ──
+    const clientData = await svc.entities.Client.get(campaign.client_id);
+    if (clientData && clientData.billing_type !== 'unlimited') {
+      const freeMinutes = clientData.free_minutes_remaining || 0;
+      const walletBalance = clientData.wallet_balance || 0;
+      const rate = clientData.per_minute_rate || 4;
+      const minBalance = 100;
+
+      // Estimate cost: count pending leads × avg 2 min per call
+      const pendingCount = campaign.total_leads - (campaign.calls_completed || 0) - (campaign.calls_failed || 0);
+      const estimatedMinutes = pendingCount * 2;
+      const paidMinutesNeeded = Math.max(0, estimatedMinutes - freeMinutes);
+      const estimatedCost = paidMinutesNeeded * rate;
+
+      if (freeMinutes <= 0 && walletBalance < minBalance) {
+        return Response.json({
+          error: 'insufficient_balance',
+          message: `Insufficient balance. Minimum ₹${minBalance} required. Current: ₹${walletBalance}`,
+          wallet_balance: walletBalance,
+          estimated_cost: estimatedCost,
+          recommended_topup: Math.max(500, Math.ceil(estimatedCost / 100) * 100)
+        }, { status: 402 });
+      }
+
+      console.log(`[campaign] Balance check: ₹${walletBalance} wallet + ${freeMinutes} free min, est. cost ₹${estimatedCost} for ${pendingCount} leads`);
+    }
+
+    // Start or resume campaign
+    await svc.entities.Campaign.update(campaign_id, {
+      status: 'running',
+      started_at: campaign.started_at || new Date().toISOString()
+    });
+
+    const agent = await svc.entities.Agent.get(campaign.agent_id);
+    const agentDIDs = (agent?.assigned_dids && agent.assigned_dids.length > 0)
+      ? agent.assigned_dids
+      : (agent?.assigned_did ? [agent.assigned_did] : []);
+    if (!agent || agentDIDs.length === 0) {
+      await svc.entities.Campaign.update(campaign_id, { status: 'draft' });
+      return Response.json({ error: 'Agent has no assigned DID' }, { status: 400 });
+    }
+
+    // KB is now stored as a single Azure Blob (agent.kb_file_uri) and searched on-demand
+    // by streamAudio via the search_knowledge_base tool. No inline KB injection here.
+    const kbFileUri = agent.kb_file_uri || '';
+
+    const maxConcurrent = campaign.max_concurrent_calls || 5;
+
+    // Fix any stuck 'calling' leads from previous runs
+    const stuckLeads = await svc.entities.CampaignLead.filter(
+      { campaign_id, status: 'calling' }, 'created_date', 100
+    );
+    for (const stuckLead of stuckLeads) {
+      try {
+        if (stuckLead.call_log_id) {
+          const callLog = await svc.entities.CallLog.get(stuckLead.call_log_id);
+          const terminalStatuses = ['completed', 'failed', 'no_answer'];
+          if (callLog && terminalStatuses.includes(callLog.status)) {
+            let outcome = 'neutral';
+            let callStatusVal = 'answered';
+            if (callLog.status === 'no_answer' || callLog.status === 'failed') { outcome = 'not_answered'; callStatusVal = 'not_answered'; }
+            await svc.entities.CampaignLead.update(stuckLead.id, {
+              status: 'completed', outcome, call_status: callStatusVal,
+              conversation_summary: callLog.conversation_summary || '',
+              transcript: callLog.transcript || '',
+              call_duration: callLog.duration || 0
+            });
+            console.log(`[campaign] Fixed stuck lead ${stuckLead.lead_name}: ${outcome}`);
+          } else if (callLog && callLog.status === 'answered') {
+            // Call is actively in progress — don't time it out, let streamAudio finish
+            console.log(`[campaign] Skipping ${stuckLead.lead_name} — call actively answered`);
+          } else {
+            const callAge = Date.now() - new Date(stuckLead.updated_date || stuckLead.created_date).getTime();
+            if (callAge > 3 * 60 * 1000) {
+              await svc.entities.CampaignLead.update(stuckLead.id, {
+                status: 'completed', outcome: 'not_answered', call_status: 'not_answered',
+                conversation_summary: 'Call timed out — no response within 3 minutes.'
+              });
+              if (stuckLead.call_log_id) {
+                await svc.entities.CallLog.update(stuckLead.call_log_id, {
+                  status: 'no_answer', call_end_time: new Date().toISOString(),
+                  conversation_summary: 'Call timed out — no Smartflo webhook callback received.'
+                });
+              }
+              console.log(`[campaign] Timed out stuck lead ${stuckLead.lead_name}`);
+            } else {
+              await svc.entities.CampaignLead.update(stuckLead.id, { status: 'pending', call_log_id: null });
+              console.log(`[campaign] Reset stuck lead ${stuckLead.lead_name} to pending`);
+            }
+          }
+        } else {
+          await svc.entities.CampaignLead.update(stuckLead.id, { status: 'pending', call_log_id: null });
+        }
+      } catch (e) {
+        console.error(`[campaign] Error fixing stuck lead:`, e.message);
+      }
+    }
+
+    // ─── FIRE-AND-FORGET BATCH: Initiate up to maxConcurrent calls without waiting ───
+    // Instead of waiting 50s per call, fire all calls and let streamAudio/campaignPostCall
+    // handle completion asynchronously. The campaignPoller automation handles retries.
+
+    const results = { initiated: 0, failed: 0, errors: [] };
+    const MAX_CALLS_PER_RUN = maxConcurrent * 2; // Fire up to 2x concurrency slots
+    let didIndex = 0;
+
+    // Count currently active calls
+    const currentlyCalling = await svc.entities.CampaignLead.filter(
+      { campaign_id, status: 'calling' }, 'created_date', 100
+    );
+    const slotsAvailable = Math.max(0, maxConcurrent - currentlyCalling.length);
+
+    if (slotsAvailable === 0) {
+      console.log(`[campaign] All ${maxConcurrent} slots occupied. Waiting for completions.`);
+      return Response.json({ success: true, message: 'All slots occupied', currently_calling: currentlyCalling.length });
+    }
+
+    // Get next pending leads ready to call
+    // Fetch a large batch because some leads may have future followup_call_date (retry-scheduled)
+    // and we need to skip past them to find fresh leads
+    const now = new Date();
+    const pendingLeadsRaw = await svc.entities.CampaignLead.filter(
+      { campaign_id, status: 'pending' }, 'created_date', 200
+    );
+    const pendingLeads = pendingLeadsRaw.filter(l => {
+      if (!l.followup_call_date) return true;
+      return new Date(l.followup_call_date) <= now;
+    }).slice(0, slotsAvailable);
+
+    if (pendingLeads.length === 0) {
+      // Check if campaign should be completed (paginated — handles >1000 leads)
+      const allLeads = await fetchAllCampaignLeads(svc, campaign_id);
+      const callingCount = allLeads.filter(l => l.status === 'calling').length;
+      const pendingWithFutureRetry = allLeads.filter(l =>
+        l.status === 'pending' && l.followup_call_date && new Date(l.followup_call_date) > now
+      ).length;
+      const pendingReady = allLeads.filter(l =>
+        l.status === 'pending' && (!l.followup_call_date || new Date(l.followup_call_date) <= now)
+      ).length;
+
+      if (callingCount === 0 && pendingReady === 0 && pendingWithFutureRetry === 0) {
+        const completed = allLeads.filter(l => l.status === 'completed').length;
+        const failed = allLeads.filter(l => l.status === 'failed').length;
+        const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0, converted: 0, do_not_call: 0 };
+        allLeads.forEach(l => { if (l.outcome && outcomes[l.outcome] !== undefined) outcomes[l.outcome]++; });
+        await svc.entities.Campaign.update(campaign_id, {
+          status: 'completed', completed_at: new Date().toISOString(),
+          calls_completed: completed, calls_failed: failed, outcomes_summary: outcomes
+        });
+        console.log(`[campaign] Campaign completed: ${completed} done, ${failed} failed`);
+        return Response.json({ success: true, status: 'completed', completed, failed });
+      }
+
+      if (pendingWithFutureRetry > 0) {
+        console.log(`[campaign] ${pendingWithFutureRetry} leads waiting for retry. Campaign continues.`);
+      }
+      return Response.json({ success: true, message: 'No ready leads', pending_retry: pendingWithFutureRetry, calling: callingCount });
+    }
+
+    // Determine Smartflo API key
+    let smartfloApiKey;
+    try {
+      const clientData = await svc.entities.Client.get(campaign.client_id);
+      const isDemoAgent = clientData && (clientData.account_status === 'trial' || clientData.account_status === 'onboarding');
+      smartfloApiKey = isDemoAgent
+        ? Deno.env.get('SMARTFLO_API_KEY')
+        : (agent.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY'));
+    } catch (_) {
+      smartfloApiKey = agent.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY');
+    }
+
+    // ─── Fire all calls in quick succession (no 50s wait per call) ───
+    for (const cl of pendingLeads) {
+      try {
+        // RE-READ to prevent race condition with concurrent executeCampaign invocations
+        // or campaignPoller picking the same lead simultaneously
+        const freshLead = await svc.entities.CampaignLead.get(cl.id);
+        if (freshLead.status !== 'pending') {
+          console.log(`[campaign] Lead ${cl.lead_name} already ${freshLead.status} — skipping (race avoided)`);
+          continue;
+        }
+
+        const selectedDID = agentDIDs[didIndex % agentDIDs.length];
+        didIndex++;
+
+        // ── VALIDATE CALLEE NUMBER before dialing ──
+        // Corrupt imports (letters in number, two numbers merged) get rejected by Smartflo
+        // → instant 'failed'. Skip these with a clear reason instead of wasting an API call.
+        const callee10 = (cl.lead_phone || '').replace(/[^0-9]/g, '').slice(-10);
+        if (!/^[6-9]\d{9}$/.test(callee10)) {
+          await svc.entities.CampaignLead.update(cl.id, {
+            status: 'completed', outcome: 'do_not_call', call_status: 'not_answered',
+            conversation_summary: `Invalid phone number "${cl.lead_phone}" — skipped (not a valid 10-digit Indian mobile).`
+          });
+          console.warn(`[campaign] Skipped ${cl.lead_name}: invalid phone "${cl.lead_phone}"`);
+          continue;
+        }
+        const dialNumber = '91' + callee10;
+
+        await svc.entities.CampaignLead.update(cl.id, {
+          status: 'calling', attempt_count: (cl.attempt_count || 0) + 1
+        });
+
+        const cleanPhone = cl.lead_phone.replace(/[^0-9]/g, '');
+        const callSid = `camp_${campaign_id.slice(-8)}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+
+        // Build lead context inline
+        let leadContext = '';
+        try {
+          let lead = null;
+          if (cl.lead_id) {
+            try { lead = await svc.entities.Lead.get(cl.lead_id); } catch (_) {}
+          }
+          if (lead) {
+            const ctxParts = [];
+            ctxParts.push(`CUSTOMER PROFILE:`);
+            ctxParts.push(`- Name: ${lead.name || cl.lead_name || 'Unknown'}`);
+            if (lead.phone) ctxParts.push(`- Phone: ${lead.phone}`);
+            if (lead.email) ctxParts.push(`- Email: ${lead.email}`);
+            if (lead.company) ctxParts.push(`- Company: ${lead.company}`);
+            if (lead.status) ctxParts.push(`- Status: ${lead.status}`);
+            if (lead.score) ctxParts.push(`- Lead Score: ${lead.score}/100`);
+            if (lead.qualification_tier) ctxParts.push(`- Qualification: ${lead.qualification_tier.toUpperCase()}`);
+            if (lead.notes) ctxParts.push(`\nNOTES: ${lead.notes}`);
+            ctxParts.push(`\nCRITICAL PERSONALIZATION RULES:`);
+            ctxParts.push(`- You MUST address the customer by name "${lead.name || cl.lead_name || 'Sir/Madam'}".`);
+            ctxParts.push(`- Example: "Kya main ${lead.name || cl.lead_name || 'Sir/Madam'} se baat kar rahi hu?"`);
+            if (lead.email) ctxParts.push(`- If confirming email, use: "${lead.email}"`);
+            if (lead.company) ctxParts.push(`- Reference their company "${lead.company}" naturally.`);
+            leadContext = ctxParts.join('\n');
+          } else {
+            leadContext = `CUSTOMER PROFILE:\n- Name: ${cl.lead_name || 'Unknown'}\n- Phone: ${cl.lead_phone}\nCRITICAL: Address the customer by name "${cl.lead_name || 'Sir/Madam'}".`;
+          }
+          console.log(`[campaign] Lead context built for ${cl.lead_name}: ${leadContext.length} chars`);
+        } catch (e) {
+          leadContext = `CUSTOMER: ${cl.lead_name || 'Unknown'}\nCRITICAL: Address the customer by name "${cl.lead_name || 'Sir/Madam'}".`;
+        }
+
+        const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+        const timeContext = `\n\n--- CURRENT DATE & TIME (IST) ---\nRight now it is: ${nowIST} (Indian Standard Time).\nUse this to calculate relative times. Always confirm callback times in IST.`;
+
+        const personalizedPrompt = [
+          agent.system_prompt || '',
+          timeContext,
+          campaign.call_script?.opening ? `\nCALL SCRIPT - Opening: ${campaign.call_script.opening}` : '',
+          campaign.call_script?.pitch ? `\nCALL SCRIPT - Pitch: ${campaign.call_script.pitch}` : '',
+          campaign.call_script?.objection_handling ? `\nCALL SCRIPT - Objections: ${campaign.call_script.objection_handling}` : '',
+          campaign.call_script?.closing ? `\nCALL SCRIPT - Closing: ${campaign.call_script.closing}` : '',
+          `\n\n--- LEAD CONTEXT (YOU MUST USE THIS DATA IN THE CONVERSATION) ---\n${leadContext}`
+        ].filter(Boolean).join('\n');
+
+        // Use campaign script's "opening" as greeting if present (overrides agent default)
+        // Personalize {{name}} placeholder if used
+        let campaignGreeting = agent.greeting_message || '';
+        if (campaign.call_script?.opening && campaign.call_script.opening.trim()) {
+          campaignGreeting = campaign.call_script.opening
+            .replace(/\{\{name\}\}/gi, cl.lead_name || 'Sir/Madam')
+            .replace(/\{\{company\}\}/gi, (await (async () => { try { return (await svc.entities.Lead.get(cl.lead_id))?.company || ''; } catch (_) { return ''; } })()))
+            .trim();
+          console.log(`[campaign] Using campaign opening as greeting for ${cl.lead_name}: "${campaignGreeting.substring(0, 80)}"`);
+        }
+
+        const callLog = await svc.entities.CallLog.create({
+          client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
+          call_sid: callSid, caller_id: selectedDID, callee_number: cleanPhone,
+          direction: 'outbound', status: 'initiated', call_start_time: new Date().toISOString(),
+          conversation_summary: leadContext ? `[LEAD CONTEXT] ${cl.lead_name}\n${leadContext}` : '',
+          agent_config_cache: {
+            agent_name: agent.name, system_prompt: personalizedPrompt,
+            persona: agent.persona || {},
+            kb_file_uri: kbFileUri,
+            lead_context: leadContext,
+            greeting_message: campaignGreeting,
+            human_transfer_number: agent.human_transfer_number || '',
+            enable_auto_transfer: agent.enable_auto_transfer !== false
+          }
+        });
+
+        await svc.entities.CampaignLead.update(cl.id, { call_log_id: callLog.id });
+
+        // ─── Initiate the call via Smartflo ───
+        let cleanCallerID = selectedDID.replace(/[^0-9]/g, '');
+        if (cleanCallerID.length === 10) cleanCallerID = '91' + cleanCallerID;
+
+        // Pass call_log_id via custom_identifier — Smartflo echoes it back to streamAudio for EXACT match
+        const smartfloResp = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            api_key: smartfloApiKey,
+            customer_number: dialNumber,
+            caller_id: cleanCallerID,
+            custom_identifier: callLog.id,
+            async: 1
+          })
+        });
+
+        const smartfloData = await smartfloResp.json();
+        console.log(`[campaign] Smartflo response for ${cl.lead_name}: ${JSON.stringify(smartfloData)}`);
+
+        if (!(smartfloResp.ok && smartfloData.success !== false)) {
+          await svc.entities.CallLog.update(callLog.id, { status: 'failed' });
+          await svc.entities.CampaignLead.update(cl.id, {
+            status: 'completed', outcome: 'not_answered', call_status: 'not_answered',
+            conversation_summary: `Smartflo API error: ${smartfloData.message || JSON.stringify(smartfloData)}`
+          });
+          results.failed++;
+          results.errors.push({ lead: cl.lead_phone, error: smartfloData.message || 'API error' });
+          continue;
+        }
+
+        // Update call log with Smartflo ref — use ref_id as fallback when call_id is null
+        const smartfloCallId = smartfloData.call_id || smartfloData.ref_id || smartfloData.call_sid || callSid;
+        await svc.entities.CallLog.update(callLog.id, {
+          call_sid: smartfloCallId,
+          status: 'ringing'
+        });
+        results.initiated++;
+        console.log(`[campaign] ✅ Call fired for ${cl.lead_name} (callLog=${callLog.id}, sid=${smartfloCallId})`);
+
+        // Small delay between calls to avoid Smartflo rate limits
+        await new Promise(r => setTimeout(r, 1500));
+
+      } catch (err) {
+        console.error(`[campaign] Error calling ${cl.lead_phone}:`, err.message);
+        await svc.entities.CampaignLead.update(cl.id, {
+          status: 'completed', outcome: 'not_answered', call_status: 'not_answered',
+          conversation_summary: `Error: ${err.message}`
+        });
+        results.failed++;
+        results.errors.push({ lead: cl.lead_phone, error: err.message });
+      }
+    }
+
+    // Update campaign counts (paginated — handles >1000 leads)
+    const allLeads = await fetchAllCampaignLeads(svc, campaign_id);
+    const completedCount = allLeads.filter(l => l.status === 'completed').length;
+    const failedCount = allLeads.filter(l => l.status === 'failed').length;
+    await svc.entities.Campaign.update(campaign_id, {
+      calls_completed: completedCount, calls_failed: failedCount
+    });
+
+    return Response.json({
+      success: true, ...results,
+      pending_remaining: allLeads.filter(l => l.status === 'pending').length,
+      currently_calling: allLeads.filter(l => l.status === 'calling').length
+    });
+
+  } catch (error) {
+    console.error('[executeCampaign] Error:', error);
+    return Response.json({ error: error.message }, { status: 500 });
+  }
+});

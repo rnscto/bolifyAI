@@ -1,0 +1,90 @@
+{
+  "name": "RetentionConfig",
+  "type": "object",
+  "properties": {
+    "is_active": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether the retention calling system is active"
+    },
+    "retention_did": {
+      "type": "string",
+      "description": "DID phone number dedicated for retention calls"
+    },
+    "retention_agent_id": {
+      "type": "string",
+      "description": "Agent ID assigned for retention calls"
+    },
+    "call_days_after_expiry": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "description": "Days after trial expiry to make calls (e.g. [2, 5])"
+    },
+    "call_time_start": {
+      "type": "string",
+      "default": "10:00",
+      "description": "Earliest time to make retention calls (HH:MM IST)"
+    },
+    "call_time_end": {
+      "type": "string",
+      "default": "18:00",
+      "description": "Latest time to make retention calls (HH:MM IST)"
+    },
+    "custom_instructions": {
+      "type": "string",
+      "description": "Custom instructions for the AI retention agent"
+    },
+    "active_offer": {
+      "type": "string",
+      "description": "Current active offer text (e.g. '20% off first quarter')"
+    },
+    "offer_code": {
+      "type": "string",
+      "description": "Offer/promo code if applicable"
+    },
+    "offer_expiry": {
+      "type": "string",
+      "format": "date",
+      "description": "Offer expiry date"
+    },
+    "greeting_template": {
+      "type": "string",
+      "description": "Custom greeting template for retention calls"
+    },
+    "objection_handlers": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "objection": {
+            "type": "string"
+          },
+          "response": {
+            "type": "string"
+          }
+        }
+      },
+      "description": "Custom objection-response pairs"
+    },
+    "excluded_client_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Client IDs excluded from retention calls"
+    },
+    "max_calls_per_client": {
+      "type": "number",
+      "default": 3,
+      "description": "Max retention calls per client"
+    },
+    "enable_incoming_identification": {
+      "type": "boolean",
+      "default": true,
+      "description": "Identify incoming callers by registered phone number"
+    }
+  },
+  "required": []
+}

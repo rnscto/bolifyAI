@@ -1,0 +1,60 @@
+{
+  "name": "CallDecision",
+  "type": "object",
+  "properties": {
+    "call_log_id": {
+      "type": "string",
+      "description": "Associated CallLog ID"
+    },
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "transfer",
+        "callback",
+        "take_message",
+        "block",
+        "custom"
+      ],
+      "description": "Owner's decision for this call"
+    },
+    "custom_message": {
+      "type": "string",
+      "description": "Custom message from owner (e.g. 'Tell them I will call back in 5 minutes')"
+    },
+    "callback_time": {
+      "type": "string",
+      "description": "Callback time if decision is callback (e.g. '5 minutes', '1 hour')"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "delivered",
+        "expired"
+      ],
+      "default": "pending",
+      "description": "Whether the AI has picked up this decision"
+    },
+    "caller_number": {
+      "type": "string",
+      "description": "Caller's phone number"
+    },
+    "caller_name": {
+      "type": "string",
+      "description": "Caller's name if identified"
+    },
+    "call_reason": {
+      "type": "string",
+      "description": "AI-classified call reason"
+    }
+  },
+  "required": [
+    "call_log_id",
+    "client_id",
+    "decision"
+  ]
+}

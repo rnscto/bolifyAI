@@ -1,0 +1,118 @@
+{
+  "name": "Activity",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "lead_id": {
+      "type": "string",
+      "description": "Associated lead"
+    },
+    "deal_id": {
+      "type": "string",
+      "description": "Associated deal"
+    },
+    "contact_id": {
+      "type": "string",
+      "description": "Associated contact"
+    },
+    "call_log_id": {
+      "type": "string",
+      "description": "Call that created this activity"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "appointment",
+        "booking",
+        "demo",
+        "visit",
+        "followup",
+        "call",
+        "email",
+        "meeting",
+        "task"
+      ],
+      "description": "Activity type"
+    },
+    "title": {
+      "type": "string",
+      "description": "Activity title"
+    },
+    "description": {
+      "type": "string",
+      "description": "Activity description"
+    },
+    "scheduled_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Scheduled date and time"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Due date for tasks"
+    },
+    "completed_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Completion date"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "scheduled",
+        "completed",
+        "cancelled",
+        "no_show",
+        "overdue"
+      ],
+      "default": "scheduled",
+      "description": "Activity status"
+    },
+    "priority": {
+      "type": "string",
+      "enum": [
+        "low",
+        "medium",
+        "high"
+      ],
+      "default": "medium",
+      "description": "Priority level"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "Assigned user email"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes"
+    },
+    "outcome": {
+      "type": "string",
+      "description": "Activity outcome"
+    },
+    "reminder_sent": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether reminder was sent"
+    },
+    "crm_synced": {
+      "type": "boolean",
+      "default": false,
+      "description": "Synced to external CRM"
+    },
+    "auto_created": {
+      "type": "boolean",
+      "default": false,
+      "description": "Created by automation"
+    }
+  },
+  "required": [
+    "client_id",
+    "type",
+    "scheduled_date"
+  ]
+}

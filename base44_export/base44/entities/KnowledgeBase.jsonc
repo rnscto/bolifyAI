@@ -1,0 +1,93 @@
+{
+  "name": "KnowledgeBase",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "title": {
+      "type": "string",
+      "description": "Document title"
+    },
+    "file_url": {
+      "type": "string",
+      "description": "Uploaded file URL"
+    },
+    "file_type": {
+      "type": "string",
+      "enum": [
+        "pdf",
+        "docx",
+        "txt",
+        "csv"
+      ],
+      "description": "File type"
+    },
+    "content": {
+      "type": "string",
+      "description": "Extracted text content"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "processing",
+        "ready",
+        "failed"
+      ],
+      "default": "processing",
+      "description": "Processing status"
+    },
+    "category": {
+      "type": "string",
+      "description": "Category (FAQs, Product Info, etc.)"
+    }
+  },
+  "required": [
+    "client_id",
+    "title"
+  ],
+  "rls": {
+    "create": {
+      "user_condition": {
+        "role": "user"
+      }
+    },
+    "read": {
+      "$or": [
+        {
+          "data.client_id": "{{user.data.client_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.client_id": "{{user.data.client_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.client_id": "{{user.data.client_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

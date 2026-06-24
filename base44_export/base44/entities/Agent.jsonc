@@ -1,0 +1,117 @@
+{
+  "name": "Agent",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Agent name"
+    },
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "industry": {
+      "type": "string",
+      "description": "Industry/Sector (e.g., Gym, Real Estate, Healthcare)"
+    },
+    "persona": {
+      "type": "object",
+      "properties": {
+        "voice_engine": {
+          "type": "string",
+          "enum": [
+            "realtime",
+            "azure_speech",
+            "gemini_realtime"
+          ],
+          "default": "realtime",
+          "description": "Voice engine: realtime (built-in GPT-4o voices), azure_speech (Azure Speech TTS), or gemini_realtime (Gemini Live API)"
+        },
+        "voice_type": {
+          "type": "string",
+          "default": "alloy",
+          "description": "Voice ID - Realtime API voice or Azure Speech TTS voice name"
+        },
+        "tone": {
+          "type": "string",
+          "description": "Conversational tone (professional/friendly/formal/energetic/empathetic)"
+        },
+        "language": {
+          "type": "string",
+          "default": "en-IN",
+          "description": "Primary language (en-IN/hi-IN/bilingual)"
+        }
+      },
+      "description": "Agent persona configuration"
+    },
+    "greeting_message": {
+      "type": "string",
+      "description": "Default voice greeting spoken by the agent when the call connects"
+    },
+    "system_prompt": {
+      "type": "string",
+      "description": "Custom instructions/system prompt"
+    },
+    "knowledge_base_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Associated knowledge base document IDs"
+    },
+    "kb_file_uri": {
+      "type": "string",
+      "description": "Azure Blob URI of the combined KB text file (private container)"
+    },
+    "kb_file_hash": {
+      "type": "string",
+      "description": "SHA-256 hash of the combined KB content used to skip re-uploads"
+    },
+    "kb_char_count": {
+      "type": "number",
+      "description": "Total characters in the combined KB blob"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "inactive",
+        "training"
+      ],
+      "default": "inactive",
+      "description": "Agent status"
+    },
+    "assigned_did": {
+      "type": "string",
+      "description": "Primary assigned DID number (legacy)"
+    },
+    "assigned_dids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "All assigned DID numbers for concurrent calling"
+    },
+    "smartflo_api_token": {
+      "type": "string",
+      "description": "Smartflo Click to Call API Token assigned to this agent's voice streaming channel"
+    },
+    "human_transfer_number": {
+      "type": "string",
+      "description": "Intercom/extension number for transferring calls to a human agent (used by AI when customer requests human support)"
+    },
+    "smartflo_agent_id": {
+      "type": "string",
+      "description": "Smartflo numeric agent ID for monitor/whisper/barge operations"
+    },
+    "enable_auto_transfer": {
+      "type": "boolean",
+      "default": true,
+      "description": "Whether AI can automatically offer/initiate transfer to human when customer requests it"
+    }
+  },
+  "required": [
+    "name",
+    "client_id"
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "name": "DID",
+  "type": "object",
+  "properties": {
+    "number": {
+      "type": "string",
+      "description": "DID phone number"
+    },
+    "country_code": {
+      "type": "string",
+      "description": "Country code"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "available",
+        "assigned",
+        "reserved",
+        "inactive"
+      ],
+      "default": "available",
+      "description": "DID status"
+    },
+    "is_demo": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether this DID is part of the shared demo pool (reserved DIDs for trial/demo agents)"
+    },
+    "client_id": {
+      "type": "string",
+      "description": "Assigned client ID"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Assigned agent ID"
+    },
+    "monthly_cost": {
+      "type": "number",
+      "default": 6500,
+      "description": "Monthly cost in INR"
+    },
+    "reserved_note": {
+      "type": "string",
+      "description": "Note for why the DID is reserved"
+    }
+  },
+  "required": [
+    "number"
+  ]
+}

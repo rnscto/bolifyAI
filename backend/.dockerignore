@@ -1,0 +1,9 @@
+.git
+.env
+.DS_Store
+node_modules/
+dist/
+coverage/
+*.log
+.vscode/
+test_*.ts

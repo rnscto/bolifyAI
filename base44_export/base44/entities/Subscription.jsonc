@@ -1,0 +1,81 @@
+{
+  "name": "Subscription",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Client ID"
+    },
+    "billing_cycle": {
+      "type": "string",
+      "enum": [
+        "monthly",
+        "quarterly"
+      ],
+      "default": "quarterly",
+      "description": "Billing cycle"
+    },
+    "channels": {
+      "type": "number",
+      "default": 1,
+      "description": "Number of channels"
+    },
+    "rate_per_channel": {
+      "type": "number",
+      "default": 6500,
+      "description": "Monthly rate per channel in INR"
+    },
+    "total_amount": {
+      "type": "number",
+      "description": "Total billing amount"
+    },
+    "billing_start_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Billing period start"
+    },
+    "billing_end_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Billing period end"
+    },
+    "next_billing_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Next billing date"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "active",
+        "pending",
+        "overdue",
+        "cancelled"
+      ],
+      "default": "active",
+      "description": "Subscription status"
+    },
+    "payment_status": {
+      "type": "string",
+      "enum": [
+        "paid",
+        "pending",
+        "failed"
+      ],
+      "default": "pending",
+      "description": "Payment status"
+    },
+    "payment_id": {
+      "type": "string",
+      "description": "Cashfree payment ID"
+    },
+    "invoice_url": {
+      "type": "string",
+      "description": "Invoice document URL"
+    }
+  },
+  "required": [
+    "client_id",
+    "channels"
+  ]
+}

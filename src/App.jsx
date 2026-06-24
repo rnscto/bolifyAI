@@ -3,7 +3,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { queryClientInstance } from '@/lib/query-client'
 import NavigationTracker from '@/lib/NavigationTracker'
 import { pagesConfig } from './pages.config'
-import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import { BrowserRouter as Router, Route, Routes, useLocation, Navigate } from 'react-router-dom';
 import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
@@ -23,6 +23,8 @@ import AdminAnnouncements from './pages/AdminAnnouncements';
 import AdminClientLifecycle from './pages/AdminClientLifecycle';
 import AdminPaymentApprovals from './pages/AdminPaymentApprovals';
 import ClientWhatsAppHistory from './pages/ClientWhatsAppHistory';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -35,8 +37,16 @@ const LayoutWrapper = ({ children, currentPageName }) => Layout ?
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
 
+  const location = useLocation();
+  const PUBLIC_ROUTES = [
+    '/', '/Home', '/PartnerReferral', '/CompliancePolicy', 
+    '/PrivacyPolicy', '/RefundPolicy', '/TermsOfService', 
+    '/PartnerSignup', '/APIDocs', '/ConceptNote', '/Login', '/Signup'
+  ];
+  const isPublicRoute = PUBLIC_ROUTES.includes(location.pathname);
+
   // Show loading spinner while checking app public settings or auth
-  if (isLoadingPublicSettings || isLoadingAuth) {
+  if ((isLoadingPublicSettings || isLoadingAuth) && !isPublicRoute) {
     return (
       <div className="fixed inset-0 flex items-center justify-center">
         <div className="w-8 h-8 border-4 border-slate-200 border-t-slate-800 rounded-full animate-spin"></div>
@@ -45,13 +55,12 @@ const AuthenticatedApp = () => {
   }
 
   // Handle authentication errors
-  if (authError) {
+  if (authError && !isPublicRoute) {
     if (authError.type === 'user_not_registered') {
       return <UserNotRegisteredError />;
     } else if (authError.type === 'auth_required') {
-      // Redirect to login automatically
-      navigateToLogin();
-      return null;
+      // Redirect to login automatically using React Router to avoid hard reloads
+      return <Navigate to="/Login" replace />;
     }
   }
 
@@ -60,6 +69,8 @@ const AuthenticatedApp = () => {
     <Routes>
       {/* Root path auto-redirects: unauthenticated → login, authenticated → role-based dashboard */}
       <Route path="/" element={<RootRedirect />} />
+      <Route path="/Login" element={<Login />} />
+      <Route path="/Signup" element={<Signup />} />
       {Object.entries(Pages).map(([path, Page]) => (
         <Route
           key={path}

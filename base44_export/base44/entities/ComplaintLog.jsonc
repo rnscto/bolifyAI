@@ -1,0 +1,78 @@
+{
+  "name": "ComplaintLog",
+  "type": "object",
+  "properties": {
+    "did_number": {
+      "type": "string",
+      "description": "DID number that received the complaint"
+    },
+    "client_id": {
+      "type": "string",
+      "description": "Client owning the DID"
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Agent that made the call"
+    },
+    "complainant_number": {
+      "type": "string",
+      "description": "Phone number of the person who complained"
+    },
+    "complaint_type": {
+      "type": "string",
+      "enum": [
+        "spam",
+        "unsolicited",
+        "harassment",
+        "ai_non_disclosure",
+        "privacy_violation",
+        "other"
+      ],
+      "description": "Type of complaint"
+    },
+    "complaint_source": {
+      "type": "string",
+      "enum": [
+        "trai_portal",
+        "customer_support",
+        "email",
+        "legal_notice",
+        "internal"
+      ],
+      "default": "customer_support",
+      "description": "Source of the complaint"
+    },
+    "description": {
+      "type": "string",
+      "description": "Complaint details"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "open",
+        "investigating",
+        "resolved",
+        "cooling_off",
+        "escalated"
+      ],
+      "default": "open",
+      "description": "Complaint status"
+    },
+    "resolution_notes": {
+      "type": "string",
+      "description": "Resolution details"
+    },
+    "auto_action_taken": {
+      "type": "string",
+      "description": "Automated action taken (e.g. DID suspended)"
+    },
+    "call_log_id": {
+      "type": "string",
+      "description": "Related call log ID"
+    }
+  },
+  "required": [
+    "did_number",
+    "complaint_type"
+  ]
+}

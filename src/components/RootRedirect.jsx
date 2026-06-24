@@ -19,7 +19,7 @@ export default function RootRedirect() {
       try {
         const authed = await base44.auth.isAuthenticated();
         if (!authed) {
-          base44.auth.redirectToLogin();
+          setTarget('/Login');
           return;
         }
         const user = await base44.auth.me();
@@ -49,7 +49,7 @@ export default function RootRedirect() {
         }
       } catch (e) {
         // On any unexpected error, send to login as a safe default
-        base44.auth.redirectToLogin();
+        setTarget('/Login');
       }
     })();
     return () => { cancelled = true; };

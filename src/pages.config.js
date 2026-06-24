@@ -83,6 +83,8 @@ import ClientLeads from './pages/ClientLeads';
 import ClientSettings from './pages/ClientSettings';
 import ConceptNote from './pages/ConceptNote';
 import Home from './pages/Home';
+import Login from './pages/Login';
+import Signup from './pages/Signup';
 import LeadDetail from './pages/LeadDetail';
 import Onboarding from './pages/Onboarding';
 import PartnerDashboard from './pages/PartnerDashboard';
@@ -130,6 +132,8 @@ export const PAGES = {
     "ClientSettings": ClientSettings,
     "ConceptNote": ConceptNote,
     "Home": Home,
+    "Login": Login,
+    "Signup": Signup,
     "LeadDetail": LeadDetail,
     "Onboarding": Onboarding,
     "PartnerDashboard": PartnerDashboard,

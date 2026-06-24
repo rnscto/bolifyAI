@@ -1,0 +1,75 @@
+{
+  "name": "Referral",
+  "type": "object",
+  "properties": {
+    "partner_id": {
+      "type": "string",
+      "description": "Partner who made the referral"
+    },
+    "client_id": {
+      "type": "string",
+      "description": "Referred client ID"
+    },
+    "client_name": {
+      "type": "string",
+      "description": "Referred client company name"
+    },
+    "client_email": {
+      "type": "string",
+      "description": "Referred client email"
+    },
+    "client_phone": {
+      "type": "string",
+      "description": "Referred client phone"
+    },
+    "referral_code_used": {
+      "type": "string",
+      "description": "Referral code used at signup"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "signed_up",
+        "trial",
+        "converted",
+        "churned"
+      ],
+      "default": "signed_up",
+      "description": "Referral lifecycle status"
+    },
+    "client_plan_amount": {
+      "type": "number",
+      "default": 0,
+      "description": "Client monthly billing amount (INR)"
+    },
+    "commission_rate": {
+      "type": "number",
+      "default": 20,
+      "description": "Commission rate at time of referral"
+    },
+    "total_commission_earned": {
+      "type": "number",
+      "default": 0,
+      "description": "Total commission earned from this referral"
+    },
+    "last_commission_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last commission calculation date"
+    },
+    "signup_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the client signed up"
+    },
+    "conversion_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the client converted to paid"
+    }
+  },
+  "required": [
+    "partner_id",
+    "client_email"
+  ]
+}

@@ -1,0 +1,88 @@
+{
+  "name": "PartnerPayout",
+  "type": "object",
+  "properties": {
+    "partner_id": {
+      "type": "string",
+      "description": "Partner ID"
+    },
+    "partner_name": {
+      "type": "string",
+      "description": "Partner name (cached)"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Payout amount (INR)"
+    },
+    "period_start": {
+      "type": "string",
+      "format": "date",
+      "description": "Commission period start"
+    },
+    "period_end": {
+      "type": "string",
+      "format": "date",
+      "description": "Commission period end"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "approved",
+        "paid",
+        "rejected"
+      ],
+      "default": "pending",
+      "description": "Payout status"
+    },
+    "payment_method": {
+      "type": "string",
+      "enum": [
+        "bank_transfer",
+        "upi",
+        "cheque"
+      ],
+      "description": "Payment method"
+    },
+    "payment_reference": {
+      "type": "string",
+      "description": "Transaction/UTR reference"
+    },
+    "paid_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the payout was made"
+    },
+    "invoice_number": {
+      "type": "string",
+      "description": "Invoice number (e.g. VAANI-INV-2026-001)"
+    },
+    "invoice_url": {
+      "type": "string",
+      "description": "Generated invoice PDF URL"
+    },
+    "referral_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of referrals in this payout period"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Admin notes"
+    },
+    "tds_amount": {
+      "type": "number",
+      "default": 0,
+      "description": "TDS deducted (INR)"
+    },
+    "net_amount": {
+      "type": "number",
+      "default": 0,
+      "description": "Net payout after TDS (INR)"
+    }
+  },
+  "required": [
+    "partner_id",
+    "amount"
+  ]
+}

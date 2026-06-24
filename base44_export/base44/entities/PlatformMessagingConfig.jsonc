@@ -1,0 +1,133 @@
+{
+  "name": "PlatformMessagingConfig",
+  "type": "object",
+  "description": "Singleton \u2014 admin's RCS Digital / Meta Cloud connection for platform broadcasts and lifecycle nudges. Only one record should exist.",
+  "properties": {
+    "is_singleton": {
+      "type": "boolean",
+      "default": true
+    },
+    "whatsapp_provider": {
+      "type": "string",
+      "enum": [
+        "none",
+        "rcs_digital",
+        "meta_cloud"
+      ],
+      "default": "rcs_digital"
+    },
+    "whatsapp_api_key": {
+      "type": "string",
+      "description": "Bearer token"
+    },
+    "whatsapp_phone_number_id": {
+      "type": "string"
+    },
+    "whatsapp_business_id": {
+      "type": "string",
+      "description": "WABA ID"
+    },
+    "whatsapp_status": {
+      "type": "string",
+      "enum": [
+        "disconnected",
+        "connected",
+        "error"
+      ],
+      "default": "disconnected"
+    },
+    "whatsapp_last_tested": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "rcs_provider": {
+      "type": "string",
+      "enum": [
+        "none",
+        "rcs_digital"
+      ],
+      "default": "none"
+    },
+    "rcs_api_key": {
+      "type": "string"
+    },
+    "rcs_bot_id": {
+      "type": "string"
+    },
+    "rcs_status": {
+      "type": "string",
+      "enum": [
+        "disconnected",
+        "connected",
+        "error"
+      ],
+      "default": "disconnected"
+    },
+    "from_email": {
+      "type": "string",
+      "format": "email"
+    },
+    "from_name": {
+      "type": "string",
+      "default": "Bolify AI"
+    },
+    "lifecycle_enabled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Master toggle for lifecycle nudges"
+    },
+    "lifecycle_templates": {
+      "type": "object",
+      "description": "Map of lifecycle event \u2192 platform template name",
+      "properties": {
+        "welcome": {
+          "type": "string"
+        },
+        "onboarding_d1": {
+          "type": "string"
+        },
+        "onboarding_d3": {
+          "type": "string"
+        },
+        "trial_2d": {
+          "type": "string"
+        },
+        "trial_1d": {
+          "type": "string"
+        },
+        "trial_0d": {
+          "type": "string"
+        },
+        "payment_success": {
+          "type": "string"
+        },
+        "payment_failed": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  },
+  "required": []
+}

@@ -1,0 +1,159 @@
+{
+  "name": "ClientMessagingConfig",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "whatsapp_provider": {
+      "type": "string",
+      "enum": [
+        "none",
+        "rcs_digital",
+        "meta_cloud",
+        "gupshup",
+        "aisensy",
+        "wati",
+        "interakt",
+        "twilio",
+        "valuefirst"
+      ],
+      "default": "none",
+      "description": "WhatsApp Business API provider"
+    },
+    "whatsapp_api_key": {
+      "type": "string",
+      "description": "WhatsApp API key / access token (Bearer)"
+    },
+    "whatsapp_api_endpoint": {
+      "type": "string",
+      "description": "WhatsApp API base URL (if custom)"
+    },
+    "whatsapp_phone_number_id": {
+      "type": "string",
+      "description": "Phone Number ID (Meta / RCS Digital) or sender number"
+    },
+    "whatsapp_business_id": {
+      "type": "string",
+      "description": "WABA ID (Meta / RCS Digital) or App ID"
+    },
+    "whatsapp_status": {
+      "type": "string",
+      "enum": [
+        "disconnected",
+        "connected",
+        "error"
+      ],
+      "default": "disconnected"
+    },
+    "whatsapp_last_tested": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "rcs_provider": {
+      "type": "string",
+      "enum": [
+        "none",
+        "rcs_digital",
+        "gupshup",
+        "smartflo",
+        "kaleyra",
+        "route_mobile",
+        "twilio"
+      ],
+      "default": "none",
+      "description": "RCS / SMS provider"
+    },
+    "rcs_api_key": {
+      "type": "string",
+      "description": "RCS/SMS API key (Bearer)"
+    },
+    "rcs_api_endpoint": {
+      "type": "string",
+      "description": "RCS/SMS API base URL"
+    },
+    "rcs_bot_id": {
+      "type": "string",
+      "description": "RCS Digital Bot ID"
+    },
+    "rcs_pe_id": {
+      "type": "string",
+      "description": "DLT Principal Entity ID"
+    },
+    "rcs_chain_value": {
+      "type": "string",
+      "description": "DLT chain (comma-separated template IDs)"
+    },
+    "rcs_sender_id": {
+      "type": "string",
+      "description": "Sender ID / DLT Header"
+    },
+    "rcs_status": {
+      "type": "string",
+      "enum": [
+        "disconnected",
+        "connected",
+        "error"
+      ],
+      "default": "disconnected"
+    },
+    "rcs_last_tested": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "email_provider": {
+      "type": "string",
+      "enum": [
+        "none",
+        "smtp",
+        "resend",
+        "sendgrid",
+        "mailgun",
+        "ses",
+        "postmark"
+      ],
+      "default": "none"
+    },
+    "email_api_key": {
+      "type": "string"
+    },
+    "email_smtp_host": {
+      "type": "string"
+    },
+    "email_smtp_port": {
+      "type": "number"
+    },
+    "email_smtp_user": {
+      "type": "string"
+    },
+    "email_smtp_pass": {
+      "type": "string"
+    },
+    "email_from_address": {
+      "type": "string"
+    },
+    "email_from_name": {
+      "type": "string"
+    },
+    "email_domain": {
+      "type": "string"
+    },
+    "email_status": {
+      "type": "string",
+      "enum": [
+        "disconnected",
+        "connected",
+        "error"
+      ],
+      "default": "disconnected"
+    },
+    "email_last_tested": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "client_id"
+  ]
+}

@@ -1,0 +1,173 @@
+import React, { useState, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Menu, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { base44 } from '@/api/base44Client';
+import { createPageUrl } from '../../utils';
+
+const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/a1247aabb_generated_image.png";
+
+export default function Navbar() {
+  const [open, setOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [userRole, setUserRole] = useState(null);
+
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', onScroll);
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
+  useEffect(() => {
+    const checkAuth = async () => {
+      const authenticated = await base44.auth.isAuthenticated();
+      if (authenticated) {
+        setIsLoggedIn(true);
+        const user = await base44.auth.me();
+        setUserRole(user?.role);
+      }
+    };
+    checkAuth();
+  }, []);
+
+  const navLinks = [
+    { label: 'For Business', href: '#features' },
+    { label: 'Personal AI', href: '#personal-assistant' },
+    { label: 'Pricing', href: '#pricing' },
+    { label: 'FAQ', href: '#faq' },
+    { label: 'Partners', href: createPageUrl('PartnerSignup'), isPage: true },
+  ];
+
+  return (
+    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-200 ${
+      scrolled ? 'bg-white/97 backdrop-blur-lg shadow-sm border-b border-gray-100' : 'bg-transparent'
+    }`}>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-18 py-2">
+          <a href="#" className="flex items-center gap-2 shrink-0">
+            <img src={LOGO_URL} alt="Bolify AI" className="h-[60px] object-contain rounded-md" />
+          </a>
+
+          {/* Desktop nav */}
+          <div className="hidden md:flex items-center gap-8">
+            {navLinks.map((link) => (
+              link.isPage ? (
+                <Link
+                  key={link.label}
+                  to={link.href}
+                  className={`text-sm font-medium transition-colors ${scrolled ? 'text-gray-600 hover:text-[#00bcd4]' : 'text-white/80 hover:text-white'}`}
+                >
+                  {link.label}
+                </Link>
+              ) : (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  className={`text-sm font-medium transition-colors ${scrolled ? 'text-gray-600 hover:text-[#00bcd4]' : 'text-white/80 hover:text-white'}`}
+                >
+                  {link.label}
+                </a>
+              )
+            ))}
+          </div>
+
+          <div className="hidden md:flex items-center gap-3">
+            {isLoggedIn ? (
+              <Button
+                className="bg-gradient-to-r from-[#00bcd4] to-[#0097a7] hover:from-[#0097a7] hover:to-[#00838f] text-white font-semibold shadow-md shadow-cyan-200"
+                onClick={() => {
+                  const dashPage = userRole === 'admin' ? 'AdminDashboard' : 'ClientDashboard';
+                  window.location.href = createPageUrl(dashPage);
+                }}
+              >
+                Go to Dashboard
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="ghost"
+                  className={`font-medium ${scrolled ? 'text-gray-700 hover:text-[#00bcd4]' : 'text-white/80 hover:text-white hover:bg-white/10'}`}
+                  onClick={() => base44.auth.redirectToLogin()}
+                >
+                  Log In
+                </Button>
+                <Button
+                  className="bg-gradient-to-r from-[#00bcd4] to-[#0097a7] hover:from-[#0097a7] hover:to-[#00838f] text-white font-semibold shadow-md shadow-cyan-200"
+                  onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
+                >
+                  Start Free Trial
+                </Button>
+              </>
+            )}
+          </div>
+
+          {/* Mobile menu button */}
+          <button
+            className="md:hidden text-gray-700"
+            onClick={() => setOpen(!open)}
+          >
+            {open ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </div>
+
+        {/* Mobile menu */}
+        {open && (
+          <div className="md:hidden pb-4 border-t border-gray-100 mt-2 pt-4 bg-white">
+            {navLinks.map((link) => (
+              link.isPage ? (
+                <Link
+                  key={link.label}
+                  to={link.href}
+                  className="block px-3 py-2.5 text-sm font-medium text-gray-700 hover:text-[#00bcd4] hover:bg-cyan-50 rounded-lg"
+                  onClick={() => setOpen(false)}
+                >
+                  {link.label}
+                </Link>
+              ) : (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  className="block px-3 py-2.5 text-sm font-medium text-gray-700 hover:text-[#00bcd4] hover:bg-cyan-50 rounded-lg"
+                  onClick={() => setOpen(false)}
+                >
+                  {link.label}
+                </a>
+              )
+            ))}
+            <div className="flex gap-3 mt-4 px-3">
+              {isLoggedIn ? (
+                <Button
+                  className="flex-1 bg-gradient-to-r from-[#00bcd4] to-[#0097a7] text-white font-semibold"
+                  onClick={() => {
+                    const dashPage = userRole === 'admin' ? 'AdminDashboard' : 'ClientDashboard';
+                    window.location.href = createPageUrl(dashPage);
+                    setOpen(false);
+                  }}
+                >
+                  Go to Dashboard
+                </Button>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-[#00bcd4] text-[#00bcd4]"
+                    onClick={() => base44.auth.redirectToLogin()}
+                  >
+                    Log In
+                  </Button>
+                  <Button
+                    className="flex-1 bg-gradient-to-r from-[#00bcd4] to-[#0097a7] text-white font-semibold"
+                    onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
+                  >
+                    Sign Up
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </nav>
+  );
+}

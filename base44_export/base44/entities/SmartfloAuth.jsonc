@@ -1,0 +1,47 @@
+{
+  "name": "SmartfloAuth",
+  "type": "object",
+  "properties": {
+    "token": {
+      "type": "string",
+      "description": "Cached Smartflo JWT access token"
+    },
+    "expires_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "When the cached token expires (set to now + 50min on issue)"
+    },
+    "blocked_until": {
+      "type": "string",
+      "format": "date-time",
+      "description": "If non-null and in the future, do not attempt login \u2014 Smartflo is rate-limiting us"
+    },
+    "last_429_retry_after": {
+      "type": "string",
+      "description": "Raw retry_after value from the last 429 response (for debugging)"
+    }
+  },
+  "required": [],
+  "rls": {
+    "read": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "create": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "update": {
+      "user_condition": {
+        "role": "admin"
+      }
+    },
+    "delete": {
+      "user_condition": {
+        "role": "admin"
+      }
+    }
+  }
+}

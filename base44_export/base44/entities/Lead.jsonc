@@ -1,0 +1,164 @@
+{
+  "name": "Lead",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "name": {
+      "type": "string",
+      "description": "Lead name"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Phone number"
+    },
+    "email": {
+      "type": "string",
+      "format": "email",
+      "description": "Email address"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "new",
+        "contacted",
+        "interested",
+        "not_interested",
+        "callback",
+        "converted",
+        "do_not_call"
+      ],
+      "default": "new",
+      "description": "Lead status"
+    },
+    "company": {
+      "type": "string",
+      "description": "Company name"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Additional notes"
+    },
+    "last_call_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last call timestamp"
+    },
+    "next_followup_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Scheduled follow-up"
+    },
+    "crm_id": {
+      "type": "string",
+      "description": "External CRM ID"
+    },
+    "custom_fields": {
+      "type": "object",
+      "description": "Custom CRM fields"
+    },
+    "source": {
+      "type": "string",
+      "description": "Lead source"
+    },
+    "assigned_to": {
+      "type": "string",
+      "description": "Assigned sales rep email"
+    },
+    "score": {
+      "type": "number",
+      "default": 0,
+      "description": "AI-calculated lead score (0-100)"
+    },
+    "sentiment": {
+      "type": "string",
+      "enum": [
+        "very_positive",
+        "positive",
+        "neutral",
+        "negative",
+        "very_negative"
+      ],
+      "description": "AI-detected sentiment from last call"
+    },
+    "intent_signals": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "AI-detected intent keywords"
+    },
+    "score_breakdown": {
+      "type": "object",
+      "description": "AI score breakdown"
+    },
+    "qualification_tier": {
+      "type": "string",
+      "enum": [
+        "hot",
+        "warm",
+        "nurture",
+        "cold",
+        "disqualified"
+      ],
+      "description": "Auto-assigned qualification tier based on AI scoring"
+    },
+    "qualification_reason": {
+      "type": "string",
+      "description": "Why this tier was assigned"
+    },
+    "auto_actions_taken": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Log of automated actions taken"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Tags for categorization"
+    },
+    "last_engagement_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last engagement timestamp"
+    },
+    "engagement_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Total engagement count"
+    },
+    "group_id": {
+      "type": "string",
+      "description": "Lead group ID for organizing leads"
+    },
+    "crm_pushed_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Last timestamp when this lead was pushed to external CRM via outbound webhook"
+    },
+    "crm_push_attempts": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of failed push attempts to external CRM webhook (resets on success)"
+    },
+    "crm_push_last_error": {
+      "type": "string",
+      "description": "Last error message from CRM webhook push attempt"
+    },
+    "crm_push_next_retry_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Earliest time the next retry attempt is allowed (exponential backoff)"
+    }
+  },
+  "required": [
+    "client_id",
+    "phone"
+  ]
+}

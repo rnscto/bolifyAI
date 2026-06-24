@@ -1,0 +1,79 @@
+{
+  "name": "UsageLog",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Client ID"
+    },
+    "call_log_id": {
+      "type": "string",
+      "description": "Associated call log ID"
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "call_charge",
+        "topup",
+        "free_minutes",
+        "refund",
+        "trial_credit"
+      ],
+      "description": "Transaction type"
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "debit",
+        "credit"
+      ],
+      "description": "Debit (charge) or Credit (topup/refund)"
+    },
+    "call_duration_seconds": {
+      "type": "number",
+      "description": "Actual call duration in seconds"
+    },
+    "billable_minutes": {
+      "type": "number",
+      "description": "Rounded-up billable minutes (ceil(seconds/60))"
+    },
+    "rate_per_minute": {
+      "type": "number",
+      "description": "Rate applied per minute in INR"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Total amount in INR (positive for credits, negative for debits)"
+    },
+    "balance_before": {
+      "type": "number",
+      "description": "Wallet balance before this transaction"
+    },
+    "balance_after": {
+      "type": "number",
+      "description": "Wallet balance after this transaction"
+    },
+    "free_minutes_before": {
+      "type": "number",
+      "description": "Free minutes before this transaction"
+    },
+    "free_minutes_after": {
+      "type": "number",
+      "description": "Free minutes after this transaction"
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description"
+    },
+    "payment_id": {
+      "type": "string",
+      "description": "Associated payment ID (for top-ups)"
+    }
+  },
+  "required": [
+    "client_id",
+    "type",
+    "direction",
+    "amount"
+  ]
+}

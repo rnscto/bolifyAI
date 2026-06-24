@@ -1,0 +1,208 @@
+{
+  "name": "WhatsAppTemplate",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID \u2014 use 'PLATFORM' for admin/platform-owned templates"
+    },
+    "vendor": {
+      "type": "string",
+      "enum": [
+        "meta_cloud",
+        "rcs_digital",
+        "gupshup",
+        "aisensy",
+        "wati",
+        "interakt",
+        "custom"
+      ],
+      "default": "meta_cloud",
+      "description": "Which provider this template lives on"
+    },
+    "meta_template_id": {
+      "type": "string",
+      "description": "Template ID returned by Meta / RCS Digital"
+    },
+    "name": {
+      "type": "string",
+      "description": "Template name (lowercase, no spaces)"
+    },
+    "language": {
+      "type": "string",
+      "default": "en"
+    },
+    "category": {
+      "type": "string",
+      "enum": [
+        "MARKETING",
+        "UTILITY",
+        "AUTHENTICATION"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "draft",
+        "PENDING",
+        "APPROVED",
+        "REJECTED",
+        "PAUSED",
+        "DISABLED"
+      ],
+      "default": "draft"
+    },
+    "rejected_reason": {
+      "type": "string"
+    },
+    "header_type": {
+      "type": "string",
+      "enum": [
+        "NONE",
+        "TEXT",
+        "IMAGE",
+        "VIDEO",
+        "DOCUMENT"
+      ],
+      "default": "NONE"
+    },
+    "header_text": {
+      "type": "string"
+    },
+    "header_media_url": {
+      "type": "string"
+    },
+    "body_text": {
+      "type": "string"
+    },
+    "body_examples": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "footer_text": {
+      "type": "string"
+    },
+    "buttons": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "QUICK_REPLY",
+              "URL",
+              "PHONE_NUMBER",
+              "OTP"
+            ]
+          },
+          "text": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "phone_number": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "linked_actions": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "enum": [
+          "campaign_interested_followup",
+          "campaign_callback_confirmation",
+          "campaign_no_answer_retry",
+          "lead_welcome",
+          "retention_offer",
+          "trial_expiry_reminder",
+          "kyc_pending_reminder",
+          "appointment_confirmation",
+          "appointment_reminder",
+          "payment_receipt",
+          "otp_verification",
+          "manual_only"
+        ]
+      }
+    },
+    "dlt_template_id": {
+      "type": "string",
+      "description": "DLT template ID for SMS/RCS compliance (India)"
+    },
+    "last_synced": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "send_count": {
+      "type": "number",
+      "default": 0
+    }
+  },
+  "required": [
+    "client_id",
+    "name"
+  ],
+  "rls": {
+    "read": {
+      "$or": [
+        {
+          "data.client_id": "{{user.data.client_id}}"
+        },
+        {
+          "data.client_id": "PLATFORM"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "create": {
+      "$or": [
+        {
+          "data.client_id": "{{user.data.client_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        },
+        {
+          "user_condition": {
+            "role": "user"
+          }
+        }
+      ]
+    },
+    "update": {
+      "$or": [
+        {
+          "data.client_id": "{{user.data.client_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    },
+    "delete": {
+      "$or": [
+        {
+          "data.client_id": "{{user.data.client_id}}"
+        },
+        {
+          "user_condition": {
+            "role": "admin"
+          }
+        }
+      ]
+    }
+  }
+}

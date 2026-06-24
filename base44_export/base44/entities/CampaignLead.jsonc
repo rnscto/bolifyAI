@@ -1,0 +1,101 @@
+{
+  "name": "CampaignLead",
+  "type": "object",
+  "properties": {
+    "campaign_id": {
+      "type": "string",
+      "description": "Campaign ID"
+    },
+    "lead_id": {
+      "type": "string",
+      "description": "Lead ID"
+    },
+    "client_id": {
+      "type": "string",
+      "description": "Client ID"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "pending",
+        "calling",
+        "processing",
+        "completed",
+        "failed",
+        "skipped"
+      ],
+      "default": "pending",
+      "description": "Status within campaign"
+    },
+    "call_status": {
+      "type": "string",
+      "enum": [
+        "answered",
+        "not_answered"
+      ],
+      "description": "Whether the call was answered or not"
+    },
+    "call_log_id": {
+      "type": "string",
+      "description": "Associated call log ID"
+    },
+    "outcome": {
+      "type": "string",
+      "enum": [
+        "neutral",
+        "interested",
+        "not_interested",
+        "not_answered",
+        "callback",
+        "converted",
+        "do_not_call"
+      ],
+      "description": "Call outcome"
+    },
+    "conversation_summary": {
+      "type": "string",
+      "description": "AI-generated call summary"
+    },
+    "transcript": {
+      "type": "string",
+      "description": "Call transcript"
+    },
+    "followup_scheduled": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether follow-up has been scheduled"
+    },
+    "followup_email_sent": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether follow-up email was sent"
+    },
+    "followup_call_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "Scheduled follow-up call date"
+    },
+    "call_duration": {
+      "type": "number",
+      "description": "Call duration in seconds"
+    },
+    "attempt_count": {
+      "type": "number",
+      "default": 0,
+      "description": "Number of call attempts"
+    },
+    "lead_name": {
+      "type": "string",
+      "description": "Cached lead name for display"
+    },
+    "lead_phone": {
+      "type": "string",
+      "description": "Cached lead phone for display"
+    }
+  },
+  "required": [
+    "campaign_id",
+    "lead_id",
+    "client_id"
+  ]
+}
