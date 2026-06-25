@@ -626,8 +626,8 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
         if (payload.event === "start" || payload.event === "connected") {
            console.log(`[${reqId}] Smartflo WS Start payload:`, JSON.stringify(payload));
            let resolvedAgentId = session._agentId;
-           const customIdentifier = payload.start?.customData || payload.customData || payload.custom_identifier || "";
-           const wsCallId = payload.start?.call_id || payload.call_id || payload.uuid || payload.start?.uuid || payload.streamSid || payload.stream_id || payload.start?.ref_id || payload.ref_id || "";
+           const customIdentifier = payload.start?.customParameters?.customData || payload.start?.customParameters?.custom_identifier || payload.start?.customData || payload.customData || payload.custom_identifier || "";
+           const wsCallId = payload.start?.callSid || payload.callSid || payload.start?.call_id || payload.call_id || payload.uuid || payload.start?.uuid || payload.streamSid || payload.stream_id || payload.start?.ref_id || payload.ref_id || "";
 
            if (!resolvedAgentId) {
              if (customIdentifier) {
@@ -654,8 +654,9 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
              }
              if (!resolvedAgentId) {
                  const possibleDids = [
-                    payload.start?.calledNumber, payload.customerNumber, payload.to,
-                    payload.start?.callerNumber, payload.callerNumber, payload.from
+                    payload.start?.customParameters?.calledNumber, payload.start?.calledNumber, payload.customerNumber, payload.to,
+                    payload.start?.customParameters?.callerNumber, payload.start?.callerNumber, payload.callerNumber, payload.from,
+                    payload.start?.customParameters?.caller_id, payload.start?.customParameters?.customer_number
                  ].filter(Boolean).map(n => String(n).replace(/[^0-9]/g, '').slice(-10));
                  
                  for (const cleanDid of possibleDids) {
