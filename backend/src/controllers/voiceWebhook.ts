@@ -137,7 +137,7 @@ voiceWebhookRouter.post("/", async (c) => {
 
     // Fallback 2: Robust phone match (loss reducer)
     if (!directLog) {
-       const pgCallee = (customer_number || payload.customer_number || called_number || '').replace(/\D/g, '').slice(-10) || null;
+       const pgCallee = (dataObj.customer_number || payload.customer_number || called_number || '').replace(/\D/g, '').slice(-10) || null;
        const pgCaller = (caller_number || '').replace(/\D/g, '').slice(-10) || null;
        if (pgCallee) {
           try {
