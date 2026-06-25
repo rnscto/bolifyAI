@@ -1,4 +1,5 @@
 import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 import { triggerSmartfloOutboundCall } from "../services/smartflo.ts";
 
 export default async function initiateCall(c: any) {
@@ -188,30 +189,34 @@ export default async function initiateCall(c: any) {
 
     const callSid = `call_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
 
-    const callLog = await base44.entities.CallLog.create({
-      client_id: agentResult.client_id,
-      lead_id: leadResult.id,
-      agent_id: agentResult.id,
-      status: "initiated",
-      duration: 0,
-      caller_id: callerDID,
-      callee_number: phone_number,
-      call_sid: callSid,
-      direction: 'outbound',
-      call_start_time: new Date().toISOString(),
-      agent_config_cache: {
-        agent_name: agentResult.name,
-        system_prompt: personalizedPrompt,
-        persona: agentResult.persona || {},
-        knowledge_base_content: kbContent,
-        knowledge_base_url: kbContentUrl,
-        kb_file_uri: agentResult.kb_file_uri || '',
-        lead_context: leadContext,
-        greeting_message: agentResult.greeting_message || '',
-        human_transfer_number: agentResult.human_transfer_number || '',
-        enable_auto_transfer: agentResult.enable_auto_transfer !== false
-      }
-    });
+    const callLogId = crypto.randomUUID();
+    const callLog = { id: callLogId, call_sid: callSid };
+    const agentConfigCache = {
+      agent_name: agentResult.name,
+      system_prompt: personalizedPrompt,
+      persona: agentResult.persona || {},
+      knowledge_base_content: kbContent,
+      knowledge_base_url: kbContentUrl,
+      kb_file_uri: agentResult.kb_file_uri || '',
+      lead_context: leadContext,
+      greeting_message: agentResult.greeting_message || '',
+      human_transfer_number: agentResult.human_transfer_number || '',
+      enable_auto_transfer: agentResult.enable_auto_transfer !== false
+    };
+
+    const nowIso = new Date().toISOString();
+    await client.queryObject(`
+      INSERT INTO "calllog"
+        (id, client_id, agent_id, lead_id, call_sid, caller_id, callee_number,
+         direction, status, agent_config_cache, conversation_summary, call_start_time, created_at, updated_at)
+      VALUES
+        ($1, $2, $3, $4, $5, $6, $7, 'outbound', 'initiated', $8::jsonb, '', $9, $10, $11)
+      ON CONFLICT (id) DO NOTHING
+    `, [
+      callLogId, agentResult.client_id, agentResult.id, leadResult.id, callSid,
+      callerDID, phone_number, JSON.stringify(agentConfigCache),
+      nowIso, nowIso, nowIso
+    ]);
 
     const smartfloApiKey = agentResult.smartflo_api_token || Deno.env.get("SMARTFLO_API_KEY");
 
@@ -255,14 +260,12 @@ export default async function initiateCall(c: any) {
         ? `Invalid caller_id: DID ${callerDID} is not mapped to this API token's Smartflo channel. Please verify the DID is assigned to this token in Smartflo dashboard.`
         : (smartfloData.message || smartfloData.error || JSON.stringify(smartfloData));
         
-        await base44.entities.CallLog.update(callLog.id, { status: 'failed' });
+        await client.queryObject(`UPDATE "calllog" SET status = 'failed', updated_at = $1 WHERE id = $2`, [new Date().toISOString(), callLog.id]);
         return c.json({ data: { success: false, error: errorMsg } }, 400);
     }
 
-    await base44.entities.CallLog.update(callLog.id, {
-        call_sid: smartfloData.call_id || smartfloData.ref_id || smartfloData.call_sid || callLog.call_sid,
-        status: 'ringing'
-    });
+    const newCallSid = smartfloData.call_id || smartfloData.ref_id || smartfloData.call_sid || callLog.call_sid;
+    await client.queryObject(`UPDATE "calllog" SET call_sid = $1, status = 'ringing', updated_at = $2 WHERE id = $3`, [newCallSid, new Date().toISOString(), callLog.id]);
 
     await base44.entities.Lead.update(leadResult.id, {
         status: 'contacted',

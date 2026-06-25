@@ -94,12 +94,13 @@ voiceWebhookRouter.post("/", async (c) => {
     }
 
     // OUTBOUND & STATUS UPDATES
+    const normalizedStatus = String(status).toLowerCase();
     const mappedStatus =
-      status === "answered" || status === "up" || status === "Answered" ? "answered" :
-      status === "ringing" || status === "early" ? "ringing" :
-      status === "completed" || status === "normal_clearing" || status === "hangup" || status === "Success" || status === "Completed" ? "completed" :
-      status === "no_answer" || status === "user_busy" || status === "cancel" || status === "NOANSWER" || status === "Missed" || status === "not_connected" ? "no_answer" :
-      status === "failed" || status === "busy" || status === "FAILED" || status === "Cancelled" ? "failed" :
+      normalizedStatus === "answered" || normalizedStatus === "up" ? "answered" :
+      normalizedStatus === "ringing" || normalizedStatus === "early" ? "ringing" :
+      normalizedStatus === "completed" || normalizedStatus === "normal_clearing" || normalizedStatus === "hangup" || normalizedStatus === "success" ? "completed" :
+      normalizedStatus === "no_answer" || normalizedStatus === "user_busy" || normalizedStatus === "cancel" || normalizedStatus === "noanswer" || normalizedStatus === "missed" || normalizedStatus === "not_connected" ? "no_answer" :
+      normalizedStatus === "failed" || normalizedStatus === "busy" || normalizedStatus === "cancelled" ? "failed" :
       "initiated";
 
     let effectiveStatus = mappedStatus;
@@ -122,8 +123,16 @@ voiceWebhookRouter.post("/", async (c) => {
     }
 
     if (!directLog) {
-       const logsRes = await client.queryObject(`SELECT * FROM "calllog" WHERE call_sid = $1 LIMIT 1`, [call_id]);
-       directLog = (logsRes.rows[0] as any) || null;
+       const possibleSids = [call_id, payload.uuid, payload.ref_id, dataObj.ref_id].filter(Boolean);
+       for (const sid of possibleSids) {
+          try {
+             const logsRes = await client.queryObject(`SELECT * FROM "calllog" WHERE call_sid = $1 LIMIT 1`, [sid]);
+             if (logsRes.rows.length > 0) {
+                directLog = (logsRes.rows[0] as any) || null;
+                break;
+             }
+          } catch(e) {}
+       }
     }
 
     if (directLog) {

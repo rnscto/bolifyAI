@@ -363,28 +363,51 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
   async function loadAgentConfig(agentId: string) {
      if (session._agentConfigReady) return;
      try {
-       const agentResult = await client.queryObject(`SELECT client_id, system_prompt, persona FROM "agent" WHERE id = $1 LIMIT 1`, [agentId]);
-       if (agentResult.rows.length > 0) {
-          const agent = agentResult.rows[0] as any;
-          session.clientId = agent.client_id;
-          if (agent.system_prompt) session.systemPrompt = agent.system_prompt;
-          if (agent.persona && typeof agent.persona === 'object') {
-            const personaObj = agent.persona as any;
-            if (personaObj.voice_type) session.voiceType = personaObj.voice_type;
-            if (personaObj.human_transfer_number) session.humanTransferNumber = personaObj.human_transfer_number;
-            if (personaObj.enable_auto_transfer) session.enableAutoTransfer = personaObj.enable_auto_transfer;
+       if (session.callLogId) {
+          const logRes = await client.queryObject(`SELECT agent_config_cache FROM "calllog" WHERE id = $1 LIMIT 1`, [session.callLogId]);
+          if (logRes.rows.length > 0 && (logRes.rows[0] as any).agent_config_cache) {
+             const cache = (logRes.rows[0] as any).agent_config_cache;
+             if (cache.system_prompt) session.systemPrompt = cache.system_prompt;
+             if (cache.greeting_message) session.greetingMessage = cache.greeting_message;
+             if (cache.persona) {
+               if (cache.persona.voice_type) session.voiceType = cache.persona.voice_type;
+               session.humanTransferNumber = cache.human_transfer_number || cache.persona.human_transfer_number;
+               session.enableAutoTransfer = cache.enable_auto_transfer ?? cache.persona.enable_auto_transfer;
+             }
+             if (cache.knowledge_base_content && cache.knowledge_base_content.length > 100) {
+                session._kbChunks = splitKBIntoChunks(cache.knowledge_base_content);
+                console.log(`[${reqId}] 📚 KB loaded from cache: ${session._kbChunks.length} chunks`);
+             }
+             session._agentConfigReady = true;
+             console.log(`[${reqId}] Agent config loaded from calllog cache`);
           }
        }
        
-       // Load KB
-       const kbQuery = await client.queryObject(`SELECT content, title FROM "knowledgebase" WHERE client_id = $1 AND status = 'ready'`, [session.clientId]);
-       let text = '';
-       for (const r of kbQuery.rows as any[]) {
-          if (r.content) text += `[${r.title}]\n${r.content}\n\n---\n\n`;
-       }
-       if (text.length >= 100) {
-          session._kbChunks = splitKBIntoChunks(text);
-          console.log(`[${reqId}] 📚 KB loaded: ${session._kbChunks.length} chunks`);
+       if (!session._agentConfigReady) {
+           const agentResult = await client.queryObject(`SELECT client_id, system_prompt, greeting_message, persona FROM "agent" WHERE id = $1 LIMIT 1`, [agentId]);
+           if (agentResult.rows.length > 0) {
+              const agent = agentResult.rows[0] as any;
+              session.clientId = agent.client_id;
+              if (agent.system_prompt) session.systemPrompt = agent.system_prompt;
+              if (agent.greeting_message) session.greetingMessage = agent.greeting_message;
+              if (agent.persona && typeof agent.persona === 'object') {
+                const personaObj = agent.persona as any;
+                if (personaObj.voice_type) session.voiceType = personaObj.voice_type;
+                if (personaObj.human_transfer_number) session.humanTransferNumber = personaObj.human_transfer_number;
+                if (personaObj.enable_auto_transfer) session.enableAutoTransfer = personaObj.enable_auto_transfer;
+              }
+           }
+           
+           // Load KB
+           const kbQuery = await client.queryObject(`SELECT content, title FROM "knowledgebase" WHERE client_id = $1 AND status = 'ready'`, [session.clientId]);
+           let text = '';
+           for (const r of kbQuery.rows as any[]) {
+              if (r.content) text += `[${r.title}]\n${r.content}\n\n---\n\n`;
+           }
+           if (text.length >= 100) {
+              session._kbChunks = splitKBIntoChunks(text);
+              console.log(`[${reqId}] 📚 KB loaded: ${session._kbChunks.length} chunks`);
+           }
        }
      } catch (e) {
        console.error(`[${reqId}] Agent config err:`, e);
@@ -601,28 +624,51 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
         if (payload.stream_id || payload.streamSid) streamId = payload.stream_id || payload.streamSid;
         
         if (payload.event === "start" || payload.event === "connected") {
+           console.log(`[${reqId}] Smartflo WS Start payload:`, JSON.stringify(payload));
            let resolvedAgentId = session._agentId;
            const customIdentifier = payload.start?.customData || payload.customData || payload.custom_identifier || "";
-           const customerNumber = payload.start?.calledNumber || payload.customerNumber || "";
+           const wsCallId = payload.start?.call_id || payload.call_id || payload.uuid || payload.start?.uuid || payload.streamSid || payload.stream_id || payload.start?.ref_id || payload.ref_id || "";
 
            if (!resolvedAgentId) {
              if (customIdentifier) {
                try {
-                 const callLogRes = await client.queryObject(`SELECT agent_id, lead_id FROM "calllog" WHERE id = $1 LIMIT 1`, [customIdentifier]);
+                 const callLogRes = await client.queryObject(`SELECT agent_id, lead_id, id FROM "calllog" WHERE id = $1 LIMIT 1`, [customIdentifier]);
                  if (callLogRes.rows.length > 0) {
                    const callLog = callLogRes.rows[0] as any;
                    resolvedAgentId = callLog.agent_id;
-                   session.callLogId = customIdentifier;
+                   session.callLogId = callLog.id;
                    if (!session._leadId && callLog.lead_id) session._leadId = callLog.lead_id;
                  }
                } catch(e) {}
              }
-             if (!resolvedAgentId && customerNumber) {
+             if (!resolvedAgentId && wsCallId) {
                try {
-                 const cleanDid = customerNumber.replace(/[^0-9]/g, '').slice(-10);
-                 const didRes = await client.queryObject(`SELECT id FROM "agent" WHERE assigned_did LIKE $1 OR assigned_dids::text LIKE $1 LIMIT 1`, [`%${cleanDid}%`]);
-                 if (didRes.rows.length > 0) resolvedAgentId = (didRes.rows[0] as any).id;
+                 const callLogRes = await client.queryObject(`SELECT agent_id, lead_id, id FROM "calllog" WHERE call_sid = $1 LIMIT 1`, [wsCallId]);
+                 if (callLogRes.rows.length > 0) {
+                   const callLog = callLogRes.rows[0] as any;
+                   resolvedAgentId = callLog.agent_id;
+                   session.callLogId = callLog.id;
+                   if (!session._leadId && callLog.lead_id) session._leadId = callLog.lead_id;
+                 }
                } catch(e) {}
+             }
+             if (!resolvedAgentId) {
+                 const possibleDids = [
+                    payload.start?.calledNumber, payload.customerNumber, payload.to,
+                    payload.start?.callerNumber, payload.callerNumber, payload.from
+                 ].filter(Boolean).map(n => String(n).replace(/[^0-9]/g, '').slice(-10));
+                 
+                 for (const cleanDid of possibleDids) {
+                     if (cleanDid.length === 10) {
+                         try {
+                             const didRes = await client.queryObject(`SELECT id FROM "agent" WHERE assigned_did LIKE $1 OR assigned_dids::text LIKE $1 LIMIT 1`, [`%${cleanDid}%`]);
+                             if (didRes.rows.length > 0) {
+                                 resolvedAgentId = (didRes.rows[0] as any).id;
+                                 break;
+                             }
+                         } catch(e) {}
+                     }
+                 }
              }
            }
            session._agentId = resolvedAgentId;
