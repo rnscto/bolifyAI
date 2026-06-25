@@ -202,12 +202,13 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
     if (transcript.trim().length > 30) {
       try {
         const azureKey = Deno.env.get("AZURE_OPENAI_KEY");
-        let azureEndpoint = Deno.env.get("AZURE_OPENAI_ENDPOINT") || "";
+        let baseUrl = (Deno.env.get("AZURE_OPENAI_ENDPOINT") || "").replace(/\/+$/, '');
         const azureDeployment = Deno.env.get("AZURE_OPENAI_DEPLOYMENT") || "gpt-5.4-pro";
         
-        if (azureKey && azureEndpoint) {
+        if (azureKey && baseUrl) {
+          const azureEndpoint = `${baseUrl}/openai/deployments/${azureDeployment}/chat/completions?api-version=2024-08-01-preview`;
+          
           const requestBody = JSON.stringify({
-            model: azureDeployment,
             messages: [{
               role: "user",
               content: `Analyze the following AI voice call transcript.\nTranscript:\n${transcript}\n\nReturn JSON exactly matching this format: {"summary":"2-3 sentences","summary_hindi":"Devanagari translation of summary","lead_status":"interested|not_interested|callback|no_answer|converted|contacted|do_not_call","sentiment":"very_positive|positive|neutral|negative|very_negative","lead_score":<number 0-100>,"intent_signals":["signal1", "signal2"],"score_breakdown":{"sentiment_score":0,"intent_score":0,"engagement_score":0,"keyword_score":0,"reasoning":"..."},"key_topics":["topic1", "topic2"],"objections":["obj1"],"recommended_next_action":"..."}\n\nIMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backticks.`
