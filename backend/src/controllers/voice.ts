@@ -603,7 +603,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
     geminiSocket.onerror = (e) => console.error(`[${reqId}] Gemini WS Error`, e);
 
     geminiSocket.onclose = (event) => {
-      console.log(`[${reqId}] 🔴 Gemini Disconnected (code: ${event.code})`);
+      console.log(`[${reqId}] 🔴 Gemini Disconnected (code: ${event.code}, reason: ${event.reason})`);
       session.geminiReady = false;
       if (!session._callEnded && session._geminiReconnectAttempts < 5) {
         session._geminiReconnectAttempts++;
