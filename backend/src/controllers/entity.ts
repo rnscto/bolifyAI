@@ -160,7 +160,9 @@ entityRouter.post("/:entity", async (c) => {
 
   const columns = Object.keys(filteredBody).map(k => `"${k}"`).join(", ");
   const placeholders = Object.keys(filteredBody).map((_, i) => `$${i + 1}`).join(", ");
-  const values = Object.values(filteredBody);
+  const values = Object.values(filteredBody).map(v => 
+    (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v
+  );
 
   let query = `INSERT INTO "${entity}" DEFAULT VALUES RETURNING *`;
   if (columns.length > 0) {
@@ -210,7 +212,9 @@ entityRouter.put("/:entity/:id", async (c) => {
   }
 
   const setClauses = Object.keys(filteredBody).map((k, i) => `"${k}" = $${i + 2}`).join(", ");
-  const values = [id, ...Object.values(filteredBody)];
+  const values = [id, ...Object.values(filteredBody).map(v => 
+    (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v
+  )];
   
   let query = `UPDATE "${entity}" SET ${setClauses} WHERE id = $1`;
 

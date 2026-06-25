@@ -59,7 +59,9 @@ export class DBEntityWrapper {
     }
     const cols = keys.map(k => `"${k}"`).join(", ");
     const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
-    const vals = Object.values(data);
+    const vals = Object.values(data).map(v => 
+      (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v
+    );
     const query = `INSERT INTO "${this.tableName}" (${cols}) VALUES (${placeholders}) RETURNING *`;
     const res = await client.queryObject(query, vals);
     return res.rows[0];
@@ -70,7 +72,9 @@ export class DBEntityWrapper {
     if (keys.length === 0) return await this.get(id);
 
     const setClauses = keys.map((k, i) => `"${k}" = $${i + 2}`).join(", ");
-    const vals = [id, ...Object.values(data)];
+    const vals = [id, ...Object.values(data).map(v => 
+      (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v
+    )];
     const query = `UPDATE "${this.tableName}" SET ${setClauses} WHERE id = $1 RETURNING *`;
     const res = await client.queryObject(query, vals);
     return res.rows[0] || null;
