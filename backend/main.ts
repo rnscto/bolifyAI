@@ -87,7 +87,7 @@ app.onError((err, c) => {
 });
 
 // Start DB connection
-await connectDB();
+connectDB().catch(console.error);
 
 export default {
   port: 8000,
