@@ -23,17 +23,45 @@ import { initDailyDigest } from "./src/cron/dailyDigest.ts";
 
 const app = new Hono();
 
-app.use("*", async (c, next) => {
-  if (c.req.path.startsWith("/api/voice/stream") || c.req.path.startsWith("/api/realtime")) {
-    return await next();
+app.get('/api/realtime', (c) => {
+  if (c.req.header("upgrade") !== "websocket") {
+    return c.text("Expected WebSocket", 400);
   }
+  const { socket, response } = Deno.upgradeWebSocket(c.req.raw);
+  handleWebSocket(socket as any);
+  return response as any;
+});
+
+import { streamHandler } from "./src/controllers/voice.ts";
+
+const wssUrlHandler = async (c: any) => {
+  const host = c.req.header('host') || c.req.header('x-forwarded-host') || 'localhost';
+  let cid = '';
+  if (c.req.method === 'POST') {
+    try { 
+      const bd = await c.req.json(); 
+      cid = bd.call_log_id || bd.custom_identifier || bd.callLogId || bd.customData || ''; 
+    } catch (_) {}
+  } else if (c.req.method === 'GET') {
+    cid = c.req.query('call_log_id') || c.req.query('custom_identifier') || '';
+  }
+  return c.json({
+    sucess: true,
+    wss_url: `wss://${host}/api/voice/stream${cid ? '?call_log_id=' + encodeURIComponent(cid) : ''}`
+  }, 200);
+};
+
+app.post("/api/voice/stream", wssUrlHandler);
+app.post("/api/voice/incoming", wssUrlHandler);
+app.get("/api/voice/incoming", wssUrlHandler);
+// Note: GET /api/voice/stream is handled by streamHandler for WS upgrade, but if not WS, it will be handled there.
+app.get("/api/voice/stream", streamHandler);
+
+app.use("*", async (c, next) => {
   return logger()(c, next);
 });
 
 app.use("*", async (c, next) => {
-  if (c.req.path.startsWith("/api/voice/stream") || c.req.path.startsWith("/api/realtime")) {
-    return await next();
-  }
   return cors({
     origin: "*",
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
@@ -60,14 +88,7 @@ app.route("/api/billing", billingRouter);
 app.route("/api/agents", agentsRouter);
 app.route("/api/functions", functionsRouter);
 
-app.get('/api/realtime', (c) => {
-  if (c.req.header("upgrade") !== "websocket") {
-    return c.text("Expected WebSocket", 400);
-  }
-  const { socket, response } = Deno.upgradeWebSocket(c.req.raw);
-  handleWebSocket(socket as any);
-  return response as any;
-});
+app.route("/api/functions", functionsRouter);
 
 app.get('*', async (c, next) => {
   if (c.req.path.startsWith('/api/')) {

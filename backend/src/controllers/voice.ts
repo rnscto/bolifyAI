@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { client } from "../db/index.ts";
-import { base44ORM as base44 } from "../db/orm.ts";
 import { sendWhatsAppMessage } from "../integrations/whatsapp.ts";
 import { sendSMS } from "../integrations/sms.ts";
 import * as geminiKeys from "../services/geminiKeyManager.ts";
@@ -28,8 +27,9 @@ voiceRouter.post("/incoming", async (c) => {
     const customIdentifier = body.custom_identifier || body.custom_data || "";
     if (!agentId && customIdentifier) {
        try {
-          const callLog = await base44.entities.CallLog.get(customIdentifier);
-          if (callLog) {
+          const callLogRes = await client.queryObject(`SELECT agent_id, lead_id FROM "call_log" WHERE id = $1 LIMIT 1`, [customIdentifier]);
+          if (callLogRes.rows.length > 0) {
+             const callLog = callLogRes.rows[0] as any;
              agentId = callLog.agent_id || "";
              leadId = callLog.lead_id || "";
           }
@@ -306,14 +306,30 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
   } catch (err: any) { console.error(`[${reqId}] ❌ Save: ${err.message}`); }
 }
 
-const streamHandler = (c: any) => {
-  const callId = c.req.param("callId") || `call_${Date.now()}`;
-  const reqId = Math.random().toString(36).substring(2, 10);
-  
-  if (c.req.header("upgrade") !== "websocket") {
-    return c.text("Expected Upgrade: websocket", 400);
+export const streamHandler = async (c: any) => {
+  const isWS = (c.req.header("upgrade") || "").toLowerCase() === "websocket";
+
+  if (!isWS) {
+    const host = c.req.header('host') || c.req.header('x-forwarded-host') || 'localhost';
+    let cid = '';
+    if (c.req.method === 'POST') {
+      try { 
+        const bd = await c.req.json(); 
+        cid = bd.call_log_id || bd.custom_identifier || bd.callLogId || bd.customData || ''; 
+      } catch (_) {}
+    } else {
+      cid = c.req.query('call_log_id') || c.req.query('custom_identifier') || '';
+    }
+    return c.json({
+      success: true,
+      sucess: true,
+      wss_url: `wss://${host}/api/voice/stream${cid ? '?call_log_id=' + encodeURIComponent(cid) : ''}`
+    });
   }
 
+  const callId = c.req.query("call_log_id") || c.req.param("callId") || `call_${Date.now()}`;
+  const reqId = Math.random().toString(36).substring(2, 10);
+  
   const { socket: smartfloSocket, response } = Deno.upgradeWebSocket(c.req.raw);
 
   const initialKey = geminiKeys.getKey();
@@ -609,8 +625,9 @@ const streamHandler = (c: any) => {
            if (!resolvedAgentId) {
              if (customIdentifier) {
                try {
-                 const callLog = await base44.entities.CallLog.get(customIdentifier);
-                 if (callLog) {
+                 const callLogRes = await client.queryObject(`SELECT agent_id, lead_id FROM "call_log" WHERE id = $1 LIMIT 1`, [customIdentifier]);
+                 if (callLogRes.rows.length > 0) {
+                   const callLog = callLogRes.rows[0] as any;
                    resolvedAgentId = callLog.agent_id;
                    session.callLogId = customIdentifier;
                    if (!session._leadId && callLog.lead_id) session._leadId = callLog.lead_id;
@@ -664,9 +681,6 @@ const streamHandler = (c: any) => {
   return response;
 };
 
-voiceRouter.get("/stream/:callId", streamHandler);
-voiceRouter.get("/stream", streamHandler);
-
 import { triggerSmartfloOutboundCall } from "../services/smartflo.ts";
 
 voiceRouter.post("/initiate", async (c) => {
@@ -674,23 +688,29 @@ voiceRouter.post("/initiate", async (c) => {
     const { lead_id, agent_id } = await c.req.json();
     if (!lead_id || !agent_id) return c.json({ error: "lead_id and agent_id required" }, 400);
 
-    const lead = await base44.entities.Lead.get(lead_id);
-    const agent = await base44.entities.Agent.get(agent_id);
-    if (!lead || !agent) return c.json({ error: "Lead or Agent not found" }, 404);
+    const leadRes = await client.queryObject(`SELECT id, phone FROM "lead" WHERE id = $1 LIMIT 1`, [lead_id]);
+    const agentRes = await client.queryObject(`SELECT id, client_id, assigned_did, assigned_dids, smartflo_api_token FROM "agent" WHERE id = $1 LIMIT 1`, [agent_id]);
+    
+    if (leadRes.rows.length === 0 || agentRes.rows.length === 0) return c.json({ error: "Lead or Agent not found" }, 404);
+    
+    const lead = leadRes.rows[0] as any;
+    const agent = agentRes.rows[0] as any;
 
-    const callerDID = (agent.assigned_dids?.length > 0) ? agent.assigned_dids[0] : agent.assigned_did;
+    let callerDID = agent.assigned_did;
+    if (!callerDID && typeof agent.assigned_dids === 'string') {
+        try { const arr = JSON.parse(agent.assigned_dids); if (arr.length > 0) callerDID = arr[0]; } catch(_) {}
+    } else if (!callerDID && Array.isArray(agent.assigned_dids) && agent.assigned_dids.length > 0) {
+        callerDID = agent.assigned_dids[0];
+    }
     if (!callerDID) return c.json({ error: "Agent has no assigned DID" }, 400);
 
-    const callLog = await base44.entities.CallLog.create({
-      client_id: agent.client_id,
-      agent_id: agent.id,
-      lead_id: lead.id,
-      caller_id: callerDID,
-      callee_number: lead.phone,
-      direction: "outbound",
-      status: "initiated",
-      call_start_time: new Date().toISOString(),
-    });
+    const callLogRes = await client.queryObject(`
+      INSERT INTO "call_log" (client_id, agent_id, lead_id, caller_id, callee_number, direction, status, call_start_time)
+      VALUES ($1, $2, $3, $4, $5, 'outbound', 'initiated', NOW())
+      RETURNING id
+    `, [agent.client_id, agent.id, lead.id, callerDID, lead.phone]);
+    
+    const callLogId = (callLogRes.rows[0] as any).id;
 
     const smartfloApiKey = agent.smartflo_api_token || Deno.env.get("SMARTFLO_API_KEY");
     if (!smartfloApiKey) return c.json({ error: "No Smartflo API Key configured" }, 500);
@@ -699,11 +719,11 @@ voiceRouter.post("/initiate", async (c) => {
       smartfloApiKey,
       calleeNumber: lead.phone,
       callerId: callerDID,
-      callLogId: callLog.id
+      callLogId: callLogId
     });
 
     if (result.success) {
-      return c.json({ success: true, call_sid: result.call_sid, call_log_id: callLog.id });
+      return c.json({ success: true, call_sid: result.call_sid, call_log_id: callLogId });
     } else {
       return c.json({ success: false, error: result.message }, 500);
     }
@@ -728,25 +748,25 @@ voiceRouter.post("/fetch-recording", async (c) => {
       return c.json({ error: e.message }, 500);
     }
 
-    let callLogs = [];
+    let logs: any[] = [];
     if (call_log_id) {
-      const log = await base44.entities.CallLog.get(call_log_id);
-      if (log) callLogs = [log];
+      const res = await client.queryObject(`SELECT * FROM "call_log" WHERE id = $1`, [call_log_id]);
+      if (res.rows.length > 0) logs.push(res.rows[0]);
     } else if (bulk) {
-      const recent = await base44.entities.CallLog.filter({ status: "completed" }, "-created_at", 50);
-      callLogs = recent.filter((l: any) => !l.recording_url && l.call_sid);
+      const res = await client.queryObject(`SELECT * FROM "call_log" WHERE status = 'completed' AND recording_url IS NULL ORDER BY created_at DESC LIMIT 50`);
+      logs = res.rows;
     }
-
-    if (callLogs.length === 0) {
+    
+    if (logs.length === 0) {
       return c.json({ success: true, message: "No calls to process", updated: 0 });
     }
 
-    let updated = 0;
+    let updatedCount = 0;
     const results = [];
 
-    for (const log of callLogs) {
+    for (const log of logs) {
       try {
-        const callSid = log.call_sid;
+        const callSid = (log as any).call_sid;
         if (!callSid) continue;
 
         let recordingUrl = null;
@@ -772,18 +792,18 @@ voiceRouter.post("/fetch-recording", async (c) => {
         }
 
         if (recordingUrl) {
-          await base44.entities.CallLog.update(log.id, { recording_url: recordingUrl });
-          updated++;
-          results.push({ id: log.id, call_sid: callSid, recording_url: recordingUrl });
+          await client.queryObject(`UPDATE "call_log" SET recording_url = $1 WHERE id = $2`, [recordingUrl, (log as any).id]);
+          updatedCount++;
+          results.push({ id: (log as any).id, call_sid: callSid, recording_url: recordingUrl });
         } else {
-          results.push({ id: log.id, call_sid: callSid, recording_url: null, note: "No recording found" });
+          results.push({ id: (log as any).id, call_sid: callSid, recording_url: null, note: "No recording found" });
         }
       } catch (err: any) {
-        results.push({ id: log.id, error: err.message });
+        results.push({ id: (log as any).id, error: err.message });
       }
     }
 
-    return c.json({ success: true, updated, total: callLogs.length, results });
+    return c.json({ success: true, updated: updatedCount, total: logs.length, results });
   } catch (error: any) {
     return c.json({ error: error.message }, 500);
   }
