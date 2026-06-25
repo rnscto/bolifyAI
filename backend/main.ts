@@ -91,5 +91,6 @@ connectDB().catch(console.error);
 
 export default {
   port: 8000,
+  hostname: "0.0.0.0",
   fetch: app.fetch,
 };
