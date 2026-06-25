@@ -671,6 +671,23 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
                  }
              }
            }
+           
+           // FALLBACK: If we found the agent but STILL don't have the callLogId (e.g. Smartflo didn't pass customData and call_id mismatched)
+           if (resolvedAgentId && !session.callLogId) {
+               try {
+                   const recentCallRes = await client.queryObject(
+                       `SELECT id, lead_id FROM "calllog" WHERE agent_id = $1 AND status IN ('initiated', 'ringing', 'answered') ORDER BY created_at DESC LIMIT 1`, 
+                       [resolvedAgentId]
+                   );
+                   if (recentCallRes.rows.length > 0) {
+                       const recentCall = recentCallRes.rows[0] as any;
+                       session.callLogId = recentCall.id;
+                       if (!session._leadId && recentCall.lead_id) session._leadId = recentCall.lead_id;
+                       console.log(`[${reqId}] ⚠️ Fallback: recovered session.callLogId ${session.callLogId} from active calls for agent ${resolvedAgentId}`);
+                   }
+               } catch(e) {}
+           }
+           
            session._agentId = resolvedAgentId;
            if (resolvedAgentId) await loadAgentConfig(resolvedAgentId);
            connectGemini();
