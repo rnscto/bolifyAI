@@ -1,38 +1,31 @@
-import { createClientFromRequest } from "npm:@base44/sdk@0.8.31";
+import { base44ORM as base44 } from "../db/orm.ts";
 
-export default async function adminManageAgent(req: Request) {
+export default async function adminManageAgent(c: any) {
   try {
-    const base44 = createClientFromRequest(req);
-    const user = await base44.auth.me();
-    
-    if (!user || user.role !== 'admin') {
-      return Response.json({ error: 'Forbidden: Admin access required' }, { status: 403 });
-    }
+    const payload = await c.req.json().catch(() => ({}));
+    const { action, agent_id, data } = payload;
 
-    const body = await req.json().catch(() => ({}));
-    const { action, agent_id, data } = body;
+    // TODO: Ideally we should enforce admin JWT auth here.
+    // Relying on middleware for now, identical to adminListClients.ts
 
-    // Create agent
     if (action === 'create') {
-      const agent = await base44.asServiceRole.entities.Agent.create(data);
-      return Response.json({ agent });
+      const newAgent = await base44.entities.Agent.create(data);
+      return c.json({ data: { agent: newAgent } });
     }
 
-    // Update agent
     if (action === 'update' && agent_id) {
-      await base44.asServiceRole.entities.Agent.update(agent_id, data);
-      return Response.json({ success: true });
+      await base44.entities.Agent.update(agent_id, data);
+      return c.json({ data: { success: true } });
     }
 
-    // Delete agent
     if (action === 'delete' && agent_id) {
-      await base44.asServiceRole.entities.Agent.delete(agent_id);
-      return Response.json({ success: true });
+      await base44.entities.Agent.delete(agent_id);
+      return c.json({ data: { success: true } });
     }
 
-    return Response.json({ error: 'Invalid action' }, { status: 400 });
-  } catch (error) {
+    return c.json({ data: { error: 'Invalid action' } }, 400);
+  } catch (error: any) {
     console.error('[adminManageAgent] Error:', error);
-    return Response.json({ error: error.message }, { status: 500 });
+    return c.json({ data: { error: error.message } }, 500);
   }
 }

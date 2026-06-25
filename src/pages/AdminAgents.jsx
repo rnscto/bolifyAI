@@ -180,13 +180,19 @@ export default function AdminAgents() {
         agentData.knowledge_base_ids = [];
       }
 
+      let res;
       if (editingAgent) {
-        await base44.functions.invoke('adminManageAgent', { action: 'update', agent_id: editingAgent.id, data: agentData });
-        toast.success('Agent updated');
+        res = await base44.functions.invoke('adminManageAgent', { action: 'update', agent_id: editingAgent.id, data: agentData });
       } else {
-        await base44.functions.invoke('adminManageAgent', { action: 'create', data: agentData });
-        toast.success('Agent created');
+        res = await base44.functions.invoke('adminManageAgent', { action: 'create', data: agentData });
       }
+
+      if (res?.error || res?.data?.error) {
+        toast.error(`Error: ${res.error || res.data.error}`);
+        return;
+      }
+
+      toast.success(editingAgent ? 'Agent updated' : 'Agent created');
 
       setDialogOpen(false);
       resetForm();
