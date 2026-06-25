@@ -210,9 +210,8 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
             model: azureDeployment,
             messages: [{
               role: "user",
-              content: `Analyze the following AI voice call transcript.\nTranscript:\n${transcript}\n\nReturn JSON exactly matching this format: {"summary":"2-3 sentences","summary_hindi":"Devanagari translation of summary","lead_status":"interested|not_interested|callback|no_answer|converted|contacted|do_not_call","sentiment":"very_positive|positive|neutral|negative|very_negative","lead_score":<number 0-100>,"intent_signals":["signal1", "signal2"],"score_breakdown":{"sentiment_score":0,"intent_score":0,"engagement_score":0,"keyword_score":0,"reasoning":"..."},"key_topics":["topic1", "topic2"],"objections":["obj1"],"recommended_next_action":"..."}`
-            }],
-            response_format: { type: "json_object" }
+              content: `Analyze the following AI voice call transcript.\nTranscript:\n${transcript}\n\nReturn JSON exactly matching this format: {"summary":"2-3 sentences","summary_hindi":"Devanagari translation of summary","lead_status":"interested|not_interested|callback|no_answer|converted|contacted|do_not_call","sentiment":"very_positive|positive|neutral|negative|very_negative","lead_score":<number 0-100>,"intent_signals":["signal1", "signal2"],"score_breakdown":{"sentiment_score":0,"intent_score":0,"engagement_score":0,"keyword_score":0,"reasoning":"..."},"key_topics":["topic1", "topic2"],"objections":["obj1"],"recommended_next_action":"..."}\n\nIMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backticks.`
+            }]
           });
           
           let r = await fetch(azureEndpoint, {
@@ -227,7 +226,8 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
           
           if (r.ok) {
             const data = await r.json();
-            const aText = data.choices?.[0]?.message?.content || '{}';
+            const aTextRaw = data.choices?.[0]?.message?.content || '{}';
+            const aText = aTextRaw.replace(/^```(?:json)?\n?/i, '').replace(/```$/i, '').trim();
             const a = JSON.parse(aText);
             summary = a.summary || ''; summaryHindi = a.summary_hindi || '';
             leadStatus = a.lead_status || 'contacted'; sentiment = a.sentiment || 'neutral';

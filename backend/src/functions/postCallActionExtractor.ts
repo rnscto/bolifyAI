@@ -102,15 +102,16 @@ If unconfirmed, ALWAYS use type "task" or "followup" — NEVER "demo", "appointm
 
 CALLBACK/RECALL SCHEDULING:
 - "call me after 1 hour" → create "call" (confirmed: true)
-- Agent proposes callback but no confirmation → create "task" (confirmed: false)`
+- Agent proposes callback but no confirmation → create "task" (confirmed: false)
+
+IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backticks.`
             },
             {
               role: 'user',
               content: `Call transcript:\n\n${callLog.transcript}\n\n${callLog.conversation_summary ? `AI Summary: ${callLog.conversation_summary.substring(0, 500)}` : ''}`
             }
           ],
-          max_completion_tokens: 1000,
-          response_format: { type: "json_object" }
+          max_completion_tokens: 1000
         })
       }
     );
@@ -121,10 +122,11 @@ CALLBACK/RECALL SCHEDULING:
 
     const extractionData = await extractionResponse.json();
     const rawContent = extractionData.choices?.[0]?.message?.content || '{}';
+    const cleanContent = rawContent.replace(/^```(?:json)?\n?/i, '').replace(/```$/i, '').trim();
 
     let extracted;
     try {
-      extracted = JSON.parse(rawContent);
+      extracted = JSON.parse(cleanContent);
     } catch (_) {
       return { success: false, error: 'AI response parse error' };
     }
