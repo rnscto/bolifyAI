@@ -12,10 +12,6 @@ voiceWebhookRouter.post("/", async (c) => {
     }
 
     const rawBody = await c.req.text();
-    console.log(`[smartfloWebhook] POST ${c.req.url}`);
-    console.log(`[smartfloWebhook] Headers:`, JSON.stringify(c.req.header()));
-    console.log(`[smartfloWebhook] Query:`, JSON.stringify(c.req.query()));
-    console.log(`[smartfloWebhook] Body:`, rawBody);
     
     let payload: any = {};
     const contentType = c.req.header("content-type") || "";
@@ -51,11 +47,6 @@ voiceWebhookRouter.post("/", async (c) => {
         if (Object.keys(payload).length <= 1) { // only secret
              console.log("[smartfloWebhook] Empty body and no query parameters. Returning 200.");
              return c.json({ success: true, message: "Empty body received" });
-        }
-    }
-    
-    console.log("[smartfloWebhook] Parsed Payload:", JSON.stringify(payload));
-
     const dataObj = payload.data || payload;
     const call_id = dataObj.call_id || dataObj.uuid || payload.call_id || payload.uuid;
     const status = dataObj.call_status || dataObj.status || payload.call_status || payload.status;
