@@ -47,15 +47,17 @@ entityRouter.get("/:entity", async (c) => {
   let paramIndex = 1;
 
   // MULTI-TENANCY ENFORCEMENT
-  if (validCols.has("client_id")) {
-    conditions.push(`"client_id" = $${paramIndex}`);
-    args.push(user.client_id);
-    paramIndex++;
-  } else if (entity === "client") {
-    // If querying the client table, user can only query their own client
-    conditions.push(`"id" = $${paramIndex}`);
-    args.push(user.client_id);
-    paramIndex++;
+  if (user.role !== 'admin') {
+    if (validCols.has("client_id")) {
+      conditions.push(`"client_id" = $${paramIndex}`);
+      args.push(user.client_id);
+      paramIndex++;
+    } else if (entity === "client") {
+      // If querying the client table, user can only query their own client
+      conditions.push(`"id" = $${paramIndex}`);
+      args.push(user.client_id);
+      paramIndex++;
+    }
   }
 
   for (const [key, value] of Object.entries(queryParams)) {
@@ -110,12 +112,14 @@ entityRouter.get("/:entity/:id", async (c) => {
     const args: any[] = [id];
 
     // MULTI-TENANCY ENFORCEMENT
-    if (validCols.has("client_id")) {
-      query += ` AND client_id = $2`;
-      args.push(user.client_id);
-    } else if (entity === "client") {
-      query += ` AND id = $2`;
-      args.push(user.client_id);
+    if (user.role !== 'admin') {
+      if (validCols.has("client_id")) {
+        query += ` AND client_id = $2`;
+        args.push(user.client_id);
+      } else if (entity === "client") {
+        query += ` AND id = $2`;
+        args.push(user.client_id);
+      }
     }
 
     query += ` LIMIT 1`;
@@ -150,7 +154,7 @@ entityRouter.post("/:entity", async (c) => {
   }
 
   // MULTI-TENANCY ENFORCEMENT: Force inject client_id
-  if (validCols.has("client_id")) {
+  if (validCols.has("client_id") && user.role !== 'admin') {
     filteredBody["client_id"] = user.client_id;
   }
 
@@ -211,7 +215,7 @@ entityRouter.put("/:entity/:id", async (c) => {
   let query = `UPDATE "${entity}" SET ${setClauses} WHERE id = $1`;
 
   // MULTI-TENANCY ENFORCEMENT
-  if (validCols.has("client_id")) {
+  if (validCols.has("client_id") && user.role !== 'admin') {
     query += ` AND client_id = $${values.length + 1}`;
     values.push(user.client_id);
   }
@@ -243,7 +247,7 @@ entityRouter.delete("/:entity/:id", async (c) => {
     const args: any[] = [id];
 
     // MULTI-TENANCY ENFORCEMENT
-    if (validCols.has("client_id")) {
+    if (validCols.has("client_id") && user.role !== 'admin') {
       query += ` AND client_id = $2`;
       args.push(user.client_id);
     }

@@ -28,11 +28,13 @@ crmRouter.post("/outbound-push", crmOutboundPushHandler);
 // Bulk import leads for a campaign or group
 crmRouter.post("/leads/bulk-import", async (c) => {
   const user = c.get("jwtPayload") as any;
-  const { campaign_id, group_id, leads } = await c.req.json();
+  const { campaign_id, group_id, leads, client_id } = await c.req.json();
 
   if (!leads || !Array.isArray(leads)) {
     return c.json({ error: "Leads array is required" }, 400);
   }
+
+  const targetClientId = (user.role === 'admin' && client_id) ? client_id : user.client_id;
 
   try {
     const insertedIds = [];
@@ -42,7 +44,7 @@ crmRouter.post("/leads/bulk-import", async (c) => {
       const result = await client.queryObject(
         `INSERT INTO "lead" (client_id, first_name, last_name, phone_number, email) 
          VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-        [user.client_id, lead.first_name, lead.last_name, lead.phone_number, lead.email]
+        [targetClientId, lead.first_name, lead.last_name, lead.phone_number, lead.email]
       );
       const leadId = (result.rows[0] as any).id;
       insertedIds.push(leadId);
@@ -69,17 +71,23 @@ crmRouter.get("/stats", async (c) => {
   const user = c.get("jwtPayload") as any;
 
   try {
-    const leadsCountResult = await client.queryObject(
-      `SELECT COUNT(*) as count FROM "lead" WHERE client_id = $1`,
-      [user.client_id]
-    );
-
-    const callsCountResult = await client.queryObject(
-      `SELECT COUNT(*) as count FROM "calllog" c
-       INNER JOIN "lead" l ON c.lead_id = l.id::text
-       WHERE l.client_id = $1`,
-      [user.client_id]
-    );
+    let leadsCountResult, callsCountResult;
+    
+    if (user.role === 'admin') {
+      leadsCountResult = await client.queryObject(`SELECT COUNT(*) as count FROM "lead"`);
+      callsCountResult = await client.queryObject(`SELECT COUNT(*) as count FROM "calllog"`);
+    } else {
+      leadsCountResult = await client.queryObject(
+        `SELECT COUNT(*) as count FROM "lead" WHERE client_id = $1`,
+        [user.client_id]
+      );
+      callsCountResult = await client.queryObject(
+        `SELECT COUNT(*) as count FROM "calllog" c
+         INNER JOIN "lead" l ON c.lead_id = l.id::text
+         WHERE l.client_id = $1`,
+        [user.client_id]
+      );
+    }
 
     return c.json({
       total_leads: Number((leadsCountResult.rows[0] as any).count),
