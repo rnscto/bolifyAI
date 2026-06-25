@@ -36,7 +36,7 @@ jobs:
           # Convert IMAGE_NAME to lowercase to avoid GHCR restrictions
           LOWER_IMAGE_NAME=$(echo "${{ env.IMAGE_NAME }}" | tr '[:upper:]' '[:lower:]')
           
-          cd backend
+          
           docker build -t ${{ env.REGISTRY }}/$LOWER_IMAGE_NAME:${{ github.sha }} .
           docker push ${{ env.REGISTRY }}/$LOWER_IMAGE_NAME:${{ github.sha }}
 
