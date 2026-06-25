@@ -45,4 +45,26 @@ jobs:
           ingress: external
           targetPort: 8000
 
+      - name: Diagnose and fix ingress configuration
+        run: |
+          echo "=== Current Container App Ingress Config ==="
+          az containerapp show \
+            --name bolify \
+            --resource-group vaani-ai-prod \
+            --query "{ingress: properties.configuration.ingress, targetPort: properties.configuration.ingress.targetPort, transport: properties.configuration.ingress.transport, external: properties.configuration.ingress.external}" \
+            -o json
 
+          echo ""
+          echo "=== Forcing targetPort to 8000 ==="
+          az containerapp ingress update \
+            --name bolify \
+            --resource-group vaani-ai-prod \
+            --target-port 8000
+
+          echo ""
+          echo "=== Verified Ingress Config ==="
+          az containerapp show \
+            --name bolify \
+            --resource-group vaani-ai-prod \
+            --query "properties.configuration.ingress" \
+            -o json
