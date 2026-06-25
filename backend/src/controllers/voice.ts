@@ -3,6 +3,8 @@ import { client } from "../db/index.ts";
 import { sendWhatsAppMessage } from "../integrations/whatsapp.ts";
 import { sendSMS } from "../integrations/sms.ts";
 import * as geminiKeys from "../services/geminiKeyManager.ts";
+import { campaignPostCallCore } from "../functions/campaignPostCall.ts";
+import { postCallActionExtractorCore } from "../functions/postCallActionExtractor.ts";
 
 export const voiceRouter = new Hono();
 
@@ -318,6 +320,26 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
         }
       } catch (e: any) { console.error(`[${reqId}] Lead err: ${e.message}`); }
     }
+
+    // ─── Post-Call Orchestrator Trigger ───
+    // Fire and forget post-call automation (Campaign follow-ups, Action Extractions, Auto Enroll)
+    if (session.callLogId) {
+      setTimeout(async () => {
+        try {
+          console.log(`[${reqId}] 🚀 Triggering Post-Call Orchestrator for ${session.callLogId}`);
+          const clRes = await client.queryObject(`SELECT id, campaign_id FROM "campaignlead" WHERE call_log_id = $1 LIMIT 1`, [session.callLogId]);
+          if (clRes.rows.length > 0) {
+            const cl = clRes.rows[0] as any;
+            await campaignPostCallCore(session.callLogId, cl.campaign_id);
+          } else {
+            await postCallActionExtractorCore(session.callLogId);
+          }
+        } catch (postErr: any) {
+          console.error(`[${reqId}] ❌ Post-Call Orchestrator error: ${postErr.message}`);
+        }
+      }, 100);
+    }
+    
   } catch (err: any) { console.error(`[${reqId}] ❌ Save: ${err.message}`); }
 }
 

@@ -77,7 +77,7 @@ Return JSON with this exact structure:
   "lead_notes": "string",
   "actions": [
     {
-      "type": "call|email|demo|appointment|visit|meeting|task|followup",
+      "type": "call|email|whatsapp|calendar_invite|human_attention|demo|appointment|visit|meeting|task|followup",
       "title": "string",
       "description": "string",
       "scheduled_date": "ISO date-time string in UTC (converted from IST, or null if no specific time mentioned)",
@@ -98,6 +98,14 @@ If unconfirmed, ALWAYS use type "task" or "followup" — NEVER "demo", "appointm
 CALLBACK/RECALL SCHEDULING:
 - "call me after 1 hour" → create "call" (confirmed: true)
 - Agent proposes callback but no confirmation → create "task" (confirmed: false)
+
+WHATSAPP & EMAIL:
+- If the customer asked to send details via WhatsApp, create a "whatsapp" action (confirmed: true, priority: high).
+- If the customer asked for details via email, create an "email" action.
+
+HUMAN ATTENTION & CALENDAR:
+- If the customer is very angry, asks to speak to a manager, or asks complex questions the AI couldn't answer, create a "human_attention" action (priority: high).
+- If the customer agreed to a meeting/demo, create a "calendar_invite" action (confirmed: true).
 
 IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backticks.`;
 
@@ -184,10 +192,15 @@ IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backtic
         let activityType = 'task';
 
         if (isConfirmed) {
-          const typeMap: any = { 'call': 'call', 'followup': 'followup', 'email': 'email', 'demo': 'demo', 'appointment': 'appointment', 'visit': 'visit', 'meeting': 'meeting', 'task': 'task', 'booking': 'booking' };
+          const typeMap: any = { 'call': 'call', 'followup': 'followup', 'email': 'email', 'whatsapp': 'whatsapp', 'calendar_invite': 'meeting', 'human_attention': 'task', 'demo': 'demo', 'appointment': 'appointment', 'visit': 'visit', 'meeting': 'meeting', 'task': 'task', 'booking': 'booking' };
           activityType = typeMap[action.type] || 'task';
+          
+          if (action.type === 'human_attention') {
+            action.priority = 'high';
+            action.title = `🚨 URGENT: ${action.title}`;
+          }
         } else {
-          const softTypes: any = { 'call': 'followup', 'email': 'task', 'followup': 'followup' };
+          const softTypes: any = { 'call': 'followup', 'email': 'task', 'whatsapp': 'task', 'followup': 'followup', 'calendar_invite': 'task', 'human_attention': 'task' };
           activityType = softTypes[action.type] || 'task';
           action.priority = 'medium';
         }
@@ -273,6 +286,23 @@ IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backtic
           await base44.entities.Lead.update(callLog.lead_id, { next_followup_date: earliest.toISOString() });
         } catch (_) {}
       }
+
+      // Auto-enroll the lead into an email sequence if the AI extracted follow-ups
+      try {
+        const leadRes = await base44.entities.Lead.get(callLog.lead_id);
+        if (leadRes && leadRes.qualification_tier && leadRes.client_id) {
+          const baseUrl = Deno.env.get('APP_BASE_URL_INTERNAL') || `http://localhost:${Deno.env.get('PORT') || '8000'}`;
+          await fetch(`${baseUrl}/api/crm/auto-enroll`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': Deno.env.get('CRON_API_KEY') || '' },
+            body: JSON.stringify({
+              lead_id: leadRes.id,
+              client_id: leadRes.client_id,
+              qualification_tier: leadRes.qualification_tier
+            })
+          }).catch(() => {});
+        }
+      } catch (_) {}
     }
 
     return { success: true, ...results };
