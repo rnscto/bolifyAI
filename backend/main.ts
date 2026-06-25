@@ -93,11 +93,8 @@ app.onError((err, c) => {
 // Start DB connection
 connectDB().catch(console.error);
 
-export default {
-  port: Number(Deno.env.get("PORT")) || 8000,
-  hostname: "::",
-  fetch: (req: Request, info: any) => {
-    console.log(`[RAW HTTP] ${req.method} ${req.url} from ${info?.remoteAddr?.hostname}`);
-    return app.fetch(req, info);
-  },
-};
+const port = Number(Deno.env.get("PORT")) || 8000;
+Deno.serve({ port, hostname: "0.0.0.0" }, (req: Request, info: any) => {
+  console.log(`[RAW HTTP] ${req.method} ${req.url} from ${info?.remoteAddr?.hostname}`);
+  return app.fetch(req, info);
+});
