@@ -240,7 +240,7 @@ Deno.serve(async (req) => {
     if (call_log_id) {
       const existing = await svc.entities.OutreachLog.filter({
         call_log_id, channel: 'whatsapp', client_id: campaign.client_id
-      }, '-created_date', 5);
+      }, '-created_at', 5);
       if (existing.some(o => o.outreach_type === 'lead_followup' && o.status === 'sent')) {
         return Response.json({ skipped: 'already_sent_for_call' });
       }

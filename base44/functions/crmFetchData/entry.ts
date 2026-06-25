@@ -10,7 +10,7 @@ import { createClient } from 'npm:@base44/sdk@0.8.31';
  *   "entity": "leads" | "contacts" | "deals" | "call_logs" | "activities",
  *   "filters": { ...optional filters... },
  *   "limit": 50,
- *   "sort": "-created_date"
+ *   "sort": "-created_at"
  * }
  */
 Deno.serve(async (req) => {
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     }
 
     const maxLimit = Math.min(limit || 50, 200);
-    const sortOrder = sort || '-created_date';
+    const sortOrder = sort || '-created_at';
 
     // Always scope to this client's data
     const query = { client_id: clientId, ...(filters || {}) };
@@ -94,7 +94,7 @@ Deno.serve(async (req) => {
     // Strip internal fields for clean API response
     const cleaned = (records || []).map(r => ({
       id: r.id,
-      created_date: r.created_date,
+      created_at: r.created_at,
       updated_date: r.updated_date,
       ...stripInternalFields(r)
     }));
@@ -132,6 +132,6 @@ async function resolveClient(base44, clientId) {
 }
 
 function stripInternalFields(record) {
-  const { id, created_date, updated_date, created_by, created_by_id, entity_name, app_id, is_sample, is_deleted, deleted_date, environment, ...rest } = record;
+  const { id, created_at, updated_date, created_by, created_by_id, entity_name, app_id, is_sample, is_deleted, deleted_date, environment, ...rest } = record;
   return rest;
 }

@@ -106,9 +106,9 @@ export default function CampaignCard({ campaign, onStart, onPause }) {
             ⏰ Starts {new Date(campaign.scheduled_date).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })} IST
           </p>
         )}
-        {campaign.created_date && (
+        {campaign.created_at && (
           <p className="text-xs text-gray-400 mt-3">
-            Created {new Date(campaign.created_date).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
+            Created {new Date(campaign.created_at).toLocaleDateString('en-IN', { timeZone: 'Asia/Kolkata' })}
           </p>
         )}
       </CardContent>

@@ -45,8 +45,8 @@ export default function AdminTopups() {
 
   const loadData = async () => {
     const [paysData, clientsData] = await Promise.all([
-      base44.entities.Payment.list('-created_date', 500),
-      base44.entities.Client.list('-created_date', 1000),
+      base44.entities.Payment.list('-created_at', 500),
+      base44.entities.Client.list('-created_at', 1000),
     ]);
     setPayments(paysData);
     setClients(clientsData);
@@ -219,7 +219,7 @@ export default function AdminTopups() {
                   const gst = p.meta?.gst || 0;
                   const total = p.meta?.total || p.amount || 0;
                   const minutes = Math.floor(base / rate);
-                  const dateStr = p.paid_at || p.created_date;
+                  const dateStr = p.paid_at || p.created_at;
                   return (
                     <TableRow key={p.id}>
                       <TableCell className="text-sm">

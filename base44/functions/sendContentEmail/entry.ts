@@ -176,7 +176,7 @@ Deno.serve(async (req) => {
     // Get the latest call log if not provided
     if (!callLog) {
       const callLogs = await base44.entities.CallLog.filter({ lead_id: leadId, status: 'completed' });
-      callLogs.sort((a, b) => new Date(b.created_date) - new Date(a.created_date));
+      callLogs.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       callLog = callLogs[0];
     }
 

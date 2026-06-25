@@ -19,7 +19,7 @@ export default function AdminPayments() {
 
   const loadData = async () => {
     const [paysData, clientsData] = await Promise.all([
-      base44.entities.Payment.list('-created_date', 100),
+      base44.entities.Payment.list('-created_at', 100),
       base44.entities.Client.list(),
     ]);
     setPayments(paysData);
@@ -132,7 +132,7 @@ export default function AdminPayments() {
                     <TableCell><Badge className={statusColors[p.status] || 'bg-gray-100'}>{p.status}</Badge></TableCell>
                     <TableCell className="text-sm capitalize">{p.payment_method || '-'}</TableCell>
                     <TableCell className="text-sm">
-                      {p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : new Date(p.created_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      {p.paid_at ? new Date(p.paid_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : new Date(p.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
                     </TableCell>
                     <TableCell>
                       {p.status === 'paid' && <InvoiceButton paymentId={p.id} />}

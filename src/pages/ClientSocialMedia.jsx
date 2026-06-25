@@ -28,7 +28,7 @@ export default function ClientSocialMedia() {
 
   const { data: posts = [], isLoading, refetch } = useQuery({
     queryKey: ['social-posts', client?.id],
-    queryFn: () => client ? base44.entities.SocialMediaPost.filter({ client_id: client.id }, '-created_date', 100) : [],
+    queryFn: () => client ? base44.entities.SocialMediaPost.filter({ client_id: client.id }, '-created_at', 100) : [],
     enabled: !!client?.id,
   });
 

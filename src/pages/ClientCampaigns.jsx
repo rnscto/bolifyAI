@@ -46,7 +46,7 @@ export default function ClientCampaigns() {
       if (clients.length > 0) {
         setClient(clients[0]);
         const data = await base44.entities.Campaign.filter(
-          { client_id: clients[0].id }, '-created_date', 50
+          { client_id: clients[0].id }, '-created_at', 50
         );
         setCampaigns(data);
       }

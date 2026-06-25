@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
           const newStatus = s.status; // sent, delivered, read, failed
           if (!msgId) continue;
           try {
-            const logs = await svc.entities.OutreachLog.filter({ vendor_message_id: msgId }, '-created_date', 1);
+            const logs = await svc.entities.OutreachLog.filter({ vendor_message_id: msgId }, '-created_at', 1);
             if (logs.length > 0) {
               const mappedStatus = ['delivered', 'read', 'failed'].includes(newStatus) ? newStatus : logs[0].status;
               await svc.entities.OutreachLog.update(logs[0].id, {
@@ -61,11 +61,11 @@ Deno.serve(async (req) => {
           let lead = null, clientId = 'PLATFORM';
           try {
             const cleanPhone = fromPhone.replace(/[^0-9]/g, '');
-            const leads = await svc.entities.Lead.filter({ phone: cleanPhone }, '-created_date', 1);
+            const leads = await svc.entities.Lead.filter({ phone: cleanPhone }, '-created_at', 1);
             if (leads.length > 0) { lead = leads[0]; clientId = lead.client_id; }
             else {
               // Try last-10-digit match
-              const allLeads = await svc.entities.Lead.list('-created_date', 1000);
+              const allLeads = await svc.entities.Lead.list('-created_at', 1000);
               const match = allLeads.find(l => (l.phone || '').replace(/\D/g, '').endsWith(cleanPhone.slice(-10)));
               if (match) { lead = match; clientId = match.client_id; }
             }

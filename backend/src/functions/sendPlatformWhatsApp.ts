@@ -6,7 +6,7 @@ export async function sendPlatformWhatsAppLogic({ template_id, to, variables, le
     throw new Error('template_id and to are required');
   }
 
-  const cfgs = await base44ORM.entities.PlatformMessagingConfig.list('-created_date', 1);
+  const cfgs = await base44ORM.entities.PlatformMessagingConfig.list('-created_at', 1);
   if (cfgs.length === 0) throw new Error('Platform messaging not configured');
   const cfg = cfgs[0];
 

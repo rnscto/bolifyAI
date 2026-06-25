@@ -38,7 +38,7 @@ export async function processOutboundPush() {
 
     const recentCalls = await base44.entities.CallLog.filter({ status: "completed" }, "-updated_date", 200);
     const toPushCalls = recentCalls.filter((c: any) =>
-      activeClientIds.includes(c.client_id) && (c.updated_date || c.created_date) >= safetyCutoff && isEligibleForRetry(c)
+      activeClientIds.includes(c.client_id) && (c.updated_date || c.created_at) >= safetyCutoff && isEligibleForRetry(c)
     ).slice(0, 8);
 
     for (const call of toPushCalls) {
@@ -66,7 +66,7 @@ export async function processOutboundPush() {
 
     const recentLeads = await base44.entities.Lead.filter({}, "-updated_date", 200);
     const toPushLeads = recentLeads.filter((l: any) =>
-      activeClientIds.includes(l.client_id) && (l.updated_date || l.created_date) >= safetyCutoff && l.last_call_date && isEligibleForRetry(l)
+      activeClientIds.includes(l.client_id) && (l.updated_date || l.created_at) >= safetyCutoff && l.last_call_date && isEligibleForRetry(l)
     ).slice(0, 7);
 
     for (const lead of toPushLeads) {

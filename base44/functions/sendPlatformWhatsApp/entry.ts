@@ -33,7 +33,7 @@ Deno.serve(async (req) => {
     }
 
     // Load platform config (singleton — first record)
-    const cfgs = await svc.entities.PlatformMessagingConfig.list('-created_date', 1);
+    const cfgs = await svc.entities.PlatformMessagingConfig.list('-created_at', 1);
     if (cfgs.length === 0) return Response.json({ error: 'Platform messaging not configured' }, { status: 404 });
     const cfg = cfgs[0];
 

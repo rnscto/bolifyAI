@@ -38,9 +38,9 @@ Deno.serve(async (req) => {
 
       const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       // Scan only the last 24h of completed calls across the platform (cap 150)
-      const recentCalls = await svc.entities.CallLog.filter({ status: 'completed' }, '-created_date', 150);
+      const recentCalls = await svc.entities.CallLog.filter({ status: 'completed' }, '-created_at', 150);
       const eligible = recentCalls.filter(c =>
-        c.created_date >= cutoffIso &&
+        c.created_at >= cutoffIso &&
         c.transcript && c.transcript.length > 100 &&
         c.client_id && c.client_id !== 'unknown'
       );
@@ -125,8 +125,8 @@ Deno.serve(async (req) => {
 
     // Last 30 days of completed calls (max 100 to keep runtime sane)
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const recentCalls = await svc.entities.CallLog.filter({ client_id, status: 'completed' }, '-created_date', 100);
-    const eligible = recentCalls.filter(c => c.created_date >= cutoff && c.transcript && c.transcript.length > 100);
+    const recentCalls = await svc.entities.CallLog.filter({ client_id, status: 'completed' }, '-created_at', 100);
+    const eligible = recentCalls.filter(c => c.created_at >= cutoff && c.transcript && c.transcript.length > 100);
 
     // Pre-fetch existing scheduled call/followup activities once to dedupe
     const followupActs = await svc.entities.Activity.filter({ client_id, type: 'followup', status: 'scheduled' });

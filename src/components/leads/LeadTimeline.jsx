@@ -24,7 +24,7 @@ function buildTimelineItems(callLogs, activities, outreachLogs, campaignLeads) {
     items.push({
       id: c.id,
       type: 'call',
-      date: c.call_start_time || c.created_date,
+      date: c.call_start_time || c.created_at,
       title: c.status === 'no_answer' ? 'Missed Call' :
              c.status === 'failed' ? 'Failed Call' :
              `${c.direction === 'inbound' ? 'Inbound' : 'Outbound'} Call`,
@@ -43,7 +43,7 @@ function buildTimelineItems(callLogs, activities, outreachLogs, campaignLeads) {
     items.push({
       id: o.id,
       type: 'email',
-      date: o.created_date,
+      date: o.created_at,
       title: o.subject || 'Email Sent',
       subtitle: o.outreach_type?.replace(/_/g, ' ') || null,
       status: o.status,
@@ -57,7 +57,7 @@ function buildTimelineItems(callLogs, activities, outreachLogs, campaignLeads) {
     items.push({
       id: a.id,
       type: 'activity',
-      date: a.scheduled_date || a.created_date,
+      date: a.scheduled_date || a.created_at,
       title: a.title || a.type,
       subtitle: a.description || null,
       status: a.status,
@@ -72,7 +72,7 @@ function buildTimelineItems(callLogs, activities, outreachLogs, campaignLeads) {
     items.push({
       id: cl.id,
       type: 'campaign',
-      date: cl.created_date,
+      date: cl.created_at,
       title: `Campaign: ${cl.outcome || cl.status}`,
       subtitle: cl.conversation_summary || null,
       status: cl.status,

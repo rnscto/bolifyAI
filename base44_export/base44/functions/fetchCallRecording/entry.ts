@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
       if (log) callLogs = [log];
     } else if (bulk) {
       // Fetch recent completed calls without recording_url
-      const recent = await base44.asServiceRole.entities.CallLog.filter({ status: 'completed' }, '-created_date', 50);
+      const recent = await base44.asServiceRole.entities.CallLog.filter({ status: 'completed' }, '-created_at', 50);
       callLogs = recent.filter(l => !l.recording_url && l.call_sid);
     }
 

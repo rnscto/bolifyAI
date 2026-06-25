@@ -74,7 +74,7 @@ export default function AdminClientLifecycle() {
     if (!confirm('Generate initial lifecycle events from existing Client records? This creates one entry per client based on current status (activation, trial, billing). Safe to run multiple times — duplicates are skipped.')) return;
     setBackfilling(true);
     try {
-      const existing = await base44.entities.ClientLifecycleEvent.list('-created_date', 2000);
+      const existing = await base44.entities.ClientLifecycleEvent.list('-created_at', 2000);
       const existingKeys = new Set(existing.map(e => `${e.client_id}:${e.event_type}:backfill`));
       const toCreate = [];
       for (const c of clients) {
@@ -86,7 +86,7 @@ export default function AdminClientLifecycle() {
             event_type: 'activated',
             to_value: c.account_status,
             amount: c.billing_type === 'unlimited' ? (c.monthly_rate_per_channel || 0) * (c.total_channels || 1) : null,
-            effective_date: c.created_date,
+            effective_date: c.created_at,
             expiry_date: c.next_billing_date || null,
             billing_type: c.billing_type,
             subscription_plan: c.subscription_plan,
@@ -158,8 +158,8 @@ export default function AdminClientLifecycle() {
     setLoading(true);
     try {
       const [evList, clList] = await Promise.all([
-        base44.entities.ClientLifecycleEvent.list('-created_date', 500),
-        base44.entities.Client.list('-created_date', 500),
+        base44.entities.ClientLifecycleEvent.list('-created_at', 500),
+        base44.entities.Client.list('-created_at', 500),
       ]);
       setEvents(evList || []);
       setClients(clList || []);
@@ -184,7 +184,7 @@ export default function AdminClientLifecycle() {
           (e.to_value || '').toLowerCase().includes(s)
         )) return false;
       }
-      const ts = e.effective_date ? new Date(e.effective_date).getTime() : new Date(e.created_date).getTime();
+      const ts = e.effective_date ? new Date(e.effective_date).getTime() : new Date(e.created_at).getTime();
       if (fromTs && ts < fromTs) return false;
       if (toTs && ts > toTs) return false;
       return true;
@@ -208,12 +208,12 @@ export default function AdminClientLifecycle() {
       const clientEvents = events.filter(e => e.client_id === c.id);
       const lastActivation = clientEvents.find(e => e.event_type === 'activated' || e.event_type === 'reactivated');
       const lastRenewal = clientEvents.find(e => e.event_type === 'renewed');
-      const lastChange = clientEvents[0]; // already sorted -created_date
+      const lastChange = clientEvents[0]; // already sorted -created_at
       return {
         client: c,
-        activated_on: lastActivation?.effective_date || lastActivation?.created_date || null,
-        last_renewed_on: lastRenewal?.effective_date || lastRenewal?.created_date || null,
-        last_change_on: lastChange?.created_date || null,
+        activated_on: lastActivation?.effective_date || lastActivation?.created_at || null,
+        last_renewed_on: lastRenewal?.effective_date || lastRenewal?.created_at || null,
+        last_change_on: lastChange?.created_at || null,
         last_change_type: lastChange?.event_type || null,
         total_events: clientEvents.length,
       };
@@ -223,7 +223,7 @@ export default function AdminClientLifecycle() {
   const exportCSV = () => {
     const headers = ['Date (IST)', 'Client', 'Event', 'From', 'To', 'Amount (₹)', 'Effective Date', 'Expiry Date', 'Source', 'Performed By', 'Notes'];
     const rows = filteredEvents.map(e => [
-      formatDateTime(e.created_date),
+      formatDateTime(e.created_at),
       e.client_name || '',
       EVENT_META[e.event_type]?.label || e.event_type,
       e.from_value || '',
@@ -377,7 +377,7 @@ export default function AdminClientLifecycle() {
                       const EventIcon = meta.Icon;
                       return (
                         <TableRow key={e.id}>
-                          <TableCell className="text-xs whitespace-nowrap">{formatDateTime(e.created_date)}</TableCell>
+                          <TableCell className="text-xs whitespace-nowrap">{formatDateTime(e.created_at)}</TableCell>
                           <TableCell className="font-medium">{e.client_name || '—'}</TableCell>
                           <TableCell>
                             <Badge className={`${meta.color} gap-1`}>

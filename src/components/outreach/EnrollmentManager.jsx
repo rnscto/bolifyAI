@@ -31,7 +31,7 @@ export default function EnrollmentManager({ sequence, onBack }) {
 
   const loadEnrollments = async () => {
     setLoading(true);
-    const data = await base44.entities.SequenceEnrollment.filter({ sequence_id: sequence.id }, '-created_date', 100);
+    const data = await base44.entities.SequenceEnrollment.filter({ sequence_id: sequence.id }, '-created_at', 100);
     setEnrollments(data);
     setLoading(false);
   };

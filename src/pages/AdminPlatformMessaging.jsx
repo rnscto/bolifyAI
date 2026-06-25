@@ -16,7 +16,7 @@ export default function AdminPlatformMessaging() {
   const load = async () => {
     setLoading(true);
     try {
-      const cfgs = await base44.entities.PlatformMessagingConfig.list('-created_date', 1);
+      const cfgs = await base44.entities.PlatformMessagingConfig.list('-created_at', 1);
       setConfig(cfgs[0] || null);
     } catch (e) { console.error(e); }
     setLoading(false);

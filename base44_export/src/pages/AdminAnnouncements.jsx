@@ -34,7 +34,7 @@ export default function AdminAnnouncements() {
   const load = async () => {
     setLoading(true);
     try {
-      const list = await base44.entities.PlatformAnnouncement.list('-created_date', 100);
+      const list = await base44.entities.PlatformAnnouncement.list('-created_at', 100);
       setItems(list || []);
     } catch (e) {
       toast.error('Failed to load announcements');

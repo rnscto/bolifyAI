@@ -23,7 +23,7 @@ function classifyCall(call) {
 
 export default function RecentCallList({ calls }) {
   const recentCalls = calls
-    .sort((a, b) => new Date(b.created_date) - new Date(a.created_date))
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 15);
 
   if (recentCalls.length === 0) {
@@ -73,7 +73,7 @@ export default function RecentCallList({ calls }) {
                 <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
-                    {moment(call.created_date).fromNow()}
+                    {moment(call.created_at).fromNow()}
                   </span>
                   {call.duration > 0 && (
                     <span>{Math.round(call.duration)}s</span>

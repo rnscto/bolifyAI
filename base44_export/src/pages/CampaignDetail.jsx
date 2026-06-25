@@ -72,7 +72,7 @@ export default function CampaignDetail() {
     const all = [];
     for (let i = 0; i < MAX_PAGES; i++) {
       const batch = await base44.entities.CampaignLead.filter(
-        { campaign_id: cid }, 'created_date', PAGE_SIZE, i * PAGE_SIZE
+        { campaign_id: cid }, 'created_at', PAGE_SIZE, i * PAGE_SIZE
       );
       if (!batch || batch.length === 0) break;
       all.push(...batch);

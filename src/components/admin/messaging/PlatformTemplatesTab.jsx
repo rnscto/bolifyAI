@@ -25,7 +25,7 @@ export default function PlatformTemplatesTab({ config }) {
   const load = async () => {
     setLoading(true);
     try {
-      const t = await base44.entities.WhatsAppTemplate.filter({ client_id: 'PLATFORM' }, '-created_date', 500);
+      const t = await base44.entities.WhatsAppTemplate.filter({ client_id: 'PLATFORM' }, '-created_at', 500);
       setTemplates(t);
     } catch (e) { console.error(e); }
     setLoading(false);

@@ -83,7 +83,7 @@ export default function TopupHistory({ payments, rate = 4 }) {
                   const gst = p.meta?.gst || 0;
                   const total = p.meta?.total || p.amount || 0;
                   const minutes = Math.floor(base / rate);
-                  const dateStr = p.paid_at || p.created_date;
+                  const dateStr = p.paid_at || p.created_at;
                   return (
                     <tr key={p.id} className="border-b last:border-0 hover:bg-gray-50">
                       <td className="py-3">

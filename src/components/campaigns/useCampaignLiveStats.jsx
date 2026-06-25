@@ -16,7 +16,7 @@ export function useCampaignLiveStats(campaigns) {
       campaigns.map(async (c) => {
         try {
           const leads = await base44.entities.CampaignLead.filter(
-            { campaign_id: c.id }, 'created_date', 2000
+            { campaign_id: c.id }, 'created_at', 2000
           );
           const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0, converted: 0, do_not_call: 0 };
           let completed = 0, failed = 0;

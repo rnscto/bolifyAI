@@ -41,7 +41,7 @@ export default function AdminPartnerExport({ partners, referrals, payouts }) {
       Pending_Payout: p.pending_payout || 0,
       City: p.city || '',
       State: p.state || '',
-      Joined: p.created_date ? moment(p.created_date).format('YYYY-MM-DD') : '',
+      Joined: p.created_at ? moment(p.created_at).format('YYYY-MM-DD') : '',
     }));
     downloadCSV(rows, `partners_${moment().format('YYYYMMDD')}.csv`);
   };

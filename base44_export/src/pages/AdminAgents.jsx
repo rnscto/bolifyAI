@@ -138,7 +138,7 @@ export default function AdminAgents() {
   const loadData = async () => {
     try {
       const [agentsData, clientsData, didsData] = await Promise.all([
-        base44.entities.Agent.list('-created_date'),
+        base44.entities.Agent.list('-created_at'),
         base44.entities.Client.list(),
         base44.entities.DID.list()
       ]);

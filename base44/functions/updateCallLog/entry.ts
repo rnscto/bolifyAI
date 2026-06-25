@@ -30,10 +30,10 @@ Deno.serve(async (req) => {
 
       // Strategy 3: Most recent ringing/initiated call
       if (!callLog) {
-        const recentLogs = await base44.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 1);
+        const recentLogs = await base44.entities.CallLog.filter({ status: 'ringing' }, '-created_at', 1);
         if (recentLogs.length > 0) callLog = recentLogs[0];
         if (!callLog) {
-          const initiatedLogs = await base44.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 1);
+          const initiatedLogs = await base44.entities.CallLog.filter({ status: 'initiated' }, '-created_at', 1);
           if (initiatedLogs.length > 0) callLog = initiatedLogs[0];
         }
       }

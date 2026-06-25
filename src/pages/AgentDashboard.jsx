@@ -39,10 +39,10 @@ export default function AgentDashboard() {
     setAgent(agentData);
 
     const [calls, cLeads, allLeads, acts] = await Promise.all([
-      base44.entities.CallLog.filter({ client_id: clientData.id, agent_id: agentData.id }, '-created_date', 200),
-      base44.entities.CampaignLead.filter({ client_id: clientData.id }, '-created_date', 500),
-      base44.entities.Lead.filter({ client_id: clientData.id }, '-created_date', 500),
-      base44.entities.Activity.filter({ client_id: clientData.id }, '-created_date', 100),
+      base44.entities.CallLog.filter({ client_id: clientData.id, agent_id: agentData.id }, '-created_at', 200),
+      base44.entities.CampaignLead.filter({ client_id: clientData.id }, '-created_at', 500),
+      base44.entities.Lead.filter({ client_id: clientData.id }, '-created_at', 500),
+      base44.entities.Activity.filter({ client_id: clientData.id }, '-created_at', 100),
     ]);
 
     setCallLogs(calls);

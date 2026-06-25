@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
           // Check if already enrolled and completed recently (within 30 days)
           const completed = await base44.entities.SequenceEnrollment.filter({ lead_id: lead.id, status: 'completed' });
           const recentlyCompleted = completed.some(e => {
-            const enrolled = new Date(e.enrolled_date || e.created_date);
+            const enrolled = new Date(e.enrolled_date || e.created_at);
             return (Date.now() - enrolled.getTime()) < 30 * 86400000;
           });
           if (recentlyCompleted) { results.skipped++; continue; }

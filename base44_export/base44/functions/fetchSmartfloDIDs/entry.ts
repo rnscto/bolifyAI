@@ -108,7 +108,7 @@ Deno.serve(async (req) => {
     const existingDids = [];
     const PAGE_SIZE = 500;
     for (let page = 0; page < 50; page++) {
-      const batch = await base44.asServiceRole.entities.DID.list('-created_date', PAGE_SIZE, page * PAGE_SIZE);
+      const batch = await base44.asServiceRole.entities.DID.list('-created_at', PAGE_SIZE, page * PAGE_SIZE);
       if (!batch || batch.length === 0) break;
       existingDids.push(...batch);
       if (batch.length < PAGE_SIZE) break;

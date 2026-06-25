@@ -41,7 +41,7 @@ export default async function retentionCall(c: any) {
       forceRun = requestBody.force === true;
     }
 
-    const configs = await base44.entities.RetentionConfig.filter({}, '-created_date', 1);
+    const configs = await base44.entities.RetentionConfig.filter({}, '-created_at', 1);
     const config = configs[0] || {};
 
     if (config.is_active === false) {
@@ -69,7 +69,7 @@ export default async function retentionCall(c: any) {
     const expiredClients = [...explicitlyExpired, ...staleTrials];
     console.log(`[retentionCall] Found ${expiredClients.length} expired clients`);
 
-    const allCallLogs = await base44.entities.CallLog.filter({}, '-created_date', 500);
+    const allCallLogs = await base44.entities.CallLog.filter({}, '-created_at', 500);
 
     for (const client of expiredClients) {
       if (!client.trial_end_date || !client.phone) continue;
@@ -199,7 +199,7 @@ export default async function retentionCall(c: any) {
       let leadContext = '';
       try {
         const clientLeads = await base44.entities.Lead.filter({ client_id: client.id });
-        const recentCalls = await base44.entities.CallLog.filter({ client_id: client.id }, '-created_date', 3);
+        const recentCalls = await base44.entities.CallLog.filter({ client_id: client.id }, '-created_at', 3);
         const ctxParts = [`CLIENT HISTORY:`];
         if (recentCalls.length > 0) {
           ctxParts.push(`Previous calls: ${recentCalls.length}`);

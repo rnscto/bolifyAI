@@ -57,13 +57,13 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
     const agentsData = await base44.entities.Agent.filter({ client_id: client.id });
     setAgents(agentsData.filter(a => a.status === 'active'));
 
-    const groupsData = await base44.entities.LeadGroup.filter({ client_id: client.id }, '-created_date', 100);
+    const groupsData = await base44.entities.LeadGroup.filter({ client_id: client.id }, '-created_at', 100);
     setLeadGroups(groupsData);
 
-    const leadsData = await base44.entities.Lead.filter({ client_id: client.id }, '-created_date', 5000);
+    const leadsData = await base44.entities.Lead.filter({ client_id: client.id }, '-created_at', 5000);
     setLeads(leadsData);
 
-    const notAnsweredCLs = await base44.entities.CampaignLead.filter({ client_id: client.id, call_status: 'not_answered' }, '-created_date', 2000);
+    const notAnsweredCLs = await base44.entities.CampaignLead.filter({ client_id: client.id, call_status: 'not_answered' }, '-created_at', 2000);
     setNotAnsweredIds(new Set(notAnsweredCLs.map(cl => cl.lead_id)));
   };
 

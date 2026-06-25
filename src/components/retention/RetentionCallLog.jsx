@@ -23,7 +23,7 @@ export default function RetentionCallLog({ callLogs, clients }) {
 
   const retentionLogs = callLogs
     .filter(l => l.call_sid?.startsWith('ret_') || l.conversation_summary?.includes('Retention'))
-    .sort((a, b) => new Date(b.call_start_time || b.created_date) - new Date(a.call_start_time || a.created_date));
+    .sort((a, b) => new Date(b.call_start_time || b.created_at) - new Date(a.call_start_time || a.created_at));
 
   return (
     <Card>

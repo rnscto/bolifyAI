@@ -22,8 +22,8 @@ export default function PartnerComplianceTab({ partner, referrals }) {
     if (clientIds.length === 0) { setLoading(false); return; }
 
     const [allConsents, allErasures] = await Promise.all([
-      base44.entities.ConsentLog.list('-created_date', 100),
-      base44.entities.DataErasureRequest.list('-created_date', 50),
+      base44.entities.ConsentLog.list('-created_at', 100),
+      base44.entities.DataErasureRequest.list('-created_at', 50),
     ]);
 
     setConsentLogs(allConsents.filter(c => clientIds.includes(c.client_id)));
@@ -96,7 +96,7 @@ export default function PartnerComplianceTab({ partner, referrals }) {
                           {c.consent_given ? 'Active' : 'Revoked'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm text-gray-500">{moment(c.created_date).format('DD MMM YY')}</TableCell>
+                      <TableCell className="text-sm text-gray-500">{moment(c.created_at).format('DD MMM YY')}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -137,7 +137,7 @@ export default function PartnerComplianceTab({ partner, referrals }) {
                           {e.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm text-gray-500">{moment(e.created_date).format('DD MMM YY')}</TableCell>
+                      <TableCell className="text-sm text-gray-500">{moment(e.created_at).format('DD MMM YY')}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

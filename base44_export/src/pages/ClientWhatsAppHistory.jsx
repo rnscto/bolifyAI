@@ -59,7 +59,7 @@ export default function ClientWhatsAppHistory() {
     if (!cid) { setLogs([]); setLoading(false); return; }
     setClientId(cid);
     const rows = await base44.entities.OutreachLog.filter(
-      { client_id: cid, channel: 'whatsapp' }, '-created_date', 200
+      { client_id: cid, channel: 'whatsapp' }, '-created_at', 200
     );
     setLogs(rows);
     setLoading(false);
@@ -167,7 +167,7 @@ export default function ClientWhatsAppHistory() {
                 return (
                   <TableRow key={log.id}>
                     <TableCell className="text-sm text-gray-500 whitespace-nowrap">
-                      {moment(log.created_date).format('DD MMM, hh:mm A')}
+                      {moment(log.created_at).format('DD MMM, hh:mm A')}
                     </TableCell>
                     <TableCell className="font-medium text-gray-700">
                       {log.recipient_phone || '—'}

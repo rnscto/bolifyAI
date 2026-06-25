@@ -56,14 +56,15 @@ voiceWebhookRouter.post("/", async (c) => {
     
     console.log("[smartfloWebhook] Parsed Payload:", JSON.stringify(payload));
 
-    const call_id = payload.call_id || payload.uuid;
-    const status = payload.call_status || payload.status;
-    const duration = payload.duration || payload.billsec;
-    const recording_url = payload.recording_url;
-    const direction = payload.direction;
-    const caller_number = payload.caller_id_number || payload.caller_number || payload.from;
-    const called_number = payload.call_to_number || payload.called_number || payload.to;
-    const hangup_cause = payload.hangup_cause_description || payload.reason_key || '';
+    const dataObj = payload.data || payload;
+    const call_id = dataObj.call_id || dataObj.uuid || payload.call_id || payload.uuid;
+    const status = dataObj.call_status || dataObj.status || payload.call_status || payload.status;
+    const duration = dataObj.duration || dataObj.billsec || payload.duration || payload.billsec;
+    const recording_url = dataObj.recording_url || dataObj.record_url || dataObj.recording || payload.recording_url || payload.record_url || payload.recording;
+    const direction = dataObj.direction || payload.direction;
+    const caller_number = dataObj.caller_id_number || dataObj.caller_number || dataObj.from || payload.caller_id_number || payload.caller_number || payload.from;
+    const called_number = dataObj.call_to_number || dataObj.called_number || dataObj.to || payload.call_to_number || payload.called_number || payload.to;
+    const hangup_cause = dataObj.hangup_cause_description || dataObj.reason_key || payload.hangup_cause_description || payload.reason_key || '';
 
     // INBOUND CALL HANDLING
     if (direction === "inbound" || payload.type === "inbound") {
@@ -111,7 +112,7 @@ voiceWebhookRouter.post("/", async (c) => {
       effectiveStatus = 'completed';
     }
 
-    const customIdentifier = payload.custom_identifier || payload.customIdentifier || "";
+    const customIdentifier = dataObj.custom_identifier || dataObj.customIdentifier || payload.custom_identifier || payload.customIdentifier || "";
     let directLog: any = null;
     
     if (customIdentifier) {

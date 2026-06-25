@@ -27,7 +27,7 @@ export default function AnnouncementMarquee({ audience = 'all' }) {
     let cancelled = false;
     const load = async () => {
       try {
-        const all = await base44.entities.PlatformAnnouncement.filter({ is_active: true }, '-created_date', 20);
+        const all = await base44.entities.PlatformAnnouncement.filter({ is_active: true }, '-created_at', 20);
         const now = Date.now();
         const visible = (all || []).filter(a => {
           if (a.audience && a.audience !== 'all' && a.audience !== audience) return false;

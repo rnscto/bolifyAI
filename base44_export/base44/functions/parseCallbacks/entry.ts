@@ -43,7 +43,7 @@ Deno.serve(async (req) => {
     }
 
     // Fetch recent completed call logs for this client (batch, lightweight indexing)
-    const callLogs = await svc.entities.CallLog.filter({ client_id, status: 'completed' }, '-created_date', 200);
+    const callLogs = await svc.entities.CallLog.filter({ client_id, status: 'completed' }, '-created_at', 200);
     const callLogByLead = {};
     for (const log of callLogs) {
       if (log.lead_id && !callLogByLead[log.lead_id]) {
@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
         activity_type: matchingActivity?.type || null,
         auto_scheduled: isAuto,
         auto_scheduled_at: isAuto ? matchingActivity.scheduled_date : null,
-        call_date: matchingLog?.call_start_time || matchingCL?.created_date || null,
+        call_date: matchingLog?.call_start_time || matchingCL?.created_at || null,
         call_duration: matchingLog?.duration || matchingCL?.call_duration || 0,
         campaign_lead_id: matchingCL?.id || null,
         extracted: {

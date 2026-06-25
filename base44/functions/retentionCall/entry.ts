@@ -36,7 +36,7 @@ Deno.serve(async (req) => {
     const base44 = base44_client.asServiceRole;
 
     // Load retention config
-    const configs = await base44.entities.RetentionConfig.list('-created_date', 1);
+    const configs = await base44.entities.RetentionConfig.list('-created_at', 1);
     const config = configs[0] || {};
 
     if (config.is_active === false) {
@@ -78,7 +78,7 @@ Deno.serve(async (req) => {
     console.log(`[retentionCall] Found ${expiredClients.length} expired clients (${explicitlyExpired.length} already expired + ${staleTrials.length} stale trials auto-expired), callDays=${callDays.join(',')}, force=${forceRun}`);
 
     // Load all retention call logs to check call counts
-    const allCallLogs = await base44.entities.CallLog.list('-created_date', 500);
+    const allCallLogs = await base44.entities.CallLog.list('-created_at', 500);
 
     for (const client of expiredClients) {
       if (!client.trial_end_date || !client.phone) continue;
@@ -223,7 +223,7 @@ Deno.serve(async (req) => {
       try {
         // Find leads matching this client's phone
         const clientLeads = await base44.entities.Lead.filter({ client_id: client.id });
-        const recentCalls = await base44.entities.CallLog.filter({ client_id: client.id }, '-created_date', 3);
+        const recentCalls = await base44.entities.CallLog.filter({ client_id: client.id }, '-created_at', 3);
         const ctxParts = [`CLIENT HISTORY:`];
         if (recentCalls.length > 0) {
           ctxParts.push(`Previous calls: ${recentCalls.length}`);

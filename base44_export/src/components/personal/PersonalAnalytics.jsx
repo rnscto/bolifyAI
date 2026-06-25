@@ -29,7 +29,7 @@ export default function PersonalAnalytics({ calls }) {
       d.setDate(d.getDate() - i);
       const key = d.toISOString().split('T')[0];
       const label = d.toLocaleDateString('en-IN', { weekday: 'short' });
-      const dayCalls = calls.filter(c => c.created_date?.startsWith(key));
+      const dayCalls = calls.filter(c => c.created_at?.startsWith(key));
       const daySpam = dayCalls.filter(c => classifyCall(c) === 'spam').length;
       days.push({ day: label, total: dayCalls.length, spam: daySpam, legit: dayCalls.length - daySpam });
     }

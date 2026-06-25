@@ -22,7 +22,7 @@ export default function LifecycleConfigTab({ config, onSaved }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    base44.entities.WhatsAppTemplate.filter({ client_id: 'PLATFORM', status: 'APPROVED' }, '-created_date', 500)
+    base44.entities.WhatsAppTemplate.filter({ client_id: 'PLATFORM', status: 'APPROVED' }, '-created_at', 500)
       .then(setTemplates).catch(() => setTemplates([]));
   }, []);
 

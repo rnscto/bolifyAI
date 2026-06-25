@@ -35,9 +35,9 @@ export default function ClientComplianceTab({ client }) {
 
   const loadData = async () => {
     const [c, e, comp] = await Promise.all([
-      base44.entities.ConsentLog.filter({ client_id: client.id }, '-created_date'),
-      base44.entities.DataErasureRequest.filter({ client_id: client.id }, '-created_date'),
-      base44.entities.ComplaintLog.filter({ client_id: client.id }, '-created_date'),
+      base44.entities.ConsentLog.filter({ client_id: client.id }, '-created_at'),
+      base44.entities.DataErasureRequest.filter({ client_id: client.id }, '-created_at'),
+      base44.entities.ComplaintLog.filter({ client_id: client.id }, '-created_at'),
     ]);
     setConsents(c);
     setErasureRequests(e);
@@ -140,7 +140,7 @@ export default function ClientComplianceTab({ client }) {
                           {c.consent_given ? 'Active' : 'Revoked'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm text-gray-500">{moment(c.created_date).format('DD MMM YY HH:mm')}</TableCell>
+                      <TableCell className="text-sm text-gray-500">{moment(c.created_at).format('DD MMM YY HH:mm')}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -182,7 +182,7 @@ export default function ClientComplianceTab({ client }) {
                       <TableCell className="text-sm">{r.requester_email}</TableCell>
                       <TableCell><Badge className={STATUS_COLORS[r.status] || 'bg-gray-100'}>{r.status}</Badge></TableCell>
                       <TableCell className="text-sm">{r.records_deleted || 0}</TableCell>
-                      <TableCell className="text-sm text-gray-500">{moment(r.created_date).format('DD MMM YY')}</TableCell>
+                      <TableCell className="text-sm text-gray-500">{moment(r.created_at).format('DD MMM YY')}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -230,7 +230,7 @@ export default function ClientComplianceTab({ client }) {
                         }>{c.status?.replace(/_/g, ' ')}</Badge>
                       </TableCell>
                       <TableCell className="text-xs text-gray-500">{c.auto_action_taken || '-'}</TableCell>
-                      <TableCell className="text-sm text-gray-500">{moment(c.created_date).format('DD MMM YY')}</TableCell>
+                      <TableCell className="text-sm text-gray-500">{moment(c.created_at).format('DD MMM YY')}</TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

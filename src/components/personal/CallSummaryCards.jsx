@@ -4,7 +4,7 @@ import { ShieldCheck, PhoneIncoming, PhoneOff, Phone } from 'lucide-react';
 
 export default function CallSummaryCards({ calls }) {
   const today = new Date().toISOString().split('T')[0];
-  const todayCalls = calls.filter(c => c.created_date?.startsWith(today));
+  const todayCalls = calls.filter(c => c.created_at?.startsWith(today));
 
   const totalScreened = calls.filter(c => c.direction === 'inbound').length;
   const spamBlocked = calls.filter(c => 

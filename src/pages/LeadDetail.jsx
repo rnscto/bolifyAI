@@ -75,10 +75,10 @@ export default function LeadDetail() {
 
     // Fetch all related data in parallel
     const [calls, acts, emails, campLeads, agentsData] = await Promise.all([
-      base44.entities.CallLog.filter({ lead_id: leadId }, '-created_date', 50),
+      base44.entities.CallLog.filter({ lead_id: leadId }, '-created_at', 50),
       base44.entities.Activity.filter({ lead_id: leadId }, '-scheduled_date', 50),
-      base44.entities.OutreachLog.filter({ lead_id: leadId }, '-created_date', 50),
-      base44.entities.CampaignLead.filter({ lead_id: leadId }, '-created_date', 20),
+      base44.entities.OutreachLog.filter({ lead_id: leadId }, '-created_at', 50),
+      base44.entities.CampaignLead.filter({ lead_id: leadId }, '-created_at', 20),
       clientData ? base44.entities.Agent.filter({ client_id: clientData.id }) : Promise.resolve([]),
     ]);
 

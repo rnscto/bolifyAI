@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
     }
     const svc = base44.asServiceRole;
 
-    const cfgs = await svc.entities.PlatformMessagingConfig.list('-created_date', 1);
+    const cfgs = await svc.entities.PlatformMessagingConfig.list('-created_at', 1);
     if (cfgs.length === 0) return Response.json({ error: 'Platform messaging not configured' }, { status: 404 });
     const cfg = cfgs[0];
     if (!cfg.whatsapp_api_key || !cfg.whatsapp_business_id) {
@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     if (!res.ok) return Response.json({ error: data.error?.message || 'Vendor API error', details: data }, { status: 400 });
 
     const remoteTemplates = data.data || [];
-    const existing = await svc.entities.WhatsAppTemplate.filter({ client_id: 'PLATFORM' }, '-created_date', 500);
+    const existing = await svc.entities.WhatsAppTemplate.filter({ client_id: 'PLATFORM' }, '-created_at', 500);
     const existingByKey = {};
     existing.forEach(t => { existingByKey[`${t.name}_${t.language}`] = t; });
 

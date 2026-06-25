@@ -41,8 +41,8 @@ export default function ClientCRMDashboard() {
 
     const [configs, dealsData, leadsData, activitiesData] = await Promise.all([
       base44.entities.CRMConfig.filter({ client_id: clientData.id }),
-      base44.entities.Deal.filter({ client_id: clientData.id }, '-created_date'),
-      base44.entities.Lead.filter({ client_id: clientData.id }, '-created_date'),
+      base44.entities.Deal.filter({ client_id: clientData.id }, '-created_at'),
+      base44.entities.Lead.filter({ client_id: clientData.id }, '-created_at'),
       base44.entities.Activity.filter({ client_id: clientData.id }, '-scheduled_date')
     ]);
 
@@ -85,7 +85,7 @@ export default function ClientCRMDashboard() {
   const openDeals = deals.filter(d => d.status === 'open');
   const pipelineValue = openDeals.reduce((s, d) => s + (d.value || 0), 0);
   const wonValue = deals.filter(d => d.status === 'won').reduce((s, d) => s + (d.value || 0), 0);
-  const newLeadsToday = leads.filter(l => l.created_date?.startsWith(new Date().toISOString().split('T')[0])).length;
+  const newLeadsToday = leads.filter(l => l.created_at?.startsWith(new Date().toISOString().split('T')[0])).length;
 
   return (
     <div className="space-y-6">

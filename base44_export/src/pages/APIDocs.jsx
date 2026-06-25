@@ -468,7 +468,7 @@ Body:
   "entity": "leads",
   "filters": { "status": "interested" },
   "limit": 50,
-  "sort": "-created_date"
+  "sort": "-created_at"
 }`}
             </pre>
           </div>

@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     console.log(`[testPlatformWhatsAppConnection] ← Response body: ${rawText.substring(0, 2000)}`);
 
     // Persist status
-    const cfgs = await svc.entities.PlatformMessagingConfig.list('-created_date', 1);
+    const cfgs = await svc.entities.PlatformMessagingConfig.list('-created_at', 1);
     const newStatus = res.ok ? 'connected' : 'error';
     const updates = {
       whatsapp_provider: provider,

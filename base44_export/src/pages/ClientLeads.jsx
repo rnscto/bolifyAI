@@ -140,7 +140,7 @@ export default function ClientLeads() {
     let skip = 0;
     while (skip < SAFETY_CAP) {
       const batch = await base44.entities.Lead.filter(
-        { client_id: clientId }, '-created_date', PAGE_SIZE, skip
+        { client_id: clientId }, '-created_at', PAGE_SIZE, skip
       );
       if (!batch || batch.length === 0) break;
       all.push(...batch);
@@ -162,7 +162,7 @@ export default function ClientLeads() {
         const [leadsData, agentsData, groupsData] = await Promise.all([
           fetchAllLeads(clientData.id),
           base44.entities.Agent.filter({ client_id: clientData.id }),
-          base44.entities.LeadGroup.filter({ client_id: clientData.id }, '-created_date')
+          base44.entities.LeadGroup.filter({ client_id: clientData.id }, '-created_at')
         ]);
 
         setLeads(leadsData);
@@ -333,7 +333,7 @@ export default function ClientLeads() {
                 groups.find(g => g.id === l.group_id)?.name || '',
                 l.sentiment || '',
                 formatDateTime(l.last_call_date), formatDateTime(l.next_followup_date),
-                l.notes || '', formatDateTime(l.created_date)
+                l.notes || '', formatDateTime(l.created_at)
               ])
             );
             toast.success(`Exported ${filtered.length} leads`);

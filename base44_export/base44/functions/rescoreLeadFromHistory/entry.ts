@@ -33,7 +33,7 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
 
 async function scoreLead(base44, lead) {
   // Find most recent CallLog with transcript or summary
-  const calls = await base44.entities.CallLog.filter({ lead_id: lead.id }, '-created_date', 10);
+  const calls = await base44.entities.CallLog.filter({ lead_id: lead.id }, '-created_at', 10);
   const latest = calls.find(c => (c.transcript && c.transcript.length > 30) || (c.conversation_summary && c.conversation_summary.length > 20));
 
   if (!latest) {
@@ -60,7 +60,7 @@ LEAD:
 LAST CALL:
 - Direction: ${direction}
 - Duration: ${duration}s
-- Date: ${latest.call_start_time || latest.created_date}
+- Date: ${latest.call_start_time || latest.created_at}
 
 SUMMARY: ${summary || '(none)'}
 

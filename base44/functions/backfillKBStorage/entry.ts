@@ -161,8 +161,8 @@ Deno.serve(async (req) => {
 
     // Re-extract stuck KB docs (status=processing or failed) — inline extraction
     if (extract_stuck) {
-      const stuckProcessing = await svc.entities.KnowledgeBase.filter({ status: 'processing' }, '-created_date', 200);
-      const stuckFailed = await svc.entities.KnowledgeBase.filter({ status: 'failed' }, '-created_date', 200);
+      const stuckProcessing = await svc.entities.KnowledgeBase.filter({ status: 'processing' }, '-created_at', 200);
+      const stuckFailed = await svc.entities.KnowledgeBase.filter({ status: 'failed' }, '-created_at', 200);
       const stuck = [...stuckProcessing, ...stuckFailed];
       console.log(`[backfillKB] Re-extracting ${stuck.length} stuck KB docs`);
       const results = [];
@@ -217,7 +217,7 @@ Deno.serve(async (req) => {
       const a = await svc.entities.Agent.get(agent_id).catch(() => null);
       agents = a ? [a] : [];
     } else {
-      agents = await svc.entities.Agent.list('-created_date', 1000);
+      agents = await svc.entities.Agent.list('-created_at', 1000);
     }
 
     const candidates = agents.filter(a => (a.knowledge_base_ids || []).length > 0);

@@ -128,7 +128,7 @@ export default async function initiateCall(c: any) {
     let leadContext = '';
     try {
       const callLogs = await base44.entities.CallLog.filter({ lead_id: leadResult.id });
-      const sortedLogs = callLogs.sort((a: any, b: any) => new Date(b.created_date).getTime() - new Date(a.created_date).getTime()).slice(0, 3);
+      const sortedLogs = callLogs.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 3);
       
       const sections = [];
       sections.push(`CUSTOMER PROFILE:`);

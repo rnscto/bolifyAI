@@ -50,7 +50,7 @@ export default function AdminDIDs() {
   const loadData = async () => {
     try {
       const [didsData, clientsData] = await Promise.all([
-        base44.entities.DID.list('-created_date'),
+        base44.entities.DID.list('-created_at'),
         base44.entities.Client.list()
       ]);
       setDids(didsData);

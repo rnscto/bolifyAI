@@ -451,7 +451,7 @@ Deno.serve(async (req) => {
       const cleanCalleeDID = (session.calleeNumber || '').replace(/[^0-9]/g, '').slice(-10);
       if (!cleanCalleeDID && !callerDID) return;
 
-      const allDIDs = await svc.entities.DID.list('-created_date', 200).catch(()=>[]);
+      const allDIDs = await svc.entities.DID.list('-created_at', 200).catch(()=>[]);
       const matchedDID = allDIDs.find(d => { const n = (d.number || '').replace(/\D/g, '').slice(-10); return n === cleanCalleeDID || n === callerDID; });
       
       let didAgent = null, didClient = null;
@@ -459,7 +459,7 @@ Deno.serve(async (req) => {
       if (matchedDID?.client_id) didClient = await svc.entities.Client.get(matchedDID.client_id).catch(()=>null);
 
       if (!didAgent) {
-        const allAgents = await svc.entities.Agent.list('-created_date', 100).catch(()=>[]);
+        const allAgents = await svc.entities.Agent.list('-created_at', 100).catch(()=>[]);
         didAgent = allAgents.find(a => {
           const dids = (a.assigned_dids || []).concat(a.assigned_did ? [a.assigned_did] : []);
           return dids.some(d => { const n = (d || '').replace(/\D/g, '').slice(-10); return n === cleanCalleeDID || n === callerDID; });

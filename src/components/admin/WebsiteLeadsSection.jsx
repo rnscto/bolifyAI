@@ -55,8 +55,8 @@ export default function WebsiteLeadsSection() {
 
   const loadData = async () => {
     const [allLeads, clients] = await Promise.all([
-      base44.entities.Lead.filter({ source: 'website_voice_agent' }, '-created_date', 50),
-      base44.entities.Client.list('-created_date'),
+      base44.entities.Lead.filter({ source: 'website_voice_agent' }, '-created_at', 50),
+      base44.entities.Client.list('-created_at'),
     ]);
 
     setLeads(allLeads);
@@ -67,7 +67,7 @@ export default function WebsiteLeadsSection() {
       full_name: c.company_name,
       email: c.email,
       role: c.account_type || 'business',
-      created_date: c.created_date
+      created_at: c.created_at
     })));
     setLoading(false);
   };
@@ -106,7 +106,7 @@ export default function WebsiteLeadsSection() {
 
   // Stats
   const todayStr = moment().format('YYYY-MM-DD');
-  const leadsToday = leads.filter(l => l.created_date?.startsWith(todayStr)).length;
+  const leadsToday = leads.filter(l => l.created_at?.startsWith(todayStr)).length;
   const readyToBuy = leads.filter(l => l.custom_fields?.intent === 'ready_to_buy').length;
   const positiveLeads = leads.filter(l => l.custom_fields?.sentiment === 'positive').length;
 
@@ -219,7 +219,7 @@ export default function WebsiteLeadsSection() {
                             {lead.custom_fields?.solution_interest || '—'}
                           </TableCell>
                           <TableCell className="text-xs text-gray-500">
-                            {moment(lead.created_date).fromNow()}
+                            {moment(lead.created_at).fromNow()}
                           </TableCell>
                           <TableCell>
                             {expandedLead === lead.id ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
@@ -300,7 +300,7 @@ export default function WebsiteLeadsSection() {
                             ) : '—'}
                           </TableCell>
                           <TableCell className="text-sm">{client.total_channels || 1}</TableCell>
-                          <TableCell className="text-xs text-gray-500">{moment(client.created_date).fromNow()}</TableCell>
+                          <TableCell className="text-xs text-gray-500">{moment(client.created_at).fromNow()}</TableCell>
                         </TableRow>
                       );
                     })}
@@ -333,7 +333,7 @@ export default function WebsiteLeadsSection() {
                         <TableCell>
                           <Badge variant="outline" className="text-[10px]">{user.role || 'user'}</Badge>
                         </TableCell>
-                        <TableCell className="text-xs text-gray-500">{moment(user.created_date).fromNow()}</TableCell>
+                        <TableCell className="text-xs text-gray-500">{moment(user.created_at).fromNow()}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>

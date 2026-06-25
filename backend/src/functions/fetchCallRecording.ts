@@ -17,7 +17,7 @@ export default async function fetchCallRecording(c: any) {
       const log = await base44.entities.CallLog.get(call_log_id);
       if (log) callLogs = [log];
     } else if (bulk) {
-      const recent = await base44.entities.CallLog.filter({ status: 'completed' }, '-created_date', 50);
+      const recent = await base44.entities.CallLog.filter({ status: 'completed' }, '-created_at', 50);
       callLogs = recent.filter((l: any) => !l.recording_url && l.call_sid);
     }
 

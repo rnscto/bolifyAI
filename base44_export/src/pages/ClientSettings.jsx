@@ -159,7 +159,7 @@ export default function ClientSettings() {
           <div className="flex items-center justify-between">
             <span className="text-sm text-gray-600">Joined</span>
             <span className="text-sm font-medium">
-              {user?.created_date ? new Date(user.created_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+              {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
             </span>
           </div>
         </CardContent>

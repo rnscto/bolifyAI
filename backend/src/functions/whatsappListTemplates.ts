@@ -65,7 +65,7 @@ export default async function (c: Context) {
     }
 
     const metaTemplates = data.data || [];
-    const existing = await base44ORM.entities.WhatsAppTemplate.filter({ client_id }, '-created_date', 500);
+    const existing = await base44ORM.entities.WhatsAppTemplate.filter({ client_id }, '-created_at', 500);
     const existingByName: Record<string, any> = {};
     existing.forEach((t: any) => { existingByName[`${t.name}_${t.language}`] = t; });
 

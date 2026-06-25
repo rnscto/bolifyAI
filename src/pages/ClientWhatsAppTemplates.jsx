@@ -35,7 +35,7 @@ export default function ClientWhatsAppTemplates() {
       const configs = await base44.entities.ClientMessagingConfig.filter({ client_id: c.id });
       if (configs.length > 0) setConfig(configs[0]);
 
-      const tmpl = await base44.entities.WhatsAppTemplate.filter({ client_id: c.id }, '-created_date', 500);
+      const tmpl = await base44.entities.WhatsAppTemplate.filter({ client_id: c.id }, '-created_at', 500);
       setTemplates(tmpl);
     } catch (e) {
       console.error(e);

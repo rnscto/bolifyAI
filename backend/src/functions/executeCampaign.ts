@@ -65,14 +65,14 @@ export default async function executeCampaign(c: any) {
     }
 
     const maxConcurrent = campaign.max_concurrent_calls || 5;
-    const currentlyCalling = await base44.entities.CampaignLead.filter({ campaign_id, status: 'calling' }, 'created_date', maxConcurrent);
+    const currentlyCalling = await base44.entities.CampaignLead.filter({ campaign_id, status: 'calling' }, 'created_at', maxConcurrent);
     const slotsAvailable = Math.max(0, maxConcurrent - currentlyCalling.length);
 
     if (slotsAvailable === 0) {
       return c.json({ data: { success: true, message: 'All slots occupied', currently_calling: currentlyCalling.length } });
     }
 
-    const pendingLeads = await base44.entities.CampaignLead.filter({ campaign_id, status: 'pending' }, 'created_date', slotsAvailable);
+    const pendingLeads = await base44.entities.CampaignLead.filter({ campaign_id, status: 'pending' }, 'created_at', slotsAvailable);
     
     if (pendingLeads.length === 0) {
       // Check if campaign is completely done

@@ -32,7 +32,7 @@ export default function VoicemailInbox({ messages, onRefresh }) {
   };
 
   const unreadCount = messages.filter(m => !m.is_read).length;
-  const sorted = [...messages].sort((a, b) => new Date(b.created_date) - new Date(a.created_date));
+  const sorted = [...messages].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   return (
     <Card>
@@ -86,7 +86,7 @@ export default function VoicemailInbox({ messages, onRefresh }) {
                         {msg.message || 'No message content'}
                       </p>
                       <span className="text-xs text-gray-400 mt-1 block">
-                        {moment(msg.created_date).fromNow()}
+                        {moment(msg.created_at).fromNow()}
                       </span>
                     </div>
                     {msg.is_read && (

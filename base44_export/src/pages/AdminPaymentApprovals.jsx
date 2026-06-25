@@ -70,8 +70,8 @@ export default function AdminPaymentApprovals() {
       const user = await base44.auth.me();
       setMe(user);
       const [reqs, cs] = await Promise.all([
-        base44.entities.PaymentApprovalRequest.list('-created_date', 500),
-        base44.entities.Client.list('-created_date', 1000)
+        base44.entities.PaymentApprovalRequest.list('-created_at', 500),
+        base44.entities.Client.list('-created_at', 1000)
       ]);
       setRequests(reqs || []);
       setClients(cs || []);
@@ -225,7 +225,7 @@ export default function AdminPaymentApprovals() {
                         </td>
                         <td className="px-4 py-3 text-xs text-gray-600">
                           {r.requested_by}
-                          <div className="text-gray-400">{new Date(r.created_date).toLocaleString()}</div>
+                          <div className="text-gray-400">{new Date(r.created_at).toLocaleString()}</div>
                         </td>
                         <td className="px-4 py-3">
                           <Badge className={meta.color}><StatusIcon className="w-3 h-3 mr-1 inline" />{meta.label}</Badge>

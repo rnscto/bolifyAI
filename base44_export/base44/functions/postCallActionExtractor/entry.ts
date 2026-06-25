@@ -313,7 +313,7 @@ If the transcript shows ONLY the AI agent speaking with NO customer responses:
         );
         const recentSameType = existingActivities.find(ea => {
           if (ea.type !== activityType) return false;
-          const created = new Date(ea.created_date);
+          const created = new Date(ea.created_at);
           const hoursAgo = (now - created) / (1000 * 60 * 60);
           return hoursAgo < 4;
         });
@@ -380,7 +380,7 @@ If the transcript shows ONLY the AI agent speaking with NO customer responses:
           });
 
           // Add to existing list so next iteration can dedup against it
-          existingActivities.push({ ...newActivity, type: activityType, created_date: now.toISOString() });
+          existingActivities.push({ ...newActivity, type: activityType, created_at: now.toISOString() });
 
           results.activities_created++;
           results.details.push({

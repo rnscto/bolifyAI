@@ -24,8 +24,8 @@ export default function ClientCRMReports() {
 
     const [configs, dealsData, leadsData, activitiesData] = await Promise.all([
       base44.entities.CRMConfig.filter({ client_id: clientData.id }),
-      base44.entities.Deal.filter({ client_id: clientData.id }, '-created_date'),
-      base44.entities.Lead.filter({ client_id: clientData.id }, '-created_date'),
+      base44.entities.Deal.filter({ client_id: clientData.id }, '-created_at'),
+      base44.entities.Lead.filter({ client_id: clientData.id }, '-created_at'),
       base44.entities.Activity.filter({ client_id: clientData.id }, '-scheduled_date')
     ]);
 

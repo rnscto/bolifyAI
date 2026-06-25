@@ -1746,7 +1746,7 @@ Deno.serve(async (req) => {
       // STRICT phone-match: only matches CallLog with same callee
       const matchPhoneStrict = (list) => {
         if (!cleanCallee) return null;
-        const uc = list.filter(l => !l.stream_sid && l.created_date >= cutoff);
+        const uc = list.filter(l => !l.stream_sid && l.created_at >= cutoff);
         return uc.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10)) || null;
       };
 
@@ -1756,15 +1756,15 @@ Deno.serve(async (req) => {
       const wd = session._warmCallLogs;
       const [sidRes, ringRaw, initRaw, broadRaw] = await Promise.all([
         sidV.length > 0 ? Promise.all(sidV.map(sid => svc.entities.CallLog.filter({ call_sid: sid }).catch(() => []))) : [],
-        wd?.ringing ?? svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
-        wd?.initiated ?? svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => []),
-        wd?.recent ?? svc.entities.CallLog.list('-created_date', 15).catch(() => [])
+        wd?.ringing ?? svc.entities.CallLog.filter({ status: 'ringing' }, '-created_at', 20).catch(() => []),
+        wd?.initiated ?? svc.entities.CallLog.filter({ status: 'initiated' }, '-created_at', 20).catch(() => []),
+        wd?.recent ?? svc.entities.CallLog.list('-created_at', 15).catch(() => [])
       ]);
       for (let i = 0; i < sidRes.length && !callLog; i++) { const l = Array.isArray(sidRes[i]) ? sidRes[i] : []; if (l.length > 0) { callLog = l[0]; console.log(`[${reqId}] 🔍 call_sid match (${sidV[i]}): ${callLog.id}`); } }
       if (!callLog) { callLog = matchPhoneStrict(Array.isArray(ringRaw) ? ringRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Ringing match: ${callLog.id}`); }
       if (!callLog) { callLog = matchPhoneStrict(Array.isArray(initRaw) ? initRaw : []); if (callLog) console.log(`[${reqId}] ⚡ Initiated match: ${callLog.id}`); }
       if (!callLog) {
-        const cands = (Array.isArray(broadRaw) ? broadRaw : []).filter(l => !l.stream_sid && l.created_date >= cutoff && l.agent_config_cache?.system_prompt && ['initiated', 'ringing', 'answered'].includes(l.status));
+        const cands = (Array.isArray(broadRaw) ? broadRaw : []).filter(l => !l.stream_sid && l.created_at >= cutoff && l.agent_config_cache?.system_prompt && ['initiated', 'ringing', 'answered'].includes(l.status));
         if (cands.length > 0 && cleanCallee) {
           callLog = cands.find(l => (l.callee_number||'').replace(/[^0-9]/g,'').slice(-10) === cleanCallee.slice(-10)) || null;
           if (callLog) console.log(`[${reqId}] 🔍 Broad match: ${callLog.id}`);
@@ -1905,9 +1905,9 @@ IMPORTANT: Ask for order number/phone/email, ALWAYS use the tool for real data, 
           svc.entities.CallLog.get(session._explicitCallLogId).then(cl => { session._warmExplicitCallLog = cl; console.log(`[${reqId}] 🔥 Warm exact CallLog ready: ${cl?.id}`); }).catch(() => {});
         } else {
           Promise.all([
-            svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
-            svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => []),
-            svc.entities.CallLog.list('-created_date', 15).catch(() => [])
+            svc.entities.CallLog.filter({ status: 'ringing' }, '-created_at', 20).catch(() => []),
+            svc.entities.CallLog.filter({ status: 'initiated' }, '-created_at', 20).catch(() => []),
+            svc.entities.CallLog.list('-created_at', 15).catch(() => [])
           ]).then(([ringing, initiated, recent]) => { session._warmCallLogs = { ringing, initiated, recent }; }).catch(() => {});
         }
       } catch (_) {}

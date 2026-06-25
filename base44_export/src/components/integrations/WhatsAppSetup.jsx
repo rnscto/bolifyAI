@@ -67,7 +67,7 @@ export default function WhatsAppSetup({ config, onSave }) {
   const loadTemplates = () => {
     if (!config?.client_id) return;
     setLoadingTemplates(true);
-    base44.entities.WhatsAppTemplate.filter({ client_id: config.client_id, status: 'APPROVED' }, '-created_date', 100)
+    base44.entities.WhatsAppTemplate.filter({ client_id: config.client_id, status: 'APPROVED' }, '-created_at', 100)
       .then(setTemplates)
       .catch(() => setTemplates([]))
       .finally(() => setLoadingTemplates(false));

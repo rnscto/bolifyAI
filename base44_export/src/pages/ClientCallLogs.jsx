@@ -79,7 +79,7 @@ export default function ClientCallLogs() {
 
         const callsData = await base44.entities.CallLog.filter(
           { client_id: clientData.id },
-          '-created_date',
+          '-created_at',
           1000
         );
         setCall(callsData);
@@ -191,7 +191,7 @@ export default function ClientCallLogs() {
             'CallLogs',
             ['Date', 'Direction', 'Caller', 'Callee', 'Duration (s)', 'Status', 'Outcome', 'Has Recording', 'Has Transcript', 'Summary', 'Transferred To', 'Call SID'],
             calls.map(c => [
-              formatDateTime(c.call_start_time || c.created_date),
+              formatDateTime(c.call_start_time || c.created_at),
               c.direction || '',
               c.direction === 'inbound' ? (c.caller_id || c.callee_number || '') : (c.caller_id || ''),
               c.callee_number || '',

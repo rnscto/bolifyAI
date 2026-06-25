@@ -59,9 +59,9 @@ export default function PersonalDashboard() {
       if (clients.length > 0) {
         setClient(clients[0]);
         const [callLogs, trustedContacts, voicemails] = await Promise.all([
-          base44.entities.CallLog.filter({ client_id: clients[0].id }, '-created_date', 100),
+          base44.entities.CallLog.filter({ client_id: clients[0].id }, '-created_at', 100),
           base44.entities.TrustedContact.filter({ client_id: clients[0].id }),
-          base44.entities.VoicemailMessage.filter({ client_id: clients[0].id }, '-created_date', 50)
+          base44.entities.VoicemailMessage.filter({ client_id: clients[0].id }, '-created_at', 50)
         ]);
         setCalls(callLogs);
         setContacts(trustedContacts);

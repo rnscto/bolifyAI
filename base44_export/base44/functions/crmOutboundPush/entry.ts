@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
       );
       const toPushCalls = recentCalls.filter(c =>
         activeClientIds.includes(c.client_id) &&
-        (c.updated_date || c.created_date) >= safetyCutoff &&
+        (c.updated_date || c.created_at) >= safetyCutoff &&
         isEligibleForRetry(c)
       ).slice(0, 8);
 
@@ -130,7 +130,7 @@ Deno.serve(async (req) => {
       const recentLeads = await svc.entities.Lead.filter({}, '-updated_date', 200);
       const toPushLeads = recentLeads.filter(l =>
         activeClientIds.includes(l.client_id) &&
-        (l.updated_date || l.created_date) >= safetyCutoff &&
+        (l.updated_date || l.created_at) >= safetyCutoff &&
         l.last_call_date &&
         isEligibleForRetry(l)
       ).slice(0, 7);

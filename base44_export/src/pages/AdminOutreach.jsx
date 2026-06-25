@@ -84,9 +84,9 @@ export default function AdminOutreach() {
   const loadData = async () => {
     setLoading(true);
     const [allLogs, allClients, allSequences] = await Promise.all([
-      base44.entities.OutreachLog.list('-created_date', 100),
+      base44.entities.OutreachLog.list('-created_at', 100),
       base44.entities.Client.list(),
-      base44.entities.EmailSequence.list('-created_date', 50)
+      base44.entities.EmailSequence.list('-created_at', 50)
     ]);
     const clientMap = {};
     allClients.forEach(c => { clientMap[c.id] = c; });
@@ -232,7 +232,7 @@ export default function AdminOutreach() {
                     return (
                       <TableRow key={log.id}>
                         <TableCell className="text-sm text-gray-500 whitespace-nowrap">
-                          {moment(log.created_date).format('DD MMM, hh:mm A')}
+                          {moment(log.created_at).format('DD MMM, hh:mm A')}
                         </TableCell>
                         <TableCell className="font-medium">
                           {client?.company_name || log.client_id}

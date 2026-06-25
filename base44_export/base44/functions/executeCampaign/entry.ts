@@ -8,7 +8,7 @@ async function fetchAllCampaignLeads(svc, campaignId) {
   let skip = 0;
   while (true) {
     const batch = await svc.entities.CampaignLead.filter(
-      { campaign_id: campaignId }, 'created_date', PAGE, skip
+      { campaign_id: campaignId }, 'created_at', PAGE, skip
     );
     if (!batch || batch.length === 0) break;
     all = all.concat(batch);
@@ -141,7 +141,7 @@ Deno.serve(async (req) => {
 
     // Fix any stuck 'calling' leads from previous runs
     const stuckLeads = await svc.entities.CampaignLead.filter(
-      { campaign_id, status: 'calling' }, 'created_date', 100
+      { campaign_id, status: 'calling' }, 'created_at', 100
     );
     for (const stuckLead of stuckLeads) {
       try {
@@ -163,7 +163,7 @@ Deno.serve(async (req) => {
             // Call is actively in progress — don't time it out, let streamAudio finish
             console.log(`[campaign] Skipping ${stuckLead.lead_name} — call actively answered`);
           } else {
-            const callAge = Date.now() - new Date(stuckLead.updated_date || stuckLead.created_date).getTime();
+            const callAge = Date.now() - new Date(stuckLead.updated_date || stuckLead.created_at).getTime();
             if (callAge > 3 * 60 * 1000) {
               await svc.entities.CampaignLead.update(stuckLead.id, {
                 status: 'completed', outcome: 'not_answered', call_status: 'not_answered',
@@ -199,7 +199,7 @@ Deno.serve(async (req) => {
 
     // Count currently active calls
     const currentlyCalling = await svc.entities.CampaignLead.filter(
-      { campaign_id, status: 'calling' }, 'created_date', 100
+      { campaign_id, status: 'calling' }, 'created_at', 100
     );
     const slotsAvailable = Math.max(0, maxConcurrent - currentlyCalling.length);
 
@@ -213,7 +213,7 @@ Deno.serve(async (req) => {
     // and we need to skip past them to find fresh leads
     const now = new Date();
     const pendingLeadsRaw = await svc.entities.CampaignLead.filter(
-      { campaign_id, status: 'pending' }, 'created_date', 200
+      { campaign_id, status: 'pending' }, 'created_at', 200
     );
     const pendingLeads = pendingLeadsRaw.filter(l => {
       if (!l.followup_call_date) return true;

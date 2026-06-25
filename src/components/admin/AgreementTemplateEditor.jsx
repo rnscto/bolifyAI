@@ -27,7 +27,7 @@ export default function AgreementTemplateEditor() {
   useEffect(() => { loadTemplates(); }, []);
 
   const loadTemplates = async () => {
-    const t = await base44.entities.AgreementTemplate.list('-created_date');
+    const t = await base44.entities.AgreementTemplate.list('-created_at');
     setTemplates(t);
     setLoading(false);
   };

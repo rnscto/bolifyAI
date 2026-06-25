@@ -46,9 +46,9 @@ export default function AdminDashboard() {
         base44.entities.DID.list().catch(() => []),
         // Only need recent calls for "today" count + a total estimate. Each CallLog row carries
         // a heavy agent_config_cache (full prompts/scripts), so pulling 5000 was downloading tens of MB.
-        base44.entities.CallLog.list('-created_date', 500).catch(() => []),
-        base44.entities.Subscription.list('-created_date').catch(() => []),
-        base44.entities.Payment.list('-created_date', 10).catch(() => []),
+        base44.entities.CallLog.list('-created_at', 500).catch(() => []),
+        base44.entities.Subscription.list('-created_at').catch(() => []),
+        base44.entities.Payment.list('-created_at', 10).catch(() => []),
       ]);
     } catch (err) {
       console.error('[AdminDashboard] Failed to load dashboard data:', err?.message || err);
@@ -56,7 +56,7 @@ export default function AdminDashboard() {
     const clients = clientsRes?.data?.clients || [];
 
     const today = new Date().toISOString().split('T')[0];
-    const callsToday = calls.filter(c => c.created_date?.startsWith(today)).length;
+    const callsToday = calls.filter(c => c.created_at?.startsWith(today)).length;
 
     const activeClients = clients.filter(c => c.account_status === 'active').length;
     const trialClients = clients.filter(c => c.account_status === 'trial').length;
@@ -97,8 +97,8 @@ export default function AdminDashboard() {
     // Revenue by month from payments
     const monthMap = {};
     payments.forEach(p => {
-      if (p.status === 'paid' && p.created_date) {
-        const month = new Date(p.created_date).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
+      if (p.status === 'paid' && p.created_at) {
+        const month = new Date(p.created_at).toLocaleDateString('en-IN', { month: 'short', year: '2-digit' });
         monthMap[month] = (monthMap[month] || 0) + (p.amount || 0);
       }
     });

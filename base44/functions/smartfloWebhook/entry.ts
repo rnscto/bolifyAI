@@ -234,7 +234,7 @@ Deno.serve(async (req) => {
 
         if (cleanDID) {
           // Find the DID entity
-          const allDIDs = await base44.entities.DID.list('-created_date', 200);
+          const allDIDs = await base44.entities.DID.list('-created_at', 200);
           resolvedDID = allDIDs.find(d => {
             const dNum = (d.number || '').replace(/\D/g, '').slice(-10);
             return dNum === cleanDID;
@@ -261,7 +261,7 @@ Deno.serve(async (req) => {
 
         // Fallback: if DID not found, try agent's assigned_dids array
         if (!resolvedAgent && cleanDID) {
-          const allAgents = await base44.entities.Agent.list('-created_date', 100);
+          const allAgents = await base44.entities.Agent.list('-created_at', 100);
           resolvedAgent = allAgents.find(a => {
             const dids = a.assigned_dids || (a.assigned_did ? [a.assigned_did] : []);
             return dids.some(d => (d || '').replace(/\D/g, '').slice(-10) === cleanDID);
@@ -298,7 +298,7 @@ Deno.serve(async (req) => {
         });
 
         // Load retention config
-        const configs = await base44.entities.RetentionConfig.list('-created_date', 1);
+        const configs = await base44.entities.RetentionConfig.list('-created_at', 1);
         const retentionConfig = configs[0] || {};
 
         // ═══ PERSONAL ACCOUNT: Build screening instructions ═══
@@ -342,7 +342,7 @@ Deno.serve(async (req) => {
           // Get last call history for this lead
           const leadCallLogs = await base44.entities.CallLog.filter({ lead_id: matchedLead.id });
           const recentLeadCalls = leadCallLogs
-            .sort((a, b) => new Date(b.call_start_time || b.created_date) - new Date(a.call_start_time || a.created_date))
+            .sort((a, b) => new Date(b.call_start_time || b.created_at) - new Date(a.call_start_time || a.created_at))
             .slice(0, 3);
 
           // Build lead context for AI agent
@@ -361,7 +361,7 @@ Deno.serve(async (req) => {
             ``,
             `CRITICAL: This is an INBOUND callback. The customer is calling YOU back. Address them by name "${matchedLead.name || 'Sir/Madam'}". Be warm and acknowledge they are returning.`,
             recentLeadCalls.length > 0 ? `\nLAST CALL HISTORY:` : null,
-            ...recentLeadCalls.map(c => `- ${c.direction} | ${c.status} | ${new Date(c.call_start_time || c.created_date).toLocaleDateString('en-IN')} | ${(c.conversation_summary || 'No summary').substring(0, 150)}`)
+            ...recentLeadCalls.map(c => `- ${c.direction} | ${c.status} | ${new Date(c.call_start_time || c.created_at).toLocaleDateString('en-IN')} | ${(c.conversation_summary || 'No summary').substring(0, 150)}`)
           ].filter(Boolean).join('\n');
 
           // Build personalized system prompt with lead context
@@ -497,7 +497,7 @@ Deno.serve(async (req) => {
           ]);
 
           const recentCalls = clientCallHistory
-            .sort((a, b) => new Date(b.call_start_time || b.created_date) - new Date(a.call_start_time || a.created_date))
+            .sort((a, b) => new Date(b.call_start_time || b.created_at) - new Date(a.call_start_time || a.created_at))
             .slice(0, 5);
           const activeSub = clientSubs.find(s => s.status === 'active');
           const pendingActivities = clientActivities.filter(a => a.status === 'scheduled');
@@ -688,15 +688,15 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
 
         // Widen lookup: 100 of each status (was 20) — campaigns can have many concurrent calls
         const [ringingLogs, initiatedLogs, answeredLogs] = await Promise.all([
-          base44.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 100),
-          base44.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 100),
-          base44.entities.CallLog.filter({ status: 'answered' }, '-created_date', 100)
+          base44.entities.CallLog.filter({ status: 'ringing' }, '-created_at', 100),
+          base44.entities.CallLog.filter({ status: 'initiated' }, '-created_at', 100),
+          base44.entities.CallLog.filter({ status: 'answered' }, '-created_at', 100)
         ]);
         const allRecent = [...ringingLogs, ...initiatedLogs, ...answeredLogs];
         const cutoff = Date.now() - 5 * 60 * 1000;
 
         const match = allRecent.find(l => {
-          if (new Date(l.created_date).getTime() < cutoff) return false;
+          if (new Date(l.created_at).getTime() < cutoff) return false;
           const logCallee = (l.callee_number || '').replace(/\D/g, '').slice(-10);
           if (!logCallee) return false;
           return phoneHints.some(hint => {
@@ -923,7 +923,7 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
                     // Idempotency: don't re-send for the same call
                     const existing = await base44.entities.OutreachLog.filter({
                       call_log_id: callLog.id, channel: 'whatsapp', client_id: campaign.client_id
-                    }, '-created_date', 5);
+                    }, '-created_at', 5);
                     const alreadySent = existing.some(o => o.template_id === wa.missed_call_template_id && o.status === 'sent');
                     if (!alreadySent) {
                       const lead = await base44.entities.Lead.get(campaignLead.lead_id);
@@ -963,7 +963,7 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
                   // Idempotency: don't re-send for the same call
                   const existing = await base44.entities.OutreachLog.filter({
                     call_log_id: callLog.id, channel: 'whatsapp', client_id: campaign.client_id
-                  }, '-created_date', 5);
+                  }, '-created_at', 5);
                   const alreadySent = existing.some(o => o.template_id === wa.answered_call_template_id && o.status === 'sent');
                   if (!alreadySent) {
                     const lead = await base44.entities.Lead.get(campaignLead.lead_id);
@@ -997,8 +997,8 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
             // (Detailed outcomes_summary is recomputed by campaignPostCall's slow path; here we
             //  just keep the completed/failed counters fresh without paginating every webhook.)
             const [completedSet, failedSet] = await Promise.all([
-              withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignLead.campaign_id, status: 'completed' }, 'created_date', 1000), 'stats_completed'),
-              withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignLead.campaign_id, status: 'failed' }, 'created_date', 1000), 'stats_failed'),
+              withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignLead.campaign_id, status: 'completed' }, 'created_at', 1000), 'stats_completed'),
+              withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignLead.campaign_id, status: 'failed' }, 'created_at', 1000), 'stats_failed'),
             ]);
             await base44.entities.Campaign.update(campaignLead.campaign_id, {
               calls_completed: completedSet.length, calls_failed: failedSet.length
@@ -1204,9 +1204,9 @@ async function triggerNextCampaignCall(base44, campaignId) {
     // BOUNDED reads instead of a full-table scan on every webhook (was the main 429 driver).
     // We only need: in-flight counts (small) + a bounded page of pending leads to dial next.
     const [callingLeads, processingLeads, pendingProbe] = await Promise.all([
-      withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'calling' }, 'created_date', 100), 'calling'),
-      withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'processing' }, 'created_date', 100), 'processing'),
-      withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'pending' }, 'created_date', 200), 'pending'),
+      withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'calling' }, 'created_at', 100), 'calling'),
+      withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'processing' }, 'created_at', 100), 'processing'),
+      withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'pending' }, 'created_at', 200), 'pending'),
     ]);
     const pendingLeads = pendingProbe;
 
@@ -1217,8 +1217,8 @@ async function triggerNextCampaignCall(base44, campaignId) {
     if (readyPending.length === 0 && callingLeads.length === 0 && retryLaterPending.length === 0 && processingLeads.length === 0 && pendingProbe.length === 0) {
       // Finishing — now (and only now) compute final stats from the completed/failed sets.
       const [completedSet, failedSet] = await Promise.all([
-        withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'completed' }, 'created_date', 1000), 'completed'),
-        withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'failed' }, 'created_date', 1000), 'failed'),
+        withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'completed' }, 'created_at', 1000), 'completed'),
+        withRetry(() => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'failed' }, 'created_at', 1000), 'failed'),
       ]);
       await base44.entities.Campaign.update(campaignId, {
         status: 'completed', completed_at: now.toISOString(),

@@ -186,7 +186,7 @@ CALLBACK/RECALL SCHEDULING:
         const hasSimilar = existingActivities.some(ea => ea.type === activityType && ea.title?.toLowerCase().includes(action.title?.toLowerCase().substring(0, 20) || ''));
         const recentSameType = existingActivities.find(ea => {
           if (ea.type !== activityType) return false;
-          const created = new Date(ea.created_date || new Date());
+          const created = new Date(ea.created_at || new Date());
           const hoursAgo = (now.getTime() - created.getTime()) / (1000 * 60 * 60);
           return hoursAgo < 4;
         });
@@ -244,7 +244,7 @@ CALLBACK/RECALL SCHEDULING:
             notes: `[Auto-extracted from call ${callLogId}] [${isConfirmed ? 'confirmed' : 'unconfirmed'}]`
           });
 
-          existingActivities.push({ ...newActivity, type: activityType, created_date: now.toISOString() });
+          existingActivities.push({ ...newActivity, type: activityType, created_at: now.toISOString() });
           results.activities_created++;
           results.details.push({ type: activityType, title: action.title, scheduled: scheduledDate, priority: action.priority });
         } catch (e) {}

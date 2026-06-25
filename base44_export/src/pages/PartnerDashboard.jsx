@@ -36,9 +36,9 @@ export default function PartnerDashboard() {
       setPartner(p);
 
       const [refs, pays, agreements] = await Promise.all([
-        base44.entities.Referral.filter({ partner_id: p.id }, '-created_date'),
-        base44.entities.PartnerPayout.filter({ partner_id: p.id }, '-created_date'),
-        base44.entities.PartnerAgreement.filter({ partner_id: p.id }, '-created_date'),
+        base44.entities.Referral.filter({ partner_id: p.id }, '-created_at'),
+        base44.entities.PartnerPayout.filter({ partner_id: p.id }, '-created_at'),
+        base44.entities.PartnerAgreement.filter({ partner_id: p.id }, '-created_at'),
       ]);
       setReferrals(refs);
       setPayouts(pays);

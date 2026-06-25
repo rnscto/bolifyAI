@@ -24,11 +24,11 @@ export default function AdminRetention() {
 
   const loadData = async () => {
     const [configList, didsData, agentsData, clientsData, callLogsData] = await Promise.all([
-      base44.entities.RetentionConfig.list('-created_date', 1),
+      base44.entities.RetentionConfig.list('-created_at', 1),
       base44.entities.DID.list(),
       base44.entities.Agent.list(),
       base44.entities.Client.list(),
-      base44.entities.CallLog.list('-created_date', 100),
+      base44.entities.CallLog.list('-created_at', 100),
     ]);
 
     setConfig(configList[0] || null);

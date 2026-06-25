@@ -16,7 +16,7 @@ export default function AgreementViewer({ partnerId }) {
   }, [partnerId]);
 
   const loadAgreements = async () => {
-    const agrs = await base44.entities.PartnerAgreement.filter({ partner_id: partnerId }, '-created_date');
+    const agrs = await base44.entities.PartnerAgreement.filter({ partner_id: partnerId }, '-created_at');
     setAgreements(agrs);
     setLoading(false);
   };

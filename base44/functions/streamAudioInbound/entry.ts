@@ -309,7 +309,7 @@ Deno.serve(async (req) => {
       if (cleanCalleeDID || cleanCallerDID) {
         const { createClient } = await import('npm:@base44/sdk@0.8.31');
         const svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
-        const allDIDs = await svc.entities.DID.list('-created_date', 200).catch(()=>[]);
+        const allDIDs = await svc.entities.DID.list('-created_at', 200).catch(()=>[]);
         const matchedDID = allDIDs.find(d => { const n = (d.number || '').replace(/\D/g, '').slice(-10); return n === cleanCalleeDID || n === cleanCallerDID; });
         
         let didAgent = null;
@@ -317,7 +317,7 @@ Deno.serve(async (req) => {
           didAgent = await svc.entities.Agent.get(matchedDID.agent_id).catch(()=>null);
         }
         if (!didAgent) {
-          const allAgents = await svc.entities.Agent.list('-created_date', 100).catch(()=>[]);
+          const allAgents = await svc.entities.Agent.list('-created_at', 100).catch(()=>[]);
           didAgent = allAgents.find(a => {
             const dids = (a.assigned_dids || []).concat(a.assigned_did ? [a.assigned_did] : []);
             return dids.some(d => { const n = (d || '').replace(/\D/g, '').slice(-10); return n === cleanCalleeDID || n === cleanCallerDID; });
@@ -1123,7 +1123,7 @@ Deno.serve(async (req) => {
       if (!cleanCalleeDID && !callerDID) { console.error(`[${reqId}] ❌ No DIDs available`); return; }
 
       // Try DID entity first
-      const allDIDsRaw = await svc.entities.DID.list('-created_date', 200);
+      const allDIDsRaw = await svc.entities.DID.list('-created_at', 200);
       const allDIDs = Array.isArray(allDIDsRaw) ? allDIDsRaw : [];
       const matchedDID = allDIDs.find(d => { const n = (d.number || '').replace(/\D/g, '').slice(-10); return n === cleanCalleeDID || n === callerDID; });
       let didAgent = null, didClient = null;
@@ -1138,7 +1138,7 @@ Deno.serve(async (req) => {
 
       // Fallback: search agents' assigned_dids arrays
       if (!didAgent) {
-        const allAgents = Array.isArray(await svc.entities.Agent.list('-created_date', 100)) ? await svc.entities.Agent.list('-created_date', 100) : [];
+        const allAgents = Array.isArray(await svc.entities.Agent.list('-created_at', 100)) ? await svc.entities.Agent.list('-created_at', 100) : [];
         didAgent = allAgents.find(a => {
           const dids = a.assigned_dids || (a.assigned_did ? [a.assigned_did] : []);
           return dids.some(d => { const n = (d || '').replace(/\D/g, '').slice(-10); return n === cleanCalleeDID || n === callerDID; });
@@ -1170,7 +1170,7 @@ Deno.serve(async (req) => {
         if (matchedLead) {
           console.log(`[${reqId}] 🎯 Lead: "${matchedLead.name}" (score: ${matchedLead.score})`);
           callerContext = [`\n\n--- INBOUND CALL - RETURNING LEAD ---`, `- Name: ${matchedLead.name || 'Unknown'}`, `- Phone: ${matchedLead.phone}`, matchedLead.email ? `- Email: ${matchedLead.email}` : null, matchedLead.company ? `- Company: ${matchedLead.company}` : null, `- Status: ${matchedLead.status || 'new'}`, `- Score: ${matchedLead.score || 0}/100`, matchedLead.qualification_tier ? `- Tier: ${matchedLead.qualification_tier}` : null, matchedLead.notes ? `- Notes: ${matchedLead.notes.substring(0, 300)}` : null, '', `CRITICAL: This is an INBOUND callback. Address them by name "${matchedLead.name || 'Sir/Madam'}".`].filter(Boolean).join('\n');
-          try { const lcRaw = await svc.entities.CallLog.filter({ lead_id: matchedLead.id }); const rc = (Array.isArray(lcRaw) ? lcRaw : []).sort((a, b) => new Date(b.call_start_time || b.created_date) - new Date(a.call_start_time || a.created_date)).slice(0, 3); if (rc.length > 0) { callerContext += '\n\nLAST CALL HISTORY:'; rc.forEach(c => { callerContext += `\n- ${c.direction} | ${c.status} | ${(c.conversation_summary || 'No summary').substring(0, 150)}`; }); } } catch (_) {}
+          try { const lcRaw = await svc.entities.CallLog.filter({ lead_id: matchedLead.id }); const rc = (Array.isArray(lcRaw) ? lcRaw : []).sort((a, b) => new Date(b.call_start_time || b.created_at) - new Date(a.call_start_time || a.created_at)).slice(0, 3); if (rc.length > 0) { callerContext += '\n\nLAST CALL HISTORY:'; rc.forEach(c => { callerContext += `\n- ${c.direction} | ${c.status} | ${(c.conversation_summary || 'No summary').substring(0, 150)}`; }); } } catch (_) {}
           session._inboundLeadId = matchedLead.id;
         }
       }

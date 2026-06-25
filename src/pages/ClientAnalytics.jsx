@@ -32,8 +32,8 @@ export default function ClientAnalytics() {
       const c = clients[0];
       setClient(c);
       const [callsData, leadsData, campaignsData] = await Promise.all([
-        base44.entities.CallLog.filter({ client_id: c.id }, '-created_date', 500),
-        base44.entities.Lead.filter({ client_id: c.id }, '-created_date', 1000),
+        base44.entities.CallLog.filter({ client_id: c.id }, '-created_at', 500),
+        base44.entities.Lead.filter({ client_id: c.id }, '-created_at', 1000),
         base44.entities.Campaign.filter({ client_id: c.id }),
       ]);
       setCalls(callsData);
@@ -48,7 +48,7 @@ export default function ClientAnalytics() {
     const days = parseInt(period);
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
-    return new Date(c.created_date) >= cutoff;
+    return new Date(c.created_at) >= cutoff;
   });
 
   // --- Stat calculations ---
@@ -63,7 +63,7 @@ export default function ClientAnalytics() {
   // --- Calls per day ---
   const callsByDay = {};
   filteredCalls.forEach(c => {
-    const day = c.created_date?.split('T')[0];
+    const day = c.created_at?.split('T')[0];
     if (day) callsByDay[day] = (callsByDay[day] || 0) + 1;
   });
   const dailyData = Object.entries(callsByDay)

@@ -8,7 +8,7 @@ async function fetchLeadsByStatus(svc, campaignId, status) {
   let skip = 0;
   while (true) {
     const batch = await svc.entities.CampaignLead.filter(
-      { campaign_id: campaignId, status }, 'created_date', PAGE, skip
+      { campaign_id: campaignId, status }, 'created_at', PAGE, skip
     );
     if (!batch || batch.length === 0) break;
     all = all.concat(batch);
@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
 
     // === AUTO-PAUSE running campaigns outside window ===
     if (!inWindow) {
-      const activeCampaigns = await svc.entities.Campaign.filter({ status: 'running' }, 'created_date', 500);
+      const activeCampaigns = await svc.entities.Campaign.filter({ status: 'running' }, 'created_at', 500);
       for (const c of activeCampaigns) {
         await svc.entities.Campaign.update(c.id, {
           status: 'paused',
@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
     // === AUTO-RESUME paused (auto-paused) campaigns when window opens ===
     let autoResumed = 0;
     if (inWindow) {
-      const pausedCampaigns = await svc.entities.Campaign.filter({ status: 'paused' }, 'created_date', 500);
+      const pausedCampaigns = await svc.entities.Campaign.filter({ status: 'paused' }, 'created_at', 500);
       for (const c of pausedCampaigns) {
         // Only auto-resume campaigns that were auto-paused by TRAI window check
         if (c.notes && c.notes.includes('Auto-paused: outside TRAI')) {
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
     const nowMs = Date.now();
     let autoStarted = 0;
     if (inWindow) {
-      const scheduledCampaigns = await svc.entities.Campaign.filter({ status: 'scheduled' }, 'created_date', 200);
+      const scheduledCampaigns = await svc.entities.Campaign.filter({ status: 'scheduled' }, 'created_at', 200);
       for (const sc of scheduledCampaigns) {
         if (!sc.scheduled_date) continue;
         const schedMs = new Date(sc.scheduled_date).getTime();
@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
     } else {
       // TRAI window closed — auto-pause any scheduled campaigns whose start time has arrived,
       // so they're visible as paused (not stuck "scheduled") and will auto-resume at 9 AM IST.
-      const dueScheduled = await svc.entities.Campaign.filter({ status: 'scheduled' }, 'created_date', 200);
+      const dueScheduled = await svc.entities.Campaign.filter({ status: 'scheduled' }, 'created_at', 200);
       let scheduledPaused = 0;
       for (const sc of dueScheduled) {
         if (!sc.scheduled_date) continue;
@@ -150,12 +150,12 @@ Deno.serve(async (req) => {
     try {
       const orphanCutoff = Date.now() - 2 * 60 * 1000; // 2 minutes
       const [ringingLogs, initiatedLogs] = await Promise.all([
-        svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 200),
-        svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 200)
+        svc.entities.CallLog.filter({ status: 'ringing' }, '-created_at', 200),
+        svc.entities.CallLog.filter({ status: 'initiated' }, '-created_at', 200)
       ]);
       const stuckLogs = [...ringingLogs, ...initiatedLogs].filter(l => {
         // Stuck = no stream_sid (call never answered) AND older than 2 min
-        const age = new Date(l.updated_date || l.created_date).getTime();
+        const age = new Date(l.updated_date || l.created_at).getTime();
         return !l.stream_sid && age < orphanCutoff;
       });
       let orphansFixed = 0;
@@ -199,14 +199,14 @@ Deno.serve(async (req) => {
 
         // === STEP 1: Fix stuck "calling" and "processing" leads ===
         const stuckCalling = await svc.entities.CampaignLead.filter(
-          { campaign_id: campaignId, status: 'calling' }, 'created_date', 100
+          { campaign_id: campaignId, status: 'calling' }, 'created_at', 100
         );
         const stuckProcessing = await svc.entities.CampaignLead.filter(
-          { campaign_id: campaignId, status: 'processing' }, 'created_date', 100
+          { campaign_id: campaignId, status: 'processing' }, 'created_at', 100
         );
         // Processing leads stuck >5 min → force to completed (campaignPostCall died mid-execution)
         for (const pl of stuckProcessing) {
-          const procAge = Date.now() - new Date(pl.updated_date || pl.created_date).getTime();
+          const procAge = Date.now() - new Date(pl.updated_date || pl.created_at).getTime();
           if (procAge > 5 * 60 * 1000) {
             console.log(`[campaignPoller] Processing lead ${pl.lead_name} stuck >5min — forcing to completed`);
             await svc.entities.CampaignLead.update(pl.id, {
@@ -219,7 +219,7 @@ Deno.serve(async (req) => {
         const stuckLeads = stuckCalling;
 
         for (const cl of stuckLeads) {
-          const leadAge = Date.now() - new Date(cl.updated_date || cl.created_date).getTime();
+          const leadAge = Date.now() - new Date(cl.updated_date || cl.created_at).getTime();
           const STUCK_TIMEOUT_MS = 3 * 60 * 1000; // 3 minutes
 
           if (leadAge < STUCK_TIMEOUT_MS) continue; // Still fresh, skip
@@ -294,7 +294,7 @@ Deno.serve(async (req) => {
         const [callingLeads, processingLeads, pendingProbe] = await Promise.all([
           fetchLeadsByStatus(svc, campaignId, 'calling'),
           fetchLeadsByStatus(svc, campaignId, 'processing'),
-          svc.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'pending' }, 'created_date', PROBE),
+          svc.entities.CampaignLead.filter({ campaign_id: campaignId, status: 'pending' }, 'created_at', PROBE),
         ]);
 
         const callingCount = callingLeads.length + processingLeads.length;

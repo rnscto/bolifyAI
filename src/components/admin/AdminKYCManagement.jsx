@@ -55,8 +55,8 @@ export default function AdminKYCManagement() {
 
   const loadData = async () => {
     const [docs, cls] = await Promise.all([
-      base44.entities.KYCDocument.list('-created_date', 200),
-      base44.entities.Client.list('-created_date', 500),
+      base44.entities.KYCDocument.list('-created_at', 200),
+      base44.entities.Client.list('-created_at', 500),
     ]);
     setKycDocs(docs);
     setClients(cls);

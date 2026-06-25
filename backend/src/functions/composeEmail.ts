@@ -54,7 +54,7 @@ export default async function (c: Context) {
 
       try {
         if (lead_id) {
-          const calls = await base44ORM.entities.CallLog.filter({ lead_id, status: 'completed' }, '-created_date', 1);
+          const calls = await base44ORM.entities.CallLog.filter({ lead_id, status: 'completed' }, '-created_at', 1);
           if (calls.length > 0) callLog = calls[0];
         }
       } catch (e: any) { console.log(`CallLog fetch failed: ${e.message}`); }

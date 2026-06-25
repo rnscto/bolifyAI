@@ -20,14 +20,14 @@ export default function AdminSignedAgreements() {
 
   const loadAgreements = async () => {
     const [clientAgrs, partnerAgrs] = await Promise.all([
-      base44.entities.ClientAgreement.list('-created_date'),
-      base44.entities.PartnerAgreement.list('-created_date'),
+      base44.entities.ClientAgreement.list('-created_at'),
+      base44.entities.PartnerAgreement.list('-created_at'),
     ]);
 
     const all = [
       ...clientAgrs.map(a => ({ ...a, _type: 'Client' })),
       ...partnerAgrs.map(a => ({ ...a, _type: 'Partner' })),
-    ].sort((a, b) => new Date(b.signed_date || b.created_date) - new Date(a.signed_date || a.created_date));
+    ].sort((a, b) => new Date(b.signed_date || b.created_at) - new Date(a.signed_date || a.created_at));
 
     setAgreements(all);
     setLoading(false);

@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
       if (!callLog) {
         console.log('Trying fallback: most recent active call log');
         const recentLogs = await base44.entities.CallLog.filter(
-          { status: 'ringing' }, '-created_date', 1
+          { status: 'ringing' }, '-created_at', 1
         );
         if (recentLogs.length > 0) {
           callLog = recentLogs[0];
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
         }
         if (!callLog) {
           const initiatedLogs = await base44.entities.CallLog.filter(
-            { status: 'initiated' }, '-created_date', 1
+            { status: 'initiated' }, '-created_at', 1
           );
           if (initiatedLogs.length > 0) {
             callLog = initiatedLogs[0];

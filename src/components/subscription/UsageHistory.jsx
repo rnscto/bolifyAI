@@ -19,7 +19,7 @@ export default function UsageHistory({ clientId }) {
 
   useEffect(() => {
     if (clientId) {
-      base44.entities.UsageLog.filter({ client_id: clientId }, '-created_date', 50)
+      base44.entities.UsageLog.filter({ client_id: clientId }, '-created_at', 50)
         .then(setLogs)
         .finally(() => setLoading(false));
     }
@@ -60,7 +60,7 @@ export default function UsageHistory({ clientId }) {
                       <p className="text-sm font-medium text-gray-900">{log.description || config.label}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         <span className="text-xs text-gray-500">
-                          {moment(log.created_date).format('DD MMM, hh:mm A')}
+                          {moment(log.created_at).format('DD MMM, hh:mm A')}
                         </span>
                         {log.billable_minutes > 0 && (
                           <Badge variant="outline" className="text-[10px]">

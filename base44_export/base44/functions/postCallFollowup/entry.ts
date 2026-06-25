@@ -180,7 +180,7 @@ Deno.serve(async (req) => {
     }
 
     // Load retention config
-    const configs = await svc.entities.RetentionConfig.list('-created_date', 1);
+    const configs = await svc.entities.RetentionConfig.list('-created_at', 1);
     const retentionConfig = configs[0] || {};
 
     // ===================================================================

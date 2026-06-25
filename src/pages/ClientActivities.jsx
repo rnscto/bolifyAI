@@ -41,7 +41,7 @@ export default function ClientActivities() {
 
         const [activitiesData, leadsData] = await Promise.all([
           base44.entities.Activity.filter({ client_id: clientData.id }, '-scheduled_date', 500),
-          base44.entities.Lead.filter({ client_id: clientData.id }, '-created_date', 1000)
+          base44.entities.Lead.filter({ client_id: clientData.id }, '-created_at', 1000)
         ]);
 
         setActivities(activitiesData);

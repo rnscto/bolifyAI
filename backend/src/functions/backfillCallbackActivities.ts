@@ -31,9 +31,9 @@ export default async function backfillCallbackActivities(c: any) {
 
     if (isCronCall) {
       const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const recentCalls = await base44.entities.CallLog.filter({ status: 'completed' }, '-created_date', 150);
+      const recentCalls = await base44.entities.CallLog.filter({ status: 'completed' }, '-created_at', 150);
       const eligible = recentCalls.filter((c: any) =>
-        c.created_date >= cutoffIso &&
+        c.created_at >= cutoffIso &&
         c.transcript && c.transcript.length > 100 &&
         c.client_id && c.client_id !== 'unknown'
       );
@@ -108,8 +108,8 @@ export default async function backfillCallbackActivities(c: any) {
     };
 
     const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-    const recentCalls = await base44.entities.CallLog.filter({ client_id, status: 'completed' }, '-created_date', 100);
-    const eligible = recentCalls.filter((c: any) => c.created_date >= cutoff && c.transcript && c.transcript.length > 100);
+    const recentCalls = await base44.entities.CallLog.filter({ client_id, status: 'completed' }, '-created_at', 100);
+    const eligible = recentCalls.filter((c: any) => c.created_at >= cutoff && c.transcript && c.transcript.length > 100);
 
     const followupActs = await base44.entities.Activity.filter({ client_id, type: 'followup', status: 'scheduled' });
     const callActs = await base44.entities.Activity.filter({ client_id, type: 'call', status: 'scheduled' });

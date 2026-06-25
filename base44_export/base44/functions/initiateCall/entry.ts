@@ -246,7 +246,7 @@ Deno.serve(async (req) => {
     try {
       // Fetch last 3 call logs for this lead
       const callLogs = await svc.entities.CallLog.filter(
-        { lead_id: lead.id }, '-created_date', 3
+        { lead_id: lead.id }, '-created_at', 3
       );
 
       const sections = [];

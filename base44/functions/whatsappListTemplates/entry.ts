@@ -74,7 +74,7 @@ Deno.serve(async (req) => {
     }
 
     const metaTemplates = data.data || [];
-    const existing = await svc.entities.WhatsAppTemplate.filter({ client_id }, '-created_date', 500);
+    const existing = await svc.entities.WhatsAppTemplate.filter({ client_id }, '-created_at', 500);
     const existingByName = {};
     existing.forEach(t => { existingByName[`${t.name}_${t.language}`] = t; });
 

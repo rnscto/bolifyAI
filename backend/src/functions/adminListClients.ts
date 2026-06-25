@@ -10,12 +10,12 @@ export default async function adminListClients(c: any) {
     // Since we are migrating from Base44 auth to custom JWT, we rely on middleware.
 
     if (!action || action === 'list') {
-      const clients = await base44.entities.Client.filter({}, "-created_date");
+      const clients = await base44.entities.Client.filter({}, "-created_at");
       const users = await base44.entities.User.filter({});
       
       // Map each client to its earliest activation (paid) date
       const activationsRes = await client.queryObject(`
-        SELECT client_id, MIN(COALESCE(effective_date, created_date)) as min_date 
+        SELECT client_id, MIN(COALESCE(effective_date::timestamptz, created_at)) as min_date 
         FROM "clientlifecycleevent" 
         WHERE event_type = 'activated'
         GROUP BY client_id

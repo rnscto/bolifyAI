@@ -30,7 +30,7 @@ export default async function (c: Context) {
     console.log(`[testPlatformWhatsAppConnection] HTTP ${res.status}`);
 
     // Persist status
-    const cfgs = await base44ORM.entities.PlatformMessagingConfig.list('-created_date', 1);
+    const cfgs = await base44ORM.entities.PlatformMessagingConfig.list('-created_at', 1);
     const newStatus = res.ok ? 'connected' : 'error';
     const updates = {
       whatsapp_provider: provider,

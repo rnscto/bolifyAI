@@ -16,7 +16,7 @@ export default function ClientAgreementViewer({ clientId }) {
   }, [clientId]);
 
   const loadAgreements = async () => {
-    const agrs = await base44.entities.ClientAgreement.filter({ client_id: clientId }, '-created_date');
+    const agrs = await base44.entities.ClientAgreement.filter({ client_id: clientId }, '-created_at');
     setAgreements(agrs);
     setLoading(false);
   };

@@ -52,8 +52,8 @@ export default function AdminComplaints() {
 
   const loadData = async () => {
     const [c, cl, d] = await Promise.all([
-      base44.entities.ComplaintLog.list('-created_date', 200),
-      base44.entities.Client.list('-created_date'),
+      base44.entities.ComplaintLog.list('-created_at', 200),
+      base44.entities.Client.list('-created_at'),
       base44.entities.DID.list(),
     ]);
     setComplaints(c);
@@ -236,7 +236,7 @@ export default function AdminComplaints() {
                     <TableCell><Badge className={TYPE_COLORS[c.complaint_type] || 'bg-gray-100'}>{c.complaint_type?.replace(/_/g, ' ')}</Badge></TableCell>
                     <TableCell className="text-sm capitalize">{c.complaint_source?.replace(/_/g, ' ')}</TableCell>
                     <TableCell><Badge className={STATUS_COLORS[c.status]}>{c.status?.replace(/_/g, ' ')}</Badge></TableCell>
-                    <TableCell className="text-sm text-gray-500">{moment(c.created_date).format('DD MMM YY HH:mm')}</TableCell>
+                    <TableCell className="text-sm text-gray-500">{moment(c.created_at).format('DD MMM YY HH:mm')}</TableCell>
                     <TableCell>
                       <Button size="sm" variant="ghost" onClick={e => { e.stopPropagation(); setSelectedComplaint(c); setShowDetailDialog(true); }}>View</Button>
                     </TableCell>

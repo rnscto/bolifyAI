@@ -15,14 +15,14 @@ Deno.serve(async (req) => {
     // List all clients
     if (!action || action === 'list') {
       const [clients, users, activations] = await Promise.all([
-        base44.asServiceRole.entities.Client.list('-created_date'),
+        base44.asServiceRole.entities.Client.list('-created_at'),
         base44.asServiceRole.entities.User.list(),
         base44.asServiceRole.entities.ClientLifecycleEvent.filter({ event_type: 'activated' }, 'effective_date', 2000)
       ]);
       // Map each client to its earliest activation (paid) date
       const activationByClient = {};
       for (const ev of activations) {
-        const d = ev.effective_date || ev.created_date;
+        const d = ev.effective_date || ev.created_at;
         if (!d) continue;
         if (!activationByClient[ev.client_id] || new Date(d) < new Date(activationByClient[ev.client_id])) {
           activationByClient[ev.client_id] = d;

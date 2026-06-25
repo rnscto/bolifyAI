@@ -39,7 +39,7 @@ export default function PartnerClientsList({ referrals }) {
     // Fetch call counts per client
     const counts = {};
     await Promise.all(clientResults.map(async (c) => {
-      const logs = await base44.entities.CallLog.filter({ client_id: c.id }, '-created_date', 1);
+      const logs = await base44.entities.CallLog.filter({ client_id: c.id }, '-created_at', 1);
       // We only get the first one to check if there's activity; use list count
       const allLogs = await base44.entities.CallLog.filter({ client_id: c.id });
       counts[c.id] = allLogs.length;
@@ -142,7 +142,7 @@ export default function PartnerClientsList({ referrals }) {
                         ₹{(ref?.total_commission_earned || 0).toLocaleString('en-IN')}
                       </TableCell>
                       <TableCell className="text-sm text-gray-500">
-                        {c.created_date ? moment(c.created_date).format('DD MMM YY') : '-'}
+                        {c.created_at ? moment(c.created_at).format('DD MMM YY') : '-'}
                       </TableCell>
                     </TableRow>
                   );

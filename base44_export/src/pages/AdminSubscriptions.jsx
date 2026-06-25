@@ -23,7 +23,7 @@ export default function AdminSubscriptions() {
   const loadData = async () => {
     try {
       const [subsData, clientsData] = await Promise.all([
-        base44.entities.Subscription.list('-created_date'),
+        base44.entities.Subscription.list('-created_at'),
         base44.entities.Client.list()
       ]);
       setSubscriptions(subsData);
@@ -267,8 +267,8 @@ function ClientBillingTable({ clients, statusColors }) {
                   <TableCell className="text-sm">
                     {c.trial_start_date
                       ? new Date(c.trial_start_date).toLocaleDateString()
-                      : c.created_date
-                        ? new Date(c.created_date).toLocaleDateString()
+                      : c.created_at
+                        ? new Date(c.created_at).toLocaleDateString()
                         : '-'}
                   </TableCell>
                   <TableCell className={`text-sm ${renewalClass}`}>

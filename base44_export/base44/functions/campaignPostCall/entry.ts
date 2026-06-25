@@ -27,7 +27,7 @@ async function fetchStatusCounts(base44, campaignId) {
   const statuses = ['pending', 'calling', 'processing', 'completed', 'failed'];
   const results = await Promise.all(
     statuses.map(s => withRetry(
-      () => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: s }, 'created_date', 1000),
+      () => base44.entities.CampaignLead.filter({ campaign_id: campaignId, status: s }, 'created_at', 1000),
       `count_${s}`
     ))
   );
@@ -310,7 +310,7 @@ Deno.serve(async (req) => {
             // Idempotency: don't re-send for same call_log_id
             const existing = await base44.entities.OutreachLog.filter({
               call_log_id: callLogId, channel: 'whatsapp', client_id: campaign.client_id
-            }, '-created_date', 5);
+            }, '-created_at', 5);
             const alreadySent = existing.some(o => o.template_id === wa.missed_call_template_id && o.status === 'sent');
             if (!alreadySent) {
               const lead = await base44.entities.Lead.get(campaignLead.lead_id);

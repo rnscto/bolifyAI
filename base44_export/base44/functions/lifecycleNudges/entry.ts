@@ -19,7 +19,7 @@ Deno.serve(async (req) => {
     const appId = Deno.env.get('BASE44_APP_ID');
     const svc = createClient({ appId, asServiceRole: true });
 
-    const cfgs = await svc.entities.PlatformMessagingConfig.list('-created_date', 1);
+    const cfgs = await svc.entities.PlatformMessagingConfig.list('-created_at', 1);
     if (cfgs.length === 0 || !cfgs[0].lifecycle_enabled) {
       return Response.json({ skipped: true, reason: 'Lifecycle disabled or not configured' });
     }
@@ -35,7 +35,7 @@ Deno.serve(async (req) => {
     const sendNudge = async ({ clientRecord, templateName, outreachType, variables }) => {
       if (!templateName) return false;
       // Find approved platform template
-      const tList = await svc.entities.WhatsAppTemplate.filter({ client_id: 'PLATFORM', name: templateName, status: 'APPROVED' }, '-created_date', 1);
+      const tList = await svc.entities.WhatsAppTemplate.filter({ client_id: 'PLATFORM', name: templateName, status: 'APPROVED' }, '-created_at', 1);
       if (tList.length === 0) { sent.errors.push(`No approved template: ${templateName}`); return false; }
 
       // Dedup — skip if already sent for this client + type + template
@@ -66,10 +66,10 @@ Deno.serve(async (req) => {
     const daysBetween = (a, b) => Math.floor((a - b) / (1000 * 60 * 60 * 24));
 
     // Pull all clients (active/trial/onboarding)
-    const clients = await svc.entities.Client.filter({}, '-created_date', 1000);
+    const clients = await svc.entities.Client.filter({}, '-created_at', 1000);
     for (const c of clients) {
       if (!c.phone) continue;
-      const created = new Date(c.created_date);
+      const created = new Date(c.created_at);
       const daysSinceCreate = daysBetween(now, created);
 
       // 1) Welcome — fire on creation day (idempotent via OutreachLog dedup)

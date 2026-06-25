@@ -138,7 +138,7 @@ export default function AdminAgents() {
   const loadData = async () => {
     try {
       const [agentsData, clientsData, didsData] = await Promise.all([
-        base44.entities.Agent.list('-created_date'),
+        base44.entities.Agent.list('-created_at'),
         base44.entities.Client.list(),
         base44.entities.DID.list()
       ]);
@@ -268,6 +268,14 @@ export default function AdminAgents() {
           <h1 className="text-3xl font-bold text-gray-900">AI Agents</h1>
           <p className="text-gray-600 mt-1">Create and manage AI calling agents</p>
         </div>
+        
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 px-4 py-3 rounded-md flex flex-col gap-1 text-sm max-w-xl">
+          <p className="font-semibold">Smartflo Click-to-Call Setup:</p>
+          <p>Configure the following Webhook URL in your Smartflo dashboard for call status updates:</p>
+          <code className="bg-blue-100 px-2 py-1 rounded select-all break-all">https://edvice.in/api/webhook?secret=ttstostt</code>
+          <p className="text-xs text-blue-600 mt-1">Note: Set this for every Smartflo account where an API key is used.</p>
+        </div>
+
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
             <Button className="bg-blue-600 hover:bg-blue-700" onClick={resetForm}>

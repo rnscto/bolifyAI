@@ -846,10 +846,10 @@ Deno.serve(async (req) => {
         const cutoff = new Date(Date.now() - 120000).toISOString();
         const cleanCallee = session.calleeNumber.replace(/[^0-9]/g, '').slice(-10);
         const [ring, init] = await Promise.all([
-          svc.entities.CallLog.filter({ status: 'ringing' }, '-created_date', 20).catch(() => []),
-          svc.entities.CallLog.filter({ status: 'initiated' }, '-created_date', 20).catch(() => [])
+          svc.entities.CallLog.filter({ status: 'ringing' }, '-created_at', 20).catch(() => []),
+          svc.entities.CallLog.filter({ status: 'initiated' }, '-created_at', 20).catch(() => [])
         ]);
-        const match = (list) => list.find(l => !l.stream_sid && l.created_date >= cutoff && (l.callee_number || '').replace(/[^0-9]/g, '').slice(-10) === cleanCallee);
+        const match = (list) => list.find(l => !l.stream_sid && l.created_at >= cutoff && (l.callee_number || '').replace(/[^0-9]/g, '').slice(-10) === cleanCallee);
         callLog = match(ring) || match(init);
         if (callLog) console.log(`[${reqId}] 🔍 Phone match: ${callLog.id}`);
       }

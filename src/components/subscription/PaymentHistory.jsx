@@ -28,7 +28,7 @@ export default function PaymentHistory({ payments }) {
                   <p className="text-xs text-gray-500">
                     {payment.paid_at
                       ? new Date(payment.paid_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
-                      : new Date(payment.created_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+                      : new Date(payment.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
                     }
                   </p>
                 </div>

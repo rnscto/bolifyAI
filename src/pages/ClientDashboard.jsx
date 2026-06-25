@@ -46,13 +46,13 @@ export default function ClientDashboard() {
           base44.entities.Agent.filter({ client_id: clientData.id }),
           base44.entities.Lead.filter({ client_id: clientData.id }),
           base44.entities.CallLog.filter(
-            { client_id: clientData.id, created_date: { $gte: todayStartISO } },
-            '-created_date',
+            { client_id: clientData.id, created_at: { $gte: todayStartISO } },
+            '-created_at',
             500
           ),
-          base44.entities.CallLog.filter({ client_id: clientData.id }, '-created_date', 500),
+          base44.entities.CallLog.filter({ client_id: clientData.id }, '-created_at', 500),
           base44.entities.Activity.filter({ client_id: clientData.id }),
-          base44.entities.Subscription.filter({ client_id: clientData.id, status: 'active' }, '-created_date', 1)
+          base44.entities.Subscription.filter({ client_id: clientData.id, status: 'active' }, '-created_at', 1)
         ]);
         setSubscription(subs[0] || null);
 

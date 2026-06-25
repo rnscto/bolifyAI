@@ -68,7 +68,7 @@ Deno.serve(async (req) => {
     y += 10;
 
     doc.setFontSize(9);
-    doc.text(`Invoice Date: ${new Date(payment.created_date || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}`, 20, y);
+    doc.text(`Invoice Date: ${new Date(payment.created_at || Date.now()).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}`, 20, y);
     doc.text(`Payment ID: ${payment.cashfree_payment_id || payment.cashfree_order_id || '-'}`, pageWidth - 20, y, { align: 'right' });
     y += 6;
     doc.text(`Status: ${payment.status?.toUpperCase()}`, 20, y);

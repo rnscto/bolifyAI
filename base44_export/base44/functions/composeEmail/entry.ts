@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
       // Get latest call for this lead
       try {
         if (lead_id) {
-          const calls = await base44.entities.CallLog.filter({ lead_id, status: 'completed' }, '-created_date', 1);
+          const calls = await base44.entities.CallLog.filter({ lead_id, status: 'completed' }, '-created_at', 1);
           if (calls.length > 0) callLog = calls[0];
         }
       } catch (e) { console.log(`CallLog fetch failed: ${e.message}`); }

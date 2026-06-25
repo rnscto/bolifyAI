@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
     // Fetch last 5 call logs for this lead
     const callLogs = await svc.entities.CallLog.filter(
       { lead_id: lead.id },
-      '-created_date',
+      '-created_at',
       5
     );
 

@@ -22,7 +22,7 @@ export default async function (c: Context) {
       clients = await Promise.all(audience.map(id => base44ORM.entities.Client.get(id).catch(() => null)));
       clients = clients.filter(Boolean);
     } else {
-      const all = await base44ORM.entities.Client.list('-created_date', 5000);
+      const all = await base44ORM.entities.Client.list('-created_at', 5000);
       if (audience === 'all') clients = all;
       else if (audience === 'trial') clients = all.filter((c: any) => c.account_status === 'trial');
       else if (audience === 'active') clients = all.filter((c: any) => c.account_status === 'active');

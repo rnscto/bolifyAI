@@ -17,7 +17,7 @@ export default function RecentCallsTable({ callLogs, leads }) {
   leads.forEach(l => { leadsMap[l.id] = l; });
 
   const recent = [...callLogs]
-    .sort((a, b) => new Date(b.created_date) - new Date(a.created_date))
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     .slice(0, 10);
 
   return (
@@ -56,7 +56,7 @@ export default function RecentCallsTable({ callLogs, leads }) {
                     {call.duration ? `${Math.floor(call.duration / 60)}m ${Math.round(call.duration % 60)}s` : '-'}
                   </TableCell>
                   <TableCell className="text-xs text-gray-400">
-                    {new Date(call.created_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    {new Date(call.created_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
                   </TableCell>
                 </TableRow>
               );

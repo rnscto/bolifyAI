@@ -309,7 +309,7 @@ Deno.serve(async (req) => {
 
           // Get recent call history
           try {
-            const recentCalls = await svc.entities.CallLog.filter({ lead_id: lead.id }, '-created_date', 3);
+            const recentCalls = await svc.entities.CallLog.filter({ lead_id: lead.id }, '-created_at', 3);
             if (recentCalls.length > 0) {
               ctxParts.push(`\nPREVIOUS CALLS (${recentCalls.length}):`);
               recentCalls.forEach((c, i) => {

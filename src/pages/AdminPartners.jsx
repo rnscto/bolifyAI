@@ -50,9 +50,9 @@ export default function AdminPartners() {
 
   const loadData = async () => {
     const [p, r, pay] = await Promise.all([
-      base44.entities.Partner.list('-created_date'),
-      base44.entities.Referral.list('-created_date'),
-      base44.entities.PartnerPayout.list('-created_date'),
+      base44.entities.Partner.list('-created_at'),
+      base44.entities.Referral.list('-created_at'),
+      base44.entities.PartnerPayout.list('-created_at'),
     ]);
     setPartners(p);
     setReferrals(r);
@@ -341,7 +341,7 @@ export default function AdminPartners() {
                         <TableCell>{p.total_referrals || 0}</TableCell>
                         <TableCell className="text-green-700 font-medium">₹{(p.total_earned || 0).toLocaleString('en-IN')}</TableCell>
                         <TableCell className="text-orange-600">₹{(p.pending_payout || 0).toLocaleString('en-IN')}</TableCell>
-                        <TableCell className="text-sm text-gray-500">{moment(p.created_date).format('DD MMM YY')}</TableCell>
+                        <TableCell className="text-sm text-gray-500">{moment(p.created_at).format('DD MMM YY')}</TableCell>
                         <TableCell>
                           <div className="flex gap-1">
                             {p.status === 'pending' && (

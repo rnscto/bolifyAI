@@ -28,7 +28,7 @@ export default function ClientCRMContacts() {
     const clients = await base44.entities.Client.filter({ user_id: user.id });
     if (clients.length > 0) {
       setClient(clients[0]);
-      const data = await base44.entities.Contact.filter({ client_id: clients[0].id }, '-created_date');
+      const data = await base44.entities.Contact.filter({ client_id: clients[0].id }, '-created_at');
       setContacts(data);
     }
     setLoading(false);

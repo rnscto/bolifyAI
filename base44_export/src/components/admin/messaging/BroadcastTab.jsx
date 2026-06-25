@@ -24,7 +24,7 @@ export default function BroadcastTab() {
   const [result, setResult] = useState(null);
 
   useEffect(() => {
-    base44.entities.WhatsAppTemplate.filter({ client_id: 'PLATFORM', status: 'APPROVED' }, '-created_date', 500)
+    base44.entities.WhatsAppTemplate.filter({ client_id: 'PLATFORM', status: 'APPROVED' }, '-created_at', 500)
       .then(setTemplates).catch(() => setTemplates([]));
   }, []);
 
