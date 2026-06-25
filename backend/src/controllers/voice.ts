@@ -632,14 +632,14 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
            if (!resolvedAgentId) {
              if (customIdentifier) {
                try {
-                 const callLogRes = await client.queryObject(`SELECT agent_id, lead_id, id FROM "calllog" WHERE id = $1 LIMIT 1`, [customIdentifier]);
+                 const callLogRes = await client.queryObject(`SELECT agent_id, lead_id, id FROM "calllog" WHERE id = $1 LIMIT 1`, [customIdentifier.trim()]);
                  if (callLogRes.rows.length > 0) {
                    const callLog = callLogRes.rows[0] as any;
                    resolvedAgentId = callLog.agent_id;
                    session.callLogId = callLog.id;
                    if (!session._leadId && callLog.lead_id) session._leadId = callLog.lead_id;
                  }
-               } catch(e) {}
+               } catch(e) { console.error(`[${reqId}] Error fetching calllog by customIdentifier:`, e); }
              }
              if (!resolvedAgentId && wsCallId) {
                try {
@@ -667,7 +667,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
                                  resolvedAgentId = (didRes.rows[0] as any).id;
                                  break;
                              }
-                         } catch(e) {}
+                         } catch(e) { console.error(`[${reqId}] Error in DID fallback query for ${cleanDid}:`, e); }
                      }
                  }
              }
@@ -686,7 +686,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
                        if (!session._leadId && recentCall.lead_id) session._leadId = recentCall.lead_id;
                        console.log(`[${reqId}] ⚠️ Fallback: recovered session.callLogId ${session.callLogId} from active calls for agent ${resolvedAgentId}`);
                    }
-               } catch(e) {}
+               } catch(e) { console.error(`[${reqId}] Error in recent call fallback query:`, e); }
            }
            
            session._agentId = resolvedAgentId;
