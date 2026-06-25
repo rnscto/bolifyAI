@@ -484,7 +484,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
 
     const setup: any = {
       setup: {
-        model: 'models/gemini-2.0-flash-live-preview',
+        model: 'models/gemini-3-flash-preview',
         generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: session.voiceType } } } },
         systemInstruction: { parts: [{ text: fullPrompt }] },
       }
