@@ -94,20 +94,5 @@ app.onError((err, c) => {
 connectDB().catch(console.error);
 
 const port = Number(Deno.env.get("PORT")) || 8000;
-console.log(`[STARTUP] Starting Deno.serve on 0.0.0.0:${port}...`);
-const server = Deno.serve({ port, hostname: "0.0.0.0" }, (req: Request, info: any) => {
-  console.log(`[RAW HTTP] ${req.method} ${req.url} from ${info?.remoteAddr?.hostname}`);
-  return app.fetch(req, info);
-});
+Deno.serve({ port, hostname: "0.0.0.0" }, app.fetch);
 
-// Self-test: verify the server actually responds to HTTP requests
-setTimeout(async () => {
-  try {
-    console.log(`[SELF-TEST] Fetching http://localhost:${port}/api/health ...`);
-    const res = await fetch(`http://localhost:${port}/api/health`);
-    const body = await res.text();
-    console.log(`[SELF-TEST] SUCCESS - Status: ${res.status}, Body: "${body}"`);
-  } catch (e) {
-    console.error(`[SELF-TEST] FAILED:`, e);
-  }
-}, 3000);
