@@ -3,6 +3,7 @@ import { client } from "../db/index.ts";
 import { base44ORM as base44 } from "../db/orm.ts";
 import { sendWhatsAppMessage } from "../integrations/whatsapp.ts";
 import { sendSMS } from "../integrations/sms.ts";
+import * as geminiKeys from "../services/geminiKeyManager.ts";
 
 export const voiceRouter = new Hono();
 
@@ -160,8 +161,8 @@ const streamHandler = (c: any) => {
   const { socket: smartfloSocket, response } = Deno.upgradeWebSocket(c.req.raw);
   const sessionState = { lastDownsampleRemainder: [] };
 
-  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-  if (!GEMINI_API_KEY) {
+  const initialKey = geminiKeys.getKey();
+  if (!initialKey.key) {
     console.error("Missing GEMINI_API_KEY. Terminating call.");
     smartfloSocket.close();
     return response;
@@ -169,8 +170,8 @@ const streamHandler = (c: any) => {
 
   let geminiSocket: WebSocket | null = null;
   let audioBuffer: string[] = []; // Buffer incoming audio until Gemini connects
-  const HOST = "generativelanguage.googleapis.com";
-  const WS_URL = `wss://${HOST}/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${GEMINI_API_KEY}`;
+  let currentGeminiKey = ""; // Track which key the active WS is using
+  let reconnectAttempted = false; // Prevent infinite reconnect loops
 
   let agentId = c.req.query("agent_id");
   let leadId = c.req.query("lead_id");
@@ -180,9 +181,18 @@ const streamHandler = (c: any) => {
     console.log(`[Smartflo] Connected for Call ID: ${callId}`);
   };
 
-  const connectGemini = async (resolvedAgentId: string | null) => {
-    if (geminiSocket) return;
+  const connectGemini = async (resolvedAgentId: string | null, isReconnect: boolean = false) => {
+    if (geminiSocket && !isReconnect) return;
 
+    // Close existing socket if reconnecting
+    if (isReconnect && geminiSocket) {
+      try { geminiSocket.close(); } catch (_) { /* ignore */ }
+      geminiSocket = null;
+    }
+
+    const { url: WS_URL, key, tier } = geminiKeys.getWebSocketUrl();
+    currentGeminiKey = key;
+    console.log(`[Gemini] Connecting with ${tier.toUpperCase()} key for Call ID: ${callId}${isReconnect ? ' (RECONNECT)' : ''}`);
     geminiSocket = new WebSocket(WS_URL);
 
     geminiSocket.onopen = async () => {
@@ -310,11 +320,21 @@ const streamHandler = (c: any) => {
     };
 
     geminiSocket.onerror = (error) => {
-      console.error("[Gemini] WebSocket Error:", error);
+      console.error(`[Gemini] WebSocket Error (${tier} key):`, error);
     };
 
-    geminiSocket.onclose = () => {
-      console.log(`[Gemini] Disconnected for Call ID: ${callId}`);
+    geminiSocket.onclose = (event) => {
+      console.log(`[Gemini] Disconnected for Call ID: ${callId} (code: ${event.code}, reason: ${event.reason})`);
+
+      // If rate-limited or policy violation, try reconnecting with paid key
+      if (geminiKeys.isRateLimitError(event.code) && !reconnectAttempted) {
+        reconnectAttempted = true;
+        geminiKeys.markRateLimited(currentGeminiKey, `ws_close_${event.code}`);
+        console.log(`[Gemini] Attempting reconnect with fallback key for Call ID: ${callId}`);
+        connectGemini(resolvedAgentId, true);
+        return;
+      }
+
       if (smartfloSocket.readyState === WebSocket.OPEN) {
         smartfloSocket.close();
       }
@@ -441,8 +461,8 @@ async function processPostCallMetrics(callId: string, streamSid: string, leadId:
     // 2. We pass the audio to Gemini 1.5 Pro to analyze
     // Because audio takes time to process, we simulate the LLM analysis via Google Generative AI
     
-    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-    if (!GEMINI_API_KEY) throw new Error("Missing Gemini API Key for post-call analysis");
+    let { key: geminiApiKey, tier } = geminiKeys.getRestApiKey();
+    if (!geminiApiKey) throw new Error("Missing Gemini API Key for post-call analysis");
 
     // Fetch call log to see if Smartflo webhook has populated recording_url
     const callLogResult = await client.queryObject(`SELECT recording_url FROM "calllog" WHERE id = $1 LIMIT 1`, [callId]);
@@ -451,27 +471,44 @@ async function processPostCallMetrics(callId: string, streamSid: string, leadId:
       recordingUrl = (callLogResult.rows[0] as any).recording_url;
     }
 
-    // Call Gemini 1.5 Pro REST API
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`, {
+    const requestBody = JSON.stringify({
+      contents: [{
+        role: "user",
+        parts: [
+          { text: `Analyze the following AI voice call interaction for Lead ID: ${leadId}. 
+          (In a real scenario, the audio recording from ${recordingUrl || 'Smartflo'} is provided). 
+          Generate a JSON object with: 
+          1) transcript: Full verbatim text of the call.
+          2) summary: A brief 2-3 sentence executive summary.
+          3) score: A number from 0 to 100 indicating buyer intent/interest.
+          4) status: A string enum ('Interested', 'Follow-up', 'Not Interested').
+          Ensure your response is ONLY valid JSON without markdown formatting.` }
+        ]
+      }]
+    });
+
+    // Call Gemini REST API with fallback retry
+    console.log(`[PostCall] Using ${tier.toUpperCase()} Gemini key for analysis`);
+    let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiApiKey}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{
-          role: "user",
-          parts: [
-            { text: `Analyze the following AI voice call interaction for Lead ID: ${leadId}. 
-            (In a real scenario, the audio recording from ${recordingUrl || 'Smartflo'} is provided). 
-            Generate a JSON object with: 
-            1) transcript: Full verbatim text of the call.
-            2) summary: A brief 2-3 sentence executive summary.
-            3) score: A number from 0 to 100 indicating buyer intent/interest.
-            4) status: A string enum ('Interested', 'Follow-up', 'Not Interested').
-            Ensure your response is ONLY valid JSON without markdown formatting.` }
-          ]
-        }]
-      })
+      body: requestBody
     });
     
+    // If rate-limited, switch to paid key and retry once
+    if (response.status === 429) {
+      geminiKeys.markRateLimited(geminiApiKey, "rest_429");
+      const fallback = geminiKeys.getRestApiKey();
+      if (fallback.key !== geminiApiKey) {
+        console.log(`[PostCall] Retrying with ${fallback.tier.toUpperCase()} key after rate limit`);
+        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${fallback.key}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: requestBody
+        });
+      }
+    }
+
     if (!response.ok) {
       console.error("[PostCall] Gemini REST API Error:", await response.text());
       return;
