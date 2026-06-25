@@ -16,7 +16,7 @@ RUN npm run build
 # ==========================================
 # STAGE 2: Run the Deno Backend API + Frontend
 # ==========================================
-FROM denoland/deno:alpine-1.42.1
+FROM denoland/deno:alpine
 
 WORKDIR /app
 
