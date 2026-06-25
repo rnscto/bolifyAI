@@ -7,7 +7,10 @@
   "imports": {
     "emailjs": "npm:emailjs@^5.0.1",
     "hono": "npm:hono@^4.12.27",
-    "hono/": "npm:hono@^4.12.27/",
+    "hono/logger": "npm:hono@^4.12.27/logger",
+    "hono/cors": "npm:hono@^4.12.27/cors",
+    "hono/jwt": "npm:hono@^4.12.27/jwt",
+    "hono/deno": "npm:hono@^4.12.27/deno",
     "jspdf": "npm:jspdf@^4.2.1",
     "unpdf": "npm:unpdf@^0.12.1",
     "mammoth": "npm:mammoth@^1.8.0",
