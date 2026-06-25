@@ -42,6 +42,10 @@ app.use("*", async (c, next) => {
 
 app.use('/assets/*', serveStatic({ root: './dist' }));
 
+app.get('/api/health', (c) => {
+  return c.text('OK');
+});
+
 app.get('*', async (c, next) => {
   if (c.req.path.startsWith('/api/')) {
     return await next();
@@ -90,7 +94,7 @@ app.onError((err, c) => {
 connectDB().catch(console.error);
 
 export default {
-  port: 8000,
+  port: Number(Deno.env.get("PORT")) || 8000,
   hostname: "0.0.0.0",
   fetch: app.fetch,
 };
