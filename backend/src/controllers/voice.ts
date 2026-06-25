@@ -151,15 +151,170 @@ function uint8ToBase64(bytes: Uint8Array): string {
 
 // --- WebSocket Handler ---
 
+
+// ─── Noise + hallucinated-script filter ───
+function isNoiseTranscription(text: string): boolean {
+  const t = (text || '').trim();
+  if (!t) return true;
+  if (t.length <= 4 && /^(uh|um|mhm|hmm|eh|oh|ah)\.?$/i.test(t)) return true;
+  if (/[\uAC00-\uD7AF\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\u0600-\u06FF\u0E00-\u0E7F\u0400-\u04FF]/.test(t)) return true;
+  if (!/[a-zA-Z\u0900-\u097F]/.test(t)) return true;
+  if (/[¿¡]/.test(t)) return true;
+  if (t.length < 80 && /[àâäçéèêëîïôöûùüÿñõãáíóú]/i.test(t)) return true;
+  return false;
+}
+
+// ─── KB chunking ───
+function splitKBIntoChunks(content: string): string[] {
+  if (!content || content.length < 100) return [];
+  const chunks: string[] = [];
+  const docs = content.split(/\n---\n/);
+  for (const doc of docs) {
+    const t = doc.trim();
+    if (!t) continue;
+    if (t.length <= 600) chunks.push(t);
+    else {
+      const paras = t.split(/\n\n+/);
+      let buf = '';
+      for (const p of paras) {
+        if ((buf + '\n\n' + p).length > 600 && buf) { chunks.push(buf.trim()); buf = p; }
+        else buf = buf ? buf + '\n\n' + p : p;
+      }
+      if (buf.trim()) chunks.push(buf.trim());
+    }
+  }
+  return chunks.filter(c => c.length >= 30);
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// SAVE CALL RECORD — full business analysis (lead score, sentiment)
+// ═══════════════════════════════════════════════════════════════════════
+async function saveCallRecord(session: any, reqId: string, duration: number) {
+  if (!session.callLogId || session._saved) return;
+  session._saved = true;
+  try {
+    if (session._pendingCustomerText) { session.transcript.push({ speaker: 'Customer', text: session._pendingCustomerText.trim() }); session._pendingCustomerText = ''; }
+    if (session._pendingAiText) { session.transcript.push({ speaker: 'AI', text: session._pendingAiText.trim() }); session._pendingAiText = ''; }
+    const transcript = session.transcript.map((t: any) => `${t.speaker}: ${t.text}`).join('\n');
+    
+    let summary = '', leadStatus = 'contacted', sentiment = 'neutral', leadScore = 0, intentSignals: string[] = [], scoreBreakdown: any = {}, keyTopics: string[] = [], summaryHindi = '';
+
+    if (transcript.trim().length > 30) {
+      try {
+        const azureKey = Deno.env.get("AZURE_OPENAI_KEY");
+        let azureEndpoint = Deno.env.get("AZURE_OPENAI_ENDPOINT") || "";
+        const azureDeployment = Deno.env.get("AZURE_OPENAI_DEPLOYMENT") || "gpt-5.4-pro";
+        
+        if (azureKey && azureEndpoint) {
+          const requestBody = JSON.stringify({
+            model: azureDeployment,
+            messages: [{
+              role: "user",
+              content: `Analyze the following AI voice call transcript.\nTranscript:\n${transcript}\n\nReturn JSON exactly matching this format: {"summary":"2-3 sentences","summary_hindi":"Devanagari translation of summary","lead_status":"interested|not_interested|callback|no_answer|converted|contacted|do_not_call","sentiment":"very_positive|positive|neutral|negative|very_negative","lead_score":<number 0-100>,"intent_signals":["signal1", "signal2"],"score_breakdown":{"sentiment_score":0,"intent_score":0,"engagement_score":0,"keyword_score":0,"reasoning":"..."},"key_topics":["topic1", "topic2"],"objections":["obj1"],"recommended_next_action":"..."}`
+            }],
+            response_format: { type: "json_object" }
+          });
+          
+          let r = await fetch(azureEndpoint, {
+            method: 'POST', 
+            headers: { 
+              'Content-Type': 'application/json',
+              'api-key': azureKey,
+              'Authorization': `Bearer ${azureKey}` // Fallback in case it expects standard Bearer
+            }, 
+            body: requestBody
+          });
+          
+          if (r.ok) {
+            const data = await r.json();
+            const aText = data.choices?.[0]?.message?.content || '{}';
+            const a = JSON.parse(aText);
+            summary = a.summary || ''; summaryHindi = a.summary_hindi || '';
+            leadStatus = a.lead_status || 'contacted'; sentiment = a.sentiment || 'neutral';
+            leadScore = Math.min(100, Math.max(0, a.lead_score || 0));
+            intentSignals = a.intent_signals || [];
+            scoreBreakdown = { ...(a.score_breakdown || {}), objections: a.objections || [], recommended_next_action: a.recommended_next_action || '', key_topics: a.key_topics || [], summary_hindi: summaryHindi };
+            keyTopics = a.key_topics || [];
+            console.log(`[${reqId}] 🧠 Score=${leadScore}, status=${leadStatus}`);
+          } else {
+            console.error(`[${reqId}] Azure OpenAI error:`, await r.text());
+          }
+        }
+      } catch (e: any) { console.error(`[${reqId}] AI err: ${e.message}`); }
+    } else { summary = 'Call ended with minimal conversation.'; }
+
+    const custLines = session.transcript.filter((t: any) => t.speaker === 'Customer');
+    const custWords = custLines.reduce((a: number, t: any) => a + t.text.split(/\s+/).length, 0);
+    if (custWords <= 5 && duration < 30 && (leadStatus === 'do_not_call' || leadStatus === 'not_interested')) {
+      leadStatus = 'contacted'; sentiment = 'neutral'; leadScore = Math.max(leadScore, 10);
+    }
+
+    let qTier = 'cold', qReason = '';
+    if (leadScore >= 75 && ['very_positive', 'positive'].includes(sentiment)) { qTier = 'hot'; qReason = `${leadScore}/100, ${sentiment}`; }
+    else if (leadScore >= 50) { qTier = 'warm'; qReason = `${leadScore}/100`; }
+    else if (leadScore >= 25) { qTier = 'nurture'; qReason = `${leadScore}/100`; }
+    else if (['negative', 'very_negative'].includes(sentiment)) qTier = 'disqualified';
+    if (leadStatus === 'converted') qTier = 'hot';
+    if (leadStatus === 'do_not_call') qTier = 'disqualified';
+
+    const enriched = summary ? `${summary}${summaryHindi ? '\n\n🇮🇳 ' + summaryHindi : ''}\n\n---\nScore: ${leadScore}/100 | ${sentiment} | ${qTier} | ${intentSignals.join(', ')}` : '';
+
+    const callLogQuery = await client.queryObject(`SELECT * FROM "calllog" WHERE id = $1 LIMIT 1`, [session.callLogId]);
+    const currentLog = callLogQuery.rows[0] as any;
+    
+    const wasTerminal = currentLog && ['completed', 'failed', 'no_answer'].includes(currentLog.status);
+    await client.queryObject(`
+      UPDATE "calllog" 
+      SET status = $1, call_end_time = $2, transcript = $3, duration = $4, lead_status_updated = $5, conversation_summary = $6
+      WHERE id = $7
+    `, [
+       wasTerminal ? currentLog.status : 'completed',
+       wasTerminal ? currentLog.call_end_time : new Date().toISOString(),
+       transcript || '',
+       duration,
+       leadStatus,
+       enriched || null,
+       session.callLogId
+    ]);
+    console.log(`[${reqId}] 💾 Saved CallLog: ${session.callLogId}, score=${leadScore}`);
+
+    const leadId = currentLog?.lead_id || session._leadId;
+    if (leadId) {
+      try {
+        const exQuery = await client.queryObject(`SELECT * FROM "lead" WHERE id = $1 LIMIT 1`, [leadId]);
+        const ex = exQuery.rows[0] as any;
+        if (ex) {
+           const merged = [...new Set([...(ex.tags || []), ...keyTopics.slice(0, 10)])];
+           await client.queryObject(`
+             UPDATE "lead"
+             SET status = $1, score = $2, sentiment = $3, intent_signals = $4, score_breakdown = $5,
+                 qualification_tier = $6, qualification_reason = $7, tags = $8,
+                 last_call_date = $9, last_engagement_date = $10,
+                 engagement_count = $11, notes = $12
+             WHERE id = $13
+           `, [
+             leadStatus, leadScore, sentiment, JSON.stringify(intentSignals), JSON.stringify(scoreBreakdown),
+             qTier, qReason, JSON.stringify(merged),
+             new Date().toISOString(), new Date().toISOString(),
+             (ex.engagement_count || 0) + 1,
+             `[Score: ${leadScore}/100 | ${sentiment} | ${qTier}] ${summary.substring(0, 300)}`,
+             leadId
+           ]);
+        }
+      } catch (e: any) { console.error(`[${reqId}] Lead err: ${e.message}`); }
+    }
+  } catch (err: any) { console.error(`[${reqId}] ❌ Save: ${err.message}`); }
+}
+
 const streamHandler = (c: any) => {
   const callId = c.req.param("callId") || `call_${Date.now()}`;
+  const reqId = Math.random().toString(36).substring(2, 10);
   
   if (c.req.header("upgrade") !== "websocket") {
     return c.text("Expected Upgrade: websocket", 400);
   }
 
   const { socket: smartfloSocket, response } = Deno.upgradeWebSocket(c.req.raw);
-  const sessionState = { lastDownsampleRemainder: [] };
 
   const initialKey = geminiKeys.getKey();
   if (!initialKey.key) {
@@ -168,213 +323,300 @@ const streamHandler = (c: any) => {
     return response;
   }
 
-  let geminiSocket: WebSocket | null = null;
-  let audioBuffer: string[] = []; // Buffer incoming audio until Gemini connects
-  let currentGeminiKey = ""; // Track which key the active WS is using
-  let reconnectAttempted = false; // Prevent infinite reconnect loops
-
-  let agentId = c.req.query("agent_id");
-  let leadId = c.req.query("lead_id");
-  const callStartTime = Date.now();
-
-  smartfloSocket.onopen = () => {
-    console.log(`[Smartflo] Connected for Call ID: ${callId}`);
+  const session: any = {
+    callSid: callId,
+    callLogId: null,
+    clientId: null,
+    transcript: [],
+    startTime: Date.now(),
+    systemPrompt: 'You are a professional AI voice assistant.',
+    greetingMessage: '',
+    voiceType: 'Puck',
+    _saved: false,
+    geminiWs: null,
+    geminiReady: false,
+    isSpeaking: false,
+    tools: [],
+    humanTransferNumber: '',
+    enableAutoTransfer: false,
+    _geminiReconnectAttempts: 0,
+    _callEnded: false,
+    _agentConfigReady: false,
+    calleeNumber: '',
+    callerNumber: '',
+    _lastDownsampleRemainder: [],
+    _pendingAiText: '',
+    _pendingCustomerText: '',
+    _kbChunks: [],
+    _leadId: c.req.query("lead_id") || null,
+    _agentId: c.req.query("agent_id") || null,
+    _audioBuffer: [],
+    _setupSent: false,
+    _greetingTriggered: false,
+    _usingPaidKey: false,
+    _triedKeyFallback: false
   };
 
-  const connectGemini = async (resolvedAgentId: string | null, isReconnect: boolean = false) => {
-    if (geminiSocket && !isReconnect) return;
+  let geminiSocket: WebSocket | null = null;
+  let currentGeminiKey = "";
+  let streamId: string | null = null;
+  
+  async function loadAgentConfig(agentId: string) {
+     if (session._agentConfigReady) return;
+     try {
+       const agentResult = await client.queryObject(`SELECT client_id, system_prompt, persona FROM "agent" WHERE id = $1 LIMIT 1`, [agentId]);
+       if (agentResult.rows.length > 0) {
+          const agent = agentResult.rows[0] as any;
+          session.clientId = agent.client_id;
+          if (agent.system_prompt) session.systemPrompt = agent.system_prompt;
+          if (agent.persona && typeof agent.persona === 'object') {
+            const personaObj = agent.persona as any;
+            if (personaObj.voice_type) session.voiceType = personaObj.voice_type;
+            if (personaObj.human_transfer_number) session.humanTransferNumber = personaObj.human_transfer_number;
+            if (personaObj.enable_auto_transfer) session.enableAutoTransfer = personaObj.enable_auto_transfer;
+          }
+       }
+       
+       // Load KB
+       const kbQuery = await client.queryObject(`SELECT content, title FROM "knowledge_base" WHERE client_id = $1 AND status = 'ready'`, [session.clientId]);
+       let text = '';
+       for (const r of kbQuery.rows as any[]) {
+          if (r.content) text += `[${r.title}]\n${r.content}\n\n---\n\n`;
+       }
+       if (text.length >= 100) {
+          session._kbChunks = splitKBIntoChunks(text);
+          console.log(`[${reqId}] 📚 KB loaded: ${session._kbChunks.length} chunks`);
+       }
+     } catch (e) {
+       console.error(`[${reqId}] Agent config err:`, e);
+     }
+     session._agentConfigReady = true;
+     if (geminiSocket?.readyState === WebSocket.OPEN) sendGeminiSetup();
+  }
 
-    // Close existing socket if reconnecting
-    if (isReconnect && geminiSocket) {
-      try { geminiSocket.close(); } catch (_) { /* ignore */ }
-      geminiSocket = null;
+  function searchKBChunks(query: string) {
+    if (!session._kbChunks?.length) return '';
+    const kws = (query || '').toLowerCase().replace(/[^\w\s\u0900-\u097F]/g, ' ').split(/\s+/).filter(w => w.length >= 3);
+    if (!kws.length) return session._kbChunks.slice(0, 2).join('\n\n---\n\n');
+    const scored = session._kbChunks.map((c: string) => {
+      const lo = c.toLowerCase(); let s = 0;
+      for (const k of kws) {
+        s += lo.split(k).length - 1;
+        if (/^\[.*\]|^#/.test(c) && lo.substring(0, 100).includes(k)) s += 2;
+      }
+      return { c, s };
+    });
+    const top = scored.filter((x: any) => x.s > 0).sort((a: any, b: any) => b.s - a.s).slice(0, 3);
+    return top.length ? top.map((x: any) => x.c).join('\n\n---\n\n') : session._kbChunks.slice(0, 2).join('\n\n---\n\n');
+  }
+
+  function buildGeminiTools() {
+    const decls: any[] = [
+      { name: 'end_call', description: 'End the call after caller said goodbye or conversation concluded.', parameters: { type: 'object', properties: { reason: { type: 'string' } }, required: ['reason'] } }
+    ];
+    if (session.humanTransferNumber) {
+      decls.push({ name: 'transfer_to_human', description: 'Transfer to human when customer requests it.', parameters: { type: 'object', properties: { reason: { type: 'string' } }, required: ['reason'] } });
     }
+    if (session._kbChunks.length > 0) {
+      decls.push({ name: 'search_knowledge_base', description: 'Search KB for product/pricing/feature/policy info. ALWAYS use for company facts.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } });
+    }
+    session.tools = decls;
+    return decls;
+  }
+
+  async function executeToolCall(name: string, args: any) {
+    console.log(`[${reqId}] 🔧 ${name}`);
+    if (name === 'search_knowledge_base') {
+      const results = searchKBChunks(args.query || '');
+      return { results: results || 'No relevant info.' };
+    }
+    if (name === 'end_call') {
+      const elapsed = (Date.now() - session.startTime) / 1000;
+      if (elapsed < 10) return { error: 'Call just started. Continue the conversation naturally.' };
+      
+      const recentCustomer = session.transcript.filter((t: any) => t.speaker === 'Customer').slice(-3).map((t: any) => (t.text || '').toLowerCase()).join(' ');
+      const goodbyeRegex = /(bye|goodbye|alvida|namaste|namaskar|dhanyav[aā]d|thank\s*you|thanks|shukriya|theek\s*hai\s*bye|ok\s*bye|fir\s*milte|chalo\s*bye|बाय|अलविदा|धन्यवाद|शुक्रिया|नमस्ते|नमस्कार|फिर मिलते)/i;
+      if (!goodbyeRegex.test(recentCustomer)) return { error: 'Customer has NOT said goodbye yet. Continue the conversation.' };
+      
+      const reason = args.reason || 'conversation_complete';
+      session.transcript.push({ speaker: 'System', text: `[Ended: ${reason}]` });
+      setTimeout(() => {
+        session._callEnded = true;
+        if (geminiSocket?.readyState === WebSocket.OPEN) geminiSocket.close();
+        if (smartfloSocket?.readyState === WebSocket.OPEN) smartfloSocket.close();
+      }, 2000);
+      return { success: true };
+    }
+    return { error: `Unknown: ${name}` };
+  }
+
+  function sendToGemini(msg: any) { if (geminiSocket?.readyState === WebSocket.OPEN) geminiSocket.send(JSON.stringify(msg)); }
+
+  function sendGeminiSetup() {
+    if (session._setupSent) return;
+    session._setupSent = true;
+    const tools = buildGeminiTools();
+    const voiceRules = `[LANGUAGE] Speak ONLY Hindi (Devanagari/Roman) + English (Indian accent). Keep replies SHORT (1-2 sentences).\n[END-CALL GUARD] Use end_call ONLY after the CUSTOMER clearly says bye/thanks/namaste/dhanyavaad AND has spoken 2+ clear sentences.`;
+    const kbHeader = session._kbChunks.length > 0 ? `\n[KB] For any price/product/feature/policy/location fact: CALL search_knowledge_base FIRST. Never guess.\n` : '';
+    const fullPrompt = voiceRules + '\n' + kbHeader + '\n' + session.systemPrompt;
+
+    const setup: any = {
+      setup: {
+        model: 'models/gemini-2.0-flash-live-preview',
+        generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: session.voiceType } } } },
+        systemInstruction: { parts: [{ text: fullPrompt }] },
+      }
+    };
+    if (tools.length) setup.setup.tools = [{ functionDeclarations: tools }];
+    sendToGemini(setup);
+    console.log(`[${reqId}] 📤 Setup: tools=${tools.length}, voice=${session.voiceType}, prompt=${fullPrompt.length}ch`);
+  }
+
+  const connectGemini = async (isReconnect: boolean = false) => {
+    if (geminiSocket && !isReconnect) return;
+    if (isReconnect && geminiSocket) { try { geminiSocket.close(); } catch (_) {} geminiSocket = null; }
 
     const { url: WS_URL, key, tier } = geminiKeys.getWebSocketUrl();
     currentGeminiKey = key;
-    console.log(`[Gemini] Connecting with ${tier.toUpperCase()} key for Call ID: ${callId}${isReconnect ? ' (RECONNECT)' : ''}`);
     geminiSocket = new WebSocket(WS_URL);
 
     geminiSocket.onopen = async () => {
-      console.log(`[Gemini] Connected for Call ID: ${callId}, Agent ID: ${resolvedAgentId}`);
-      
-      let systemInstructionText = "You are a helpful AI business assistant. Keep your answers concise, conversational, and friendly as if you are on a phone call.";
-      let voiceName = "Aoede";
-
-      if (resolvedAgentId) {
-        try {
-          const agentResult = await client.queryObject(`SELECT system_prompt, persona FROM "agent" WHERE id = $1 LIMIT 1`, [resolvedAgentId]);
-          if (agentResult.rows.length > 0) {
-             const agent = agentResult.rows[0] as any;
-             if (agent.system_prompt) systemInstructionText = agent.system_prompt;
-             if (agent.persona && typeof agent.persona === 'object') {
-               const personaObj = agent.persona as any;
-               if (personaObj.voice_type) voiceName = personaObj.voice_type;
-             }
-          }
-        } catch (err) {
-          console.error("Error fetching agent configuration:", err);
-        }
-      }
-      
-      const setupMessage = {
-        setup: {
-          model: "models/gemini-3.1-flash-live-preview",
-          generationConfig: {
-            responseModalities: ["AUDIO"],
-            speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } } }
-          },
-          systemInstruction: { parts: [ { text: systemInstructionText } ] }
-        }
-      };
-      
-      geminiSocket!.send(JSON.stringify(setupMessage));
-
-      // Flush buffer
-      while (audioBuffer.length > 0) {
-         const pcm16kBase64 = audioBuffer.shift();
-         if (geminiSocket!.readyState === WebSocket.OPEN) {
-            geminiSocket!.send(JSON.stringify({
-              realtimeInput: { audio: { mimeType: "audio/pcm;rate=16000", data: pcm16kBase64 } }
-            }));
-         }
-      }
+      console.log(`[${reqId}] 🔌 Gemini Connected`);
+      session._setupSent = false;
+      if (session._agentConfigReady) sendGeminiSetup();
     };
 
     geminiSocket.onmessage = async (event) => {
       try {
         let text = typeof event.data === "string" ? event.data : "";
-        if (event.data instanceof Blob) {
-          text = await event.data.text();
-        } else if (event.data instanceof ArrayBuffer) {
-          text = new TextDecoder().decode(event.data);
-        }
+        if (event.data instanceof Blob) text = await event.data.text();
+        else if (event.data instanceof ArrayBuffer) text = new TextDecoder().decode(event.data);
         
         if (!text) return;
-        const data = JSON.parse(text);
+        const msg = JSON.parse(text);
 
-        if (data.setupComplete !== undefined) {
-          console.log("[Gemini] setupComplete received. Triggering initial greeting.");
-          if (geminiSocket && geminiSocket.readyState === WebSocket.OPEN) {
-            geminiSocket.send(JSON.stringify({
-              clientContent: {
-                turns: [
-                  { role: "user", parts: [{ text: "Hello! Greet me briefly in English or Hindi to start the conversation." }] }
-                ],
-                turnComplete: true
-              }
-            }));
+        if (msg.setupComplete !== undefined) {
+          session.geminiReady = true;
+          console.log(`[${reqId}] ✅ Gemini setupComplete (buffered=${session._audioBuffer.length})`);
+          
+          if (!session._greetingTriggered) {
+             session._greetingTriggered = true;
+             sendToGemini({ clientContent: { turns: [{ role: "user", parts: [{ text: "Hello! Greet me briefly in English or Hindi to start the conversation." }] }], turnComplete: true } });
+             session._audioBuffer = [];
+          } else {
+             // Flush last bit of buffer for reconnects
+             const tail = session._audioBuffer.slice(-50);
+             for (const b64 of tail) sendToGemini({ realtimeInput: { audio: { data: b64, mimeType: 'audio/pcm;rate=16000' } } });
+             session._audioBuffer = [];
           }
           return;
         }
-        
-        if (data.serverContent?.modelTurn) {
-          const parts = data.serverContent.modelTurn.parts;
-          for (const part of parts) {
-            if (part.inlineData && part.inlineData.mimeType.startsWith("audio/pcm")) {
-              const audioBase64 = part.inlineData.data;
-              // Downsample Gemini's 24kHz PCM16 to 8kHz Mu-law
-              const mulawBytes = base64PCM16_24kToMulaw(audioBase64, sessionState);
-              if (mulawBytes.length === 0) continue;
-              
-              // Forward back to Smartflo with pacing
-              if (smartfloSocket.readyState === WebSocket.OPEN && streamId) {
-                const CHUNK_SIZE = 960;
-                for (let i = 0; i < mulawBytes.length; i += CHUNK_SIZE) {
-                  const end = Math.min(i + CHUNK_SIZE, mulawBytes.length);
-                  let chunk = mulawBytes.slice(i, end);
-                  
-                  // Smartflo expects multiples of 160 bytes
-                  if (chunk.length % 160 !== 0) {
-                    const paddedLen = Math.ceil(chunk.length / 160) * 160;
-                    const padded = new Uint8Array(paddedLen);
-                    padded.set(chunk);
-                    padded.fill(127, chunk.length); // 127 = 0x7F mu-law silence
-                    chunk = padded;
+
+        if (msg.serverContent) {
+          const sc = msg.serverContent;
+          if (sc.modelTurn?.parts) {
+            for (const p of sc.modelTurn.parts) {
+              if (p.inlineData?.mimeType?.includes('audio') && p.inlineData.data) {
+                session.isSpeaking = true;
+                const m = base64PCM16_24kToMulaw(p.inlineData.data, session);
+                if (m.length > 0 && smartfloSocket.readyState === WebSocket.OPEN && streamId) {
+                  const CHUNK_SIZE = 960;
+                  for (let i = 0; i < m.length; i += CHUNK_SIZE) {
+                    const end = Math.min(i + CHUNK_SIZE, m.length);
+                    let chunk = m.slice(i, end);
+                    if (chunk.length % 160 !== 0) {
+                      const padded = new Uint8Array(Math.ceil(chunk.length / 160) * 160);
+                      padded.set(chunk); padded.fill(127, chunk.length);
+                      chunk = padded;
+                    }
+                    smartfloSocket.send(JSON.stringify({ event: "media", streamSid: streamId, media: { payload: uint8ToBase64(chunk) } }));
                   }
-                  
-                  const outPayload = JSON.stringify({
-                    event: "media",
-                    streamSid: streamId,
-                    media: { payload: uint8ToBase64(chunk) }
-                  });
-                  
-                  if (!(sessionState as any)._loggedOut) {
-                    console.log("[Smartflo] First OUTGOING media packet:", outPayload.substring(0, 150));
-                    (sessionState as any)._loggedOut = true;
-                  }
-                  
-                  smartfloSocket.send(outPayload);
                 }
               }
             }
           }
-        } else if (data.serverContent?.interrupted) {
-          // Handle interruption if needed
-        } else if (data.serverContent) {
-           console.log("[Gemini] Non-audio message received:", JSON.stringify(data).substring(0, 200));
+          if (sc.inputTranscription) {
+            const t = (sc.inputTranscription.text || '').trim();
+            if (t && !isNoiseTranscription(t)) session._pendingCustomerText += (session._pendingCustomerText ? ' ' : '') + t;
+          }
+          if (sc.outputTranscription) {
+             const t = (sc.outputTranscription.text || '').trim();
+             if (t) session._pendingAiText += (session._pendingAiText ? ' ' : '') + t;
+          }
+          if (sc.turnComplete) {
+            session.isSpeaking = false;
+            if (session._pendingCustomerText) {
+              const t = session._pendingCustomerText.trim();
+              console.log(`[${reqId}] 🗣️ "${t.substring(0, 200)}"`);
+              session.transcript.push({ speaker: 'Customer', text: t });
+              session._pendingCustomerText = '';
+            }
+            if (session._pendingAiText) {
+              const t = session._pendingAiText.trim();
+              console.log(`[${reqId}] 🤖 "${t.substring(0, 200)}"`);
+              session.transcript.push({ speaker: 'AI', text: t });
+              session._pendingAiText = '';
+            }
+          }
+          if (sc.interrupted) {
+             session.isSpeaking = false;
+             if (session._pendingAiText) { session.transcript.push({ speaker: 'AI', text: session._pendingAiText.trim() }); session._pendingAiText = ''; }
+             if (smartfloSocket.readyState === WebSocket.OPEN && streamId) smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: streamId }));
+          }
+        }
+        if (msg.toolCall) {
+           const fcs = msg.toolCall.functionCalls || [];
+           const responses = [];
+           for (const fc of fcs) {
+              const r = await executeToolCall(fc.name, fc.args || {});
+              responses.push({ id: fc.id, name: fc.name, response: r });
+           }
+           sendToGemini({ toolResponse: { functionResponses: responses } });
         }
       } catch (e) {
-        console.error("[Gemini] Error handling incoming message:", e);
+        console.error(`[${reqId}] Gemini error handling msg:`, e);
       }
     };
 
-    geminiSocket.onerror = (error) => {
-      console.error(`[Gemini] WebSocket Error (${tier} key):`, error);
-    };
+    geminiSocket.onerror = (e) => console.error(`[${reqId}] Gemini WS Error`, e);
 
     geminiSocket.onclose = (event) => {
-      console.log(`[Gemini] Disconnected for Call ID: ${callId} (code: ${event.code}, reason: ${event.reason})`);
-
-      // If rate-limited or policy violation, try reconnecting with paid key
-      if (geminiKeys.isRateLimitError(event.code) && !reconnectAttempted) {
-        reconnectAttempted = true;
-        geminiKeys.markRateLimited(currentGeminiKey, `ws_close_${event.code}`);
-        console.log(`[Gemini] Attempting reconnect with fallback key for Call ID: ${callId}`);
-        connectGemini(resolvedAgentId, true);
-        return;
-      }
-
-      if (smartfloSocket.readyState === WebSocket.OPEN) {
-        smartfloSocket.close();
+      console.log(`[${reqId}] 🔴 Gemini Disconnected (code: ${event.code})`);
+      session.geminiReady = false;
+      if (!session._callEnded && session._geminiReconnectAttempts < 5) {
+        session._geminiReconnectAttempts++;
+        connectGemini(true);
+      } else if (!session._callEnded) {
+        session._callEnded = true;
+        if (smartfloSocket.readyState === WebSocket.OPEN) smartfloSocket.close();
       }
     };
   };
-    
-  let streamId: string | null = null;
-  let firstMessageLogged = false; let firstMediaLogged = false;
+
+  smartfloSocket.onopen = () => console.log(`[${reqId}] Smartflo Connected`);
 
   smartfloSocket.onmessage = async (event) => {
     try {
       if (typeof event.data === "string") {
         const payload = JSON.parse(event.data);
-        if (!firstMediaLogged) {
-          console.log("[Smartflo] First message received:", JSON.stringify(payload));
-          firstMessageLogged = true;
-        }
-        if (payload.stream_id) {
-          streamId = payload.stream_id;
-        } else if (payload.streamSid) {
-          streamId = payload.streamSid;
-        }
+        if (payload.stream_id || payload.streamSid) streamId = payload.stream_id || payload.streamSid;
         
         if (payload.event === "start" || payload.event === "connected") {
-           let resolvedAgentId = agentId;
+           let resolvedAgentId = session._agentId;
            const customIdentifier = payload.start?.customData || payload.customData || payload.custom_identifier || "";
            const customerNumber = payload.start?.calledNumber || payload.customerNumber || "";
 
            if (!resolvedAgentId) {
-             // 1. Try CallLog lookup
              if (customIdentifier) {
                try {
                  const callLog = await base44.entities.CallLog.get(customIdentifier);
                  if (callLog) {
                    resolvedAgentId = callLog.agent_id;
-                   if (!leadId && callLog.lead_id) leadId = callLog.lead_id;
+                   session.callLogId = customIdentifier;
+                   if (!session._leadId && callLog.lead_id) session._leadId = callLog.lead_id;
                  }
                } catch(e) {}
              }
-             // 2. Try DID lookup
              if (!resolvedAgentId && customerNumber) {
                try {
                  const cleanDid = customerNumber.replace(/[^0-9]/g, '').slice(-10);
@@ -383,167 +625,44 @@ const streamHandler = (c: any) => {
                } catch(e) {}
              }
            }
-           connectGemini(resolvedAgentId);
+           session._agentId = resolvedAgentId;
+           if (resolvedAgentId) await loadAgentConfig(resolvedAgentId);
+           connectGemini();
         }
 
         if (payload.event === "media" || payload.type === "audio") {
-          if (!firstMediaLogged) {
-            console.log("[Smartflo] First media packet:", JSON.stringify(payload).substring(0, 300));
-            firstMediaLogged = true;
-          }
           const rawBase64 = payload.media?.payload || payload.data;
-          
-          // Decode Smartflo Mu-law Base64, upsample to PCM16 16kHz
           const rawBytes = Uint8Array.from(atob(rawBase64), c => c.charCodeAt(0));
           const pcm16kBase64 = mulawToBase64PCM16_16k(rawBytes);
 
-          if (geminiSocket && geminiSocket.readyState === WebSocket.OPEN) {
-            geminiSocket.send(JSON.stringify({
-              realtimeInput: { audio: { mimeType: "audio/pcm;rate=16000", data: pcm16kBase64 } }
-            }));
+          if (geminiSocket && session.geminiReady) {
+            sendToGemini({ realtimeInput: { audio: { mimeType: "audio/pcm;rate=16000", data: pcm16kBase64 } } });
           } else {
-            audioBuffer.push(pcm16kBase64); // Buffer until connected
-            if (!geminiSocket) connectGemini(agentId || null);
+            session._audioBuffer.push(pcm16kBase64);
+            if (!geminiSocket) connectGemini();
           }
         }
       }
-    } catch (e) {
-      console.error("[Smartflo] Error handling incoming media:", e);
-    }
+    } catch (e) { console.error(`[${reqId}] Smartflo parse err:`, e); }
   };
 
   smartfloSocket.onclose = async () => {
-    console.log(`[Smartflo] Disconnected for Call ID: ${callId}`);
+    console.log(`[${reqId}] Smartflo Disconnected`);
+    session._callEnded = true;
+    if (geminiSocket && geminiSocket.readyState === WebSocket.OPEN) geminiSocket.close();
     
-    if (leadId) {
-      try {
-        await base44.entities.CallLog.update(callId, {
-          call_end_time: new Date().toISOString(),
-          duration: Math.round((Date.now() - callStartTime) / 1000)
-        });
-        
-        await client.queryObject(`UPDATE "lead" SET last_call_date = $1 WHERE id = $2`, [new Date().toISOString(), leadId]);
-      } catch (err) {
-        console.error("Error updating CallLog/Lead on close:", err);
-      }
-    }
-
-    if (geminiSocket && geminiSocket.readyState === WebSocket.OPEN) {
-      geminiSocket.close();
-    }
-    
-    // Trigger post-call processing (Summary, Transcription, Scoring)
-    if (streamId) {
-      setTimeout(() => {
-        processPostCallMetrics(callId, streamId!, leadId).catch(err => {
-          console.error(`[PostCall] Failed to process metrics for call ${callId}:`, err);
-        });
-      }, 90000); // Wait 90 seconds for Smartflo recording to be ready
+    const duration = Math.round((Date.now() - session.startTime) / 1000);
+    if (session.callLogId) {
+      await saveCallRecord(session, reqId, duration);
+    } else if (session._leadId) {
+      await client.queryObject(`UPDATE "lead" SET last_call_date = $1 WHERE id = $2`, [new Date().toISOString(), session._leadId]);
     }
   };
 
-  smartfloSocket.onerror = (error) => {
-    console.error("[Smartflo] WebSocket Error:", error);
-  };
+  smartfloSocket.onerror = (e) => console.error(`[${reqId}] Smartflo WS Error:`, e);
 
   return response;
 };
-
-async function processPostCallMetrics(callId: string, streamSid: string, leadId: string) {
-  try {
-    console.log(`[PostCall] Starting post-call analysis for Call ID: ${callId}, Lead ID: ${leadId}`);
-    
-    // Fetch Smartflo Recording URL
-    // NOTE: This usually requires a server-to-server API call to Smartflo's Call Records API.
-    // For now, we will construct a mock URL or just use a placeholder text if recording isn't ready.
-    const smartfloAuthToken = Deno.env.get("SMARTFLO_API_KEY"); // Or fetch from DB
-    
-    // 1. We would fetch the recording file from Smartflo
-    // 2. We pass the audio to Gemini 1.5 Pro to analyze
-    // Because audio takes time to process, we simulate the LLM analysis via Google Generative AI
-    
-    let { key: geminiApiKey, tier } = geminiKeys.getRestApiKey();
-    if (!geminiApiKey) throw new Error("Missing Gemini API Key for post-call analysis");
-
-    // Fetch call log to see if Smartflo webhook has populated recording_url
-    const callLogResult = await client.queryObject(`SELECT recording_url FROM "calllog" WHERE id = $1 LIMIT 1`, [callId]);
-    let recordingUrl = null;
-    if (callLogResult.rows.length > 0) {
-      recordingUrl = (callLogResult.rows[0] as any).recording_url;
-    }
-
-    const requestBody = JSON.stringify({
-      contents: [{
-        role: "user",
-        parts: [
-          { text: `Analyze the following AI voice call interaction for Lead ID: ${leadId}. 
-          (In a real scenario, the audio recording from ${recordingUrl || 'Smartflo'} is provided). 
-          Generate a JSON object with: 
-          1) transcript: Full verbatim text of the call.
-          2) summary: A brief 2-3 sentence executive summary.
-          3) score: A number from 0 to 100 indicating buyer intent/interest.
-          4) status: A string enum ('Interested', 'Follow-up', 'Not Interested').
-          Ensure your response is ONLY valid JSON without markdown formatting.` }
-        ]
-      }]
-    });
-
-    // Call Gemini REST API with fallback retry
-    console.log(`[PostCall] Using ${tier.toUpperCase()} Gemini key for analysis`);
-    let response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${geminiApiKey}`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: requestBody
-    });
-    
-    // If rate-limited, switch to paid key and retry once
-    if (response.status === 429) {
-      geminiKeys.markRateLimited(geminiApiKey, "rest_429");
-      const fallback = geminiKeys.getRestApiKey();
-      if (fallback.key !== geminiApiKey) {
-        console.log(`[PostCall] Retrying with ${fallback.tier.toUpperCase()} key after rate limit`);
-        response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${fallback.key}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: requestBody
-        });
-      }
-    }
-
-    if (!response.ok) {
-      console.error("[PostCall] Gemini REST API Error:", await response.text());
-      return;
-    }
-    
-    const data = await response.json();
-    let llmText = data.candidates?.[0]?.content?.parts?.[0]?.text || "{}";
-    llmText = llmText.replace(/```json/g, "").replace(/```/g, "").trim();
-    
-    const analysis = JSON.parse(llmText);
-    console.log(`[PostCall] Analysis Result for ${leadId}:`, analysis);
-
-    // Update Lead Database
-    await client.queryObject(`
-      UPDATE "lead" 
-      SET score = $1, 
-          status = $2, 
-          notes = $3
-      WHERE id = $4
-    `, [analysis.score, analysis.status, `Summary:\n${analysis.summary}\n\nTranscript:\n${analysis.transcript}`, leadId]);
-    
-    // Update CallLog Database
-    await client.queryObject(`
-      UPDATE "calllog"
-      SET transcript = $1, conversation_summary = $2
-      WHERE id = $3
-    `, [analysis.transcript, analysis.summary, callId]);
-
-    console.log(`[PostCall] Successfully updated metrics for Lead ${leadId}`);
-
-  } catch (err) {
-    console.error("[PostCall] Error processing call metrics:", err);
-  }
-}
 
 voiceRouter.get("/stream/:callId", streamHandler);
 voiceRouter.get("/stream", streamHandler);
