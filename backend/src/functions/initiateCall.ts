@@ -212,8 +212,7 @@ export default async function initiateCall(c: any) {
       }
     });
 
-    const isDemoAgent = clientData.account_status === 'trial' || clientData.account_status === 'onboarding';
-    const smartfloApiKey = isDemoAgent ? Deno.env.get("SMARTFLO_API_KEY") : (agentResult.smartflo_api_token || Deno.env.get("SMARTFLO_API_KEY"));
+    const smartfloApiKey = agentResult.smartflo_api_token || Deno.env.get("SMARTFLO_API_KEY");
 
     if (!smartfloApiKey) {
       return c.json({ data: { success: false, error: "SMARTFLO_API_KEY not set" } }, 400);
