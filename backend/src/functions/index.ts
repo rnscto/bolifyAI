@@ -9,6 +9,8 @@ import azureBlobUpload from "./azureBlobUpload.ts";
 import extractKBContent from "./extractKBContent.ts";
 import generateConceptNote from "./generateConceptNote.ts";
 
+import adminManageAgent from "./adminManageAgent.ts";
+
 // AI Add-ons & Agents
 import generatePromptAndPersona from "./generatePromptAndPersona.ts";
 import uploadKBToStorage from "./uploadKBToStorage.ts";
@@ -61,6 +63,7 @@ export const functionRegistry: Record<string, Function> = {
   initiateCall,
   executeCampaign,
   adminListClients,
+  adminManageAgent,
   fetchCallRecording,
   rescoreLeadFromHistory,
   azureBlobSignedUrl,

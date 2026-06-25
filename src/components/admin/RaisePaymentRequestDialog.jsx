@@ -22,7 +22,7 @@ const TYPE_LABELS = {
   other: 'Other'
 };
 
-const CEO_EMAIL = 'ceo@getwaygroup.com';
+const CEO_EMAIL = 'yadavnand886@gmail.com';
 
 /**
  * Generic dialog the CEO admin uses to raise any payment approval request.

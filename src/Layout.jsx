@@ -190,7 +190,7 @@ export default function Layout({ children, currentPageName }) {
     return <>{children}</>;
   }
 
-  const isMainAdmin = isAdmin && user?.email === 'neerajyrns@gmail.com';
+  const isMainAdmin = isAdmin && user?.email === 'yadavnand886@gmail.com';
 
   const adminNav = [
     { name: 'Dashboard', path: 'AdminDashboard', icon: LayoutDashboard },

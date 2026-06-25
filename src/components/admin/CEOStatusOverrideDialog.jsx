@@ -29,7 +29,7 @@ export default function CEOStatusOverrideDialog({ client, currentUser, open, onO
   const [trialDays, setTrialDays] = useState(7);
   const [saving, setSaving] = useState(false);
 
-  const isCEO = (currentUser?.email || '').toLowerCase() === 'ceo@getwaygroup.com';
+  const isCEO = (currentUser?.email || '').toLowerCase() === 'yadavnand886@gmail.com';
   if (!isCEO || !client) return null;
 
   const handleSave = async () => {

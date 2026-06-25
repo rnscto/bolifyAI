@@ -6,7 +6,7 @@ import { jsPDF } from "jspdf";
 export const billingRouter = new Hono();
 
 const JWT_SECRET = Deno.env.get("JWT_SECRET") || "super_secret_bolifyai_key";
-const CEO_EMAIL = "ceo@getwaygroup.com";
+const CEO_EMAIL = "yadavnand886@gmail.com";
 const CASHFREE_APP_ID = Deno.env.get("CASHFREE_APP_ID");
 const CASHFREE_SECRET_KEY = Deno.env.get("CASHFREE_SECRET_KEY");
 const CASHFREE_ENV = Deno.env.get("CASHFREE_ENVIRONMENT") || "sandbox";

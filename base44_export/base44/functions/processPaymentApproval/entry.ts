@@ -1,10 +1,10 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-const MAIN_ADMIN_EMAIL = 'neerajyrns@gmail.com';
+const MAIN_ADMIN_EMAIL = 'yadavnand886@gmail.com';
 
 /**
  * Process (approve/reject) a PaymentApprovalRequest.
- * Only neerajyrns@gmail.com (main admin) may call this.
+ * Only yadavnand886@gmail.com (main admin) may call this.
  * On approval, the underlying change is applied to the client (e.g. activate account, top up wallet, activate CRM, activate Social Media).
  * Body: { request_id: string, decision: "approve" | "reject", review_notes?: string }
  */

@@ -14,7 +14,7 @@ import InvoiceButton from '../components/subscription/InvoiceButton';
 import { Button } from '@/components/ui/button';
 import RaisePaymentRequestDialog from '../components/admin/RaisePaymentRequestDialog';
 
-const CEO_EMAIL = 'ceo@getwaygroup.com';
+const CEO_EMAIL = 'yadavnand886@gmail.com';
 
 const statusColors = {
   paid: 'bg-green-100 text-green-800',

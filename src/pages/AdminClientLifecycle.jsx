@@ -16,7 +16,7 @@ import {
   CheckCircle2, XCircle, AlertTriangle, ArrowRightLeft, Plus, Lock,
 } from 'lucide-react';
 
-const MAIN_ADMIN_EMAIL = 'neerajyrns@gmail.com';
+const MAIN_ADMIN_EMAIL = 'yadavnand886@gmail.com';
 
 const EVENT_META = {
   activated:           { label: 'Activated',           color: 'bg-green-100 text-green-800',   Icon: CheckCircle2 },

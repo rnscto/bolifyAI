@@ -22,8 +22,8 @@ import { Loader2, CreditCard, Calendar, Wallet, Upload, FileImage, ShieldCheck, 
 import { toast } from 'sonner';
 import { uploadPrivateFile, getSignedUrl } from '@/lib/azureBlob';
 
-const CEO_EMAIL = 'ceo@getwaygroup.com';
-const MAIN_ADMIN_EMAIL = 'neerajyrns@gmail.com';
+const CEO_EMAIL = 'yadavnand886@gmail.com';
+const MAIN_ADMIN_EMAIL = 'yadavnand886@gmail.com';
 
 export default function ActivateClientDialog({ client, open, onOpenChange, onUpdated }) {
   const [me, setMe] = useState(null);

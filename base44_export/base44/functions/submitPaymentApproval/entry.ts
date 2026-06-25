@@ -1,10 +1,10 @@
 import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
-const CEO_EMAIL = 'ceo@getwaygroup.com';
+const CEO_EMAIL = 'yadavnand886@gmail.com';
 
 /**
  * Submit a payment approval request.
- * Only ceo@getwaygroup.com may call this.
+ * Only yadavnand886@gmail.com may call this.
  * Body:
  * {
  *   request_type: "client_activation" | "wallet_topup" | "crm_integration_access" | "social_media_access" | "subscription_renewal" | "channel_addition" | "other",

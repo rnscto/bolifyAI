@@ -1,6 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 
-const MAIN_ADMIN_EMAIL = 'neerajyrns@gmail.com';
+const MAIN_ADMIN_EMAIL = 'yadavnand886@gmail.com';
 
 export default async function processPaymentApproval(c: any) {
   try {

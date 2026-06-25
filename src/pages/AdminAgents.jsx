@@ -172,15 +172,19 @@ export default function AdminAgents() {
         assigned_dids: formData.assigned_dids || [],
         status: formData.status,
         industry: formData.industry,
-        smartflo_api_token: formData.smartflo_api_token || '',
-        knowledge_base_ids: []
+        smartflo_api_token: formData.smartflo_api_token || ''
       };
+      
+      // Only set knowledge_base_ids to empty array when creating a NEW agent
+      if (!editingAgent) {
+        agentData.knowledge_base_ids = [];
+      }
 
       if (editingAgent) {
-        await base44.entities.Agent.update(editingAgent.id, agentData);
+        await base44.functions.invoke('adminManageAgent', { action: 'update', agent_id: editingAgent.id, data: agentData });
         toast.success('Agent updated');
       } else {
-        await base44.entities.Agent.create(agentData);
+        await base44.functions.invoke('adminManageAgent', { action: 'create', data: agentData });
         toast.success('Agent created');
       }
 
@@ -239,7 +243,7 @@ export default function AdminAgents() {
     if (!confirm('Delete this agent?')) return;
     
     try {
-      await base44.entities.Agent.delete(id);
+      await base44.functions.invoke('adminManageAgent', { action: 'delete', agent_id: id });
       toast.success('Agent deleted');
       loadData();
     } catch (error) {

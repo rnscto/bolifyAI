@@ -14,8 +14,8 @@ import {
 import RaisePaymentRequestDialog from '../components/admin/RaisePaymentRequestDialog';
 import { getSignedUrl } from '@/lib/azureBlob';
 
-const CEO_EMAIL = 'ceo@getwaygroup.com';
-const MAIN_ADMIN_EMAIL = 'neerajyrns@gmail.com';
+const CEO_EMAIL = 'yadavnand886@gmail.com';
+const MAIN_ADMIN_EMAIL = 'yadavnand886@gmail.com';
 
 const TYPE_LABELS = {
   client_activation: 'Client Activation',

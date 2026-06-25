@@ -13,8 +13,8 @@ import { toast } from 'sonner';
 import { CheckCircle2, XCircle, Database, Clock, Ban, IndianRupee, Upload } from 'lucide-react';
 import RaisePaymentRequestDialog from '../components/admin/RaisePaymentRequestDialog';
 
-const CEO_EMAIL = 'ceo@getwaygroup.com';
-const MAIN_ADMIN_EMAIL = 'neerajyrns@gmail.com';
+const CEO_EMAIL = 'yadavnand886@gmail.com';
+const MAIN_ADMIN_EMAIL = 'yadavnand886@gmail.com';
 
 const STATUS_META = {
   not_requested: { label: 'Not requested', color: 'bg-gray-100 text-gray-700' },
