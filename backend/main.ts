@@ -95,6 +95,6 @@ connectDB().catch(console.error);
 
 export default {
   port: Number(Deno.env.get("PORT")) || 8000,
-  hostname: "0.0.0.0",
+  hostname: "::",
   fetch: app.fetch,
 };
