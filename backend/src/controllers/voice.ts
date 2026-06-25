@@ -324,7 +324,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
 
   const session: any = {
     callSid: callId,
-    callLogId: null,
+    callLogId: url.searchParams.get("call_log_id") || null,
     clientId: null,
     transcript: [],
     startTime: Date.now(),
