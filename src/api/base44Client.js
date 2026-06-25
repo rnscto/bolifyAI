@@ -29,7 +29,7 @@ async function apiFetch(path, options = {}) {
     let errorMsg = "API Error";
     try {
       const err = await response.json();
-      errorMsg = err.error || errorMsg;
+      errorMsg = err?.data?.error || err?.error || err?.message || errorMsg;
     } catch (e) {}
     throw new Error(errorMsg);
   }
