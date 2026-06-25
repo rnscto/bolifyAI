@@ -42,5 +42,7 @@ jobs:
           containerAppName: bolify
           resourceGroup: vaani-ai-prod
           imageToBuild: codeastraregistry.azurecr.io/bolify:${{ github.sha }}
+          ingress: external
+          targetPort: 8000
 
 
