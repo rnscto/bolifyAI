@@ -306,31 +306,16 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
   } catch (err: any) { console.error(`[${reqId}] ❌ Save: ${err.message}`); }
 }
 
-export const streamHandler = async (c: any) => {
-  const isWS = (c.req.header("upgrade") || "").toLowerCase() === "websocket";
-
-  if (!isWS) {
-    const host = c.req.header('host') || c.req.header('x-forwarded-host') || 'localhost';
-    let cid = '';
-    if (c.req.method === 'POST') {
-      try { 
-        const bd = await c.req.json(); 
-        cid = bd.call_log_id || bd.custom_identifier || bd.callLogId || bd.customData || ''; 
-      } catch (_) {}
-    } else {
-      cid = c.req.query('call_log_id') || c.req.query('custom_identifier') || '';
-    }
-    return c.json({
-      success: true,
-      sucess: true,
-      wss_url: `wss://${host}/api/voice/stream${cid ? '?call_log_id=' + encodeURIComponent(cid) : ''}`
-    });
-  }
-
-  const callId = c.req.query("call_log_id") || c.req.param("callId") || `call_${Date.now()}`;
+// handleStreamWebSocket: Called directly from Deno.serve BEFORE Hono middleware.
+// This is the ONLY reliable way to handle WebSocket upgrades in Deno + Hono.
+export async function handleStreamWebSocket(req: Request): Promise<Response> {
+  const url = new URL(req.url);
+  const callId = url.searchParams.get("call_log_id") || url.searchParams.get("callId") || `call_${Date.now()}`;
   const reqId = Math.random().toString(36).substring(2, 10);
-  
-  const { socket: smartfloSocket, response } = Deno.upgradeWebSocket(c.req.raw);
+  const leadIdParam = url.searchParams.get("lead_id") || null;
+  const agentIdParam = url.searchParams.get("agent_id") || null;
+
+  const { socket: smartfloSocket, response } = Deno.upgradeWebSocket(req);
 
   const initialKey = geminiKeys.getKey();
   if (!initialKey.key) {
@@ -364,8 +349,8 @@ export const streamHandler = async (c: any) => {
     _pendingAiText: '',
     _pendingCustomerText: '',
     _kbChunks: [],
-    _leadId: c.req.query("lead_id") || null,
-    _agentId: c.req.query("agent_id") || null,
+    _leadId: leadIdParam,
+    _agentId: agentIdParam,
     _audioBuffer: [],
     _setupSent: false,
     _greetingTriggered: false,
@@ -679,6 +664,27 @@ export const streamHandler = async (c: any) => {
   smartfloSocket.onerror = (e) => console.error(`[${reqId}] Smartflo WS Error:`, e);
 
   return response;
+}
+
+// streamHandler: Hono-compatible handler for GET /api/voice/stream
+// If it receives a plain HTTP request, returns WSS URL info.
+// WS upgrades are handled at Deno.serve level via handleStreamWebSocket.
+export const streamHandler = async (c: any) => {
+  const isWS = (c.req.header("upgrade") || "").toLowerCase() === "websocket";
+  if (isWS) {
+    try {
+      return await handleStreamWebSocket(c.req.raw) as any;
+    } catch(e: any) {
+      return c.text("WebSocket upgrade failed: " + e.message, 500);
+    }
+  }
+  const appBaseUrl = Deno.env.get('APP_BASE_URL');
+  const host = appBaseUrl || c.req.header('x-forwarded-host') || c.req.header('host') || '';
+  const cid = c.req.query('call_log_id') || c.req.query('custom_identifier') || '';
+  return c.json({
+    success: true,
+    wss_url: `wss://${host}/api/voice/stream${cid ? '?call_log_id=' + encodeURIComponent(cid) : ''}`
+  });
 };
 
 import { triggerSmartfloOutboundCall } from "../services/smartflo.ts";
