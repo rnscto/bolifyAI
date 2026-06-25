@@ -1,4 +1,4 @@
-import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 import { triggerSmartfloOutboundCall } from "../services/smartflo.ts";
 
 export default async function executeCampaign(c: any) {
@@ -8,15 +8,16 @@ export default async function executeCampaign(c: any) {
     
     if (!campaign_id) return c.json({ data: { error: 'campaign_id required' } }, 400);
 
-    const campaign = await base44.entities.Campaign.get(campaign_id);
+    const campRes = await client.queryObject(`SELECT * FROM "campaign" WHERE id = $1 LIMIT 1`, [campaign_id]);
+    const campaign = campRes.rows[0] as any;
     if (!campaign) return c.json({ data: { error: 'Campaign not found' } }, 404);
 
     if (action === 'pause') {
-      await base44.entities.Campaign.update(campaign_id, { status: 'paused' });
+      await client.queryObject(`UPDATE "campaign" SET status = 'paused' WHERE id = $1`, [campaign_id]);
       return c.json({ data: { success: true, status: 'paused' } });
     }
     if (action === 'cancel') {
-      await base44.entities.Campaign.update(campaign_id, { status: 'cancelled' });
+      await client.queryObject(`UPDATE "campaign" SET status = 'cancelled' WHERE id = $1`, [campaign_id]);
       return c.json({ data: { success: true, status: 'cancelled' } });
     }
 
@@ -25,7 +26,7 @@ export default async function executeCampaign(c: any) {
     const istDate = new Date(istMs);
     const istHour = istDate.getUTCHours();
     if (istHour < 9 || istHour >= 21) {
-      await base44.entities.Campaign.update(campaign_id, { status: 'paused' });
+      await client.queryObject(`UPDATE "campaign" SET status = 'paused' WHERE id = $1`, [campaign_id]);
       return c.json({ data: { error: 'trai_window_closed', message: "Calling allowed only between 9 AM and 9 PM IST. Campaign auto-paused." } });
     }
 
@@ -34,53 +35,70 @@ export default async function executeCampaign(c: any) {
     }
 
     // Billing Check
-    const clientData = await base44.entities.Client.get(campaign.client_id);
+    const clientDataRes = await client.queryObject(`SELECT billing_type, free_minutes_remaining, wallet_balance FROM "client" WHERE id = $1 LIMIT 1`, [campaign.client_id]);
+    const clientData = clientDataRes.rows[0] as any;
     if (clientData && clientData.billing_type !== 'unlimited') {
-      const freeMinutes = clientData.free_minutes_remaining || 0;
-      const walletBalance = clientData.wallet_balance || 0;
+      const freeMinutes = Number(clientData.free_minutes_remaining) || 0;
+      const walletBalance = Number(clientData.wallet_balance) || 0;
       if (freeMinutes <= 0 && walletBalance < 100) {
         return c.json({ data: { error: 'insufficient_balance', message: 'Insufficient balance. Minimum ₹100 required.' } });
       }
     }
 
-    await base44.entities.Campaign.update(campaign_id, {
-      status: 'running',
-      started_at: campaign.started_at || new Date().toISOString()
-    });
+    await client.queryObject(`UPDATE "campaign" SET status = 'running', started_at = COALESCE(started_at, $2) WHERE id = $1`, [campaign_id, new Date().toISOString()]);
 
-    const agent = await base44.entities.Agent.get(campaign.agent_id);
-    if (!agent) {
-      await base44.entities.Campaign.update(campaign_id, { status: 'draft' });
+    const agentRes = await client.queryObject(`SELECT * FROM "agent" WHERE id = $1 LIMIT 1`, [campaign.agent_id]);
+    const agentResult = agentRes.rows[0] as any;
+    if (!agentResult) {
+      await client.queryObject(`UPDATE "campaign" SET status = 'draft' WHERE id = $1`, [campaign_id]);
       return c.json({ data: { error: 'Agent not found' } });
     }
 
-    const callerId = (agent.assigned_dids?.length > 0) ? agent.assigned_dids[0] : agent.assigned_did;
+    const callerId = (agentResult.assigned_dids?.length > 0) ? agentResult.assigned_dids[0] : agentResult.assigned_did;
     if (!callerId) {
       return c.json({ data: { error: 'Agent has no assigned DID' } });
     }
 
-    const smartfloApiKey = agent.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY');
+    const smartfloApiKey = agentResult.smartflo_api_token || Deno.env.get('SMARTFLO_API_KEY');
     if (!smartfloApiKey) {
       return c.json({ data: { error: 'No SMARTFLO_API_KEY configured' } });
     }
 
     const maxConcurrent = campaign.max_concurrent_calls || 5;
-    const currentlyCalling = await base44.entities.CampaignLead.filter({ campaign_id, status: 'calling' }, 'created_at', maxConcurrent);
+    
+    const currentlyCallingRes = await client.queryObject(`SELECT id FROM "campaignlead" WHERE campaign_id = $1 AND status = 'calling' LIMIT $2`, [campaign_id, maxConcurrent]);
+    const currentlyCalling = currentlyCallingRes.rows;
     const slotsAvailable = Math.max(0, maxConcurrent - currentlyCalling.length);
 
     if (slotsAvailable === 0) {
       return c.json({ data: { success: true, message: 'All slots occupied', currently_calling: currentlyCalling.length } });
     }
 
-    const pendingLeads = await base44.entities.CampaignLead.filter({ campaign_id, status: 'pending' }, 'created_at', slotsAvailable);
+    const pendingLeadsRes = await client.queryObject(`SELECT * FROM "campaignlead" WHERE campaign_id = $1 AND status = 'pending' ORDER BY created_at ASC LIMIT $2`, [campaign_id, slotsAvailable]);
+    const pendingLeads = pendingLeadsRes.rows as any[];
     
     if (pendingLeads.length === 0) {
       // Check if campaign is completely done
       if (currentlyCalling.length === 0) {
-         await base44.entities.Campaign.update(campaign_id, { status: 'completed', completed_at: new Date().toISOString() });
+         await client.queryObject(`UPDATE "campaign" SET status = 'completed', completed_at = $2 WHERE id = $1`, [campaign_id, new Date().toISOString()]);
          return c.json({ data: { success: true, status: 'completed' } });
       }
       return c.json({ data: { success: true, message: 'No ready leads' } });
+    }
+
+    let kbContent = '';
+    let kbContentUrl = '';
+    if (agentResult.knowledge_base_id) {
+        try {
+            const kbRes = await client.queryObject(`SELECT content, content_url FROM "knowledgebase" WHERE id = $1 LIMIT 1`, [agentResult.knowledge_base_id]);
+            if (kbRes.rows.length > 0) {
+                kbContent = (kbRes.rows[0] as any).content || '';
+                kbContentUrl = (kbRes.rows[0] as any).content_url || '';
+                if (kbContent.length > 2000) {
+                    kbContent = kbContent.substring(0, 2000) + '\n\n[TRUNCATED - Content too large]';
+                }
+            }
+        } catch (err) {}
     }
 
     const results = { initiated: 0, failed: 0, errors: [] as any[] };
@@ -89,39 +107,110 @@ export default async function executeCampaign(c: any) {
       try {
         const callee10 = (cl.lead_phone || '').replace(/[^0-9]/g, '').slice(-10);
         if (!/^[6-9]\d{9}$/.test(callee10)) {
-           await base44.entities.CampaignLead.update(cl.id, { status: 'completed', outcome: 'do_not_call', conversation_summary: 'Invalid phone' });
+           await client.queryObject(`UPDATE "campaignlead" SET status = 'completed', outcome = 'do_not_call', conversation_summary = 'Invalid phone' WHERE id = $1`, [cl.id]);
            continue;
         }
 
-        await base44.entities.CampaignLead.update(cl.id, { status: 'calling', attempt_count: (cl.attempt_count || 0) + 1 });
+        await client.queryObject(`UPDATE "campaignlead" SET status = 'calling', attempt_count = COALESCE(attempt_count, 0) + 1 WHERE id = $1`, [cl.id]);
 
-        const callLog = await base44.entities.CallLog.create({
-          client_id: campaign.client_id, 
-          agent_id: campaign.agent_id, 
-          lead_id: cl.lead_id,
-          caller_id: callerId, 
-          callee_number: callee10,
-          direction: 'outbound', 
-          status: 'initiated', 
-          call_start_time: new Date().toISOString(),
-        });
+        let leadContext = '';
+        try {
+            const leadRes = await client.queryObject(`SELECT * FROM "lead" WHERE id = $1 LIMIT 1`, [cl.lead_id]);
+            const leadResult = (leadRes.rows[0] as any) || {};
 
-        await base44.entities.CampaignLead.update(cl.id, { call_log_id: callLog.id });
+            const callLogsRes = await client.queryObject(`SELECT * FROM "calllog" WHERE lead_id = $1 ORDER BY created_at DESC LIMIT 3`, [cl.lead_id]);
+            const sortedLogs = callLogsRes.rows as any[];
+            
+            const sections = [];
+            sections.push(`CUSTOMER PROFILE:`);
+            sections.push(`- Name: ${leadResult.name || cl.lead_name || 'Unknown'}`);
+            if (callee10) sections.push(`- Phone: ${callee10}`);
+            if (leadResult.email) sections.push(`- Email: ${leadResult.email}`);
+            if (leadResult.company) sections.push(`- Company: ${leadResult.company}`);
+            if (leadResult.source) sections.push(`- Lead Source: ${leadResult.source}`);
+            if (leadResult.status) sections.push(`- Current Status: ${leadResult.status}`);
+
+            if (leadResult.score || leadResult.sentiment || leadResult.qualification_tier) {
+                sections.push(`\nLEAD INTELLIGENCE:`);
+                if (leadResult.score) sections.push(`- Lead Score: ${leadResult.score}/100`);
+                if (leadResult.sentiment) sections.push(`- Sentiment: ${leadResult.sentiment.replace(/_/g, ' ')}`);
+                if (leadResult.qualification_tier) sections.push(`- Qualification: ${leadResult.qualification_tier.toUpperCase()}`);
+            }
+
+            if (sortedLogs.length > 0) {
+                sections.push(`\nPREVIOUS CALL HISTORY (last ${sortedLogs.length}):`);
+                sortedLogs.forEach((log: any, i: number) => {
+                const date = log.call_start_time ? new Date(log.call_start_time).toLocaleDateString('en-IN') : 'Unknown';
+                sections.push(`Call ${i + 1} — ${date} (${log.duration ? Math.round(log.duration) + 's' : 'N/A'}, ${log.status}):`);
+                if (log.conversation_summary) sections.push(`  Summary: ${log.conversation_summary.substring(0, 300)}`);
+                if (log.lead_status_updated) sections.push(`  Outcome: ${log.lead_status_updated}`);
+                });
+            } else {
+                sections.push(`\nPREVIOUS CALLS: None — this is the first interaction.`);
+            }
+
+            sections.push(`\nCRITICAL PERSONALIZATION RULES:`);
+            sections.push(`- You MUST address the customer by their name "${leadResult.name || cl.lead_name || ''}" in the conversation.`);
+            sections.push(`- Example: "Kya main ${leadResult.name || cl.lead_name || 'Sir/Madam'} se baat kar rahi hu?"`);
+            
+            leadContext = sections.join('\n');
+        } catch (e) {
+            leadContext = `CUSTOMER PROFILE:\n- Name: ${cl.lead_name || 'Unknown'}\n- Phone: ${callee10}\nCRITICAL: Address the customer by name "${cl.lead_name || 'Sir/Madam'}" during the call.`;
+        }
+
+        const nowIST = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' });
+        const timeContext = `\n\n--- CURRENT DATE & TIME (IST) ---\nRight now it is: ${nowIST} (Indian Standard Time).`;
+
+        const personalizedPrompt = [
+            agentResult.system_prompt || '',
+            timeContext,
+            `\n\n--- LEAD CONTEXT (YOU MUST USE THIS DATA IN THE CONVERSATION) ---\n${leadContext}`
+        ].filter(Boolean).join('\n');
+
+        const agentConfigCache = {
+            agent_name: agentResult.name,
+            system_prompt: personalizedPrompt,
+            persona: agentResult.persona || {},
+            knowledge_base_content: kbContent,
+            knowledge_base_url: kbContentUrl,
+            kb_file_uri: agentResult.kb_file_uri || '',
+            lead_context: leadContext,
+            greeting_message: agentResult.greeting_message || '',
+            human_transfer_number: agentResult.human_transfer_number || '',
+            enable_auto_transfer: agentResult.enable_auto_transfer !== false
+        };
+
+        const callLogId = crypto.randomUUID();
+        const callSid = `call_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
+        const nowIso = new Date().toISOString();
+
+        await client.queryObject(`
+          INSERT INTO "calllog"
+            (id, client_id, agent_id, lead_id, call_sid, caller_id, callee_number,
+             direction, status, agent_config_cache, call_start_time, created_at, updated_at)
+          VALUES
+            ($1, $2, $3, $4, $5, $6, $7, 'outbound', 'initiated', $8::jsonb, $9, $10, $11)
+        `, [
+          callLogId, campaign.client_id, campaign.agent_id, cl.lead_id, callSid,
+          callerId, callee10, JSON.stringify(agentConfigCache), nowIso, nowIso, nowIso
+        ]);
+
+        await client.queryObject(`UPDATE "campaignlead" SET call_log_id = $1 WHERE id = $2`, [callLogId, cl.id]);
 
         const smartfloResp = await triggerSmartfloOutboundCall({
           smartfloApiKey,
           calleeNumber: '91' + callee10,
           callerId: callerId,
-          callLogId: callLog.id
+          callLogId: callLogId
         });
 
         if (!smartfloResp.success) {
-           await base44.entities.CallLog.update(callLog.id, { status: 'failed' });
-           await base44.entities.CampaignLead.update(cl.id, { status: 'completed', outcome: 'not_answered', conversation_summary: smartfloResp.message });
+           await client.queryObject(`UPDATE "calllog" SET status = 'failed' WHERE id = $1`, [callLogId]);
+           await client.queryObject(`UPDATE "campaignlead" SET status = 'completed', outcome = 'not_answered', conversation_summary = $1 WHERE id = $2`, [smartfloResp.message, cl.id]);
            results.failed++;
            results.errors.push({ lead: cl.lead_phone, error: smartfloResp.message });
         } else {
-           await base44.entities.CallLog.update(callLog.id, { call_sid: smartfloResp.call_sid, status: 'ringing' });
+           await client.queryObject(`UPDATE "calllog" SET call_sid = $1, status = 'ringing' WHERE id = $2`, [smartfloResp.call_sid, callLogId]);
            results.initiated++;
         }
       } catch (err: any) {
@@ -136,3 +225,4 @@ export default async function executeCampaign(c: any) {
     return c.json({ data: { error: error.message } }, 500);
   }
 }
+
