@@ -31,17 +31,28 @@ jobs:
           tenant-id: ${{ secrets.BOLIFY_AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.BOLIFY_AZURE_SUBSCRIPTION_ID }}
 
-      - name: Build and push container image to registry
+      - name: Log in to container registry
+        uses: docker/login-action@v3
+        with:
+          registry: codeastraregistry.azurecr.io
+          username: ${{ secrets.BOLIFY_REGISTRY_USERNAME }}
+          password: ${{ secrets.BOLIFY_REGISTRY_PASSWORD }}
+
+      - name: Build and push container image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: codeastraregistry.azurecr.io/bolify:${{ github.sha }}
+          file: Dockerfile
+
+      - name: Deploy to Azure Container Apps
         uses: azure/container-apps-deploy-action@v2
         with:
-          appSourcePath: ${{ github.workspace }}
-          dockerfilePath: Dockerfile
           registryUrl: codeastraregistry.azurecr.io
           registryUsername: ${{ secrets.BOLIFY_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.BOLIFY_REGISTRY_PASSWORD }}
           containerAppName: bolify
           resourceGroup: vaani-ai-prod
-          imageToBuild: codeastraregistry.azurecr.io/bolify:${{ github.sha }}
-          ingress: external
-          targetPort: 8000
+          imageToDeploy: codeastraregistry.azurecr.io/bolify:${{ github.sha }}
 
