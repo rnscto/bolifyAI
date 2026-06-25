@@ -287,7 +287,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
                 </div>
               </div>
               <p className="text-xs text-cyan-700">
-                Current wallet: ₹{(client?.wallet_balance || 0).toLocaleString()} · {client?.free_minutes_remaining || 0} free min · {(client?.total_minutes_used || 0).toFixed(1)} min used
+                Current wallet: ₹{Number(client?.wallet_balance || 0).toLocaleString()} · {client?.free_minutes_remaining || 0} free min · {Number(client?.total_minutes_used || 0).toFixed(1)} min used
               </p>
             </div>
           )}
