@@ -1,7 +1,10 @@
 import { Hono } from "hono";
-import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 
 export const voiceWebhookRouter = new Hono();
+
+// Helper to get the app base URL for internal self-calls
+const getAppBaseUrl = () => Deno.env.get('APP_BASE_URL_INTERNAL') || `http://localhost:${Deno.env.get('PORT') || '8000'}`;
 
 voiceWebhookRouter.post("/", async (c) => {
   try {
@@ -34,7 +37,6 @@ voiceWebhookRouter.post("/", async (c) => {
             try {
                 payload = JSON.parse(rawBody);
             } catch (e) {
-                // If it fails, maybe it's URL params in the body anyway
                  const params = new URLSearchParams(rawBody);
                  for (const [key, value] of params.entries()) {
                      payload[key] = value;
@@ -42,13 +44,14 @@ voiceWebhookRouter.post("/", async (c) => {
             }
         }
     } else {
-        // Body is empty, maybe they sent parameters in query?
         payload = c.req.query();
-        if (Object.keys(payload).length <= 1) { // only secret
+        if (Object.keys(payload).length <= 1) {
              console.log("[smartfloWebhook] Empty body and no query parameters. Returning 200.");
              return c.json({ success: true, message: "Empty body received" });
         }
     }
+
+    console.log("[smartfloWebhook] Received payload:", JSON.stringify(payload));
 
     const dataObj = payload.data || payload;
     const call_id = dataObj.call_id || dataObj.uuid || payload.call_id || payload.uuid;
@@ -67,24 +70,23 @@ voiceWebhookRouter.post("/", async (c) => {
       console.log(`[smartfloWebhook] Incoming call from: ${incomingNumber}, to DID: ${calledDID}`);
       
       const cleanDID = calledDID.replace(/\D/g, "").slice(-10);
-      const allDIDs = await base44.entities.DID.filter({});
+      const allDIDsRes = await client.queryObject(`SELECT * FROM "did"`);
+      const allDIDs = allDIDsRes.rows as any[];
       const resolvedDID = allDIDs.find((d: any) => d.number && d.number.replace(/\D/g, "").slice(-10) === cleanDID);
       
       if (resolvedDID) {
-        const resolvedAgent = await base44.entities.Agent.get(resolvedDID.agent_id);
-        const resolvedClient = await base44.entities.Client.get(resolvedDID.client_id);
+        const agentRes = await client.queryObject(`SELECT * FROM "agent" WHERE id = $1 LIMIT 1`, [resolvedDID.agent_id]);
+        const clientRes = await client.queryObject(`SELECT * FROM "client" WHERE id = $1 LIMIT 1`, [resolvedDID.client_id]);
+        const resolvedAgent = (agentRes.rows[0] as any) || null;
+        const resolvedClient = (clientRes.rows[0] as any) || null;
         
         if (resolvedAgent && resolvedClient) {
-          const inboundLog = await base44.entities.CallLog.create({
-            client_id: resolvedClient.id,
-            agent_id: resolvedAgent.id,
-            call_sid: call_id,
-            caller_id: incomingNumber,
-            callee_number: calledDID,
-            direction: "inbound",
-            status: "ringing",
-            call_start_time: new Date().toISOString()
-          });
+          const inboundLogRes = await client.queryObject(
+            `INSERT INTO "call_log" (client_id, agent_id, call_sid, caller_id, callee_number, direction, status, call_start_time)
+             VALUES ($1, $2, $3, $4, $5, 'inbound', 'ringing', NOW()) RETURNING *`,
+            [resolvedClient.id, resolvedAgent.id, call_id, incomingNumber, calledDID]
+          );
+          const inboundLog = inboundLogRes.rows[0] as any;
           return c.json({ success: true, type: "inbound", call_log_id: inboundLog.id });
         }
       }
@@ -110,64 +112,71 @@ voiceWebhookRouter.post("/", async (c) => {
     let directLog: any = null;
     
     if (customIdentifier) {
-      try { directLog = await base44.entities.CallLog.get(customIdentifier); } catch(e) {}
+      try {
+        const res = await client.queryObject(`SELECT * FROM "call_log" WHERE id = $1 LIMIT 1`, [customIdentifier]);
+        directLog = (res.rows[0] as any) || null;
+      } catch(e) {}
       if (directLog && directLog.call_sid !== call_id) {
-         await base44.entities.CallLog.update(directLog.id, { call_sid: call_id });
+         await client.queryObject(`UPDATE "call_log" SET call_sid = $1 WHERE id = $2`, [call_id, directLog.id]);
       }
     }
 
     if (!directLog) {
-       const logs = await base44.entities.CallLog.filter({ call_sid: call_id });
-       if (logs.length > 0) directLog = logs[0];
+       const logsRes = await client.queryObject(`SELECT * FROM "call_log" WHERE call_sid = $1 LIMIT 1`, [call_id]);
+       directLog = (logsRes.rows[0] as any) || null;
     }
 
     if (directLog) {
-      const updateData: any = {};
+      const setClauses: string[] = [];
+      const vals: any[] = [];
+      let idx = 1;
+
       if (directLog.status !== effectiveStatus) {
-         updateData.status = effectiveStatus;
+         setClauses.push(`status = $${idx++}`); vals.push(effectiveStatus);
          if (effectiveStatus === "answered") {
-            updateData.call_start_time = directLog.call_start_time || new Date().toISOString();
+            setClauses.push(`call_start_time = $${idx++}`); vals.push(directLog.call_start_time || new Date().toISOString());
          }
          if (effectiveStatus === "completed" || effectiveStatus === "failed" || effectiveStatus === "no_answer") {
-            updateData.call_end_time = new Date().toISOString();
+            setClauses.push(`call_end_time = $${idx++}`); vals.push(new Date().toISOString());
          }
       }
 
-      if (duration) updateData.duration = parseInt(duration);
-      if (recording_url) updateData.recording_url = recording_url;
+      if (duration) { setClauses.push(`duration = $${idx++}`); vals.push(parseInt(duration)); }
+      if (recording_url) { setClauses.push(`recording_url = $${idx++}`); vals.push(recording_url); }
 
-      if (Object.keys(updateData).length > 0) {
-         await base44.entities.CallLog.update(directLog.id, updateData);
-         console.log(`[smartfloWebhook] Updated CallLog ${directLog.id}: ${JSON.stringify(updateData)}`);
+      if (setClauses.length > 0) {
+         vals.push(directLog.id);
+         await client.queryObject(
+           `UPDATE "call_log" SET ${setClauses.join(', ')} WHERE id = $${idx}`,
+           vals
+         );
+         console.log(`[smartfloWebhook] Updated CallLog ${directLog.id}: status=${effectiveStatus}`);
       }
 
-      // Check if call reached terminal status and needs post-processing
+      // Post-processing for terminal statuses
       const terminalStatuses = ['completed', 'failed', 'no_answer'];
-      const justBecameTerminal = !terminalStatuses.includes(directLog.status) && terminalStatuses.includes(effectiveStatus);
       const isTerminal = terminalStatuses.includes(effectiveStatus);
 
       if (isTerminal || recording_url) {
-        // Check for campaign
-        const campaignLeads = await base44.entities.CampaignLead.filter({ call_log_id: directLog.id });
-         if (campaignLeads.length > 0) {
-           const cl = campaignLeads[0];
-           // Trigger campaignPostCall
-           try {
-             fetch(`http://localhost:8000/api/functions/campaignPostCall`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ call_log_id: directLog.id, campaign_id: cl.campaign_id })
-             }).catch(e => console.error('Error triggering campaignPostCall:', e));
-           } catch(e) {}
+        const baseUrl = getAppBaseUrl();
+        // Check for campaign lead
+        const campaignLeadsRes = await client.queryObject(
+          `SELECT * FROM "campaign_lead" WHERE call_log_id = $1 LIMIT 1`,
+          [directLog.id]
+        );
+        if (campaignLeadsRes.rows.length > 0) {
+          const cl = campaignLeadsRes.rows[0] as any;
+          fetch(`${baseUrl}/api/functions/campaignPostCall`, {
+             method: 'POST',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({ call_log_id: directLog.id, campaign_id: cl.campaign_id })
+          }).catch(e => console.error('Error triggering campaignPostCall:', e));
         } else if (effectiveStatus === 'completed') {
-           // Not a campaign call, trigger processTranscript
-           try {
-              fetch(`http://localhost:8000/api/functions/processTranscript`, {
-                 method: 'POST',
-                 headers: { 'Content-Type': 'application/json' },
-                 body: JSON.stringify({ call_log_id: directLog.id, recording_url: recording_url || directLog.recording_url })
-              }).catch(e => console.error('Error triggering processTranscript:', e));
-           } catch(e) {}
+           fetch(`${baseUrl}/api/functions/processTranscript`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ call_log_id: directLog.id, recording_url: recording_url || directLog.recording_url })
+           }).catch(e => console.error('Error triggering processTranscript:', e));
         }
       }
 

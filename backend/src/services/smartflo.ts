@@ -1,4 +1,4 @@
-import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 
 export async function triggerSmartfloOutboundCall(params: {
   smartfloApiKey: string;
@@ -30,16 +30,22 @@ export async function triggerSmartfloOutboundCall(params: {
   console.log("[Smartflo] Click-to-call response:", smartfloResp.status, smartfloData);
   if (smartfloResp.ok && smartfloData.success !== false) {
     const newCallSid = smartfloData.call_id || smartfloData.call_sid || smartfloData.ref_id;
-    await base44.entities.CallLog.update(callLogId, { call_sid: newCallSid, status: 'ringing' });
+    await client.queryObject(
+      `UPDATE "call_log" SET call_sid = $1, status = 'ringing' WHERE id = $2`,
+      [newCallSid, callLogId]
+    );
     return { success: true, call_sid: newCallSid };
   } else {
-    await base44.entities.CallLog.update(callLogId, { status: 'failed' });
+    await client.queryObject(
+      `UPDATE "call_log" SET status = 'failed' WHERE id = $1`,
+      [callLogId]
+    );
     return { success: false, message: smartfloData.message || 'Smartflo API Error' };
   }
 }
 
 // Global Smartflo Token Cache Logic
-let _localCache = { token: null, expiresAt: 0 };
+let _localCache = { token: null as string | null, expiresAt: 0 };
 let _loginPromise: Promise<string> | null = null;
 
 export async function getSmartfloToken(forceRefresh = false): Promise<string> {
@@ -48,8 +54,10 @@ export async function getSmartfloToken(forceRefresh = false): Promise<string> {
     return _localCache.token as string;
   }
   
-  const records = await base44.entities.smartfloauth.filter({}, '-updated_at', 1);
-  const rec = records[0] || null;
+  // Read token from DB (smartfloauth table)
+  const recRes = await client.queryObject(`SELECT * FROM "smartfloauth" ORDER BY updated_at DESC LIMIT 1`);
+  const rec = (recRes.rows[0] as any) || null;
+
   if (rec) {
     if (rec.blocked_until && new Date(rec.blocked_until).getTime() > now) {
       throw new Error("Smartflo login is rate-limited (shared)");
@@ -83,7 +91,12 @@ export async function getSmartfloToken(forceRefresh = false): Promise<string> {
              const ra = new Date(d.retry_after.replace(' ', 'T') + '+05:30').getTime();
              if (!isNaN(ra) && ra > Date.now()) cooldownMs = ra - Date.now() + 5000;
           }
-          if (rec) await base44.entities.smartfloauth.update(rec.id, { blocked_until: new Date(Date.now() + cooldownMs).toISOString() });
+          if (rec) {
+            await client.queryObject(
+              `UPDATE "smartfloauth" SET blocked_until = $1 WHERE id = $2`,
+              [new Date(Date.now() + cooldownMs).toISOString(), rec.id]
+            );
+          }
           throw new Error(`Smartflo login rate-limited, try again later.`);
         }
         throw new Error(`Login failed: ${d.message || r.status}`);
@@ -91,9 +104,15 @@ export async function getSmartfloToken(forceRefresh = false): Promise<string> {
 
       const expiresAt = new Date(Date.now() + 50 * 60 * 1000).toISOString();
       if (rec) {
-        await base44.entities.smartfloauth.update(rec.id, { token, expires_at: expiresAt, blocked_until: null });
+        await client.queryObject(
+          `UPDATE "smartfloauth" SET token = $1, expires_at = $2, blocked_until = NULL WHERE id = $3`,
+          [token, expiresAt, rec.id]
+        );
       } else {
-        await base44.entities.smartfloauth.create({ token, expires_at: expiresAt });
+        await client.queryObject(
+          `INSERT INTO "smartfloauth" (token, expires_at) VALUES ($1, $2)`,
+          [token, expiresAt]
+        );
       }
       
       _localCache = { token, expiresAt: new Date(expiresAt).getTime() };

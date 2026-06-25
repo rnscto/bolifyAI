@@ -101,7 +101,8 @@ export default async function initiateCall(c: any) {
         if (kbContent.length > 2000) {
             // Upload to Blob
             try {
-                const url = "http://localhost:8000/api/azureBlobUpload";
+                const baseUrl = Deno.env.get('APP_BASE_URL_INTERNAL') || `http://localhost:${Deno.env.get('PORT') || '8000'}`;
+                const url = `${baseUrl}/api/azureBlobUpload`;
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

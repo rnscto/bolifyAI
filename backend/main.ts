@@ -35,7 +35,17 @@ app.get('/api/realtime', (c) => {
 import { streamHandler } from "./src/controllers/voice.ts";
 
 const wssUrlHandler = async (c: any) => {
-  const host = c.req.header('host') || c.req.header('x-forwarded-host') || 'localhost';
+  // Priority: 1) APP_BASE_URL env (set in Azure), 2) x-forwarded-host (set by reverse proxy), 3) host header
+  // Never fallback to 'localhost' — if none available, fail clearly
+  const appBaseUrl = Deno.env.get('APP_BASE_URL'); // e.g. "edvice.in"
+  const xForwardedHost = c.req.header('x-forwarded-host');
+  const hostHeader = c.req.header('host');
+  const host = appBaseUrl || xForwardedHost || hostHeader || '';
+
+  if (!host || host.includes('localhost') || host.includes('127.0.0.1')) {
+    console.warn(`[WSS] WARNING: host resolved to "${host}" — APP_BASE_URL env var may not be set!`);
+  }
+
   let cid = '';
   if (c.req.method === 'POST') {
     try { 
@@ -45,9 +55,11 @@ const wssUrlHandler = async (c: any) => {
   } else if (c.req.method === 'GET') {
     cid = c.req.query('call_log_id') || c.req.query('custom_identifier') || '';
   }
+  const wssUrl = `wss://${host}/api/voice/stream${cid ? '?call_log_id=' + encodeURIComponent(cid) : ''}`;
+  console.log(`[WSS] Responding with wss_url: ${wssUrl}`);
   return c.json({
-    sucess: true,
-    wss_url: `wss://${host}/api/voice/stream${cid ? '?call_log_id=' + encodeURIComponent(cid) : ''}`
+    success: true,
+    wss_url: wssUrl
   }, 200);
 };
 

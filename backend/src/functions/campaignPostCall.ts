@@ -1,17 +1,19 @@
-import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 import { processTranscriptCore } from "./processTranscript.ts";
 import { postCallActionExtractorCore } from "./postCallActionExtractor.ts";
 // We will also invoke executeCampaign to trigger next batch, but let's just make a fetch call or something
 // to not mess with executeCampaign.ts for now.
 // Better yet, we can do a local fetch to our own server, or just import it if we refactor.
-// Let's just do a local fetch to `http://localhost:8000/api/executeCampaign` for simplicity.
+// Let's just do a local fetch to our own API endpoint for simplicity.
 
 export async function campaignPostCallCore(call_log_id: string, campaign_id: string) {
   try {
-    const campaignLeads = await base44.entities.CampaignLead.filter({ call_log_id, campaign_id });
-    if (campaignLeads.length === 0) return { success: true, skipped: 'not_found' };
-
-    const cl = campaignLeads[0];
+    const clRes = await client.queryObject(
+      `SELECT * FROM "campaign_lead" WHERE call_log_id = $1 AND campaign_id = $2 LIMIT 1`,
+      [call_log_id, campaign_id]
+    );
+    if (clRes.rows.length === 0) return { success: true, skipped: 'not_found' };
+    const cl = clRes.rows[0] as any;
 
     if (['completed', 'failed', 'processing'].includes(cl.status)) {
        // Already processed
@@ -22,9 +24,10 @@ export async function campaignPostCallCore(call_log_id: string, campaign_id: str
        return { success: true, skipped: 'already_pending_retry' };
     }
 
-    await base44.entities.CampaignLead.update(cl.id, { status: 'processing' });
+    await client.queryObject(`UPDATE "campaign_lead" SET status = 'processing' WHERE id = $1`, [cl.id]);
     
-    const callLog = await base44.entities.CallLog.get(call_log_id);
+    const callLogRes = await client.queryObject(`SELECT * FROM "call_log" WHERE id = $1 LIMIT 1`, [call_log_id]);
+    const callLog = (callLogRes.rows[0] as any) || {};
     const callConnected = (callLog.transcript && callLog.transcript.length > 20) || !!callLog.recording_url || (callLog.duration && callLog.duration > 0);
 
     let outcome = 'neutral';
@@ -41,37 +44,34 @@ export async function campaignPostCallCore(call_log_id: string, campaign_id: str
       summary = summary || 'Call failed to connect.';
     }
 
-    await base44.entities.CampaignLead.update(cl.id, {
-      status: 'completed',
-      outcome,
-      call_status: callStatus,
-      conversation_summary: summary,
-      transcript: callLog.transcript || '',
-      call_duration: callLog.duration || 0
-    });
+    await client.queryObject(
+      `UPDATE "campaign_lead" SET status = 'completed', outcome = $1, call_status = $2,
+       conversation_summary = $3, transcript = $4, call_duration = $5 WHERE id = $6`,
+      [outcome, callStatus, summary, callLog.transcript || '', callLog.duration || 0, cl.id]
+    );
 
     let retryScheduled = false;
     if (outcome === 'not_answered') {
-      const campaign = await base44.entities.Campaign.get(campaign_id);
+      const campaignRes = await client.queryObject(`SELECT * FROM "campaign" WHERE id = $1 LIMIT 1`, [campaign_id]);
+      const campaign = (campaignRes.rows[0] as any) || null;
       const rules = campaign?.followup_rules || {};
       if (rules.no_answer_retry !== false) {
         const maxRetries = rules.no_answer_max_retries || 3;
         const currentAttempts = (cl.attempt_count || 0) + 1;
         if (currentAttempts < maxRetries) {
           const retryHours = rules.no_answer_retry_hours || 4;
-          await base44.entities.CampaignLead.update(cl.id, {
-            status: 'pending', outcome: 'not_answered',
-            attempt_count: currentAttempts, call_log_id: null,
-            followup_call_date: new Date(Date.now() + retryHours * 3600000).toISOString()
-          });
+          await client.queryObject(
+            `UPDATE "campaign_lead" SET status = 'pending', outcome = 'not_answered', attempt_count = $1,
+             call_log_id = NULL, followup_call_date = $2 WHERE id = $3`,
+            [currentAttempts, new Date(Date.now() + retryHours * 3600000).toISOString(), cl.id]
+          );
           retryScheduled = true;
         }
       }
     }
 
-    // Trigger next batch inline by making a local request
-    try {
-      fetch('http://localhost:8000/api/executeCampaign', {
+    const baseUrl = Deno.env.get('APP_BASE_URL_INTERNAL') || `http://localhost:${Deno.env.get('PORT') || '8000'}`;
+    fetch(`${baseUrl}/api/campaign/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ campaign_id })
