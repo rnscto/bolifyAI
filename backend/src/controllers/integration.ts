@@ -12,6 +12,63 @@ const JWT_SECRET = Deno.env.get("JWT_SECRET") || "super_secret_bolifyai_key";
 // All endpoints require a valid JWT token / API Key from the client
 integrationRouter.use("*", jwt({ secret: JWT_SECRET, alg: "HS256" }));
 
+// --- Messaging Configuration Endpoints ---
+
+integrationRouter.get("/messaging-config", async (c) => {
+  try {
+    const user = c.get("jwtPayload") as any;
+    const clientId = user.client_id;
+    if (!clientId) return c.json({ error: "Missing client_id in token" }, 400);
+
+    const res = await client.queryObject(
+      `SELECT * FROM "clientmessagingconfig" WHERE client_id = $1 LIMIT 1`,
+      [clientId]
+    );
+    
+    return c.json({ success: true, config: res.rows[0] || null });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+integrationRouter.post("/messaging-config", async (c) => {
+  try {
+    const user = c.get("jwtPayload") as any;
+    const clientId = user.client_id;
+    if (!clientId) return c.json({ error: "Missing client_id in token" }, 400);
+
+    const body = await c.req.json();
+    
+    // Check if exists
+    const check = await client.queryObject(`SELECT id FROM "clientmessagingconfig" WHERE client_id = $1`, [clientId]);
+    
+    if (check.rows.length > 0) {
+      // Update
+      const keys = Object.keys(body).filter(k => k !== 'id' && k !== 'client_id' && k !== 'created_at');
+      if (keys.length === 0) return c.json({ success: true });
+      
+      const setClauses = keys.map((k, i) => `"${k}" = $${i + 2}`).join(", ");
+      const vals = [clientId, ...keys.map(k => body[k])];
+      
+      await client.queryObject(`UPDATE "clientmessagingconfig" SET ${setClauses}, updated_at = CURRENT_TIMESTAMP WHERE client_id = $1`, vals);
+    } else {
+      // Insert
+      const payload = { ...body, client_id: clientId };
+      const keys = Object.keys(payload).filter(k => k !== 'id' && k !== 'created_at' && k !== 'updated_at');
+      const cols = keys.map(k => `"${k}"`).join(", ");
+      const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
+      const vals = keys.map(k => payload[k]);
+      
+      await client.queryObject(`INSERT INTO "clientmessagingconfig" (${cols}) VALUES (${placeholders})`, vals);
+    }
+    
+    const res = await client.queryObject(`SELECT * FROM "clientmessagingconfig" WHERE client_id = $1`, [clientId]);
+    return c.json({ success: true, config: res.rows[0] });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 // Plug & Play Endpoint: Send WhatsApp
 integrationRouter.post("/whatsapp/send", async (c) => {
   try {
@@ -23,7 +80,8 @@ integrationRouter.post("/whatsapp/send", async (c) => {
       return c.json({ error: "Missing 'to' or 'templateName'" }, 400);
     }
 
-    const success = await sendWhatsAppMessage(to, templateName, variables || []);
+    const clientId = user.client_id || user.id;
+    const success = await sendWhatsAppMessage(to, templateName, variables || [], clientId);
     return c.json({ success });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -41,7 +99,8 @@ integrationRouter.post("/email/send", async (c) => {
       return c.json({ error: "Missing 'to', 'subject', or 'bodyText'" }, 400);
     }
 
-    const success = await sendEmail(to, subject, bodyText, bodyHtml);
+    const clientId = user.client_id || user.id;
+    const success = await sendEmail(to, subject, bodyText, bodyHtml, clientId);
     return c.json({ success });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -59,7 +118,8 @@ integrationRouter.post("/sms/send", async (c) => {
       return c.json({ error: "Missing 'to' or 'message'" }, 400);
     }
 
-    const success = await sendSMS(to, message);
+    const clientId = user.client_id || user.id;
+    const success = await sendSMS(to, message, clientId);
     return c.json({ success });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
