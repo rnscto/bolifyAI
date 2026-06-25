@@ -96,5 +96,8 @@ connectDB().catch(console.error);
 export default {
   port: Number(Deno.env.get("PORT")) || 8000,
   hostname: "::",
-  fetch: app.fetch,
+  fetch: (req: Request, info: any) => {
+    console.log(`[RAW HTTP] ${req.method} ${req.url} from ${info?.remoteAddr?.hostname}`);
+    return app.fetch(req, info);
+  },
 };
