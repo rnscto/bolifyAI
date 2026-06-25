@@ -78,7 +78,7 @@ export function markRateLimited(key: string, reason: string = "unknown"): void {
 export function getWebSocketUrl(): { url: string; key: string; tier: "free" | "paid" } {
   const { key, tier } = getKey();
   const HOST = "generativelanguage.googleapis.com";
-  const url = `wss://${HOST}/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${key}`;
+  const url = `wss://${HOST}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${key}`;
   return { url, key, tier };
 }
 
