@@ -135,6 +135,32 @@ voiceWebhookRouter.post("/", async (c) => {
        }
     }
 
+    // Fallback 2: Robust phone match (loss reducer)
+    if (!directLog) {
+       const pgCallee = (customer_number || payload.customer_number || called_number || '').replace(/\D/g, '').slice(-10) || null;
+       const pgCaller = (caller_number || '').replace(/\D/g, '').slice(-10) || null;
+       if (pgCallee) {
+          try {
+             const phoneRes = await client.queryObject(
+                `SELECT * FROM "calllog"
+                 WHERE status IN ('initiated','ringing','answered')
+                   AND created_at > NOW() - INTERVAL '30 minutes'
+                   AND RIGHT(REGEXP_REPLACE(callee_number, '\\D', '', 'g'), 10) = $1
+                   AND ($2::text IS NULL OR RIGHT(REGEXP_REPLACE(caller_id, '\\D', '', 'g'), 10) = $2)
+                 LIMIT 2`,
+                [pgCallee, pgCaller]
+             );
+             if (phoneRes.rows.length === 1) {
+                directLog = (phoneRes.rows[0] as any) || null;
+                console.log(`[smartfloWebhook] ✅ PG-direct match by phone: CallLog ${directLog.id}`);
+                if (call_id && directLog.call_sid !== call_id) {
+                   await client.queryObject(`UPDATE "calllog" SET call_sid = $1 WHERE id = $2`, [call_id, directLog.id]);
+                }
+             }
+          } catch(e) {}
+       }
+    }
+
     if (directLog) {
       const setClauses: string[] = [];
       const vals: any[] = [];
