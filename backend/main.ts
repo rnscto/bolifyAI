@@ -24,14 +24,14 @@ import { initDailyDigest } from "./src/cron/dailyDigest.ts";
 const app = new Hono();
 
 app.use("*", async (c, next) => {
-  if (c.req.path.startsWith("/api/voice/stream")) {
+  if (c.req.path.startsWith("/api/voice/stream") || c.req.path.startsWith("/api/realtime")) {
     return await next();
   }
   return logger()(c, next);
 });
 
 app.use("*", async (c, next) => {
-  if (c.req.path.startsWith("/api/voice/stream")) {
+  if (c.req.path.startsWith("/api/voice/stream") || c.req.path.startsWith("/api/realtime")) {
     return await next();
   }
   return cors({
@@ -44,26 +44,6 @@ app.use('/assets/*', serveStatic({ root: './dist' }));
 
 app.get('/api/health', (c) => {
   return c.text('OK');
-});
-
-app.get('*', async (c, next) => {
-  if (c.req.path.startsWith('/api/')) {
-    return await next();
-  }
-  try {
-    if (c.req.path !== '/' && c.req.path !== '') {
-      try {
-        const fileInfo = await Deno.stat(`./dist${c.req.path}`);
-        if (fileInfo.isFile) {
-           return await serveStatic({ root: './dist' })(c, next);
-        }
-      } catch { /* file not found, fallback to index.html */ }
-    }
-    const content = await Deno.readTextFile('./dist/index.html');
-    return c.html(content);
-  } catch (e) {
-    return c.text("BolifyAI API is running. Frontend dist/ not found.");
-  }
 });
 
 import { handleWebSocket } from "./src/services/realtime.ts";
@@ -87,6 +67,26 @@ app.get('/api/realtime', (c) => {
   const { socket, response } = Deno.upgradeWebSocket(c.req.raw);
   handleWebSocket(socket as any);
   return response as any;
+});
+
+app.get('*', async (c, next) => {
+  if (c.req.path.startsWith('/api/')) {
+    return await next();
+  }
+  try {
+    if (c.req.path !== '/' && c.req.path !== '') {
+      try {
+        const fileInfo = await Deno.stat(`./dist${c.req.path}`);
+        if (fileInfo.isFile) {
+           return await serveStatic({ root: './dist' })(c, next);
+        }
+      } catch { /* file not found, fallback to index.html */ }
+    }
+    const content = await Deno.readTextFile('./dist/index.html');
+    return c.html(content);
+  } catch (e) {
+    return c.text("BolifyAI API is running. Frontend dist/ not found.");
+  }
 });
 
 // Initialize background scheduled tasks
