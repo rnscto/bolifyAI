@@ -58,20 +58,15 @@ export async function postCallActionExtractorCore(callLogId: string) {
     const dayOfWeek = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][istNow.getDay()];
     const istTimeStr = `${istNow.getUTCHours().toString().padStart(2,'0')}:${istNow.getUTCMinutes().toString().padStart(2,'0')} IST`;
 
-    let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
+    let baseUrlRaw = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
+    const _oi = baseUrlRaw.indexOf('/openai/'); 
+    if (_oi > 0) baseUrlRaw = baseUrlRaw.substring(0, _oi);
+    
     const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
     const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
 
-    const extractionResponse = await fetch(
-      `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`,
-      {
-        method: 'POST',
-        headers: { 'api-key': apiKey || '', 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: [
-            {
-              role: 'system',
-              content: `You are an expert at extracting actionable items from sales call transcripts. Today is ${dayOfWeek}, ${todayStr}, current time is ${istTimeStr} (IST timezone, UTC+5:30).
+    const responsesUrl = `${baseUrlRaw}/openai/v1/responses`;
+    const sysPrompt = `You are an expert at extracting actionable items from sales call transcripts. Today is ${dayOfWeek}, ${todayStr}, current time is ${istTimeStr} (IST timezone, UTC+5:30).
 
 Extract action items from the conversation. Be thorough but ACCURATE — only create actions that are grounded in the actual conversation.
 
@@ -104,14 +99,21 @@ CALLBACK/RECALL SCHEDULING:
 - "call me after 1 hour" → create "call" (confirmed: true)
 - Agent proposes callback but no confirmation → create "task" (confirmed: false)
 
-IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backticks.`
-            },
-            {
-              role: 'user',
-              content: `Call transcript:\n\n${callLog.transcript}\n\n${callLog.conversation_summary ? `AI Summary: ${callLog.conversation_summary.substring(0, 500)}` : ''}`
-            }
-          ],
-          max_completion_tokens: 1000
+IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backticks.`;
+
+    const userPrompt = `Call transcript:\n\n${callLog.transcript}\n\n${callLog.conversation_summary ? `AI Summary: ${callLog.conversation_summary.substring(0, 500)}` : ''}`;
+
+    const extractionResponse = await fetch(
+      responsesUrl,
+      {
+        method: 'POST',
+        headers: { 'api-key': apiKey || '', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: deployment,
+          instructions: sysPrompt,
+          input: userPrompt,
+          max_output_tokens: 1000,
+          text: { format: { type: 'json_object' } }
         })
       }
     );
@@ -121,7 +123,17 @@ IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backtic
     }
 
     const extractionData = await extractionResponse.json();
-    const rawContent = extractionData.choices?.[0]?.message?.content || '{}';
+    
+    let rawContent = extractionData.output_text || '';
+    if (!rawContent && Array.isArray(extractionData.output)) {
+      for (const item of extractionData.output) {
+        const parts = item?.content || [];
+        for (const p of parts) {
+          if ((p.type === 'output_text' || p.type === 'text') && p.text) { rawContent += p.text; }
+        }
+      }
+    }
+    
     const cleanContent = rawContent.replace(/^```(?:json)?\n?/i, '').replace(/```$/i, '').trim();
 
     let extracted;
