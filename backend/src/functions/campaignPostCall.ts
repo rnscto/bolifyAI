@@ -5,7 +5,7 @@ import { postCallActionExtractorCore } from "./postCallActionExtractor.ts";
 export async function campaignPostCallCore(call_log_id: string, campaign_id: string) {
   try {
     const clRes = await client.queryObject(
-      `SELECT * FROM "campaign_lead" WHERE call_log_id = $1 AND campaign_id = $2 LIMIT 1`,
+      `SELECT * FROM "campaignlead" WHERE call_log_id = $1 AND campaign_id = $2 LIMIT 1`,
       [call_log_id, campaign_id]
     );
     if (clRes.rows.length === 0) return { success: true, skipped: 'not_found' };
@@ -19,9 +19,9 @@ export async function campaignPostCallCore(call_log_id: string, campaign_id: str
       return { success: true, skipped: 'already_pending_retry' };
     }
 
-    await client.queryObject(`UPDATE "campaign_lead" SET status = 'processing' WHERE id = $1`, [cl.id]);
+    await client.queryObject(`UPDATE "campaignlead" SET status = 'processing' WHERE id = $1`, [cl.id]);
 
-    const callLogRes = await client.queryObject(`SELECT * FROM "call_log" WHERE id = $1 LIMIT 1`, [call_log_id]);
+    const callLogRes = await client.queryObject(`SELECT * FROM "calllog" WHERE id = $1 LIMIT 1`, [call_log_id]);
     const callLog = (callLogRes.rows[0] as any) || {};
     const callConnected = (callLog.transcript && callLog.transcript.length > 20) || !!callLog.recording_url || (callLog.duration && callLog.duration > 0);
 
@@ -40,7 +40,7 @@ export async function campaignPostCallCore(call_log_id: string, campaign_id: str
     }
 
     await client.queryObject(
-      `UPDATE "campaign_lead" SET status = 'completed', outcome = $1, call_status = $2,
+      `UPDATE "campaignlead" SET status = 'completed', outcome = $1, call_status = $2,
        conversation_summary = $3, transcript = $4, call_duration = $5 WHERE id = $6`,
       [outcome, callStatus, summary, callLog.transcript || '', callLog.duration || 0, cl.id]
     );
@@ -56,7 +56,7 @@ export async function campaignPostCallCore(call_log_id: string, campaign_id: str
         if (currentAttempts < maxRetries) {
           const retryHours = rules.no_answer_retry_hours || 4;
           await client.queryObject(
-            `UPDATE "campaign_lead" SET status = 'pending', outcome = 'not_answered', attempt_count = $1,
+            `UPDATE "campaignlead" SET status = 'pending', outcome = 'not_answered', attempt_count = $1,
              call_log_id = NULL, followup_call_date = $2 WHERE id = $3`,
             [currentAttempts, new Date(Date.now() + retryHours * 3600000).toISOString(), cl.id]
           );
@@ -88,7 +88,7 @@ export async function campaignPostCallCore(call_log_id: string, campaign_id: str
       outcome = statusToOutcome[callLog.lead_status_updated] || outcome;
       summary = callLog.conversation_summary || summary;
       await client.queryObject(
-        `UPDATE "campaign_lead" SET outcome = $1, conversation_summary = $2 WHERE id = $3`,
+        `UPDATE "campaignlead" SET outcome = $1, conversation_summary = $2 WHERE id = $3`,
         [outcome, summary, cl.id]
       );
     } else if (outcome !== 'not_answered' && (callLog.transcript || callLog.conversation_summary)) {
@@ -97,7 +97,7 @@ export async function campaignPostCallCore(call_log_id: string, campaign_id: str
         if (aiResult.success) {
           outcome = aiResult.lead_status || outcome;
           await client.queryObject(
-            `UPDATE "campaign_lead" SET outcome = $1, conversation_summary = $2 WHERE id = $3`,
+            `UPDATE "campaignlead" SET outcome = $1, conversation_summary = $2 WHERE id = $3`,
             [outcome, aiResult.summary || summary, cl.id]
           );
         }
@@ -130,7 +130,7 @@ export async function campaignPostCallCore(call_log_id: string, campaign_id: str
     // Update Campaign Stats
     try {
       const allLeadsRes = await client.queryObject(
-        `SELECT status, outcome FROM "campaign_lead" WHERE campaign_id = $1`,
+        `SELECT status, outcome FROM "campaignlead" WHERE campaign_id = $1`,
         [campaign_id]
       );
       const allLeads = allLeadsRes.rows as any[];

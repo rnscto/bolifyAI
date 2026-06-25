@@ -27,7 +27,7 @@ voiceRouter.post("/incoming", async (c) => {
     const customIdentifier = body.custom_identifier || body.custom_data || "";
     if (!agentId && customIdentifier) {
        try {
-          const callLogRes = await client.queryObject(`SELECT agent_id, lead_id FROM "call_log" WHERE id = $1 LIMIT 1`, [customIdentifier]);
+          const callLogRes = await client.queryObject(`SELECT agent_id, lead_id FROM "calllog" WHERE id = $1 LIMIT 1`, [customIdentifier]);
           if (callLogRes.rows.length > 0) {
              const callLog = callLogRes.rows[0] as any;
              agentId = callLog.agent_id || "";
@@ -379,7 +379,7 @@ export async function handleStreamWebSocket(req: Request): Promise<Response> {
        }
        
        // Load KB
-       const kbQuery = await client.queryObject(`SELECT content, title FROM "knowledge_base" WHERE client_id = $1 AND status = 'ready'`, [session.clientId]);
+       const kbQuery = await client.queryObject(`SELECT content, title FROM "knowledgebase" WHERE client_id = $1 AND status = 'ready'`, [session.clientId]);
        let text = '';
        for (const r of kbQuery.rows as any[]) {
           if (r.content) text += `[${r.title}]\n${r.content}\n\n---\n\n`;
@@ -610,7 +610,7 @@ export async function handleStreamWebSocket(req: Request): Promise<Response> {
            if (!resolvedAgentId) {
              if (customIdentifier) {
                try {
-                 const callLogRes = await client.queryObject(`SELECT agent_id, lead_id FROM "call_log" WHERE id = $1 LIMIT 1`, [customIdentifier]);
+                 const callLogRes = await client.queryObject(`SELECT agent_id, lead_id FROM "calllog" WHERE id = $1 LIMIT 1`, [customIdentifier]);
                  if (callLogRes.rows.length > 0) {
                    const callLog = callLogRes.rows[0] as any;
                    resolvedAgentId = callLog.agent_id;
@@ -711,7 +711,7 @@ voiceRouter.post("/initiate", async (c) => {
     if (!callerDID) return c.json({ error: "Agent has no assigned DID" }, 400);
 
     const callLogRes = await client.queryObject(`
-      INSERT INTO "call_log" (client_id, agent_id, lead_id, caller_id, callee_number, direction, status, call_start_time)
+      INSERT INTO "calllog" (client_id, agent_id, lead_id, caller_id, callee_number, direction, status, call_start_time)
       VALUES ($1, $2, $3, $4, $5, 'outbound', 'initiated', NOW())
       RETURNING id
     `, [agent.client_id, agent.id, lead.id, callerDID, lead.phone]);
@@ -756,10 +756,10 @@ voiceRouter.post("/fetch-recording", async (c) => {
 
     let logs: any[] = [];
     if (call_log_id) {
-      const res = await client.queryObject(`SELECT * FROM "call_log" WHERE id = $1`, [call_log_id]);
+      const res = await client.queryObject(`SELECT * FROM "calllog" WHERE id = $1`, [call_log_id]);
       if (res.rows.length > 0) logs.push(res.rows[0]);
     } else if (bulk) {
-      const res = await client.queryObject(`SELECT * FROM "call_log" WHERE status = 'completed' AND recording_url IS NULL ORDER BY created_at DESC LIMIT 50`);
+      const res = await client.queryObject(`SELECT * FROM "calllog" WHERE status = 'completed' AND recording_url IS NULL ORDER BY created_at DESC LIMIT 50`);
       logs = res.rows;
     }
     
@@ -798,7 +798,7 @@ voiceRouter.post("/fetch-recording", async (c) => {
         }
 
         if (recordingUrl) {
-          await client.queryObject(`UPDATE "call_log" SET recording_url = $1 WHERE id = $2`, [recordingUrl, (log as any).id]);
+          await client.queryObject(`UPDATE "calllog" SET recording_url = $1 WHERE id = $2`, [recordingUrl, (log as any).id]);
           updatedCount++;
           results.push({ id: (log as any).id, call_sid: callSid, recording_url: recordingUrl });
         } else {

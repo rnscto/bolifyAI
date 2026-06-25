@@ -82,7 +82,7 @@ voiceWebhookRouter.post("/", async (c) => {
         
         if (resolvedAgent && resolvedClient) {
           const inboundLogRes = await client.queryObject(
-            `INSERT INTO "call_log" (client_id, agent_id, call_sid, caller_id, callee_number, direction, status, call_start_time)
+            `INSERT INTO "calllog" (client_id, agent_id, call_sid, caller_id, callee_number, direction, status, call_start_time)
              VALUES ($1, $2, $3, $4, $5, 'inbound', 'ringing', NOW()) RETURNING *`,
             [resolvedClient.id, resolvedAgent.id, call_id, incomingNumber, calledDID]
           );
@@ -113,16 +113,16 @@ voiceWebhookRouter.post("/", async (c) => {
     
     if (customIdentifier) {
       try {
-        const res = await client.queryObject(`SELECT * FROM "call_log" WHERE id = $1 LIMIT 1`, [customIdentifier]);
+        const res = await client.queryObject(`SELECT * FROM "calllog" WHERE id = $1 LIMIT 1`, [customIdentifier]);
         directLog = (res.rows[0] as any) || null;
       } catch(e) {}
       if (directLog && directLog.call_sid !== call_id) {
-         await client.queryObject(`UPDATE "call_log" SET call_sid = $1 WHERE id = $2`, [call_id, directLog.id]);
+         await client.queryObject(`UPDATE "calllog" SET call_sid = $1 WHERE id = $2`, [call_id, directLog.id]);
       }
     }
 
     if (!directLog) {
-       const logsRes = await client.queryObject(`SELECT * FROM "call_log" WHERE call_sid = $1 LIMIT 1`, [call_id]);
+       const logsRes = await client.queryObject(`SELECT * FROM "calllog" WHERE call_sid = $1 LIMIT 1`, [call_id]);
        directLog = (logsRes.rows[0] as any) || null;
     }
 
@@ -147,7 +147,7 @@ voiceWebhookRouter.post("/", async (c) => {
       if (setClauses.length > 0) {
          vals.push(directLog.id);
          await client.queryObject(
-           `UPDATE "call_log" SET ${setClauses.join(', ')} WHERE id = $${idx}`,
+           `UPDATE "calllog" SET ${setClauses.join(', ')} WHERE id = $${idx}`,
            vals
          );
          console.log(`[smartfloWebhook] Updated CallLog ${directLog.id}: status=${effectiveStatus}`);
@@ -161,7 +161,7 @@ voiceWebhookRouter.post("/", async (c) => {
         const baseUrl = getAppBaseUrl();
         // Check for campaign lead
         const campaignLeadsRes = await client.queryObject(
-          `SELECT * FROM "campaign_lead" WHERE call_log_id = $1 LIMIT 1`,
+          `SELECT * FROM "campaignlead" WHERE call_log_id = $1 LIMIT 1`,
           [directLog.id]
         );
         if (campaignLeadsRes.rows.length > 0) {

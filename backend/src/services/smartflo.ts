@@ -31,13 +31,13 @@ export async function triggerSmartfloOutboundCall(params: {
   if (smartfloResp.ok && smartfloData.success !== false) {
     const newCallSid = smartfloData.call_id || smartfloData.call_sid || smartfloData.ref_id;
     await client.queryObject(
-      `UPDATE "call_log" SET call_sid = $1, status = 'ringing' WHERE id = $2`,
+      `UPDATE "calllog" SET call_sid = $1, status = 'ringing' WHERE id = $2`,
       [newCallSid, callLogId]
     );
     return { success: true, call_sid: newCallSid };
   } else {
     await client.queryObject(
-      `UPDATE "call_log" SET status = 'failed' WHERE id = $1`,
+      `UPDATE "calllog" SET status = 'failed' WHERE id = $1`,
       [callLogId]
     );
     return { success: false, message: smartfloData.message || 'Smartflo API Error' };
