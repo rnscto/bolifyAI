@@ -21,7 +21,7 @@ import { initTrialExpiryCheck } from "./src/cron/trialExpiryCheck.ts";
 import { initBillingSweeper } from "./src/cron/billingSweeper.ts";
 import { initDailyDigest } from "./src/cron/dailyDigest.ts";
 import { handleWebSocket } from "./src/services/realtime.ts";
-import { handleStreamWebSocket } from "./src/controllers/voice.ts";
+import { initStreamSession } from "./src/controllers/voice.ts";
 
 const app = new Hono();
 
@@ -137,14 +137,15 @@ Deno.serve({ port, hostname: "0.0.0.0" }, async (req: Request) => {
   const upgradeHeader = req.headers.get("upgrade") || "";
 
   // Handle /api/voice/stream WebSocket upgrade
+  // CRITICAL: Deno.upgradeWebSocket MUST be called synchronously — no await before it.
+  // Wrapping in an async function (even without await) defers execution to a microtask,
+  // causing Deno to reject the upgrade with 503.
   if (url.pathname === "/api/voice/stream" && upgradeHeader.toLowerCase() === "websocket") {
-    console.log(`[WS] Upgrade request for /api/voice/stream from ${req.headers.get("x-forwarded-for") || "unknown"}`);
-    try {
-      return await handleStreamWebSocket(req);
-    } catch (e: any) {
-      console.error("[WS] Upgrade error:", e.message);
-      return new Response("WebSocket upgrade failed", { status: 500 });
-    }
+    console.log(`[WS] Upgrade: /api/voice/stream from ${req.headers.get("x-forwarded-for") || "unknown"}`);
+    const { socket, response } = Deno.upgradeWebSocket(req);
+    // initStreamSession is async — runs AFTER the response is returned to the client
+    initStreamSession(socket, url).catch(e => console.error("[WS] Session init error:", e));
+    return response;
   }
 
   // Handle /api/realtime WebSocket upgrade

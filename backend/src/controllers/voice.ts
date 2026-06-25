@@ -306,22 +306,20 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
   } catch (err: any) { console.error(`[${reqId}] ❌ Save: ${err.message}`); }
 }
 
-// handleStreamWebSocket: Called directly from Deno.serve BEFORE Hono middleware.
-// This is the ONLY reliable way to handle WebSocket upgrades in Deno + Hono.
-export async function handleStreamWebSocket(req: Request): Promise<Response> {
-  const url = new URL(req.url);
+// initStreamSession: Called with an ALREADY-UPGRADED socket from Deno.serve.
+// Deno.upgradeWebSocket was called SYNCHRONOUSLY in main.ts before this function.
+// All async work (Gemini, DB) happens here, AFTER the WS handshake is complete.
+export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Promise<void> {
   const callId = url.searchParams.get("call_log_id") || url.searchParams.get("callId") || `call_${Date.now()}`;
   const reqId = Math.random().toString(36).substring(2, 10);
   const leadIdParam = url.searchParams.get("lead_id") || null;
   const agentIdParam = url.searchParams.get("agent_id") || null;
 
-  const { socket: smartfloSocket, response } = Deno.upgradeWebSocket(req);
-
   const initialKey = geminiKeys.getKey();
   if (!initialKey.key) {
     console.error("Missing GEMINI_API_KEY. Terminating call.");
     smartfloSocket.close();
-    return response;
+    return;
   }
 
   const session: any = {
@@ -662,24 +660,16 @@ export async function handleStreamWebSocket(req: Request): Promise<Response> {
   };
 
   smartfloSocket.onerror = (e) => console.error(`[${reqId}] Smartflo WS Error:`, e);
-
-  return response;
+  // initStreamSession is void — response was already returned to the client by Deno.serve
 }
 
-// streamHandler: Hono-compatible handler for GET /api/voice/stream
-// If it receives a plain HTTP request, returns WSS URL info.
-// WS upgrades are handled at Deno.serve level via handleStreamWebSocket.
+
+// streamHandler: Hono handler for GET /api/voice/stream (HTTP only — not WS)
+// WS upgrades are intercepted at Deno.serve level in main.ts.
 export const streamHandler = async (c: any) => {
-  const isWS = (c.req.header("upgrade") || "").toLowerCase() === "websocket";
-  if (isWS) {
-    try {
-      return await handleStreamWebSocket(c.req.raw) as any;
-    } catch(e: any) {
-      return c.text("WebSocket upgrade failed: " + e.message, 500);
-    }
-  }
   const appBaseUrl = Deno.env.get('APP_BASE_URL');
   const host = appBaseUrl || c.req.header('x-forwarded-host') || c.req.header('host') || '';
+
   const cid = c.req.query('call_log_id') || c.req.query('custom_identifier') || '';
   return c.json({
     success: true,
