@@ -4,30 +4,7 @@ export class DBEntityWrapper {
   private tableName: string;
 
   constructor(entityName: string) {
-    // Known overrides for Supabase/Postgres plural snake_case conventions
-    const TABLE_MAP: Record<string, string> = {
-      Client: 'clients',
-      Payment: 'payments',
-      PaymentApprovalRequest: 'payment_approval_requests',
-      Subscription: 'subscriptions',
-      UsageLog: 'usage_logs',
-      MarketplaceIntegration: 'marketplace_integrations',
-      Activity: 'activities',
-      DID: 'dids',
-      VoiceLog: 'voice_logs',
-      EmailLog: 'email_logs',
-      SmsLog: 'sms_logs',
-      Contact: 'contacts',
-      Template: 'templates',
-      ClientConfig: 'client_configs',
-      KnowledgeBase: 'knowledge_base',
-      Lead: 'leads',
-      Campaign: 'campaigns',
-      Agent: 'agents',
-      Webhook: 'webhooks'
-    };
-    
-    this.tableName = TABLE_MAP[entityName] || entityName.toLowerCase();
+    this.tableName = entityName.toLowerCase();
   }
 
   async get(id: string) {

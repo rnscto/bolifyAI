@@ -121,11 +121,11 @@ voiceWebhookRouter.post("/", async (c) => {
       if (isTerminal || recording_url) {
         // Check for campaign
         const campaignLeads = await base44.entities.CampaignLead.filter({ call_log_id: directLog.id });
-        if (campaignLeads.length > 0) {
+         if (campaignLeads.length > 0) {
            const cl = campaignLeads[0];
            // Trigger campaignPostCall
            try {
-             fetch(`http://localhost:8000/api/campaignPostCall`, {
+             fetch(`http://localhost:8000/api/functions/campaignPostCall`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ call_log_id: directLog.id, campaign_id: cl.campaign_id })
@@ -134,7 +134,7 @@ voiceWebhookRouter.post("/", async (c) => {
         } else if (effectiveStatus === 'completed') {
            // Not a campaign call, trigger processTranscript
            try {
-              fetch(`http://localhost:8000/api/processTranscript`, {
+              fetch(`http://localhost:8000/api/functions/processTranscript`, {
                  method: 'POST',
                  headers: { 'Content-Type': 'application/json' },
                  body: JSON.stringify({ call_log_id: directLog.id, recording_url: recording_url || directLog.recording_url })
