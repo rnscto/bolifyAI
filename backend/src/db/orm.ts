@@ -1,4 +1,5 @@
 import { client } from "./index.ts";
+import { broadcastEntityChange } from "../services/realtime.ts";
 
 export class DBEntityWrapper {
   private tableName: string;
@@ -64,7 +65,9 @@ export class DBEntityWrapper {
     );
     const query = `INSERT INTO "${this.tableName}" (${cols}) VALUES (${placeholders}) RETURNING *`;
     const res = await client.queryObject(query, vals);
-    return res.rows[0];
+    const record = res.rows[0];
+    if (record) broadcastEntityChange(this.tableName, "created", record);
+    return record;
   }
 
   async update(id: string, data: Record<string, any>) {
@@ -77,12 +80,16 @@ export class DBEntityWrapper {
     )];
     const query = `UPDATE "${this.tableName}" SET ${setClauses} WHERE id = $1 RETURNING *`;
     const res = await client.queryObject(query, vals);
-    return res.rows[0] || null;
+    const record = res.rows[0] || null;
+    if (record) broadcastEntityChange(this.tableName, "updated", record);
+    return record;
   }
 
   async delete(id: string) {
     const res = await client.queryObject(`DELETE FROM "${this.tableName}" WHERE id = $1 RETURNING *`, [id]);
-    return res.rows[0] || null;
+    const record = res.rows[0] || null;
+    if (record) broadcastEntityChange(this.tableName, "deleted", record);
+    return record;
   }
 }
 

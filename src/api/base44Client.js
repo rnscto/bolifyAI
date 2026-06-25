@@ -1,4 +1,46 @@
 const API_BASE_URL = import.meta.env.VITE_API_URL || (import.meta.env.PROD ? "/api" : "http://localhost:8000/api");
+const WS_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
+
+let ws = null;
+const subscribers = {};
+
+function connectWebSocket() {
+  if (ws && (ws.readyState === WebSocket.CONNECTING || ws.readyState === WebSocket.OPEN)) return;
+  const wsUrl = WS_BASE_URL + '/realtime';
+  ws = new WebSocket(wsUrl);
+
+  ws.onopen = () => {
+    for (const entity of Object.keys(subscribers)) {
+      if (subscribers[entity].length > 0) {
+        ws.send(JSON.stringify({ action: "subscribe", entity }));
+      }
+    }
+  };
+
+  ws.onmessage = (e) => {
+    try {
+      const data = JSON.parse(e.data);
+      const entity = data.entity;
+      const cbs = subscribers[entity] || [];
+      const typeMap = { created: 'create', updated: 'update', deleted: 'delete' };
+      const eventType = typeMap[data.type] || data.type;
+      
+      const event = {
+        type: eventType,
+        id: data.record?.id,
+        data: data.record
+      };
+      
+      cbs.forEach(cb => cb(event));
+    } catch (err) {
+      console.error("WS Parse Error:", err);
+    }
+  };
+
+  ws.onclose = () => {
+    setTimeout(connectWebSocket, 5000); // Reconnect after 5s
+  };
+}
 
 function getToken() {
   return localStorage.getItem("bolifyai_token");
@@ -83,9 +125,20 @@ class EntityHandler {
   }
 
   subscribe(callback) {
-    // Mock subscription
-    console.warn(`Subscriptions are currently mocked for ${this.entityName}`);
-    return () => {}; // Unsubscribe function
+    if (!subscribers[this.entityName]) {
+      subscribers[this.entityName] = [];
+    }
+    subscribers[this.entityName].push(callback);
+    
+    if (!ws || ws.readyState === WebSocket.CLOSED) {
+      connectWebSocket();
+    } else if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ action: "subscribe", entity: this.entityName }));
+    }
+
+    return () => {
+      subscribers[this.entityName] = subscribers[this.entityName].filter(cb => cb !== callback);
+    };
   }
 }
 

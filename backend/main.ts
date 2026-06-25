@@ -66,6 +66,8 @@ app.get('*', async (c, next) => {
   }
 });
 
+import { handleWebSocket } from "./src/services/realtime.ts";
+
 app.route("/api/auth", authRouter);
 app.route("/api/entities", entityRouter);
 app.route("/api/voice", voiceRouter);
@@ -77,6 +79,15 @@ app.route("/api/telegram", telegramRouter);
 app.route("/api/billing", billingRouter);
 app.route("/api/agents", agentsRouter);
 app.route("/api/functions", functionsRouter);
+
+app.get('/api/realtime', (c) => {
+  if (c.req.header("upgrade") !== "websocket") {
+    return c.text("Expected WebSocket", 400);
+  }
+  const { socket, response } = Deno.upgradeWebSocket(c.req.raw);
+  handleWebSocket(socket as any);
+  return response as any;
+});
 
 // Initialize background scheduled tasks
 initCampaignPoller();
