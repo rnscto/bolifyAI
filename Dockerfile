@@ -37,4 +37,4 @@ ENV DENO_DIR=/app/.deno
 
 # Set permissions for Deno runtime
 # We grant network access and read/write to the app directory
-CMD ["deno", "serve", "--unstable-cron", "--allow-net", "--allow-read", "--allow-write", "--allow-env", "backend/main.ts"]
+CMD ["deno", "serve", "--config", "backend/deno.json", "--unstable-cron", "--allow-net", "--allow-read", "--allow-write", "--allow-env", "backend/main.ts"]
