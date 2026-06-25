@@ -434,7 +434,7 @@ const streamHandler = (c: any) => {
     // Trigger post-call processing (Summary, Transcription, Scoring)
     if (streamId) {
       setTimeout(() => {
-        processPostCallMetrics(callId, streamId, leadId).catch(err => {
+        processPostCallMetrics(callId, streamId!, leadId).catch(err => {
           console.error(`[PostCall] Failed to process metrics for call ${callId}:`, err);
         });
       }, 90000); // Wait 90 seconds for Smartflo recording to be ready

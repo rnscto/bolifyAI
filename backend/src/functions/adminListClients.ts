@@ -26,7 +26,7 @@ export default async function adminListClients(c: any) {
         activationByClient[row.client_id] = row.min_date;
       }
       
-      const enriched = clients.map(c => ({ ...c, activation_date: activationByClient[c.id] || null }));
+      const enriched = clients.map((c: any) => ({ ...c, activation_date: activationByClient[c.id] || null }));
       return c.json({ data: { clients: enriched, users } });
     }
 

@@ -55,7 +55,7 @@ async function sendViaSMTP({ to, subject, html, fromAddress, fromName, config }:
     subject,
     attachment: [{ data: html, alternative: true }]
   });
-  return { provider: 'client_smtp', status: 'sent', message_id: message?.header?.['message-id'] || null };
+  return { provider: 'client_smtp', status: 'sent', message_id: (message?.header as any)?.['message-id'] || null };
 }
 
 // ─── Client provider: Resend ───

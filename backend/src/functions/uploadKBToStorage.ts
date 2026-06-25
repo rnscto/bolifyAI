@@ -49,7 +49,7 @@ async function putBlob(params: { endpoint: string, accountName: string, accountK
       'Content-Type': contentType,
       'Content-Length': String(contentLength)
     },
-    body
+    body: body as any
   });
   if (!resp.ok) {
     throw new Error(`Azure PUT failed \${resp.status}: \${(await resp.text()).substring(0, 300)}`);

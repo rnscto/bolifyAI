@@ -334,7 +334,7 @@ export default async function (c: Context) {
           return c.json({ data: {
             success: true,
             message: `SMTP connected! Test email sent to ${testTo}`,
-            message_id: message?.header?.['message-id'] || null
+            message_id: (message?.header as any)?.['message-id'] || null
           } });
         } catch (smtpErr: any) {
           console.error('[testMessagingConnection/smtp] SMTP error:', smtpErr?.message);
