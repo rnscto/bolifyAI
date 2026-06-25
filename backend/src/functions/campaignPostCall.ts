@@ -1,10 +1,6 @@
 import { client } from "../db/index.ts";
 import { processTranscriptCore } from "./processTranscript.ts";
 import { postCallActionExtractorCore } from "./postCallActionExtractor.ts";
-// We will also invoke executeCampaign to trigger next batch, but let's just make a fetch call or something
-// to not mess with executeCampaign.ts for now.
-// Better yet, we can do a local fetch to our own server, or just import it if we refactor.
-// Let's just do a local fetch to our own API endpoint for simplicity.
 
 export async function campaignPostCallCore(call_log_id: string, campaign_id: string) {
   try {
@@ -16,16 +12,15 @@ export async function campaignPostCallCore(call_log_id: string, campaign_id: str
     const cl = clRes.rows[0] as any;
 
     if (['completed', 'failed', 'processing'].includes(cl.status)) {
-       // Already processed
-       return { success: true, skipped: 'already_processed' };
+      return { success: true, skipped: 'already_processed' };
     }
 
     if (cl.status === 'pending') {
-       return { success: true, skipped: 'already_pending_retry' };
+      return { success: true, skipped: 'already_pending_retry' };
     }
 
     await client.queryObject(`UPDATE "campaign_lead" SET status = 'processing' WHERE id = $1`, [cl.id]);
-    
+
     const callLogRes = await client.queryObject(`SELECT * FROM "call_log" WHERE id = $1 LIMIT 1`, [call_log_id]);
     const callLog = (callLogRes.rows[0] as any) || {};
     const callConnected = (callLog.transcript && callLog.transcript.length > 20) || !!callLog.recording_url || (callLog.duration && callLog.duration > 0);
@@ -70,14 +65,17 @@ export async function campaignPostCallCore(call_log_id: string, campaign_id: str
       }
     }
 
-    const baseUrl = Deno.env.get('APP_BASE_URL_INTERNAL') || `http://localhost:${Deno.env.get('PORT') || '8000'}`;
-    fetch(`${baseUrl}/api/campaign/execute`, {
+    // Trigger next batch (fire-and-forget)
+    try {
+      const baseUrl = Deno.env.get('APP_BASE_URL_INTERNAL') || `http://localhost:${Deno.env.get('PORT') || '8000'}`;
+      fetch(`${baseUrl}/api/campaign/execute`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ campaign_id })
       }).catch(err => console.error('Failed to trigger next batch', err));
     } catch (e) {}
 
+    // AI Analysis / Lead status update
     let aiResult: any = {};
     const alreadyAnalyzed = callLog.lead_status_updated && callLog.transcript;
 
@@ -89,58 +87,62 @@ export async function campaignPostCallCore(call_log_id: string, campaign_id: str
       };
       outcome = statusToOutcome[callLog.lead_status_updated] || outcome;
       summary = callLog.conversation_summary || summary;
-      await base44.entities.CampaignLead.update(cl.id, { outcome, conversation_summary: summary });
+      await client.queryObject(
+        `UPDATE "campaign_lead" SET outcome = $1, conversation_summary = $2 WHERE id = $3`,
+        [outcome, summary, cl.id]
+      );
     } else if (outcome !== 'not_answered' && (callLog.transcript || callLog.conversation_summary)) {
-        // Run AI Analysis via processTranscriptCore if there is a recording url.
-        // If recording URL is missing, we can't do STT, but if transcript is somehow there, we can.
-        // Let's rely on processTranscript to do the heavy lifting if possible.
-        // But processTranscript handles the entire LLM processing and scoring.
-        if (callLog.recording_url) {
-            aiResult = await processTranscriptCore(call_log_id, callLog.recording_url);
-            if (aiResult.success) {
-                outcome = aiResult.lead_status || outcome;
-                await base44.entities.CampaignLead.update(cl.id, { outcome, conversation_summary: aiResult.summary || summary });
-            }
+      if (callLog.recording_url) {
+        aiResult = await processTranscriptCore(call_log_id, callLog.recording_url);
+        if (aiResult.success) {
+          outcome = aiResult.lead_status || outcome;
+          await client.queryObject(
+            `UPDATE "campaign_lead" SET outcome = $1, conversation_summary = $2 WHERE id = $3`,
+            [outcome, aiResult.summary || summary, cl.id]
+          );
         }
+      }
     } else if (cl.lead_id) {
       if (outcome === 'not_answered') {
-        await base44.entities.Lead.update(cl.lead_id, {
-          last_call_date: new Date().toISOString(),
-          last_engagement_date: new Date().toISOString()
-        });
+        await client.queryObject(
+          `UPDATE "lead" SET last_call_date = NOW(), last_engagement_date = NOW() WHERE id = $1`,
+          [cl.lead_id]
+        );
       } else {
         const outcomeToLeadStatus: any = {
           interested: 'interested', not_interested: 'not_interested', callback: 'callback',
           neutral: 'contacted', converted: 'converted', do_not_call: 'do_not_call'
         };
-        await base44.entities.Lead.update(cl.lead_id, {
-          status: outcomeToLeadStatus[outcome] || 'contacted',
-          last_call_date: new Date().toISOString(),
-          last_engagement_date: new Date().toISOString()
-        });
+        await client.queryObject(
+          `UPDATE "lead" SET status = $1, last_call_date = NOW(), last_engagement_date = NOW() WHERE id = $2`,
+          [outcomeToLeadStatus[outcome] || 'contacted', cl.lead_id]
+        );
       }
     }
 
     // Call Action Extractor
     if (callLog.transcript && callLog.transcript.length > 50 && outcome !== 'not_answered') {
-       try {
-           await postCallActionExtractorCore(call_log_id);
-       } catch (err) {}
+      try {
+        await postCallActionExtractorCore(call_log_id);
+      } catch (err) {}
     }
 
     // Update Campaign Stats
     try {
-        const statuses = ['completed', 'failed', 'pending', 'calling', 'processing'];
-        const allLeads = await base44.entities.CampaignLead.filter({ campaign_id });
-        const completed = allLeads.filter((l: any) => l.status === 'completed' || l.status === 'failed');
-        const outcomes: any = {};
-        completed.forEach((l: any) => {
-           outcomes[l.outcome] = (outcomes[l.outcome] || 0) + 1;
-        });
-        await base44.entities.Campaign.update(campaign_id, {
-            calls_completed: completed.length,
-            outcomes_summary: outcomes
-        });
+      const allLeadsRes = await client.queryObject(
+        `SELECT status, outcome FROM "campaign_lead" WHERE campaign_id = $1`,
+        [campaign_id]
+      );
+      const allLeads = allLeadsRes.rows as any[];
+      const completed = allLeads.filter((l: any) => l.status === 'completed' || l.status === 'failed');
+      const outcomes: any = {};
+      completed.forEach((l: any) => {
+        outcomes[l.outcome] = (outcomes[l.outcome] || 0) + 1;
+      });
+      await client.queryObject(
+        `UPDATE "campaign" SET calls_completed = $1, outcomes_summary = $2 WHERE id = $3`,
+        [completed.length, JSON.stringify(outcomes), campaign_id]
+      );
     } catch (e) {}
 
     return { success: true, outcome, retryScheduled };
