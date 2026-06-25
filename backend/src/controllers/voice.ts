@@ -377,7 +377,8 @@ const streamHandler = (c: any) => {
              // 2. Try DID lookup
              if (!resolvedAgentId && customerNumber) {
                try {
-                 const didRes = await client.queryObject(`SELECT id FROM "agent" WHERE assigned_did = $1 OR assigned_dids @> '"${customerNumber}"' LIMIT 1`, [customerNumber]);
+                 const cleanDid = customerNumber.replace(/[^0-9]/g, '').slice(-10);
+                 const didRes = await client.queryObject(`SELECT id FROM "agent" WHERE assigned_did LIKE $1 OR assigned_dids::text LIKE $1 LIMIT 1`, [`%${cleanDid}%`]);
                  if (didRes.rows.length > 0) resolvedAgentId = (didRes.rows[0] as any).id;
                } catch(e) {}
              }
