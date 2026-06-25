@@ -11,17 +11,50 @@ voiceWebhookRouter.post("/", async (c) => {
       return c.json({ error: "Forbidden" }, 403);
     }
 
-    const payloadText = await c.req.text();
-    if (!payloadText || payloadText.trim() === "") {
-      return c.json({ success: true, message: "Empty body received" });
+    const rawBody = await c.req.text();
+    console.log(`[smartfloWebhook] POST ${c.req.url}`);
+    console.log(`[smartfloWebhook] Headers:`, JSON.stringify(c.req.header()));
+    console.log(`[smartfloWebhook] Query:`, JSON.stringify(c.req.query()));
+    console.log(`[smartfloWebhook] Body:`, rawBody);
+    
+    let payload: any = {};
+    const contentType = c.req.header("content-type") || "";
+    
+    if (rawBody && rawBody.trim() !== "") {
+        if (contentType.includes("application/x-www-form-urlencoded")) {
+            const params = new URLSearchParams(rawBody);
+            for (const [key, value] of params.entries()) {
+                payload[key] = value;
+            }
+        } else if (contentType.includes("application/json")) {
+            try {
+                payload = JSON.parse(rawBody);
+            } catch (e) {
+                console.error("[smartfloWebhook] JSON Parse Error on body:", rawBody);
+                return c.json({ error: "Invalid JSON body" }, 400);
+            }
+        } else {
+            // fallback attempt to parse JSON
+            try {
+                payload = JSON.parse(rawBody);
+            } catch (e) {
+                // If it fails, maybe it's URL params in the body anyway
+                 const params = new URLSearchParams(rawBody);
+                 for (const [key, value] of params.entries()) {
+                     payload[key] = value;
+                 }
+            }
+        }
+    } else {
+        // Body is empty, maybe they sent parameters in query?
+        payload = c.req.query();
+        if (Object.keys(payload).length <= 1) { // only secret
+             console.log("[smartfloWebhook] Empty body and no query parameters. Returning 200.");
+             return c.json({ success: true, message: "Empty body received" });
+        }
     }
     
-    let payload;
-    try {
-      payload = JSON.parse(payloadText);
-    } catch (e) {
-      return c.json({ error: "Invalid JSON body" }, 400);
-    }
+    console.log("[smartfloWebhook] Parsed Payload:", JSON.stringify(payload));
 
     const call_id = payload.call_id || payload.uuid;
     const status = payload.call_status || payload.status;
