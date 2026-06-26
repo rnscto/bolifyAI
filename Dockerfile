@@ -30,9 +30,7 @@ COPY --from=frontend-builder /app/dist /app/dist
 COPY backend /app/backend
 
 # Cache the Deno dependencies
-# Using || true ensures that if it fails to cache (e.g. native dependency build on alpine), 
-# it won't break the build and will instead cache at runtime
-RUN cd /app/backend && (deno cache main.ts || true)
+RUN cd /app/backend && deno cache main.ts
 
 # Set environment variables for Deno to safely run
 ENV DENO_DIR=/app/.deno
