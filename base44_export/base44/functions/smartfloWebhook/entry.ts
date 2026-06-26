@@ -749,6 +749,60 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
     if (recording_url) updateData.recording_url = recording_url;
     if (effectiveStatus === 'completed') updateData.call_end_time = new Date().toISOString();
 
+    // ── Wallet Deduction Logic ──
+    if (effectiveStatus === 'completed' && duration && parseInt(duration) > 0 && callLog.client_id) {
+      try {
+        const client = await base44.entities.Client.get(callLog.client_id);
+        if (client) {
+          const isPayg = client.billing_type !== 'unlimited';
+          const billableMinutes = Math.ceil(parseInt(duration) / 60);
+          const rate = Number(client.per_minute_rate) || 4.0;
+          const amountToDeduct = isPayg ? (billableMinutes * rate) : 0;
+          
+          const freeBefore = Number(client.free_minutes_remaining) || 0;
+          const balanceBefore = Number(client.wallet_balance) || 0;
+          
+          let freeAfter = freeBefore;
+          let balanceAfter = balanceBefore;
+          
+          if (isPayg) {
+            if (freeBefore >= billableMinutes) {
+              freeAfter = freeBefore - billableMinutes;
+            } else {
+              const remainingMinutes = billableMinutes - freeBefore;
+              freeAfter = 0;
+              balanceAfter = balanceBefore - (remainingMinutes * rate);
+            }
+            
+            await base44.entities.Client.update(client.id, {
+              free_minutes_remaining: freeAfter,
+              wallet_balance: balanceAfter,
+              total_minutes_used: (Number(client.total_minutes_used) || 0) + billableMinutes
+            });
+          }
+
+          await base44.entities.UsageLog.create({
+            client_id: client.id,
+            call_log_id: callLog.id,
+            type: 'call_charge',
+            direction: 'debit',
+            call_duration_seconds: parseInt(duration),
+            billable_minutes: billableMinutes,
+            rate_per_minute: rate,
+            amount: amountToDeduct,
+            balance_before: balanceBefore,
+            balance_after: balanceAfter,
+            free_minutes_before: freeBefore,
+            free_minutes_after: freeAfter,
+            description: isPayg ? `Call charge for ${billableMinutes} min(s) @ ₹${rate}/min` : `Unlimited plan usage: ${billableMinutes} min(s)`
+          });
+          console.log(`[smartfloWebhook] Wallet deduction for ${client.company_name}: ₹${amountToDeduct} for ${billableMinutes} mins.`);
+        }
+      } catch (e) {
+        console.error(`[smartfloWebhook] Failed to process wallet deduction: ${e.message}`);
+      }
+    }
+
     await base44.entities.CallLog.update(callLog.id, updateData);
 
     // If this webhook delivers a recording_url for an already-completed transferred call,

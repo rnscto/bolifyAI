@@ -10,18 +10,31 @@ export default function InvoiceButton({ paymentId, size = 'sm' }) {
   const handleDownload = async (e) => {
     e.stopPropagation();
     setDownloading(true);
-    
-    const response = await apiClient.functions.invoke('generateInvoice', { payment_id: paymentId });
-    const blob = new Blob([response.data], { type: 'application/pdf' });
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `VaaniAI-Invoice-${paymentId.slice(-8)}.pdf`;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    a.remove();
-    toast.success('Invoice downloaded');
+    try {
+      const response = await fetch(`${apiClient.baseUrl}/billing/generate-invoice`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ payment_id: paymentId })
+      });
+
+      if (!response.ok) throw new Error('Failed to download invoice');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `VaaniAI-Invoice-${paymentId.slice(-8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+      toast.success('Invoice downloaded');
+    } catch (e) {
+      toast.error(e.message);
+    }
     
     setDownloading(false);
   };

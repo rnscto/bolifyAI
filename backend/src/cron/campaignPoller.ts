@@ -48,7 +48,10 @@ export async function processPendingLeads() {
           INNER JOIN "lead" l ON cl.lead_id = l.id::text
           INNER JOIN "campaign" c ON cl.campaign_id = c.id::text
           INNER JOIN "agent" a ON c.agent_id = a.id::text
+          INNER JOIN "client" cli ON c.client_id = cli.id::text
           WHERE c.agent_id = $1 AND cl.status = 'pending' AND c.status = 'active'
+            AND cli.account_status = 'active'
+            AND (cli.billing_type = 'unlimited' OR COALESCE(cli.wallet_balance, 0) > 0 OR COALESCE(cli.free_minutes_remaining, 0) > 0)
           FOR UPDATE OF cl SKIP LOCKED
           LIMIT $2
         `, [agentId, availableSlots]);

@@ -150,6 +150,96 @@ billingRouter.post("/verify-payment", jwt({ secret: JWT_SECRET, alg: "HS256" }),
   }
 });
 
+// POST /api/billing/webhook
+billingRouter.post("/webhook", async (c) => {
+  try {
+    const signature = c.req.header("x-webhook-signature");
+    const timestamp = c.req.header("x-webhook-timestamp");
+    const rawBody = await c.req.text();
+
+    if (!signature || !timestamp) return c.json({ error: "Missing signature headers" }, 400);
+
+    // Verify Cashfree Webhook Signature (requires Deno crypto/hmac)
+    const encoder = new TextEncoder();
+    const keyData = encoder.encode(CASHFREE_SECRET_KEY || "");
+    const messageData = encoder.encode(timestamp + rawBody);
+    
+    const key = await crypto.subtle.importKey("raw", keyData, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+    const signatureBuffer = await crypto.subtle.sign("HMAC", key, messageData);
+    const generatedSignature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)));
+
+    if (generatedSignature !== signature) {
+      console.error("[Cashfree Webhook] Invalid signature");
+      return c.json({ error: "Invalid signature" }, 401);
+    }
+
+    const payload = JSON.parse(rawBody);
+
+    if (payload.type === "PAYMENT_SUCCESS_WEBHOOK") {
+      const order_id = payload.data.order.order_id;
+      const cashfree_payment_id = payload.data.payment.cf_payment_id?.toString();
+      
+      const payments = await base44.entities.Payment.filter({ cashfree_order_id: order_id });
+      if (!payments.length) return c.json({ error: "Payment not found" }, 404);
+      const payment = payments[0];
+
+      if (payment.status === "paid") return c.json({ success: true, message: "Already processed" });
+
+      await base44.entities.Payment.update(payment.id, {
+        status: "paid", cashfree_payment_id: cashfree_payment_id, paid_at: new Date().toISOString(),
+      });
+
+      let planDetails: any = {};
+      try { planDetails = JSON.parse(payment.description); } catch (e) {}
+
+      if (planDetails.type === "wallet_topup") {
+        const topupAmount = planDetails.amount || payment.amount;
+        const client = await base44.entities.Client.get(payment.client_id);
+        const newBalance = (Number(client?.wallet_balance) || 0) + Number(topupAmount);
+
+        await base44.entities.Client.update(payment.client_id, { wallet_balance: newBalance });
+        await base44.entities.UsageLog.create({
+          client_id: payment.client_id, type: "topup", direction: "credit", amount: topupAmount,
+          balance_before: Number(client?.wallet_balance) || 0, balance_after: newBalance, description: `Wallet top-up ₹${topupAmount}`, payment_id: payment.id,
+        });
+
+        console.log(`[Cashfree Webhook] Processed Topup for ${payment.client_id}: ₹${topupAmount}`);
+        return c.json({ success: true });
+      }
+
+      let subscribedChannels = planDetails.channels || 1;
+      let includeCRM = planDetails.include_crm || false;
+      const now = new Date();
+      const billingEnd = new Date(now);
+      billingEnd.setMonth(billingEnd.getMonth() + (planDetails.months || 3));
+
+      await base44.entities.Client.update(payment.client_id, {
+        account_status: "active", status: "active", billing_type: "unlimited",
+        total_channels: subscribedChannels, monthly_rate_per_channel: 6500, has_custom_crm: includeCRM,
+        next_billing_date: billingEnd.toISOString().split("T")[0],
+      });
+
+      const subs = await base44.entities.Subscription.filter({ client_id: payment.client_id });
+      const subData = {
+        client_id: payment.client_id, channels: subscribedChannels, rate_per_channel: 6500, total_amount: payment.amount,
+        billing_start_date: now.toISOString().split("T")[0], billing_end_date: billingEnd.toISOString().split("T")[0],
+        next_billing_date: billingEnd.toISOString().split("T")[0], status: "active", payment_status: "paid", payment_id: payment.id,
+      };
+
+      if (subs.length) await base44.entities.Subscription.update(subs[0].id, subData);
+      else await base44.entities.Subscription.create(subData);
+
+      console.log(`[Cashfree Webhook] Processed Subscription for ${payment.client_id}`);
+      return c.json({ success: true });
+    }
+
+    return c.json({ success: true, message: "Ignored event type" });
+  } catch (err: any) {
+    console.error("[Cashfree Webhook] Error:", err.message);
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 // POST /api/billing/submit-payment-approval
 billingRouter.post("/submit-payment-approval", jwt({ secret: JWT_SECRET, alg: "HS256" }), async (c) => {
   try {
