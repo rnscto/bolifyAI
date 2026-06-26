@@ -154,7 +154,21 @@ resellerRouter.post("/admin/pay-commission", async (c) => {
   }
 });
 
-import { bindCustomDomain } from "../services/azureContainerService.ts";
+import { bindCustomDomain, getAzureEnvironmentDetails } from "../services/azureContainerService.ts";
+
+// GET /api/reseller/custom-domain-config
+resellerRouter.get("/custom-domain-config", async (c) => {
+  try {
+    const user = c.get("jwtPayload") as any;
+    if (user.role !== "reseller" && user.role !== "master_reseller") {
+      return c.json({ error: "Only resellers can manage custom domains" }, 403);
+    }
+    const config = await getAzureEnvironmentDetails();
+    return c.json(config);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
 
 // POST /api/reseller/custom-domain
 resellerRouter.post("/custom-domain", async (c) => {
@@ -186,7 +200,14 @@ resellerRouter.post("/custom-domain", async (c) => {
     return c.json(result);
   } catch (err: any) {
     console.error("[Custom Domain Binding Error]", err);
-    return c.json({ error: err.message || "Failed to bind custom domain" }, 500);
+    let errorMsg = err.message || "Failed to bind custom domain";
+    
+    // Check if it's an Azure DNS validation error
+    if (errorMsg.includes("CustomDomainVerificationFailed")) {
+      errorMsg = "Domain verification failed. Please ensure you have added the required TXT and CNAME records and wait a few minutes for DNS to propagate.";
+    }
+    
+    return c.json({ error: errorMsg }, 500);
   }
 });// POST /api/reseller/admin/promote
 resellerRouter.post("/admin/promote", async (c) => {

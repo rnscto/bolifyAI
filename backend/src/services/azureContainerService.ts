@@ -20,6 +20,40 @@ function getClient() {
 }
 
 /**
+ * Fetches the required Azure environment details for custom domain verification:
+ * - The Custom Domain Verification ID (for the TXT record)
+ * - The default FQDN of the Container App (for the CNAME record)
+ */
+export async function getAzureEnvironmentDetails() {
+  try {
+    const acaClient = getClient();
+    
+    // Get the Container App to find its default FQDN
+    const app = await acaClient.containerApps.get(resourceGroupName, containerAppName);
+    const defaultFqdn = app.configuration?.ingress?.fqdn || "app.bolify.ai";
+
+    // Get the Managed Environment to find the Custom Domain Verification ID
+    const env = await acaClient.managedEnvironments.get(resourceGroupName, environmentName);
+    const verificationId = env.customDomainConfiguration?.customDomainVerificationId || "pending-verification-id";
+
+    return {
+      success: true,
+      verificationId,
+      fqdn: defaultFqdn
+    };
+  } catch (error: any) {
+    console.error("[AzureContainerService] Failed to get environment details:", error.message);
+    return {
+      success: false,
+      error: "Azure credentials not configured properly on the server, or the environment does not exist.",
+      // Fallback details to allow UI to render even if Azure is misconfigured locally
+      verificationId: "AZURE_NOT_CONFIGURED",
+      fqdn: "app.bolify.ai"
+    };
+  }
+}
+
+/**
  * Validates and binds a custom domain to the Azure Container App.
  * This expects the user to have already added a TXT record `asuid.<domain>` 
  * with the Container App's Custom Domain Verification ID, and a CNAME record.
