@@ -22,6 +22,10 @@ export default function ClientAnalytics() {
   const [campaigns, setCampaigns] = useState([]);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('30');
+  const [advancedMetrics, setAdvancedMetrics] = useState({
+    objectionSuccessRate: 0,
+    intentBreakdown: []
+  });
 
   useEffect(() => { loadData(); }, []);
 
@@ -38,7 +42,14 @@ export default function ClientAnalytics() {
       ]);
       setCalls(callsData);
       setLeads(leadsData);
-      setCampaigns(campaignsData);
+      const token = localStorage.getItem('token');
+      const analyticsRes = await fetch('/api/v1/analytics/overview', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const analyticsJson = await analyticsRes.json();
+      if (analyticsJson.success) {
+        setAdvancedMetrics(analyticsJson.overview);
+      }
     }
     setLoading(false);
   };
@@ -177,6 +188,39 @@ export default function ClientAnalytics() {
           })}
         </div>
 
+        </div>
+
+        {/* ADVANCED AI METRICS */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-indigo-500" />
+                Objection Resolution Rate
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-slate-900">{advancedMetrics.objectionSuccessRate}%</div>
+              <p className="text-sm text-gray-500 mt-1">of all detected objections successfully handled by AI</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="w-5 h-5 text-emerald-500" />
+                Auto-Extracted Intent Actions
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold text-slate-900">
+                {advancedMetrics.intentBreakdown.reduce((sum, item) => sum + item.value, 0).toLocaleString()}
+              </div>
+              <p className="text-sm text-gray-500 mt-1">actions pushed to workflows (email, whatsapp, demo)</p>
+            </CardContent>
+          </Card>
+        </div>
+
         {/* Charts Row 1 */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Card className="lg:col-span-2">
@@ -310,7 +354,43 @@ export default function ClientAnalytics() {
             </CardContent>
           </Card>
         </div>
-      </div>
-    </FeatureGate>
+
+        {/* AI Intent Extraction Pie Chart */}
+        <div className="grid grid-cols-1 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">AI Intent Extraction Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent className="h-[300px]">
+              {advancedMetrics.intentBreakdown.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={advancedMetrics.intentBreakdown}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={80}
+                      outerRadius={120}
+                      paddingAngle={5}
+                      dataKey="value"
+                    >
+                      {advancedMetrics.intentBreakdown.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-full flex items-center justify-center text-gray-400">
+                  No actions extracted in this period.
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+
+      </FeatureGate>
   );
 }

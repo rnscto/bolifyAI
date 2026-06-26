@@ -1,5 +1,6 @@
-import { client } from "../db/index.ts";
+import { client } from '../db/index.ts';
 import { runActivityDispatcher } from '../cron/activityDispatcher.ts';
+import { sendWebhookEvent } from '../integrations/webhooks.ts';
 
 export async function postCallActionExtractorCore(callLogId: string) {
   try {
@@ -333,6 +334,19 @@ IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backtic
       // Execute the dispatcher immediately in the background for instant gratification
       runActivityDispatcher().catch(e => console.error('[ActionExtractor] Immediate dispatcher error:', e));
     }
+
+    // Fire webhook to Zapier/Make with the extracted data
+    try {
+      const webhookPayload = {
+        call_log_id: callLogId,
+        lead_id: callLog.lead_id,
+        summary: callLog.conversation_summary,
+        transcript: callLog.transcript,
+        extracted_notes: extracted.lead_notes,
+        activities_created: results.details,
+      };
+      sendWebhookEvent(callLog.client_id, "call.analyzed", webhookPayload).catch(e => console.error('[ActionExtractor] Webhook error:', e));
+    } catch (e) {}
 
     return { success: true, ...results };
 

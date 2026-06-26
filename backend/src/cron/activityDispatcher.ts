@@ -2,6 +2,7 @@ import { client } from "../db/index.ts";
 import { sendWhatsAppMessage } from "../integrations/whatsapp.ts";
 import { sendEmail } from "../integrations/email.ts";
 import { sendSMS } from "../integrations/sms.ts";
+import { sendCalendarInvite } from "../integrations/calendar.ts";
 
 export async function runActivityDispatcher() {
   try {
@@ -14,7 +15,7 @@ export async function runActivityDispatcher() {
       JOIN campaign c ON l.campaign_id = c.id
       WHERE a.status = 'scheduled' 
         AND a.scheduled_date <= NOW() 
-        AND a.type IN ('whatsapp', 'email', 'sms')
+        AND a.type IN ('whatsapp', 'email', 'sms', 'calendar_invite')
       LIMIT 50
     `;
     const res = await client.queryObject(query);
@@ -53,6 +54,12 @@ export async function runActivityDispatcher() {
           if (!activity.lead_phone) throw new Error("Lead missing phone number");
           const body = activity.description || "Thank you for speaking with us. We will follow up soon.";
           success = await sendSMS(activity.lead_phone, body, activity.client_id);
+        }
+        else if (activity.type === 'calendar_invite') {
+          if (!activity.lead_email) throw new Error("Lead missing email address");
+          const subject = activity.title || "Meeting Invitation from BolifyAI";
+          const body = activity.description || "Please find the calendar invite attached.";
+          success = await sendCalendarInvite(activity.lead_email, subject, body, activity.scheduled_date, activity.client_id);
         }
 
         if (success) {

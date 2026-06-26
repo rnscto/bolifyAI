@@ -6,6 +6,7 @@ import WhatsAppSetup from '../components/integrations/WhatsAppSetup';
 import RCSSetup from '../components/integrations/RCSSetup';
 import EmailSetup from '../components/integrations/EmailSetup';
 import ShopifySetup from '../components/integrations/ShopifySetup';
+import WebhookSetup from '../components/integrations/WebhookSetup';
 
 export default function ClientIntegrations() {
   const [client, setClient] = useState(null);
@@ -144,6 +145,7 @@ export default function ClientIntegrations() {
       <WhatsAppSetup config={config} onSave={handleSave} />
       <RCSSetup config={config} onSave={handleSave} />
       <EmailSetup config={config} onSave={handleSave} />
+      <WebhookSetup clientId={client?.id} />
 
       <div className="bg-gray-50 rounded-xl p-5 text-center text-sm text-gray-500">
         <p>Your API credentials are stored securely and only used for sending messages on your behalf.</p>

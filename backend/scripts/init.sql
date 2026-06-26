@@ -968,6 +968,26 @@ CREATE TABLE IF NOT EXISTS "crmintegration" (
 );
 
 
+CREATE TABLE IF NOT EXISTS "calendarintegration" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "client_id" TEXT,
+  "provider" TEXT,
+  "access_token" TEXT,
+  "refresh_token" TEXT,
+  "expires_at" TIMESTAMP WITH TIME ZONE,
+  "account_email" TEXT,
+  "status" TEXT
+);
+
+DROP TRIGGER IF EXISTS update_calendarintegration_updated_at ON "calendarintegration";
+CREATE TRIGGER update_calendarintegration_updated_at
+BEFORE UPDATE ON "calendarintegration"
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+
 DROP TRIGGER IF EXISTS update_crmintegration_updated_at ON "crmintegration";
 CREATE TRIGGER update_crmintegration_updated_at
 BEFORE UPDATE ON "crmintegration"
