@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiClient } from '@/api/apiClient';
+import { apiClient, apiFetch } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +28,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Edit, Trash2, FileText, CreditCard, Download } from 'lucide-react';
+import { Plus, Edit, Trash2, FileText, CreditCard, Download, Users, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 import ClientAgreementTemplateEditor from '../components/admin/ClientAgreementTemplateEditor';
 import AdminSignedAgreements from '../components/admin/AdminSignedAgreements';
@@ -127,6 +127,22 @@ export default function AdminClients() {
     } catch (error) {
       console.error('Error deleting client:', error);
       toast.error('Failed to delete client');
+    }
+  };
+
+  const handlePromote = async (client, newRole) => {
+    if (!confirm(`Are you sure you want to promote ${client.company_name || 'this client'} to ${newRole.replace('_', ' ')}?`)) return;
+    try {
+      const res = await apiFetch('/reseller/admin/promote', {
+        method: 'POST',
+        body: JSON.stringify({ client_id: client.id, new_role: newRole })
+      });
+      if (res.error) throw new Error(res.error);
+      toast.success(res.message);
+      loadClients();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.message || 'Failed to promote client');
     }
   };
 
@@ -430,7 +446,24 @@ export default function AdminClients() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          title="Delete"
+                          title="Promote to Reseller"
+                          onClick={() => handlePromote(client, 'reseller')}
+                        >
+                          <Users className="w-4 h-4 text-purple-600" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Promote to Master Reseller"
+                          onClick={() => handlePromote(client, 'master_reseller')}
+                        >
+                          <Crown className="w-4 h-4 text-yellow-600" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="text-red-600"
+                          title="Delete Client"
                           onClick={() => handleDelete(client.id)}
                         >
                           <Trash2 className="w-4 h-4 text-red-600" />

@@ -188,4 +188,56 @@ resellerRouter.post("/custom-domain", async (c) => {
     console.error("[Custom Domain Binding Error]", err);
     return c.json({ error: err.message || "Failed to bind custom domain" }, 500);
   }
+});// POST /api/reseller/admin/promote
+resellerRouter.post("/admin/promote", async (c) => {
+  try {
+    const admin = c.get("jwtPayload") as any;
+    if (admin.role !== "admin" && admin.role !== "master_admin") {
+      return c.json({ error: "Unauthorized" }, 403);
+    }
+
+    const { client_id, new_role } = await c.req.json();
+    if (!client_id || !new_role) return c.json({ error: "Missing required fields" }, 400);
+    if (!["reseller", "master_reseller"].includes(new_role)) return c.json({ error: "Invalid role" }, 400);
+
+    const client = await base44.entities.Client.get(client_id);
+    if (!client) return c.json({ error: "Client not found" }, 404);
+
+    const user = await base44.entities.User.get(client.user_id);
+    if (!user) return c.json({ error: "User not found" }, 404);
+
+    // Update User role
+    await base44.entities.User.update(user.id, { role: new_role });
+
+    // Update Client account_type to business if not already
+    if (client.account_type !== "business") {
+      await base44.entities.Client.update(client.id, { account_type: "business" });
+    }
+
+    // Check if Partner record exists
+    const partners = await base44.entities.Partner.filter({ user_id: user.id });
+    if (partners.length === 0) {
+      const code = 'BOLIFY-' + (user.name || 'PARTNER').split(' ')[0].toUpperCase().substring(0, 6) + Math.floor(1000 + Math.random() * 9000);
+      await base44.entities.Partner.create({
+        user_id: user.id,
+        name: user.name || client.company_name || 'Reseller',
+        email: user.email || client.email,
+        phone: client.phone || user.phone || '',
+        company_name: client.company_name || user.name || 'Reseller',
+        status: "approved",
+        commission_rate: new_role === "master_reseller" ? 30 : 20,
+        referral_code: code,
+        referral_link: `https://app.bolify.ai/?ref=${code}`
+      });
+    } else {
+      // update commission rate if it's a promotion
+      await base44.entities.Partner.update(partners[0].id, {
+         commission_rate: new_role === "master_reseller" ? 30 : 20,
+      });
+    }
+
+    return c.json({ success: true, message: `Successfully promoted to ${new_role.replace('_', ' ')}` });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
 });
