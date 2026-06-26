@@ -154,7 +154,6 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
         name: form.name,
         type: form.type,
         agent_id: form.agent_id,
-        max_concurrent_calls: form.max_concurrent_calls,
         total_leads: selectedLeads.length,
         ...(hasScript ? { call_script: form.call_script } : {}),
         ...(scheduledISO ? { scheduled_date: scheduledISO } : {}),
@@ -235,7 +234,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4">
             <div>
               <Label>Agent</Label>
               <Select value={form.agent_id} onValueChange={v => setForm({...form, agent_id: v})}>
@@ -244,11 +243,6 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
                   {agents.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
                 </SelectContent>
               </Select>
-            </div>
-            <div>
-              <Label>Max Concurrent Calls</Label>
-              <Input type="number" min={1} max={10} value={form.max_concurrent_calls}
-                onChange={e => setForm({...form, max_concurrent_calls: parseInt(e.target.value) || 5})} />
             </div>
           </div>
 

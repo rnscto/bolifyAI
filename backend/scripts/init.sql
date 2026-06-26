@@ -502,7 +502,8 @@ CREATE TABLE IF NOT EXISTS "agent" (
   "smartflo_api_token" TEXT,
   "human_transfer_number" TEXT,
   "smartflo_agent_id" TEXT,
-  "enable_auto_transfer" BOOLEAN
+  "enable_auto_transfer" BOOLEAN,
+  "max_concurrent_calls" NUMERIC DEFAULT 5
 );
 
 

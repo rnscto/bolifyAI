@@ -195,6 +195,7 @@ export const apiClient = {
   
   // New V1 endpoints mapped to EntityClients
   Lead: new EntityClient('/v1/leads', 'lead'),
+  LeadGroup: new EntityClient('/v1/lead-groups', 'leadgroup'),
   CampaignLead: new EntityClient('/v1/campaign-leads', 'campaignlead'),
   Campaign: new EntityClient('/v1/campaigns', 'campaign'),
   Activity: new EntityClient('/v1/activities', 'activity'),

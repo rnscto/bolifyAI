@@ -263,6 +263,8 @@ const buildCrudRouter = (tableName: string) => {
 
 // Explicit mappings
 v1Router.route("/leads", buildCrudRouter("lead"));
+v1Router.route("/lead-groups", buildCrudRouter("leadgroup"));
+v1Router.route("/whatsapp-templates", buildCrudRouter("whatsapptemplate"));
 v1Router.route("/campaigns", buildCrudRouter("campaign"));
 v1Router.route("/campaign-leads", buildCrudRouter("campaignlead"));
 v1Router.route("/activities", buildCrudRouter("activity"));

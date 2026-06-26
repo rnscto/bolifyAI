@@ -11,26 +11,27 @@ export async function processPendingLeads() {
     console.log("[CRON] Running Campaign Poller...");
 
     try {
-      // 1. Get all active campaigns and their max_concurrent_calls
-      const campaignsRes = await client.queryObject(`
-        SELECT id, COALESCE(max_concurrent_calls, 10) as max_concurrent_calls 
-        FROM "campaign" 
+      // 1. Get all active agents and their max_concurrent_calls
+      const agentsRes = await client.queryObject(`
+        SELECT id, COALESCE(max_concurrent_calls, 5) as max_concurrent_calls 
+        FROM "agent" 
         WHERE status = 'active'
       `);
-      const activeCampaigns = campaignsRes.rows as any[];
+      const activeAgents = agentsRes.rows as any[];
 
-      if (activeCampaigns.length === 0) return;
+      if (activeAgents.length === 0) return;
 
-      for (const campaign of activeCampaigns) {
-        const campaignId = campaign.id;
-        const maxConcurrent = parseInt(campaign.max_concurrent_calls) || 10;
+      for (const agent of activeAgents) {
+        const agentId = agent.id;
+        const maxConcurrent = parseInt(agent.max_concurrent_calls) || 5;
 
-        // 2. Find how many are currently processing for this campaign
+        // 2. Find how many are currently processing for this agent across ALL active campaigns
         const processingRes = await client.queryObject(`
           SELECT COUNT(*) as count 
-          FROM "campaignlead" 
-          WHERE campaign_id = $1 AND status = 'processing'
-        `, [campaignId]);
+          FROM "campaignlead" cl
+          INNER JOIN "campaign" c ON cl.campaign_id = c.id::text
+          WHERE c.agent_id = $1 AND cl.status = 'processing'
+        `, [agentId]);
         const processingCount = parseInt((processingRes.rows[0] as any).count);
 
         const availableSlots = maxConcurrent - processingCount;
@@ -47,16 +48,16 @@ export async function processPendingLeads() {
           INNER JOIN "lead" l ON cl.lead_id = l.id::text
           INNER JOIN "campaign" c ON cl.campaign_id = c.id::text
           INNER JOIN "agent" a ON c.agent_id = a.id::text
-          WHERE cl.campaign_id = $1 AND cl.status = 'pending'
+          WHERE c.agent_id = $1 AND cl.status = 'pending' AND c.status = 'active'
           FOR UPDATE OF cl SKIP LOCKED
           LIMIT $2
-        `, [campaignId, availableSlots]);
+        `, [agentId, availableSlots]);
 
         const leadsToCall = pendingBatches.rows as any[];
         
         if (leadsToCall.length === 0) continue;
 
-        console.log(`[CRON] Campaign ${campaignId}: Dispatching ${leadsToCall.length} leads... (Max: ${maxConcurrent})`);
+        console.log(`[CRON] Agent ${agentId}: Dispatching ${leadsToCall.length} leads... (Max: ${maxConcurrent})`);
 
         // 4. Update status to 'processing'
         const leadIds = leadsToCall.map(l => l.campaignlead_id);

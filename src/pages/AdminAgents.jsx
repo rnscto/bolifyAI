@@ -172,7 +172,8 @@ export default function AdminAgents() {
         assigned_dids: formData.assigned_dids || [],
         status: formData.status,
         industry: formData.industry,
-        smartflo_api_token: formData.smartflo_api_token || ''
+        smartflo_api_token: formData.smartflo_api_token || '',
+        max_concurrent_calls: parseInt(formData.max_concurrent_calls) || 5
       };
       
       // Only set knowledge_base_ids to empty array when creating a NEW agent
@@ -218,7 +219,8 @@ export default function AdminAgents() {
       assigned_dids: [],
       status: 'inactive',
       industry: '',
-      smartflo_api_token: ''
+      smartflo_api_token: '',
+      max_concurrent_calls: 5
     });
   };
 
@@ -240,7 +242,8 @@ export default function AdminAgents() {
       assigned_dids: didsArray,
       status: agent.status || 'inactive',
       industry: agent.industry || '',
-      smartflo_api_token: agent.smartflo_api_token || ''
+      smartflo_api_token: agent.smartflo_api_token || '',
+      max_concurrent_calls: agent.max_concurrent_calls || 5
     });
     setDialogOpen(true);
   };
@@ -490,6 +493,22 @@ export default function AdminAgents() {
                   value={formData.smartflo_api_token}
                   onChange={(e) => setFormData({ ...formData, smartflo_api_token: e.target.value })}
                   placeholder="e.g., 5457572800c4..."
+                  className="font-mono text-sm"
+                />
+              </div>
+
+              <div>
+                <Label htmlFor="max_concurrent_calls">Max Concurrent Calls</Label>
+                <p className="text-xs text-gray-500 mb-1">
+                  Maximum number of calls this agent can make simultaneously.
+                </p>
+                <Input
+                  id="max_concurrent_calls"
+                  type="number"
+                  min="1"
+                  max="100"
+                  value={formData.max_concurrent_calls}
+                  onChange={(e) => setFormData({ ...formData, max_concurrent_calls: e.target.value })}
                   className="font-mono text-sm"
                 />
               </div>

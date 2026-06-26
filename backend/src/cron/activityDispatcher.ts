@@ -9,10 +9,9 @@ export async function runActivityDispatcher() {
     // Find scheduled activities that are due to be sent now
     // We target whatsapp, email, sms types that haven't been completed yet
     const query = `
-      SELECT a.*, l.phone as lead_phone, l.email as lead_email, l.first_name, l.last_name, c.client_id
+      SELECT a.*, l.phone as lead_phone, l.email as lead_email, l.name as lead_name, a.client_id
       FROM activity a
       JOIN lead l ON a.lead_id = l.id::text
-      JOIN campaign c ON l.campaign_id = c.id::text
       WHERE a.status = 'scheduled' 
         AND a.scheduled_date <= NOW() 
         AND a.type IN ('whatsapp', 'email', 'sms', 'calendar_invite')
