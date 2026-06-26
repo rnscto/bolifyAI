@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
-import { Save, Loader2, Phone, Settings, Gift, MessageSquare } from 'lucide-react';
+import { Save, Loader2, Phone, Gift, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function RetentionSettings({ config, dids, agents, onSave, saving }) {

@@ -11,7 +11,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { CreditCard, TrendingUp, Wallet, Clock } from 'lucide-react';
+import { CreditCard, TrendingUp, Wallet } from 'lucide-react';
 
 export default function AdminSubscriptions() {
   const [subscriptions, setSubscriptions] = useState([]);

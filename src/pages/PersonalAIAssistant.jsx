@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Bot, Phone as PhoneIcon, Pencil } from 'lucide-react';
-import { toast } from 'sonner';
 import AgentEditDialog from '../components/agents/AgentEditDialog';
 import AgentSettingsCard from '../components/agents/AgentSettingsCard';
 

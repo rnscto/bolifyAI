@@ -2,9 +2,8 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Sparkles, Loader2, RefreshCw, MessageSquare } from 'lucide-react';
+import { Sparkles, Loader2, MessageSquare } from 'lucide-react';
 import { apiClient } from '@/api/apiClient';
-import ReactMarkdown from 'react-markdown';
 
 export default function AITalkingPoints({ activeCalls, agent, leads }) {
   const [talkingPoints, setTalkingPoints] = useState({});

@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { apiClient } from '@/api/apiClient';
 import { useRealtime } from '@/hooks/useRealtime';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import FeatureGate from '../components/FeatureGate';
 import CampaignCard from '../components/campaigns/CampaignCard';
 import CreateCampaignDialog from '../components/campaigns/CreateCampaignDialog';

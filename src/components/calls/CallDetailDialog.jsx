@@ -1,5 +1,4 @@
 import React from 'react';
-import { apiClient } from '@/api/apiClient';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';

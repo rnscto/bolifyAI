@@ -1,7 +1,7 @@
 import React from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Phone, PhoneIncoming, Mail, Clock, Users, AlertTriangle } from 'lucide-react';
+import { Phone, PhoneIncoming, Clock, Users } from 'lucide-react';
 
 export default function RetentionOverview({ config, stats }) {
   return (

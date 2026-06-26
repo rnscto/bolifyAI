@@ -13,7 +13,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Eye, PhoneCall, PhoneIncoming, PhoneOutgoing, FileText, ExternalLink, Disc, Download, Loader2, FileSpreadsheet, Trash2 } from 'lucide-react';
+import { Eye, PhoneIncoming, PhoneOutgoing, FileText, ExternalLink, Disc, Download, Loader2, FileSpreadsheet, Trash2 } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   AlertDialog,

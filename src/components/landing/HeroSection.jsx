@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { ArrowRight, PhoneCall, TrendingUp, Mic, Bot, Zap } from 'lucide-react';
+import { ArrowRight, PhoneCall, TrendingUp, Mic, Zap } from 'lucide-react';
 import { apiClient } from '@/api/apiClient';
 import { motion } from 'framer-motion';
 import { createPageUrl } from '../../utils';

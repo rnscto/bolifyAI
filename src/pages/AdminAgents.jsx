@@ -28,9 +28,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Edit, Trash2, Bot, Phone } from 'lucide-react';
+import { Plus, Edit, Trash2, Phone } from 'lucide-react';
 import { toast } from 'sonner';
-import { REALTIME_VOICES, AZURE_SPEECH_VOICES, GEMINI_VOICES } from '../components/agents/VoiceData';
+import { GEMINI_VOICES } from '../components/agents/VoiceData';
 
 const AGENT_TEMPLATES = {
   ecommerce_support: {

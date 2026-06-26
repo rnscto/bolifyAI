@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { CheckCircle2, XCircle, Clock, Phone, Mail, Calendar, AlertTriangle, User, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Phone, Mail, Calendar, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import moment from 'moment';
 
 const statusConfig = {

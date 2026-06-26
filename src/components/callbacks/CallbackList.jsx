@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../../utils';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
-  Phone, Clock, User, Building2, AlertTriangle, ChevronDown, ChevronUp,
-  Calendar as CalendarIcon, Star, MessageSquare, ArrowRight, ExternalLink, Bot
+  Phone, Building2, AlertTriangle, ChevronDown, ChevronUp,
+  Calendar as CalendarIcon, Star, MessageSquare, Bot
 } from 'lucide-react';
 import moment from 'moment';
 

@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '@/api/apiClient';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Sparkles, Calendar, Clock, CheckCircle2, XCircle, Share2, Loader2, RefreshCw, Image } from 'lucide-react';
+import { Sparkles, Loader2, RefreshCw, Image } from 'lucide-react';
 import PostCard from '../components/social/PostCard';
 import AddOnAccessGate from '../components/AddOnAccessGate';
 

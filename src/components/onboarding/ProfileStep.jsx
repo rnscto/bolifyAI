@@ -4,7 +4,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Building2, Mail, Phone, User, ArrowRight, ArrowLeft, MapPin } from 'lucide-react';
+import { Building2, ArrowRight, ArrowLeft } from 'lucide-react';
 
 export default function ProfileStep({ data, onChange, onNext, onBack, user }) {
   const handleSubmit = (e) => {

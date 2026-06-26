@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { Loader2, Save, BookOpen, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import { REALTIME_VOICES, AZURE_SPEECH_VOICES, GEMINI_VOICES } from './VoiceData';
+import { GEMINI_VOICES } from './VoiceData';
 import { INDIAN_LANGUAGES } from './IndianLanguages';
 import PromptGeneratorDialog from './PromptGeneratorDialog';
 import { Sparkles } from 'lucide-react';

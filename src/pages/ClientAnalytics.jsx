@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
   XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend
 } from 'recharts';
 import {
-  PhoneCall, PhoneOutgoing, PhoneIncoming, Clock, TrendingUp,
-  Users, CheckCircle2, XCircle, PhoneMissed, Timer
+  PhoneCall, TrendingUp,
+  Users, CheckCircle2, PhoneMissed, Timer
 } from 'lucide-react';
 import FeatureGate from '../components/FeatureGate';
 

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle2, Loader2, Users, IndianRupee, TrendingUp, Handshake, Phone, Cpu, BarChart3 } from 'lucide-react';
+import { CheckCircle2, Loader2, Users, Phone, Cpu, BarChart3 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const DEFAULT_LOGO = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg";

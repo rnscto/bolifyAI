@@ -28,7 +28,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter, Loader2, PhoneCall, Eye, FolderOpen, Settings, Download, Sparkles, X } from 'lucide-react';
+import { Plus, Upload, Phone as PhoneIcon, Edit, Trash2, Filter, Loader2, Eye, FolderOpen, Download, Sparkles, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';

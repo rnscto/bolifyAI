@@ -8,7 +8,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { getOccasions, OCCASION_TYPES } from '@/lib/marketingCalendar';
-import { CalendarDays, Plus, X, Pencil } from 'lucide-react';
+import { CalendarDays, Plus, X } from 'lucide-react';
 
 export default function OccasionsTab({ form, setForm }) {
   const [filterType, setFilterType] = useState('all');

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Users, Phone, PhoneCall, TrendingUp, Clock, CreditCard, AlertTriangle, CheckCircle2, ArrowUpRight, Zap, IndianRupee, Activity } from 'lucide-react';
+import { Users, Phone, PhoneCall, TrendingUp, CreditCard, AlertTriangle, CheckCircle2, ArrowUpRight, Zap, IndianRupee, Activity } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';

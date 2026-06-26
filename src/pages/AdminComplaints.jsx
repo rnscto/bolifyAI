@@ -9,7 +9,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { AlertTriangle, Plus, Phone, Search, Loader2, Shield, Ban, CheckCircle2, Clock } from 'lucide-react';
+import { AlertTriangle, Plus, Search, Loader2, Shield, Ban, CheckCircle2, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import moment from 'moment';
 

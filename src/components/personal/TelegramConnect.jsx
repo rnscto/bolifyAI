@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/api/apiClient';
-import { Send, Link2, Unlink, Loader2, ExternalLink, CheckCircle2 } from 'lucide-react';
+import { Send, Unlink, Loader2, ExternalLink, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function TelegramConnect({ client, onUpdate }) {

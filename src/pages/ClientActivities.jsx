@@ -11,7 +11,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, CheckCircle2, XCircle, ExternalLink, Mail, AlertCircle } from 'lucide-react';
+import { Calendar, CheckCircle2, XCircle, Mail, AlertCircle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import FeatureGate from '../components/FeatureGate';

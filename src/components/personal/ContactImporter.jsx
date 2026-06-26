@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { apiClient } from '@/api/apiClient';
-import { Upload, FileText, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Upload, FileText, Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function ContactImporter({ clientId, onImported }) {

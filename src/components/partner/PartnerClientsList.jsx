@@ -3,7 +3,7 @@ import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
-import { Loader2, Users, Phone, TrendingUp, IndianRupee } from 'lucide-react';
+import { Loader2, Users, Phone } from 'lucide-react';
 import moment from 'moment';
 
 const STATUS_BADGE = {

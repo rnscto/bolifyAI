@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Check, X, Pencil, Eye, Calendar, Sparkles, Save } from 'lucide-react';
+import { Check, X, Pencil, Calendar, Save } from 'lucide-react';
 import { apiClient } from '@/api/apiClient';
 import ShareMenu from './ShareMenu';
 

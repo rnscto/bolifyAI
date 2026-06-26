@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Copy, Check, Link2, QrCode } from 'lucide-react';
+import { Copy, Check, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function ReferralCodeCard({ partner }) {

@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import {
   PhoneCall, PhoneOutgoing, PhoneIncoming, PhoneMissed,
   Mail, Calendar, Clock, Activity, Megaphone,
-  ChevronDown, ChevronUp, Play, FileText
+  ChevronDown, ChevronUp, FileText
 } from 'lucide-react';
 import AudioPlayer from '../calls/AudioPlayer';
 

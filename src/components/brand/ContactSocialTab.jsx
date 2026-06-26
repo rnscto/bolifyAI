@@ -3,7 +3,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, X, MapPin, Phone, Globe, AtSign } from 'lucide-react';
+import { Plus, X, MapPin, Phone, AtSign } from 'lucide-react';
 
 export default function ContactSocialTab({ form, setForm }) {
   const addAddress = () => setForm(f => ({ ...f, addresses: [...(f.addresses || []), { label: '', address: '', city: '', state: '', pincode: '' }] }));

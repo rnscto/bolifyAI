@@ -11,7 +11,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Database, CheckCircle, XCircle, RefreshCw, Copy, Eye, EyeOff, Trash2 } from 'lucide-react';
+import { Plus, Database, CheckCircle, RefreshCw, Copy, Eye, EyeOff, Trash2 } from 'lucide-react';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,

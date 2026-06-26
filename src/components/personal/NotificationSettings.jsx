@@ -3,7 +3,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Badge } from '@/components/ui/badge';
 import { apiClient } from '@/api/apiClient';
 import { Bell, Send, MessageSquare, CheckCircle2, Unlink, Loader2, ExternalLink, Save } from 'lucide-react';
 import { toast } from 'sonner';

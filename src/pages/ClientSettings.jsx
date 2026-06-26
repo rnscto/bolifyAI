@@ -6,7 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Building, Phone, Mail, Save, Loader2, Shield, FileText } from 'lucide-react';
+import { User, Building, Save, Loader2, Shield, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 import ClientComplianceTab from '../components/compliance/ClientComplianceTab';

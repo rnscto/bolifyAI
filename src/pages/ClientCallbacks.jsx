@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { apiClient } from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
-import { Badge } from '@/components/ui/badge';
 import {
   Phone, RefreshCw, Calendar as CalendarIcon, List,
   AlertTriangle, Clock, CheckCircle2, ClipboardList, Wand2

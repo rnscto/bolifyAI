@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import { Building2, User, ArrowRight, Briefcase, Shield, Phone, Calendar, Brain, MessageSquare } from 'lucide-react';
+import { Building2, User, ArrowRight, Brain } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 const accountTypes = [

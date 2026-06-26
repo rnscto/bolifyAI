@@ -6,11 +6,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
-  ArrowLeft, Phone, Mail, Building2, Edit, PhoneCall, Loader2,
-  Calendar, Clock, MessageSquare, Activity, ExternalLink, Send, Sparkles
+  ArrowLeft, Phone, Mail, PhoneCall, Loader2,
+  Calendar, Clock, Send, Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
-import LeadScoreBadge from '../components/leads/LeadScoreBadge';
 import LeadProfileCard from '../components/leads/LeadProfileCard';
 import LeadTimeline from '../components/leads/LeadTimeline';
 import EmailComposer from '../components/email/EmailComposer';

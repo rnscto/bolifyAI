@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Loader2, FileText, Printer, Eye, Search, Download } from 'lucide-react';
+import { Loader2, Printer, Eye, Search } from 'lucide-react';
 import moment from 'moment';
 
 export default function AdminSignedAgreements() {

@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Mic, MicOff, X, Phone, PhoneOff, Send } from 'lucide-react';
+import { Mic, X, PhoneOff, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { apiClient } from '@/api/apiClient';

@@ -1,6 +1,5 @@
 import React from 'react';
-import { Badge } from "@/components/ui/badge";
-import { getOccasionsForDate, OCCASION_TYPES } from '@/lib/marketingCalendar';
+import { getOccasionsForDate } from '@/lib/marketingCalendar';
 
 const statusDot = {
   pending_approval: 'bg-yellow-400',

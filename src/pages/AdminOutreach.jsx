@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Mail, MessageSquare, RefreshCw, Filter, Send, AlertCircle, CheckCircle2, Clock, RotateCw, Loader2, ListOrdered } from 'lucide-react';
+import { Mail, MessageSquare, RefreshCw, Filter, AlertCircle, CheckCircle2, Clock, RotateCw, Loader2, ListOrdered } from 'lucide-react';
 import { toast } from 'sonner';
 import moment from 'moment';
 import SequenceList from '../components/outreach/SequenceList';
