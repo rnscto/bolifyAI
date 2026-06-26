@@ -1,5 +1,5 @@
 import { Context } from "hono";
-import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 
 async function azureLLM(prompt: string, systemPrompt: string, jsonSchema: any) {
   const baseUrl = Deno.env.get("AZURE_OPENAI_ENDPOINT")?.replace(/\/+$/, "");
@@ -44,9 +44,12 @@ async function generateTierSequence(tier: string, outreachType: string, companyN
     }));
     if (steps.length === 0) return null;
 
-    return await base44.entities.EmailSequence.create({
-      name: config.name, outreach_type: outreachType, status: "active", tier_target: tier, client_id: clientId, steps
-    });
+    const res = await (client as any).queryObject(`
+      INSERT INTO emailsequence (id, created_at, name, outreach_type, status, tier_target, client_id, steps)
+      VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6)
+      RETURNING *
+    `, [config.name, outreachType, "active", tier, clientId, JSON.stringify(steps)]);
+    return res.rows[0];
   } catch (err: any) {
     console.error("AI sequence gen failed", err.message);
     return null;
@@ -69,28 +72,37 @@ export async function autoEnrollSequenceHandler(c: Context) {
       const results = { enrolled: 0, skipped: 0, errors: 0 };
       const tiers = ["hot", "warm", "nurture", "cold"];
       for (const tier of tiers) {
-        const leads = await base44.entities.Lead.filter({ qualification_tier: tier }, "-updated_at", 50);
+        const leadsRes = await (client as any).queryObject(`SELECT * FROM lead WHERE qualification_tier = $1 ORDER BY updated_date DESC LIMIT 50`, [tier]);
+        const leads = leadsRes.rows;
         for (const lead of leads) {
           if (results.enrolled >= 20) break;
           if (!lead.email || !lead.client_id || lead.status === "do_not_call") { results.skipped++; continue; }
-          const existing = await base44.entities.SequenceEnrollment.filter({ lead_id: lead.id, status: "active" });
-          if (existing.length > 0) { results.skipped++; continue; }
+          
+          const existingRes = await (client as any).queryObject(`SELECT id FROM sequenceenrollment WHERE lead_id = $1 AND status = 'active'`, [lead.id]);
+          if (existingRes.rows.length > 0) { results.skipped++; continue; }
 
           try {
-            const client = await base44.entities.Client.get(lead.client_id);
-            if (!client) { results.skipped++; continue; }
+            const clientRes = await (client as any).queryObject(`SELECT * FROM client WHERE id = $1`, [lead.client_id]);
+            const clientRow = clientRes.rows[0];
+            if (!clientRow) { results.skipped++; continue; }
 
             let sequence = null;
-            const seqs = await base44.entities.EmailSequence.filter({ client_id: lead.client_id, tier_target: tier, status: "active" });
-            if (seqs.length > 0) sequence = seqs[0];
-            if (!sequence) sequence = await generateTierSequence(tier, "lead_followup", client.company_name || "Company", client.industry || "General", lead.client_id);
-            if (!sequence || !sequence.steps?.length) { results.skipped++; continue; }
+            const seqsRes = await (client as any).queryObject(`SELECT * FROM emailsequence WHERE client_id = $1 AND tier_target = $2 AND status = 'active'`, [lead.client_id, tier]);
+            if (seqsRes.rows.length > 0) sequence = seqsRes.rows[0];
+            
+            if (!sequence) sequence = await generateTierSequence(tier, "lead_followup", clientRow.company_name || "Company", clientRow.industry || "General", lead.client_id);
+            if (!sequence || !sequence.steps) { results.skipped++; continue; }
 
-            const nextSend = new Date(); nextSend.setDate(nextSend.getDate() + (sequence.steps[0]?.delay_days || 1));
-            await base44.entities.SequenceEnrollment.create({
-              sequence_id: sequence.id, client_id: lead.client_id, lead_id: lead.id, recipient_email: lead.email,
-              status: "active", total_steps: sequence.steps.length, next_send_date: nextSend.toISOString()
-            });
+            const steps = typeof sequence.steps === 'string' ? JSON.parse(sequence.steps) : sequence.steps;
+            if (!steps || !steps.length) { results.skipped++; continue; }
+
+            const nextSend = new Date(); nextSend.setDate(nextSend.getDate() + (steps[0]?.delay_days || 1));
+            
+            await (client as any).queryObject(`
+              INSERT INTO sequenceenrollment (id, created_at, sequence_id, client_id, lead_id, recipient_email, status, total_steps, next_send_date)
+              VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7)
+            `, [sequence.id, lead.client_id, lead.id, lead.email, "active", steps.length, nextSend.toISOString()]);
+            
             results.enrolled++;
           } catch (e: any) { results.errors++; }
         }
@@ -102,26 +114,34 @@ export async function autoEnrollSequenceHandler(c: Context) {
     const { lead_id, client_id, qualification_tier } = await c.req.json();
     if (!lead_id || !client_id || !qualification_tier) return c.json({ error: "Missing required fields" }, 400);
 
-    const lead = await base44.entities.Lead.get(lead_id);
+    const leadRes = await (client as any).queryObject(`SELECT * FROM lead WHERE id = $1`, [lead_id]);
+    const lead = leadRes.rows[0];
     if (!lead?.email || lead.status === "do_not_call") return c.json({ success: true, skipped: "invalid" });
     
-    const existing = await base44.entities.SequenceEnrollment.filter({ lead_id, status: "active" });
-    if (existing.length > 0) return c.json({ success: true, skipped: "already_enrolled" });
+    const existingRes = await (client as any).queryObject(`SELECT id FROM sequenceenrollment WHERE lead_id = $1 AND status = 'active'`, [lead_id]);
+    if (existingRes.rows.length > 0) return c.json({ success: true, skipped: "already_enrolled" });
 
-    const client = await base44.entities.Client.get(client_id);
+    const clientRes = await (client as any).queryObject(`SELECT * FROM client WHERE id = $1`, [client_id]);
+    const clientRow = clientRes.rows[0];
+    
     let sequence = null;
-    const seqs = await base44.entities.EmailSequence.filter({ client_id, tier_target: qualification_tier, status: "active" });
-    if (seqs.length > 0) sequence = seqs[0];
-    if (!sequence) sequence = await generateTierSequence(qualification_tier, "lead_followup", client?.company_name || "Company", client?.industry || "General", client_id);
-    if (!sequence || !sequence.steps?.length) return c.json({ success: true, skipped: "no_valid_sequence" });
+    const seqsRes = await (client as any).queryObject(`SELECT * FROM emailsequence WHERE client_id = $1 AND tier_target = $2 AND status = 'active'`, [client_id, qualification_tier]);
+    if (seqsRes.rows.length > 0) sequence = seqsRes.rows[0];
+    
+    if (!sequence) sequence = await generateTierSequence(qualification_tier, "lead_followup", clientRow?.company_name || "Company", clientRow?.industry || "General", client_id);
+    if (!sequence || !sequence.steps) return c.json({ success: true, skipped: "no_valid_sequence" });
 
-    const nextSend = new Date(); nextSend.setDate(nextSend.getDate() + (sequence.steps[0]?.delay_days || 1));
-    const enrollment = await base44.entities.SequenceEnrollment.create({
-      sequence_id: sequence.id, client_id, lead_id, recipient_email: lead.email,
-      status: "active", total_steps: sequence.steps.length, next_send_date: nextSend.toISOString()
-    });
+    const steps = typeof sequence.steps === 'string' ? JSON.parse(sequence.steps) : sequence.steps;
+    if (!steps || !steps.length) return c.json({ success: true, skipped: "no_valid_sequence" });
 
-    return c.json({ success: true, enrolled: true, sequence_id: sequence.id, enrollment_id: enrollment.id });
+    const nextSend = new Date(); nextSend.setDate(nextSend.getDate() + (steps[0]?.delay_days || 1));
+    const enrollmentRes = await (client as any).queryObject(`
+      INSERT INTO sequenceenrollment (id, created_at, sequence_id, client_id, lead_id, recipient_email, status, total_steps, next_send_date)
+      VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7)
+      RETURNING id
+    `, [sequence.id, client_id, lead_id, lead.email, "active", steps.length, nextSend.toISOString()]);
+
+    return c.json({ success: true, enrolled: true, sequence_id: sequence.id, enrollment_id: enrollmentRes.rows[0].id });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }

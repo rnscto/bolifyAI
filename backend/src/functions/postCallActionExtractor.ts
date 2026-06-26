@@ -1,4 +1,4 @@
-import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 
 export async function postCallActionExtractorCore(callLogId: string) {
   try {
@@ -6,7 +6,8 @@ export async function postCallActionExtractorCore(callLogId: string) {
       return { success: false, error: 'Missing call_log_id' };
     }
 
-    const callLog = await base44.entities.CallLog.get(callLogId);
+    const callLogRes = await (client as any).queryObject('SELECT * FROM calllog WHERE id = $1', [callLogId]);
+    const callLog = callLogRes.rows[0];
     if (!callLog || !callLog.transcript) {
       return { success: false, skipped: true, reason: 'No transcript available' };
     }
@@ -25,26 +26,31 @@ export async function postCallActionExtractorCore(callLogId: string) {
       if (phoneToSearch) {
         try {
           const cleanPhone = phoneToSearch.replace(/\D/g, '');
-          const clientLeads = await base44.entities.Lead.filter({ client_id: callLog.client_id });
+          const clientLeadsRes = await (client as any).queryObject('SELECT * FROM lead WHERE client_id = $1', [callLog.client_id]);
+          const clientLeads = clientLeadsRes.rows;
           const matchedLead = clientLeads.find((l: any) => {
             const lPhone = (l.phone || '').replace(/\D/g, '');
             return lPhone && (lPhone === cleanPhone || lPhone.endsWith(cleanPhone.slice(-10)) || cleanPhone.endsWith(lPhone.slice(-10)));
           });
           if (matchedLead) {
             callLog.lead_id = matchedLead.id;
-            await base44.entities.CallLog.update(callLogId, { lead_id: matchedLead.id });
+            await (client as any).queryObject('UPDATE calllog SET lead_id = $2 WHERE id = $1', [callLogId, matchedLead.id]);
           } else if (cleanPhone.length >= 10) {
-            const newLead = await base44.entities.Lead.create({
-              client_id: callLog.client_id,
-              name: callLog.direction === 'inbound' ? `Inbound caller ${cleanPhone.slice(-10)}` : `Lead ${cleanPhone.slice(-10)}`,
-              phone: cleanPhone,
-              status: 'contacted',
-              source: callLog.direction === 'inbound' ? 'inbound_call' : 'auto_created',
-              last_call_date: new Date().toISOString(),
-              notes: `Auto-created from call ${callLogId}`
-            });
-            callLog.lead_id = newLead.id;
-            await base44.entities.CallLog.update(callLogId, { lead_id: newLead.id });
+            const newLeadRes = await (client as any).queryObject(`
+              INSERT INTO lead (id, created_at, client_id, name, phone, status, source, last_call_date, notes)
+              VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7)
+              RETURNING id
+            `, [
+              callLog.client_id,
+              callLog.direction === 'inbound' ? `Inbound caller ${cleanPhone.slice(-10)}` : `Lead ${cleanPhone.slice(-10)}`,
+              cleanPhone,
+              'contacted',
+              callLog.direction === 'inbound' ? 'inbound_call' : 'auto_created',
+              new Date().toISOString(),
+              `Auto-created from call ${callLogId}`
+            ]);
+            callLog.lead_id = newLeadRes.rows[0].id;
+            await (client as any).queryObject('UPDATE calllog SET lead_id = $2 WHERE id = $1', [callLogId, callLog.lead_id]);
           }
         } catch (e) {
           console.warn(`[ActionExtractor] Lead resolve/create failed:`, e);
@@ -156,14 +162,14 @@ IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backtic
     let isCampaignCall = false;
     if (callLog.id) {
       try {
-        const clByCallLog = await base44.entities.CampaignLead.filter({ call_log_id: callLog.id });
-        if (clByCallLog.length > 0) isCampaignCall = true;
+        const clByCallLog = await (client as any).queryObject('SELECT * FROM campaignlead WHERE call_log_id = $1', [callLog.id]);
+        if (clByCallLog.rows.length > 0) isCampaignCall = true;
       } catch (_) {}
     }
     if (!isCampaignCall && callLog.lead_id) {
       try {
-        const campaignLeads = await base44.entities.CampaignLead.filter({ lead_id: callLog.lead_id });
-        isCampaignCall = campaignLeads.some((cl: any) => ['pending', 'calling', 'processing', 'completed'].includes(cl.status));
+        const campaignLeads = await (client as any).queryObject('SELECT * FROM campaignlead WHERE lead_id = $1', [callLog.lead_id]);
+        isCampaignCall = campaignLeads.rows.some((cl: any) => ['pending', 'calling', 'processing', 'completed'].includes(cl.status));
       } catch (_) {}
     }
     const leadInActiveCampaign = isCampaignCall;
@@ -171,18 +177,22 @@ IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backtic
     let existingActivities: any[] = [];
     if (callLog.lead_id) {
       try {
-        existingActivities = await base44.entities.Activity.filter({ lead_id: callLog.lead_id, status: 'scheduled' });
+        const actRes = await (client as any).queryObject("SELECT * FROM activity WHERE lead_id = $1 AND status = 'scheduled'", [callLog.lead_id]);
+        existingActivities = actRes.rows;
       } catch (_) {}
     }
 
     if (callLog.lead_id && extracted.lead_notes && extracted.lead_notes.trim().length > 10) {
       try {
-        const lead = await base44.entities.Lead.get(callLog.lead_id);
-        const existingNotes = lead.notes || '';
-        const dateTag = `[${todayStr}]`;
-        const updatedNotes = existingNotes ? `${existingNotes}\n\n${dateTag} ${extracted.lead_notes}` : `${dateTag} ${extracted.lead_notes}`;
-        await base44.entities.Lead.update(callLog.lead_id, { notes: updatedNotes });
-        results.lead_notes_updated = true;
+        const leadRes = await (client as any).queryObject('SELECT notes FROM lead WHERE id = $1', [callLog.lead_id]);
+        const lead = leadRes.rows[0];
+        if (lead) {
+          const existingNotes = lead.notes || '';
+          const dateTag = `[${todayStr}]`;
+          const updatedNotes = existingNotes ? `${existingNotes}\n\n${dateTag} ${extracted.lead_notes}` : `${dateTag} ${extracted.lead_notes}`;
+          await (client as any).queryObject('UPDATE lead SET notes = $2, updated_date = NOW() WHERE id = $1', [callLog.lead_id, updatedNotes]);
+          results.lead_notes_updated = true;
+        }
       } catch (e) {}
     }
 
@@ -223,12 +233,20 @@ IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backtic
           const newTime = new Date(action.scheduled_date).getTime();
           if (Math.abs(existingTime - newTime) > 5 * 60 * 1000) {
             try {
-              await base44.entities.Activity.update(recentSameType.id, {
-                scheduled_date: action.scheduled_date,
-                description: `✅ CONFIRMED by customer (RESCHEDULED)\n\n${action.description || ''}\n\n[Trigger: "${action.trigger || ''}"]`,
-                reminder_sent: false,
-                notes: `[Auto-extracted from call ${callLogId}] [confirmed, rescheduled]`
-              });
+              await (client as any).queryObject(`
+                UPDATE activity 
+                SET scheduled_date = $2,
+                    description = $3,
+                    reminder_sent = false,
+                    notes = $4,
+                    updated_date = NOW()
+                WHERE id = $1
+              `, [
+                recentSameType.id,
+                action.scheduled_date,
+                `✅ CONFIRMED by customer (RESCHEDULED)\n\n${action.description || ''}\n\n[Trigger: "${action.trigger || ''}"]`,
+                `[Auto-extracted from call ${callLogId}] [confirmed, rescheduled]`
+              ]);
               results.activities_created++;
               results.details.push({ type: activityType, title: action.title, scheduled: action.scheduled_date, rescheduled: true });
               continue;
@@ -256,22 +274,26 @@ IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backtic
 
         try {
           const confirmTag = isConfirmed ? '✅ CONFIRMED by customer' : '⏳ UNCONFIRMED — needs customer confirmation';
-          const newActivity = await base44.entities.Activity.create({
-            client_id: callLog.client_id,
-            lead_id: callLog.lead_id || null,
-            call_log_id: callLogId,
-            type: activityType,
-            title: action.title || `${activityType} follow-up`,
-            description: `${confirmTag}\n\n${action.description || ''}\n\n[Trigger: "${action.trigger || 'Extracted from call'}"]`,
-            scheduled_date: scheduledDate,
-            status: 'scheduled',
-            priority: action.priority || 'medium',
-            auto_created: true,
-            assigned_to: callLog.agent_id || '',
-            notes: `[Auto-extracted from call ${callLogId}] [${isConfirmed ? 'confirmed' : 'unconfirmed'}]`
-          });
+          const newActRes = await (client as any).queryObject(`
+            INSERT INTO activity (id, created_at, client_id, lead_id, call_log_id, type, title, description, scheduled_date, status, priority, auto_created, assigned_to, notes)
+            VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            RETURNING *
+          `, [
+            callLog.client_id,
+            callLog.lead_id || null,
+            callLogId,
+            activityType,
+            action.title || `${activityType} follow-up`,
+            `${confirmTag}\n\n${action.description || ''}\n\n[Trigger: "${action.trigger || 'Extracted from call'}"]`,
+            scheduledDate,
+            'scheduled',
+            action.priority || 'medium',
+            true,
+            callLog.agent_id || null,
+            `[Auto-extracted from call ${callLogId}] [${isConfirmed ? 'confirmed' : 'unconfirmed'}]`
+          ]);
 
-          existingActivities.push({ ...newActivity, type: activityType, created_at: now.toISOString() });
+          existingActivities.push({ ...newActRes.rows[0], type: activityType, created_at: now.toISOString() });
           results.activities_created++;
           results.details.push({ type: activityType, title: action.title, scheduled: scheduledDate, priority: action.priority });
         } catch (e) {}
@@ -283,22 +305,23 @@ IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backtic
       if (callActivities.length > 0) {
         const earliest = callActivities.map((a: any) => new Date(a.scheduled_date)).sort((a: any, b: any) => a.getTime() - b.getTime())[0];
         try {
-          await base44.entities.Lead.update(callLog.lead_id, { next_followup_date: earliest.toISOString() });
+          await (client as any).queryObject('UPDATE lead SET next_followup_date = $2, updated_date = NOW() WHERE id = $1', [callLog.lead_id, earliest.toISOString()]);
         } catch (_) {}
       }
 
       // Auto-enroll the lead into an email sequence if the AI extracted follow-ups
       try {
-        const leadRes = await base44.entities.Lead.get(callLog.lead_id);
-        if (leadRes && leadRes.qualification_tier && leadRes.client_id) {
+        const leadRes = await (client as any).queryObject('SELECT * FROM lead WHERE id = $1', [callLog.lead_id]);
+        const leadForEnroll = leadRes.rows[0];
+        if (leadForEnroll && leadForEnroll.qualification_tier && leadForEnroll.client_id) {
           const baseUrl = Deno.env.get('APP_BASE_URL_INTERNAL') || `http://localhost:${Deno.env.get('PORT') || '8000'}`;
           await fetch(`${baseUrl}/api/crm/auto-enroll`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'X-Internal-Secret': Deno.env.get('CRON_API_KEY') || '' },
             body: JSON.stringify({
-              lead_id: leadRes.id,
-              client_id: leadRes.client_id,
-              qualification_tier: leadRes.qualification_tier
+              lead_id: leadForEnroll.id,
+              client_id: leadForEnroll.client_id,
+              qualification_tier: leadForEnroll.qualification_tier
             })
           }).catch(() => {});
         }

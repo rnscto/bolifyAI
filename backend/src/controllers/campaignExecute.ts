@@ -1,5 +1,5 @@
 import { Context } from "hono";
-import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 import { triggerSmartfloOutboundCall } from "../services/smartflo.ts";
 
 export async function executeCampaignHandler(c: Context) {
@@ -10,7 +10,8 @@ export async function executeCampaignHandler(c: Context) {
     const body = await c.req.json().catch(() => ({}));
     const action = body.action;
 
-    const campaign = await base44.entities.Campaign.get(campaign_id);
+    const campaignRes = await (client as any).queryObject('SELECT * FROM campaign WHERE id = $1', [campaign_id]);
+    const campaign = campaignRes.rows[0];
     if (!campaign) return c.json({ error: "Campaign not found" }, 404);
 
     if (user.role !== "admin" && campaign.client_id !== user.client_id) {
@@ -18,11 +19,11 @@ export async function executeCampaignHandler(c: Context) {
     }
 
     if (action === "pause") {
-      await base44.entities.Campaign.update(campaign_id, { status: "paused" });
+      await (client as any).queryObject('UPDATE campaign SET status = $2, updated_date = NOW() WHERE id = $1', [campaign_id, "paused"]);
       return c.json({ success: true, status: "paused" });
     }
     if (action === "cancel") {
-      await base44.entities.Campaign.update(campaign_id, { status: "cancelled" });
+      await (client as any).queryObject('UPDATE campaign SET status = $2, updated_date = NOW() WHERE id = $1', [campaign_id, "cancelled"]);
       return c.json({ success: true, status: "cancelled" });
     }
 
@@ -32,32 +33,42 @@ export async function executeCampaignHandler(c: Context) {
     const istHour = istDate.getUTCHours();
     const istString = `${String(istHour).padStart(2, "0")}:${String(istDate.getUTCMinutes()).padStart(2, "0")} IST`;
     if (istHour < 9 || istHour >= 21) {
-      await base44.entities.Campaign.update(campaign_id, {
-        status: "paused",
-        notes: `${campaign.notes || ""}\n[${new Date().toISOString()}] Auto-paused: outside TRAI 9AM-9PM window.`.trim()
-      });
+      await (client as any).queryObject(`
+        UPDATE campaign 
+        SET status = $2, notes = $3, updated_date = NOW() 
+        WHERE id = $1
+      `, [campaign_id, "paused", `${campaign.notes || ""}\n[${new Date().toISOString()}] Auto-paused: outside TRAI 9AM-9PM window.`.trim()]);
       return c.json({ error: "trai_window_closed", message: `Allowed 9 AM - 9 PM IST. Paused.`, current_ist: istString }, 423);
     }
 
-    await base44.entities.Campaign.update(campaign_id, { status: "running" });
+    await (client as any).queryObject('UPDATE campaign SET status = $2, updated_date = NOW() WHERE id = $1', [campaign_id, "running"]);
 
-    const agent = await base44.entities.Agent.get(campaign.agent_id);
-    const agentDIDs = agent?.assigned_dids?.length > 0 ? agent.assigned_dids : agent?.assigned_did ? [agent.assigned_did] : [];
+    const agentRes = await (client as any).queryObject('SELECT * FROM agent WHERE id = $1', [campaign.agent_id]);
+    const agent = agentRes.rows[0];
+    const agentAssignedDIDs = typeof agent?.assigned_dids === 'string' ? JSON.parse(agent.assigned_dids) : (agent?.assigned_dids || []);
+    const agentDIDs = agentAssignedDIDs?.length > 0 ? agentAssignedDIDs : agent?.assigned_did ? [agent.assigned_did] : [];
     if (!agent || agentDIDs.length === 0) {
-      await base44.entities.Campaign.update(campaign_id, { status: "draft" });
+      await (client as any).queryObject('UPDATE campaign SET status = $2, updated_date = NOW() WHERE id = $1', [campaign_id, "draft"]);
       return c.json({ error: "Agent has no assigned DID" }, 400);
     }
 
     const maxConcurrent = campaign.max_concurrent_calls || 5;
 
-    const currentlyCalling = await base44.entities.CampaignLead.filter({ campaign_id, status: "calling" });
-    const slotsAvailable = Math.max(0, maxConcurrent - currentlyCalling.length);
+    const currentlyCallingRes = await (client as any).queryObject(`SELECT id FROM campaignlead WHERE campaign_id = $1 AND status = 'calling'`, [campaign_id]);
+    const slotsAvailable = Math.max(0, maxConcurrent - currentlyCallingRes.rows.length);
 
     if (slotsAvailable === 0) {
-      return c.json({ success: true, message: "All slots occupied", currently_calling: currentlyCalling.length });
+      return c.json({ success: true, message: "All slots occupied", currently_calling: currentlyCallingRes.rows.length });
     }
 
-    const pendingLeadsRaw = await base44.entities.CampaignLead.filter({ campaign_id, status: "pending" }, "-created_at", 200);
+    const pendingLeadsRes = await (client as any).queryObject(`
+      SELECT * FROM campaignlead 
+      WHERE campaign_id = $1 AND status = 'pending' 
+      ORDER BY created_at DESC 
+      LIMIT 200
+    `, [campaign_id]);
+    const pendingLeadsRaw = pendingLeadsRes.rows;
+    
     const now = new Date();
     const pendingLeads = pendingLeadsRaw.filter((l: any) => !l.followup_call_date || new Date(l.followup_call_date) <= now).slice(0, slotsAvailable);
 
@@ -73,41 +84,50 @@ export async function executeCampaignHandler(c: Context) {
 
     for (const cl of pendingLeads) {
       try {
-        const freshLead = await base44.entities.CampaignLead.get(cl.id);
-        if (freshLead.status !== "pending") continue;
+        const freshLeadRes = await (client as any).queryObject('SELECT status FROM campaignlead WHERE id = $1', [cl.id]);
+        const freshLead = freshLeadRes.rows[0];
+        if (freshLead?.status !== "pending") continue;
 
         const selectedDID = agentDIDs[didIndex % agentDIDs.length];
         didIndex++;
 
         const callee10 = (cl.lead_phone || "").replace(/[^0-9]/g, "").slice(-10);
         if (!/^[6-9]\d{9}$/.test(callee10)) {
-          await base44.entities.CampaignLead.update(cl.id, {
-            status: "completed", outcome: "do_not_call", call_status: "not_answered",
-            conversation_summary: "Invalid phone number."
-          });
+          await (client as any).queryObject(`
+            UPDATE campaignlead 
+            SET status = 'completed', outcome = 'do_not_call', call_status = 'not_answered', conversation_summary = 'Invalid phone number.', updated_date = NOW()
+            WHERE id = $1
+          `, [cl.id]);
           continue;
         }
 
-        await base44.entities.CampaignLead.update(cl.id, { status: "calling", attempt_count: (cl.attempt_count || 0) + 1 });
+        await (client as any).queryObject(`
+          UPDATE campaignlead 
+          SET status = 'calling', attempt_count = COALESCE(attempt_count, 0) + 1, updated_date = NOW()
+          WHERE id = $1
+        `, [cl.id]);
         
-        const callLog = await base44.entities.CallLog.create({
-          client_id: campaign.client_id, agent_id: campaign.agent_id, lead_id: cl.lead_id,
-          caller_id: selectedDID, callee_number: cl.lead_phone,
-          direction: "outbound", status: "initiated", call_start_time: new Date().toISOString(),
-        });
-        await base44.entities.CampaignLead.update(cl.id, { call_log_id: callLog.id });
+        const callLogRes = await (client as any).queryObject(`
+          INSERT INTO calllog (id, created_at, client_id, agent_id, lead_id, caller_id, callee_number, direction, status, call_start_time)
+          VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7, $8)
+          RETURNING id
+        `, [campaign.client_id, campaign.agent_id, cl.lead_id, selectedDID, cl.lead_phone, "outbound", "initiated", new Date().toISOString()]);
+        
+        const callLogId = callLogRes.rows[0].id;
+        await (client as any).queryObject('UPDATE campaignlead SET call_log_id = $2, updated_date = NOW() WHERE id = $1', [cl.id, callLogId]);
 
         const smartfloRes = await triggerSmartfloOutboundCall({
-          smartfloApiKey, calleeNumber: cl.lead_phone, callerId: selectedDID, callLogId: callLog.id
+          smartfloApiKey, calleeNumber: cl.lead_phone, callerId: selectedDID, callLogId: callLogId
         });
 
         if (smartfloRes.success) {
           results.initiated++;
         } else {
-          await base44.entities.CampaignLead.update(cl.id, {
-            status: "completed", outcome: "not_answered", call_status: "not_answered",
-            conversation_summary: `Smartflo Error: ${smartfloRes.message}`
-          });
+          await (client as any).queryObject(`
+            UPDATE campaignlead 
+            SET status = 'completed', outcome = 'not_answered', call_status = 'not_answered', conversation_summary = $2, updated_date = NOW()
+            WHERE id = $1
+          `, [cl.id, `Smartflo Error: ${smartfloRes.message}`]);
           results.failed++;
           results.errors.push({ lead: cl.lead_phone, error: smartfloRes.message });
         }

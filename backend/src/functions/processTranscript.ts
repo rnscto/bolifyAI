@@ -1,4 +1,4 @@
-import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 import { postCallActionExtractorCore } from "./postCallActionExtractor.ts";
 
 export async function processTranscriptCore(call_log_id: string, recording_url: string) {
@@ -13,7 +13,8 @@ export async function processTranscriptCore(call_log_id: string, recording_url: 
       return { success: false, error: 'Invalid recording URL' };
     }
 
-    const callLog = await base44.entities.CallLog.get(call_log_id);
+    const callLogRes = await (client as any).queryObject('SELECT * FROM calllog WHERE id = $1', [call_log_id]);
+    const callLog = callLogRes.rows[0];
     if (!callLog) {
       return { success: false, error: 'Call log not found' };
     }
@@ -123,12 +124,15 @@ Respond ONLY in valid JSON with this exact structure.`
     const scoreBreakdown = analysis.score_breakdown || {};
     const keyKeywords = analysis.key_keywords || [];
 
-    await base44.entities.CallLog.update(call_log_id, {
-      status: 'completed',
-      transcript,
-      conversation_summary: `${summary}\n\n---\nScore: ${leadScore}/100 | Sentiment: ${sentiment} | Signals: ${intentSignals.join(', ')}`,
-      lead_status_updated: leadStatus
-    });
+    await (client as any).queryObject(`
+      UPDATE calllog 
+      SET status = 'completed', 
+          transcript = $2, 
+          conversation_summary = $3, 
+          lead_status_updated = $4,
+          updated_date = NOW()
+      WHERE id = $1
+    `, [call_log_id, transcript, `${summary}\n\n---\nScore: ${leadScore}/100 | Sentiment: ${sentiment} | Signals: ${intentSignals.join(', ')}`, leadStatus]);
 
     const highIntents = ['demo_request', 'budget_confirmed', 'timeline_mentioned', 'decision_maker']
       .filter(s => intentSignals.includes(s));
@@ -159,17 +163,10 @@ Respond ONLY in valid JSON with this exact structure.`
 
     if (leadStatus === 'do_not_call' && callLog.caller_id) {
       try {
-        await base44.entities.ComplaintLog.create({
-          did_number: callLog.caller_id,
-          client_id: callLog.client_id,
-          agent_id: callLog.agent_id,
-          complainant_number: callLog.callee_number,
-          complaint_type: 'unsolicited',
-          complaint_source: 'internal',
-          description: `Auto-detected: Lead explicitly requested "do not call" during AI conversation. Call ID: ${call_log_id}`,
-          status: 'open',
-          call_log_id: call_log_id,
-        });
+        await (client as any).queryObject(`
+          INSERT INTO complaintlog (id, created_at, did_number, client_id, agent_id, complainant_number, complaint_type, complaint_source, description, status, call_log_id)
+          VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `, [callLog.caller_id, callLog.client_id, callLog.agent_id, callLog.callee_number, 'unsolicited', 'internal', `Auto-detected: Lead explicitly requested "do not call" during AI conversation. Call ID: ${call_log_id}`, 'open', call_log_id]);
       } catch (e) {}
     }
 
@@ -179,19 +176,25 @@ Respond ONLY in valid JSON with this exact structure.`
 
     if (callLog.lead_id) {
       let existingLead: any = {};
-      try { existingLead = await base44.entities.Lead.get(callLog.lead_id); } catch (_) {}
+      try { 
+        const leadRes = await (client as any).queryObject('SELECT * FROM lead WHERE id = $1', [callLog.lead_id]);
+        if (leadRes.rows.length > 0) existingLead = leadRes.rows[0];
+      } catch (_) {}
       
       const updatedEngagement = (existingLead.engagement_count || 0) + 1;
-      const existingTags = existingLead.tags || [];
+      const existingTags = typeof existingLead.tags === 'string' ? JSON.parse(existingLead.tags) : (existingLead.tags || []);
       const mergedTags = [...new Set([...existingTags, ...keyKeywords.slice(0, 10)])];
       
       if (isNonAnswer) {
-        await base44.entities.Lead.update(callLog.lead_id, {
-          last_call_date: new Date().toISOString(),
-          last_engagement_date: new Date().toISOString(),
-          engagement_count: updatedEngagement,
-          tags: mergedTags,
-        });
+        await (client as any).queryObject(`
+          UPDATE lead 
+          SET last_call_date = $2, 
+              last_engagement_date = $3, 
+              engagement_count = $4, 
+              tags = $5,
+              updated_date = NOW()
+          WHERE id = $1
+        `, [callLog.lead_id, new Date().toISOString(), new Date().toISOString(), updatedEngagement, JSON.stringify(mergedTags)]);
       } else {
         const existingScore = existingLead.score || 0;
         const existingStatus = existingLead.status || 'new';
@@ -215,24 +218,29 @@ Respond ONLY in valid JSON with this exact structure.`
           finalTier = existingLead.qualification_tier || qualificationTier;
           finalReason = existingLead.qualification_reason || qualificationReason;
           finalSentiment = existingLead.sentiment || sentiment;
-          finalIntents = existingLead.intent_signals || intentSignals;
-          finalBreakdown = existingLead.score_breakdown || scoreBreakdown;
+          finalIntents = typeof existingLead.intent_signals === 'string' ? JSON.parse(existingLead.intent_signals) : (existingLead.intent_signals || intentSignals);
+          finalBreakdown = typeof existingLead.score_breakdown === 'string' ? JSON.parse(existingLead.score_breakdown) : (existingLead.score_breakdown || scoreBreakdown);
         }
 
-        await base44.entities.Lead.update(callLog.lead_id, {
-          status: finalStatus,
-          score: finalScore,
-          sentiment: finalSentiment,
-          intent_signals: finalIntents,
-          score_breakdown: finalBreakdown,
-          qualification_tier: finalTier,
-          qualification_reason: finalReason,
-          tags: mergedTags,
-          last_call_date: new Date().toISOString(),
-          last_engagement_date: new Date().toISOString(),
-          engagement_count: updatedEngagement,
-          notes: `[Score: ${finalScore}/100 | ${finalSentiment} | ${finalTier}] ${summary.substring(0, 300)}`
-        });
+        await (client as any).queryObject(`
+          UPDATE lead 
+          SET status = $2, 
+              score = $3, 
+              sentiment = $4, 
+              intent_signals = $5, 
+              score_breakdown = $6, 
+              qualification_tier = $7, 
+              qualification_reason = $8, 
+              tags = $9, 
+              last_call_date = $10, 
+              last_engagement_date = $11, 
+              engagement_count = $12, 
+              notes = $13,
+              updated_date = NOW()
+          WHERE id = $1
+        `, [
+          callLog.lead_id, finalStatus, finalScore, finalSentiment, JSON.stringify(finalIntents), JSON.stringify(finalBreakdown), finalTier, finalReason, JSON.stringify(mergedTags), new Date().toISOString(), new Date().toISOString(), updatedEngagement, `[Score: ${finalScore}/100 | ${finalSentiment} | ${finalTier}] ${summary.substring(0, 300)}`
+        ]);
       }
     }
 
@@ -246,7 +254,10 @@ Respond ONLY in valid JSON with this exact structure.`
 
     let leadForActivities: any = null;
     if (callLog.lead_id && !isNonAnswer) {
-      try { leadForActivities = await base44.entities.Lead.get(callLog.lead_id); } catch (_) {}
+      try { 
+        const leadRes = await (client as any).queryObject('SELECT * FROM lead WHERE id = $1', [callLog.lead_id]);
+        if (leadRes.rows.length > 0) leadForActivities = leadRes.rows[0];
+      } catch (_) {}
     }
 
     if (callLog.lead_id && qualificationTier && leadStatus !== 'do_not_call' && !isNonAnswer) {
@@ -255,14 +266,10 @@ Respond ONLY in valid JSON with this exact structure.`
       if (qualificationTier === 'hot') {
         const dueDate = new Date();
         dueDate.setHours(dueDate.getHours() + 4);
-        await base44.entities.Activity.create({
-          client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
-          type: 'task',
-          title: `🔥 HOT LEAD: Call ${leadForActivities?.name || callLog.callee_number} immediately`,
-          description: `AI Score: ${leadScore}/100 | Tier: HOT | ${qualificationReason}\n\nSummary: ${summary}\nSignals: ${intentSignals.join(', ')}`,
-          scheduled_date: new Date().toISOString(), due_date: dueDate.toISOString(),
-          status: 'scheduled', priority: 'high', auto_created: true
-        });
+        await (client as any).queryObject(`
+          INSERT INTO activity (id, created_at, client_id, lead_id, call_log_id, type, title, description, scheduled_date, due_date, status, priority, auto_created)
+          VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `, [callLog.client_id, callLog.lead_id, call_log_id, 'task', `🔥 HOT LEAD: Call ${leadForActivities?.name || callLog.callee_number} immediately`, `AI Score: ${leadScore}/100 | Tier: HOT | ${qualificationReason}\n\nSummary: ${summary}\nSignals: ${intentSignals.join(', ')}`, new Date().toISOString(), dueDate.toISOString(), 'scheduled', 'high', true]);
         actionsCreated.push('hot_task');
 
         if (intentSignals.includes('demo_request')) {
@@ -271,14 +278,10 @@ Respond ONLY in valid JSON with this exact structure.`
           if (demoDate.getDay() === 0) demoDate.setDate(demoDate.getDate() + 1);
           if (demoDate.getDay() === 6) demoDate.setDate(demoDate.getDate() + 2);
           setISTHours(demoDate, 10, 0);
-          await base44.entities.Activity.create({
-            client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
-            type: 'demo',
-            title: `Schedule demo for ${leadForActivities?.name || callLog.callee_number}`,
-            description: `Lead requested a demo. Score: ${leadScore}/100.`,
-            scheduled_date: demoDate.toISOString(), due_date: demoDate.toISOString(),
-            status: 'scheduled', priority: 'high', auto_created: true
-          });
+          await (client as any).queryObject(`
+            INSERT INTO activity (id, created_at, client_id, lead_id, call_log_id, type, title, description, scheduled_date, due_date, status, priority, auto_created)
+            VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          `, [callLog.client_id, callLog.lead_id, call_log_id, 'demo', `Schedule demo for ${leadForActivities?.name || callLog.callee_number}`, `Lead requested a demo. Score: ${leadScore}/100.`, demoDate.toISOString(), demoDate.toISOString(), 'scheduled', 'high', true]);
           actionsCreated.push('demo_scheduled');
         }
       }
@@ -289,14 +292,10 @@ Respond ONLY in valid JSON with this exact structure.`
         if (followupDate.getDay() === 0) followupDate.setDate(followupDate.getDate() + 1);
         if (followupDate.getDay() === 6) followupDate.setDate(followupDate.getDate() + 2);
         setISTHours(followupDate, 11, 0);
-        await base44.entities.Activity.create({
-          client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
-          type: 'followup',
-          title: `Follow up with warm lead: ${leadForActivities?.name || callLog.callee_number}`,
-          description: `AI Score: ${leadScore}/100 | Tier: WARM | ${qualificationReason}\nSummary: ${summary}`,
-          scheduled_date: followupDate.toISOString(), due_date: followupDate.toISOString(),
-          status: 'scheduled', priority: 'medium', auto_created: true
-        });
+        await (client as any).queryObject(`
+          INSERT INTO activity (id, created_at, client_id, lead_id, call_log_id, type, title, description, scheduled_date, due_date, status, priority, auto_created)
+          VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        `, [callLog.client_id, callLog.lead_id, call_log_id, 'followup', `Follow up with warm lead: ${leadForActivities?.name || callLog.callee_number}`, `AI Score: ${leadScore}/100 | Tier: WARM | ${qualificationReason}\nSummary: ${summary}`, followupDate.toISOString(), followupDate.toISOString(), 'scheduled', 'medium', true]);
         actionsCreated.push('warm_followup');
       }
 
@@ -304,14 +303,10 @@ Respond ONLY in valid JSON with this exact structure.`
         const reengageDate = new Date();
         reengageDate.setDate(reengageDate.getDate() + 5);
         setISTHours(reengageDate, 11, 0);
-        await base44.entities.Activity.create({
-          client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
-          type: 'followup',
-          title: `Nurture lead: ${leadForActivities?.name || callLog.callee_number}`,
-          description: `AI Score: ${leadScore}/100 | Tier: NURTURE | ${qualificationReason}`,
-          scheduled_date: reengageDate.toISOString(),
-          status: 'scheduled', priority: 'low', auto_created: true
-        });
+        await (client as any).queryObject(`
+          INSERT INTO activity (id, created_at, client_id, lead_id, call_log_id, type, title, description, scheduled_date, status, priority, auto_created)
+          VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        `, [callLog.client_id, callLog.lead_id, call_log_id, 'followup', `Nurture lead: ${leadForActivities?.name || callLog.callee_number}`, `AI Score: ${leadScore}/100 | Tier: NURTURE | ${qualificationReason}`, reengageDate.toISOString(), 'scheduled', 'low', true]);
         actionsCreated.push('nurture_followup');
       }
 
@@ -319,9 +314,12 @@ Respond ONLY in valid JSON with this exact structure.`
         const nextFollowup = qualificationTier === 'hot' ? new Date(Date.now() + 4 * 3600000) :
           qualificationTier === 'warm' ? new Date(Date.now() + 24 * 3600000) :
           new Date(Date.now() + 5 * 86400000);
-        await base44.entities.Lead.update(callLog.lead_id, {
-          next_followup_date: nextFollowup.toISOString()
-        });
+        await (client as any).queryObject(`
+          UPDATE lead 
+          SET next_followup_date = $2,
+              updated_date = NOW()
+          WHERE id = $1
+        `, [callLog.lead_id, nextFollowup.toISOString()]);
       }
     }
 

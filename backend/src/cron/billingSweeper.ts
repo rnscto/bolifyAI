@@ -1,53 +1,64 @@
-import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 
 export function initBillingSweeper() {
   Deno.cron("Billing Sweeper", "0 0 * * *", async () => {
     console.log("[cron/billingSweeper] Running daily billing & suspension sweep...");
-    const now = new Date();
     
     try {
-      // 1. Trial -> Expired
-      const trials = await base44.entities.Client.filter({ account_status: 'trial' });
-      for (const c of trials) {
-        if (!c.trial_end_date) continue;
-        const end = new Date(c.trial_end_date);
-        if (end < now) {
-          await base44.entities.Client.update(c.id, { account_status: 'expired' });
-          console.log(`[cron/billingSweeper] Client ${c.id} trial expired.`);
+      const trialRes = await (client as any).queryObject(`
+        UPDATE client 
+        SET account_status = 'expired', updated_date = NOW()
+        WHERE account_status = 'trial' AND trial_end_date IS NOT NULL AND trial_end_date < NOW()
+        RETURNING id
+      `);
+      if (trialRes.rows.length > 0) {
+        console.log(`[cron/billingSweeper] ${trialRes.rows.length} trial clients expired.`);
+      }
+
+      const pendingSubRes = await (client as any).queryObject(`
+        UPDATE subscription 
+        SET status = 'overdue', payment_status = 'failed', updated_date = NOW()
+        WHERE status = 'pending'
+        RETURNING id, client_id
+      `);
+      
+      for (const sub of pendingSubRes.rows) {
+        const suspendRes = await (client as any).queryObject(`
+          UPDATE client 
+          SET account_status = 'suspended', updated_date = NOW()
+          WHERE id = $1 AND account_status NOT IN ('suspended', 'cancelled')
+          RETURNING id
+        `, [sub.client_id]);
+        if (suspendRes.rows.length > 0) {
+          console.log(`[cron/billingSweeper] Client ${sub.client_id} suspended due to pending subscription ${sub.id}.`);
         }
       }
 
-      // 2. Pending Subscriptions
-      const pendingSubs = await base44.entities.Subscription.filter({ status: 'pending' });
-      for (const sub of pendingSubs) {
-        await base44.entities.Subscription.update(sub.id, { status: 'overdue', payment_status: 'failed' });
-        const clients = await base44.entities.Client.filter({ id: sub.client_id });
-        const c = clients[0];
-        if (c && !['suspended', 'cancelled'].includes(c.account_status)) {
-          await base44.entities.Client.update(c.id, { account_status: 'suspended' });
-          console.log(`[cron/billingSweeper] Client ${c.id} suspended due to pending subscription ${sub.id}.`);
-        }
-      }
+      const activeSubsRes = await (client as any).queryObject(`
+        SELECT id, client_id, billing_end_date 
+        FROM subscription 
+        WHERE status = 'active' AND billing_end_date IS NOT NULL AND billing_end_date < NOW()
+      `);
 
-      // 3. Active Subscription -> Overdue
-      const activeSubs = await base44.entities.Subscription.filter({ status: 'active' });
-      for (const sub of activeSubs) {
-        if (!sub.billing_end_date) continue;
-        const end = new Date(sub.billing_end_date);
-        if (end >= now) continue;
+      for (const sub of activeSubsRes.rows) {
+        const newerActiveRes = await (client as any).queryObject(`
+          SELECT id FROM subscription 
+          WHERE client_id = $1 AND id != $2 AND status = 'active' AND billing_end_date > NOW()
+        `, [sub.client_id, sub.id]);
 
-        const allClientSubs = await base44.entities.Subscription.filter({ client_id: sub.client_id });
-        const hasNewerActive = allClientSubs.some((s: any) =>
-          s.id !== sub.id && s.status === 'active' && s.billing_end_date && new Date(s.billing_end_date) > now
-        );
-        if (hasNewerActive) continue;
+        if (newerActiveRes.rows.length > 0) continue;
 
-        await base44.entities.Subscription.update(sub.id, { status: 'overdue' });
-        const clients = await base44.entities.Client.filter({ id: sub.client_id });
-        const c = clients[0];
-        if (c && !['suspended', 'cancelled'].includes(c.account_status)) {
-          await base44.entities.Client.update(c.id, { account_status: 'suspended' });
-          console.log(`[cron/billingSweeper] Client ${c.id} suspended due to expired active subscription ${sub.id}.`);
+        await (client as any).queryObject(`UPDATE subscription SET status = 'overdue', updated_date = NOW() WHERE id = $1`, [sub.id]);
+        
+        const suspendRes = await (client as any).queryObject(`
+          UPDATE client 
+          SET account_status = 'suspended', updated_date = NOW()
+          WHERE id = $1 AND account_status NOT IN ('suspended', 'cancelled')
+          RETURNING id
+        `, [sub.client_id]);
+        
+        if (suspendRes.rows.length > 0) {
+          console.log(`[cron/billingSweeper] Client ${sub.client_id} suspended due to expired active subscription ${sub.id}.`);
         }
       }
     } catch (err) {
