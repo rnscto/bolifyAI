@@ -14,7 +14,37 @@ on:
   workflow_dispatch:      
 
 jobs:
+  lint-and-sast:
+    name: Run SAST & Linter
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup Node.js (Frontend)
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install Frontend Dependencies
+        run: npm ci || npm install
+
+      - name: Run ESLint (Frontend)
+        run: npm run lint
+
+      - name: Setup Deno (Backend)
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+
+      - name: Run Deno Lint (Backend)
+        run: cd backend && deno lint
+
+      - name: Run Deno Type Check (Backend)
+        run: cd backend && deno check main.ts
+
   build-and-deploy:
+    needs: lint-and-sast
     runs-on: ubuntu-latest
     permissions: 
       id-token: write #This is required for requesting the OIDC JWT Token
