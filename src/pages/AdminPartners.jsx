@@ -63,7 +63,7 @@ export default function AdminPartners() {
   // ─── Actions ───
   const handleApprove = async (partner) => {
     await apiClient.Partner.update(partner.id, { status: 'approved' });
-    try { await base44.users.inviteUser(partner.email, 'user'); } catch (e) {}
+    // try { await base44.users.inviteUser(partner.email, 'user'); } catch (e) {}
 
     // Auto-generate partner agreement
     try {
@@ -141,7 +141,7 @@ export default function AdminPartners() {
       const p = partners.find(x => x.id === id);
       if (p?.status === 'pending') {
         await apiClient.Partner.update(id, { status: 'approved' });
-        try { await base44.users.inviteUser(p.email, 'user'); } catch (e) {}
+        // try { await base44.users.inviteUser(p.email, 'user'); } catch (e) {}
       }
     }
     toast.success(`${selectedIds.size} partner(s) approved`);

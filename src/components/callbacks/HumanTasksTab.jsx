@@ -119,10 +119,9 @@ export default function HumanTasksTab({ clientId }) {
 
   const loadTasks = async () => {
     setLoading(true);
-    const svc = base44;
     const [scheduled, overdue] = await Promise.all([
-      svc.entities.Activity.filter({ client_id: clientId, status: 'scheduled' }, 'scheduled_date', 200),
-      svc.entities.Activity.filter({ client_id: clientId, status: 'overdue' }, 'scheduled_date', 200),
+      apiClient.Activity.filter({ client_id: clientId, status: 'scheduled' }, 'scheduled_date', 200),
+      apiClient.Activity.filter({ client_id: clientId, status: 'overdue' }, 'scheduled_date', 200),
     ]);
     const allTasks = [...scheduled, ...overdue].filter(a => humanTypes.includes(a.type));
     setTasks(allTasks);
@@ -131,7 +130,7 @@ export default function HumanTasksTab({ clientId }) {
     const leadIds = [...new Set(allTasks.map(t => t.lead_id).filter(Boolean))];
     const leadMap = {};
     const fetched = await Promise.all(
-      leadIds.map(lid => svc.entities.Lead.get(lid).catch(() => null))
+      leadIds.map(lid => apiClient.Lead.get(lid).catch(() => null))
     );
     leadIds.forEach((lid, i) => { if (fetched[i]) leadMap[lid] = fetched[i]; });
     setLeads(leadMap);
