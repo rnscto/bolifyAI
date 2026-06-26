@@ -2,11 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Users, Phone, PhoneCall, TrendingUp, Clock, CreditCard, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { Users, Phone, PhoneCall, TrendingUp, Clock, CreditCard, AlertTriangle, CheckCircle2, ArrowUpRight, Zap, IndianRupee, Activity } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import WebsiteLeadsSection from '../components/admin/WebsiteLeadsSection';
+import { motion } from 'framer-motion';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
@@ -147,40 +148,69 @@ export default function AdminDashboard() {
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-        <p className="text-gray-600 mt-1">Platform overview and analytics</p>
-      </div>
+    <div className="space-y-8">
+      {/* Header Section */}
+      <motion.div 
+        initial={{ opacity: 0, y: -20 }} 
+        animate={{ opacity: 1, y: 0 }} 
+        className="flex flex-col md:flex-row md:items-end justify-between gap-4"
+      >
+        <div>
+          <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 drop-shadow-sm">Admin Overview</h1>
+          <p className="text-gray-500 mt-2 text-lg">Real-time platform metrics and analytics</p>
+        </div>
+        <div className="flex items-center gap-2 text-sm font-medium text-cyan-600 bg-cyan-50 px-4 py-2 rounded-full shadow-sm border border-cyan-100">
+          <Zap className="w-4 h-4" /> System fully operational
+        </div>
+      </motion.div>
 
       {/* Alert for expired clients */}
       {stats.expiredClients > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-center gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
-          <span className="text-sm text-amber-800">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/50 shadow-sm rounded-xl px-5 py-4 flex items-center gap-4"
+        >
+          <div className="p-2 bg-amber-100 rounded-lg">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+          </div>
+          <span className="text-amber-900 font-medium">
             <strong>{stats.expiredClients} client(s)</strong> have expired trials. Review them in{' '}
-            <Link to={createPageUrl('AdminClients')} className="underline font-medium">Clients</Link>.
+            <Link to={createPageUrl('AdminClients')} className="underline text-amber-700 hover:text-amber-800 transition-colors">Clients</Link>.
           </span>
-        </div>
+        </motion.div>
       )}
 
       {/* Stat cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat) => {
+        {statCards.map((stat, i) => {
           const Icon = stat.icon;
           return (
-            <Card key={stat.title}>
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-gray-600">{stat.title}</CardTitle>
-                <div className={`p-2 rounded-lg ${stat.bgColor}`}>
-                  <Icon className={`w-5 h-5 ${stat.color}`} />
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-gray-900">{stat.value}</div>
-                <p className="text-xs text-gray-500 mt-1">{stat.subtitle}</p>
-              </CardContent>
-            </Card>
+            <motion.div
+              key={stat.title}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.1 }}
+            >
+              <Card className="overflow-hidden border-none shadow-lg shadow-gray-200/40 bg-white/60 backdrop-blur-xl relative group">
+                <div className={`absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-300 ${stat.bgColor.replace('50', '500')}`} />
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider">{stat.title}</p>
+                      <div className="text-3xl font-black text-gray-900 mt-2 tracking-tight">{stat.value}</div>
+                    </div>
+                    <div className={`p-4 rounded-2xl ${stat.bgColor} shadow-inner`}>
+                      <Icon className={`w-7 h-7 ${stat.color}`} />
+                    </div>
+                  </div>
+                  <div className="mt-4 flex items-center gap-1.5 text-sm font-medium text-gray-600 bg-gray-50/50 rounded-lg px-3 py-1.5 w-max">
+                    <TrendingUp className="w-4 h-4 text-emerald-500" />
+                    {stat.subtitle}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
           );
         })}
       </div>
@@ -188,141 +218,196 @@ export default function AdminDashboard() {
       {/* Charts row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Client breakdown pie chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Client Status Breakdown</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {clientBreakdown.length > 0 ? (
-              <div className="flex items-center gap-6">
-                <ResponsiveContainer width={160} height={160}>
-                  <PieChart>
-                    <Pie data={clientBreakdown} dataKey="value" cx="50%" cy="50%" outerRadius={70} innerRadius={40}>
-                      {clientBreakdown.map((entry, idx) => (
-                        <Cell key={idx} fill={entry.color} />
-                      ))}
-                    </Pie>
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="space-y-2">
-                  {clientBreakdown.map((item) => (
-                    <div key={item.name} className="flex items-center gap-2">
-                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
-                      <span className="text-sm text-gray-700">{item.name}: <strong>{item.value}</strong></span>
-                    </div>
-                  ))}
+        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
+          <Card className="h-full border-none shadow-lg shadow-gray-200/40 bg-white/60 backdrop-blur-xl">
+            <CardHeader>
+              <CardTitle className="text-lg font-bold text-gray-800">Status Breakdown</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {clientBreakdown.length > 0 ? (
+                <div className="flex flex-col sm:flex-row items-center gap-8 justify-center py-4">
+                  <ResponsiveContainer width={180} height={180}>
+                    <PieChart>
+                      <Pie 
+                        data={clientBreakdown} 
+                        dataKey="value" 
+                        cx="50%" cy="50%" 
+                        outerRadius={85} 
+                        innerRadius={55}
+                        stroke="none"
+                      >
+                        {clientBreakdown.map((entry, idx) => (
+                          <Cell key={idx} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="space-y-4">
+                    {clientBreakdown.map((item) => (
+                      <div key={item.name} className="flex items-center justify-between w-40 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-3.5 h-3.5 rounded-full shadow-inner" style={{ backgroundColor: item.color }} />
+                          <span className="text-sm font-medium text-gray-600">{item.name}</span>
+                        </div>
+                        <span className="text-base font-bold text-gray-900">{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500">No client data yet</p>
-            )}
-          </CardContent>
-        </Card>
+              ) : (
+                <div className="flex items-center justify-center h-[200px] text-gray-400 font-medium">No client data yet</div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
 
         {/* Revenue bar chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Recent Payments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {revenueData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={160}>
-                <BarChart data={revenueData}>
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} />
-                  <Tooltip formatter={(v) => `₹${v.toLocaleString()}`} />
-                  <Bar dataKey="amount" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-sm text-gray-500">No payment data yet</p>
-            )}
-          </CardContent>
-        </Card>
+        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
+          <Card className="h-full border-none shadow-lg shadow-gray-200/40 bg-white/60 backdrop-blur-xl">
+            <CardHeader className="flex flex-row justify-between items-center">
+              <CardTitle className="text-lg font-bold text-gray-800">Revenue Growth</CardTitle>
+              <div className="text-xs font-bold px-2 py-1 bg-blue-50 text-blue-600 rounded-md">Last 6 Months</div>
+            </CardHeader>
+            <CardContent>
+              {revenueData.length > 0 ? (
+                <div className="pt-4">
+                  <ResponsiveContainer width="100%" height={200}>
+                    <BarChart data={revenueData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                      <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b', fontWeight: 500 }} axisLine={false} tickLine={false} />
+                      <YAxis tick={{ fontSize: 12, fill: '#64748b', fontWeight: 500 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} axisLine={false} tickLine={false} />
+                      <Tooltip 
+                        cursor={{ fill: '#f8fafc' }}
+                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
+                        formatter={(v) => `₹${v.toLocaleString()}`} 
+                      />
+                      <Bar dataKey="amount" fill="url(#colorRevenue)" radius={[6, 6, 0, 0]} />
+                      <defs>
+                        <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="#06b6d4" stopOpacity={1}/>
+                          <stop offset="100%" stopColor="#3b82f6" stopOpacity={0.8}/>
+                        </linearGradient>
+                      </defs>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="flex items-center justify-center h-[200px] text-gray-400 font-medium">No payment data yet</div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
       {/* Recent activity row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Recent clients */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Recent Clients</CardTitle>
-            <Link to={createPageUrl('AdminClients')} className="text-sm text-blue-600 hover:underline">View all</Link>
-          </CardHeader>
-          <CardContent>
-            {recentClients.length === 0 ? (
-              <p className="text-sm text-gray-500">No clients yet</p>
-            ) : (
-              <div className="space-y-3">
-                {recentClients.map((c) => (
-                  <div key={c.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">{c.company_name}</p>
-                      <p className="text-xs text-gray-500">{c.email}</p>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
+          <Card className="border-none shadow-lg shadow-gray-200/40 bg-white/60 backdrop-blur-xl">
+            <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
+              <CardTitle className="text-lg font-bold text-gray-800">Recent Clients</CardTitle>
+              <Link to={createPageUrl('AdminClients')} className="text-sm font-semibold text-cyan-600 hover:text-cyan-700 flex items-center gap-1 group">
+                View all <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              </Link>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {recentClients.length === 0 ? (
+                <p className="text-sm text-gray-500 py-4 text-center">No clients yet</p>
+              ) : (
+                <div className="space-y-1">
+                  {recentClients.map((c) => (
+                    <div key={c.id} className="flex items-center justify-between py-3 px-2 rounded-xl hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-cyan-100 to-blue-100 flex items-center justify-center text-cyan-700 font-bold">
+                          {c.company_name?.charAt(0) || 'C'}
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-gray-900">{c.company_name}</p>
+                          <p className="text-xs font-medium text-gray-500">{c.email}</p>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className={`border-none px-3 py-1 ${accountColors[c.account_status] || 'bg-gray-100'}`}>
+                        {c.account_status || 'unknown'}
+                      </Badge>
                     </div>
-                    <Badge className={accountColors[c.account_status] || 'bg-gray-100'}>
-                      {c.account_status || 'unknown'}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
 
-        {/* Recent payments */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base">Recent Payments</CardTitle>
-            <Link to={createPageUrl('AdminSubscriptions')} className="text-sm text-blue-600 hover:underline">View all</Link>
-          </CardHeader>
-          <CardContent>
-            {recentPayments.length === 0 ? (
-              <p className="text-sm text-gray-500">No payments yet</p>
-            ) : (
-              <div className="space-y-3">
-                {recentPayments.map((p) => (
-                  <div key={p.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">₹{p.amount?.toLocaleString()}</p>
-                      <p className="text-xs text-gray-500">{p.description || 'Subscription payment'}</p>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
+          <Card className="border-none shadow-lg shadow-gray-200/40 bg-white/60 backdrop-blur-xl">
+            <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
+              <CardTitle className="text-lg font-bold text-gray-800">Recent Payments</CardTitle>
+              <Link to={createPageUrl('AdminSubscriptions')} className="text-sm font-semibold text-cyan-600 hover:text-cyan-700 flex items-center gap-1 group">
+                View all <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+              </Link>
+            </CardHeader>
+            <CardContent className="pt-4">
+              {recentPayments.length === 0 ? (
+                <p className="text-sm text-gray-500 py-4 text-center">No payments yet</p>
+              ) : (
+                <div className="space-y-1">
+                  {recentPayments.map((p) => (
+                    <div key={p.id} className="flex items-center justify-between py-3 px-2 rounded-xl hover:bg-gray-50 transition-colors">
+                      <div className="flex items-center gap-4">
+                        <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
+                          <IndianRupee className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-bold text-gray-900">₹{p.amount?.toLocaleString()}</p>
+                          <p className="text-xs font-medium text-gray-500">{p.description || 'Subscription'}</p>
+                        </div>
+                      </div>
+                      <Badge variant="outline" className={`border-none px-3 py-1 ${paymentColors[p.status] || 'bg-gray-100'}`}>
+                        {p.status}
+                      </Badge>
                     </div>
-                    <Badge className={paymentColors[p.status] || 'bg-gray-100'}>
-                      {p.status}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
 
-      {/* Website Leads, Trial Clients & Signups */}
-      <WebsiteLeadsSection />
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7 }}>
+        <WebsiteLeadsSection />
+      </motion.div>
 
       {/* Platform Health */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Platform Health</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            {[
-              { name: 'WebSocket Status', status: 'Operational' },
-              { name: 'Azure OpenAI', status: 'Connected' },
-              { name: 'Cashfree Payments', status: 'Active' },
-            ].map((s) => (
-              <div key={s.name} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                <span className="text-sm text-gray-600">{s.name}</span>
-                <span className="flex items-center gap-1 px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
-                  <CheckCircle2 className="w-3 h-3" /> {s.status}
-                </span>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}>
+        <Card className="border-none shadow-lg shadow-gray-200/40 bg-white/60 backdrop-blur-xl">
+          <CardHeader>
+            <CardTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <Activity className="w-5 h-5 text-cyan-500" />
+              Platform Infrastructure Health
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[
+                { name: 'WebSocket Clusters', status: 'Operational', icon: Zap },
+                { name: 'Azure Voice Gateway', status: 'Connected', icon: Phone },
+                { name: 'Cashfree Engine', status: 'Active', icon: CreditCard },
+              ].map((s) => (
+                <div key={s.name} className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-gray-50 rounded-lg text-gray-500"><s.icon className="w-4 h-4" /></div>
+                    <span className="text-sm font-bold text-gray-700">{s.name}</span>
+                  </div>
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold bg-green-50 border border-green-100 text-green-700 rounded-full">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> {s.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </motion.div>
     </div>
   );
 }

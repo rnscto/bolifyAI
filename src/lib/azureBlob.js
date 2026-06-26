@@ -30,12 +30,13 @@ async function invokeUpload({ file, visibility, folder }) {
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   const resp = await fetch(url, { method: 'POST', headers, body: formData });
-  let data;
-  try { data = await resp.json(); } catch { data = {}; }
-  if (!resp.ok || !data?.success) {
-    throw new Error(data?.error || `Azure upload failed (${resp.status})`);
+  let result;
+  try { result = await resp.json(); } catch { result = {}; }
+  const payload = result?.data || result;
+  if (!resp.ok || !payload?.success) {
+    throw new Error(payload?.error || result?.error || `Azure upload failed (${resp.status})`);
   }
-  return data;
+  return payload;
 }
 
 // Public uploads (logos, social images, recordings) — returns { file_url }

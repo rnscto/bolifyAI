@@ -1,8 +1,12 @@
 import { Hono } from "hono";
 import { functionRegistry } from "../functions/index.ts";
 import { client } from "../db/index.ts";
+import { universalAuth } from "../middleware/auth.ts";
 
 export const functionsRouter = new Hono();
+
+// Apply auth to all functions except debug
+functionsRouter.use("/:functionName", universalAuth);
 
 functionsRouter.get('/debug_calllog/:id', async (c) => {
   const id = c.req.param('id');

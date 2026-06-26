@@ -203,7 +203,13 @@ resellerRouter.post("/admin/promote", async (c) => {
     const client = await base44.entities.Client.get(client_id);
     if (!client) return c.json({ error: "Client not found" }, 404);
 
-    const user = await base44.entities.User.get(client.user_id);
+    let user = null;
+    if (client.user_id) {
+      user = await base44.entities.User.get(client.user_id);
+    } else {
+      const users = await base44.entities.User.filter({ client_id: client.id });
+      if (users.length > 0) user = users[0];
+    }
     if (!user) return c.json({ error: "User not found" }, 404);
 
     // Update User role

@@ -6,11 +6,17 @@ export default async function adminListClients(c: any) {
     const payload = await c.req.json().catch(() => ({}));
     const { action, client_id, data } = payload;
 
-    // TODO: Ideally we should enforce admin JWT auth here. 
-    // Since we are migrating from Base44 auth to custom JWT, we rely on middleware.
+    const user = c.get("jwtPayload");
+    if (!user) {
+      return c.json({ data: { error: 'Unauthorized' } }, 401);
+    }
+    
+    // Determine filter conditions based on role
+    const isReseller = user.role === 'reseller' || user.role === 'master_reseller';
+    const filterCondition = isReseller ? { created_by: user.email } : {};
 
     if (!action || action === 'list') {
-      const clients = await base44.entities.Client.filter({}, "-created_at");
+      const clients = await base44.entities.Client.filter(filterCondition, "-created_at");
       const users = await base44.entities.User.filter({});
       
       // Map each client to its earliest activation (paid) date
@@ -42,6 +48,19 @@ export default async function adminListClients(c: any) {
 
     if (action === 'delete' && client_id) {
       await base44.entities.Client.delete(client_id);
+      return c.json({ data: { success: true } });
+    }
+
+    if (action === 'promote_user' && payload.user_id && payload.role) {
+      // Only master_admin or yadavnand886@gmail.com can promote users
+      if (user.role !== 'master_admin' && user.email !== 'yadavnand886@gmail.com') {
+         return c.json({ data: { error: 'Forbidden. Only Master Admin can promote users.' } }, 403);
+      }
+      const allowedRoles = ['reseller', 'master_reseller', 'admin', 'user'];
+      if (!allowedRoles.includes(payload.role)) {
+         return c.json({ data: { error: 'Invalid role' } }, 400);
+      }
+      await base44.entities.User.update(payload.user_id, { role: payload.role });
       return c.json({ data: { success: true } });
     }
 

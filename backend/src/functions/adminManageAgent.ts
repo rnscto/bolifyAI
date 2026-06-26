@@ -5,8 +5,14 @@ export default async function adminManageAgent(c: any) {
     const payload = await c.req.json().catch(() => ({}));
     const { action, agent_id, data } = payload;
 
-    // TODO: Ideally we should enforce admin JWT auth here.
-    // Relying on middleware for now, identical to adminListClients.ts
+    const user = c.get("jwtPayload");
+    if (!user) {
+      return c.json({ data: { error: 'Unauthorized' } }, 401);
+    }
+    const adminRoles = ['admin', 'master_admin', 'reseller', 'master_reseller'];
+    if (!adminRoles.includes(user.role)) {
+      return c.json({ data: { error: 'Forbidden' } }, 403);
+    }
 
     if (action === 'create') {
       const newAgent = await base44.entities.Agent.create(data);

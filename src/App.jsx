@@ -28,6 +28,7 @@ import AdminPaymentApprovals from './pages/AdminPaymentApprovals';
 import ClientWhatsAppHistory from './pages/ClientWhatsAppHistory';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import AdminLayout from './AdminLayout';
 
 const { Pages, Layout, mainPage } = pagesConfig;
 const mainPageKey = mainPage ?? Object.keys(Pages)[0];
@@ -36,6 +37,9 @@ const MainPage = mainPageKey ? Pages[mainPageKey] : <></>;
 const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>
   : <>{children}</>;
+
+const AdminLayoutWrapper = ({ children, currentPageName }) => 
+  <AdminLayout currentPageName={currentPageName}>{children}</AdminLayout>;
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -74,17 +78,20 @@ const AuthenticatedApp = () => {
       <Route path="/" element={<RootRedirect />} />
       <Route path="/Login" element={<Login />} />
       <Route path="/Signup" element={<Signup />} />
-      {Object.entries(Pages).map(([path, Page]) => (
-        <Route
-          key={path}
-          path={`/${path}`}
-          element={
-            <LayoutWrapper currentPageName={path}>
-              <Page />
-            </LayoutWrapper>
-          }
-        />
-      ))}
+      {Object.entries(Pages).map(([path, Page]) => {
+        const Wrapper = path.startsWith('Admin') ? AdminLayoutWrapper : LayoutWrapper;
+        return (
+          <Route
+            key={path}
+            path={`/${path}`}
+            element={
+              <Wrapper currentPageName={path}>
+                <Page />
+              </Wrapper>
+            }
+          />
+        );
+      })}
       <Route path="/PartnerReferral" element={
         <LayoutWrapper currentPageName="PartnerReferral">
           <PartnerReferral />
@@ -96,9 +103,9 @@ const AuthenticatedApp = () => {
         </LayoutWrapper>
       } />
       <Route path="/AdminComplaints" element={
-        <LayoutWrapper currentPageName="AdminComplaints">
+        <AdminLayoutWrapper currentPageName="AdminComplaints">
           <AdminComplaints />
-        </LayoutWrapper>
+        </AdminLayoutWrapper>
       } />
       <Route path="/ClientSocialMedia" element={
         <LayoutWrapper currentPageName="ClientSocialMedia">
@@ -126,9 +133,24 @@ const AuthenticatedApp = () => {
         </LayoutWrapper>
       } />
       <Route path="/AdminTopups" element={
-        <LayoutWrapper currentPageName="AdminTopups">
+        <AdminLayoutWrapper currentPageName="AdminTopups">
           <AdminTopups />
-        </LayoutWrapper>
+        </AdminLayoutWrapper>
+      } />
+      <Route path="/AdminTrustedClients" element={
+        <AdminLayoutWrapper currentPageName="AdminTrustedClients">
+          <AdminTrustedClients />
+        </AdminLayoutWrapper>
+      } />
+      <Route path="/AdminWebsiteLeads" element={
+        <AdminLayoutWrapper currentPageName="AdminWebsiteLeads">
+          <AdminWebsiteLeads />
+        </AdminLayoutWrapper>
+      } />
+      <Route path="/AdminResellerBranding" element={
+        <AdminLayoutWrapper currentPageName="AdminResellerBranding">
+          <AdminResellerBranding />
+        </AdminLayoutWrapper>
       } />
       <Route path="/ClientWhatsAppTemplates" element={
         <LayoutWrapper currentPageName="ClientWhatsAppTemplates">
@@ -136,24 +158,24 @@ const AuthenticatedApp = () => {
         </LayoutWrapper>
       } />
       <Route path="/AdminPlatformMessaging" element={
-        <LayoutWrapper currentPageName="AdminPlatformMessaging">
+        <AdminLayoutWrapper currentPageName="AdminPlatformMessaging">
           <AdminPlatformMessaging />
-        </LayoutWrapper>
+        </AdminLayoutWrapper>
       } />
       <Route path="/AdminAnnouncements" element={
-        <LayoutWrapper currentPageName="AdminAnnouncements">
+        <AdminLayoutWrapper currentPageName="AdminAnnouncements">
           <AdminAnnouncements />
-        </LayoutWrapper>
+        </AdminLayoutWrapper>
       } />
       <Route path="/AdminClientLifecycle" element={
-        <LayoutWrapper currentPageName="AdminClientLifecycle">
+        <AdminLayoutWrapper currentPageName="AdminClientLifecycle">
           <AdminClientLifecycle />
-        </LayoutWrapper>
+        </AdminLayoutWrapper>
       } />
       <Route path="/AdminPaymentApprovals" element={
-        <LayoutWrapper currentPageName="AdminPaymentApprovals">
+        <AdminLayoutWrapper currentPageName="AdminPaymentApprovals">
           <AdminPaymentApprovals />
-        </LayoutWrapper>
+        </AdminLayoutWrapper>
       } />
       <Route path="/ClientWhatsAppHistory" element={
         <LayoutWrapper currentPageName="ClientWhatsAppHistory">
