@@ -73,16 +73,19 @@ const buildCrudRouter = (tableName: string) => {
 
     // MULTI-TENANCY ENFORCEMENT
     if (user.role !== 'admin' && user.role !== 'master_admin') {
-      if (validCols.has("client_id")) {
-        conditions.push(`"client_id" = $${paramIndex}`);
-        args.push(user.client_id);
-        paramIndex++;
-      } else if (entity === "client") {
+      if (entity === "client") {
         if (user.role === 'reseller' || user.role === 'master_reseller') {
           conditions.push(`("id" = $${paramIndex} OR "upline_id" = $${paramIndex})`);
         } else {
-          // If querying the client table, normal users can only query their own client
           conditions.push(`"id" = $${paramIndex}`);
+        }
+        args.push(user.client_id);
+        paramIndex++;
+      } else if (validCols.has("client_id")) {
+        if (user.role === 'reseller' || user.role === 'master_reseller') {
+          conditions.push(`"client_id" IN (SELECT id FROM "client" WHERE id = $${paramIndex} OR upline_id = $${paramIndex})`);
+        } else {
+          conditions.push(`"client_id" = $${paramIndex}`);
         }
         args.push(user.client_id);
         paramIndex++;
@@ -138,14 +141,18 @@ const buildCrudRouter = (tableName: string) => {
 
       // MULTI-TENANCY ENFORCEMENT
       if (user.role !== 'admin' && user.role !== 'master_admin') {
-        if (validCols.has("client_id")) {
-          query += ` AND client_id = $2`;
-          args.push(user.client_id);
-        } else if (entity === "client") {
+        if (entity === "client") {
           if (user.role === 'reseller' || user.role === 'master_reseller') {
             query += ` AND (id = $2 OR upline_id = $2)`;
           } else {
             query += ` AND id = $2`;
+          }
+          args.push(user.client_id);
+        } else if (validCols.has("client_id")) {
+          if (user.role === 'reseller' || user.role === 'master_reseller') {
+            query += ` AND client_id IN (SELECT id FROM "client" WHERE id = $2 OR upline_id = $2)`;
+          } else {
+            query += ` AND client_id = $2`;
           }
           args.push(user.client_id);
         }
@@ -181,7 +188,18 @@ const buildCrudRouter = (tableName: string) => {
     }
 
     if (validCols.has("client_id") && user.role !== 'admin' && user.role !== 'master_admin') {
-      filteredBody["client_id"] = user.client_id;
+      if (user.role === 'reseller' || user.role === 'master_reseller') {
+        if (filteredBody["client_id"] && filteredBody["client_id"] !== user.client_id) {
+          const check = await client.queryObject(`SELECT id FROM "client" WHERE id = $1 AND upline_id = $2`, [filteredBody["client_id"], user.client_id]);
+          if (check.rows.length === 0) {
+            filteredBody["client_id"] = user.client_id;
+          }
+        } else {
+          filteredBody["client_id"] = user.client_id;
+        }
+      } else {
+        filteredBody["client_id"] = user.client_id;
+      }
     }
     
     // Auto-assign upline_id when resellers create a downline client
@@ -246,7 +264,11 @@ const buildCrudRouter = (tableName: string) => {
     let query = `UPDATE "${entity}" SET ${setClauses} WHERE id = $1`;
 
     if (validCols.has("client_id") && user.role !== 'admin' && user.role !== 'master_admin') {
-      query += ` AND client_id = $${values.length + 1}`;
+      if (user.role === 'reseller' || user.role === 'master_reseller') {
+        query += ` AND client_id IN (SELECT id FROM "client" WHERE id = $${values.length + 1} OR upline_id = $${values.length + 1})`;
+      } else {
+        query += ` AND client_id = $${values.length + 1}`;
+      }
       values.push(user.client_id);
     }
 
@@ -278,7 +300,11 @@ const buildCrudRouter = (tableName: string) => {
       const args: any[] = [id];
 
       if (validCols.has("client_id") && user.role !== 'admin' && user.role !== 'master_admin') {
-        query += ` AND client_id = $2`;
+        if (user.role === 'reseller' || user.role === 'master_reseller') {
+          query += ` AND client_id IN (SELECT id FROM "client" WHERE id = $2 OR upline_id = $2)`;
+        } else {
+          query += ` AND client_id = $2`;
+        }
         args.push(user.client_id);
       }
 

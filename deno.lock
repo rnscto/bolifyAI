@@ -243,6 +243,8 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@azure/arm-appcontainers@3",
+        "npm:@azure/identity@^4.13.1",
         "npm:@eslint/js@^9.19.0",
         "npm:@hello-pangea/dnd@17",
         "npm:@hono/node-server@^2.0.6",

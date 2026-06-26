@@ -17,7 +17,30 @@ export async function processTickets() {
         // AI Auto-Responder
         let aiResponse = "Thank you for reaching out. We have received your ticket and will look into it shortly.";
 
-        if (OPENAI_API_KEY) {
+        if (Deno.env.get("GEMINI_API_KEY")) {
+          try {
+            const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${Deno.env.get("GEMINI_API_KEY")}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                system_instruction: {
+                  parts: [{ text: "You are a helpful support agent for an AI voice calling platform. Give a short, polite initial response acknowledging the issue." }]
+                },
+                contents: [{
+                  parts: [{ text: `Subject: ${ticket.subject}\n\nCategory: ${ticket.category}\n\nPlease help.` }]
+                }],
+                generationConfig: { maxOutputTokens: 100 }
+              })
+            });
+            const data = await geminiRes.json();
+            if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
+              aiResponse = data.candidates[0].content.parts[0].text;
+            }
+          } catch (e) {
+            console.error("Gemini error:", e);
+          }
+        } else if (OPENAI_API_KEY) {
+          // Fallback to OpenAI if Gemini isn't configured
           try {
             const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
               method: "POST",
@@ -26,7 +49,7 @@ export async function processTickets() {
                 "Content-Type": "application/json"
               },
               body: JSON.stringify({
-                model: "gpt-5.4-pro",
+                model: "gpt-4o",
                 messages: [
                   { role: "system", content: "You are a helpful support agent for an AI voice calling platform. Give a short, polite initial response acknowledging the issue." },
                   { role: "user", content: `Subject: ${ticket.subject}\n\nCategory: ${ticket.category}\n\nPlease help.` }

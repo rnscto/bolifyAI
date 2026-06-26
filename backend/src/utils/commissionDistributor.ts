@@ -13,6 +13,8 @@ export async function distributeCommission(paymentId: string, clientId: string, 
     let currentRate = isTopup ? Number(clientRecord.per_minute_rate || 2.5) : Number(clientRecord.monthly_rate_per_channel || 6500);
     let uplineId = clientRecord.upline_id;
 
+    let initialClientRate = currentRate;
+
     while (uplineId) {
       const uplineRecord = await base44.entities.Client.get(uplineId);
       if (!uplineRecord) break;
@@ -21,9 +23,9 @@ export async function distributeCommission(paymentId: string, clientId: string, 
 
       let commissionAmount = 0;
       if (isTopup) {
-        // Proportion of margin. E.g., rate 5, upline rate 2.5. Margin is 2.5/5.0 = 50% of the topup.
-        const marginRatio = currentRate > 0 ? (currentRate - uplineRate) / currentRate : 0;
-        if (marginRatio > 0) commissionAmount = currentAmount * marginRatio;
+        // Proportion of margin based on the initial client's payment structure
+        const marginRatio = initialClientRate > 0 ? (currentRate - uplineRate) / initialClientRate : 0;
+        if (marginRatio > 0) commissionAmount = amountPaid * marginRatio;
       } else {
         commissionAmount = (currentRate - uplineRate) * currentChannels;
       }
