@@ -26,6 +26,7 @@ import AdminAnnouncements from './pages/AdminAnnouncements';
 import AdminClientLifecycle from './pages/AdminClientLifecycle';
 import AdminPaymentApprovals from './pages/AdminPaymentApprovals';
 import ClientWhatsAppHistory from './pages/ClientWhatsAppHistory';
+import AdminUsers from './pages/AdminUsers';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import AdminLayout from './AdminLayout';
@@ -175,6 +176,11 @@ const AuthenticatedApp = () => {
       <Route path="/AdminPaymentApprovals" element={
         <AdminLayoutWrapper currentPageName="AdminPaymentApprovals">
           <AdminPaymentApprovals />
+        </AdminLayoutWrapper>
+      } />
+      <Route path="/AdminUsers" element={
+        <AdminLayoutWrapper currentPageName="AdminUsers">
+          <AdminUsers />
         </AdminLayoutWrapper>
       } />
       <Route path="/ClientWhatsAppHistory" element={

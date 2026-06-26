@@ -134,17 +134,17 @@ export default function AdminDashboard() {
   ];
 
   const accountColors = {
-    active: 'bg-green-100 text-green-800',
-    trial: 'bg-blue-100 text-blue-800',
-    expired: 'bg-red-100 text-red-800',
-    onboarding: 'bg-yellow-100 text-yellow-800',
-    suspended: 'bg-gray-100 text-gray-800',
+    active: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20',
+    trial: 'bg-blue-500/20 text-blue-400 border border-blue-500/20',
+    expired: 'bg-red-500/20 text-red-400 border border-red-500/20',
+    onboarding: 'bg-amber-500/20 text-amber-400 border border-amber-500/20',
+    suspended: 'bg-gray-500/20 text-gray-400 border border-gray-500/20',
   };
 
   const paymentColors = {
-    paid: 'bg-green-100 text-green-800',
-    pending: 'bg-yellow-100 text-yellow-800',
-    failed: 'bg-red-100 text-red-800',
+    paid: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20',
+    pending: 'bg-amber-500/20 text-amber-400 border border-amber-500/20',
+    failed: 'bg-red-500/20 text-red-400 border border-red-500/20',
   };
 
   return (
@@ -156,10 +156,10 @@ export default function AdminDashboard() {
         className="flex flex-col md:flex-row md:items-end justify-between gap-4"
       >
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight text-gray-900 drop-shadow-sm">Admin Overview</h1>
-          <p className="text-gray-500 mt-2 text-lg">Real-time platform metrics and analytics</p>
+          <h1 className="text-3xl font-extrabold tracking-tight text-white drop-shadow-sm">Admin Overview</h1>
+          <p className="text-gray-400 mt-1">Real-time platform metrics and analytics</p>
         </div>
-        <div className="flex items-center gap-2 text-sm font-medium text-cyan-600 bg-cyan-50 px-4 py-2 rounded-full shadow-sm border border-cyan-100">
+        <div className="flex items-center gap-2 text-sm font-medium text-cyan-400 bg-cyan-500/10 px-4 py-2 rounded-full border border-cyan-500/20">
           <Zap className="w-4 h-4" /> System fully operational
         </div>
       </motion.div>
@@ -169,14 +169,14 @@ export default function AdminDashboard() {
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/50 shadow-sm rounded-xl px-5 py-4 flex items-center gap-4"
+          className="bg-amber-500/10 border border-amber-500/20 rounded-xl px-5 py-4 flex items-center gap-4"
         >
-          <div className="p-2 bg-amber-100 rounded-lg">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+          <div className="p-2 bg-amber-500/20 rounded-lg">
+            <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0" />
           </div>
-          <span className="text-amber-900 font-medium">
+          <span className="text-amber-200 font-medium">
             <strong>{stats.expiredClients} client(s)</strong> have expired trials. Review them in{' '}
-            <Link to={createPageUrl('AdminClients')} className="underline text-amber-700 hover:text-amber-800 transition-colors">Clients</Link>.
+            <Link to={createPageUrl('AdminClients')} className="underline text-amber-400 hover:text-amber-300 transition-colors">Clients</Link>.
           </span>
         </motion.div>
       )}
@@ -192,20 +192,19 @@ export default function AdminDashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
             >
-              <Card className="overflow-hidden border-none shadow-lg shadow-gray-200/40 bg-white/60 backdrop-blur-xl relative group">
-                <div className={`absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-300 ${stat.bgColor.replace('50', '500')}`} />
+              <Card className="overflow-hidden border border-white/8 shadow-xl bg-white/5 backdrop-blur-xl relative group hover:bg-white/8 transition-colors">
                 <CardContent className="p-6">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-sm font-semibold text-gray-500 uppercase tracking-wider">{stat.title}</p>
-                      <div className="text-3xl font-black text-gray-900 mt-2 tracking-tight">{stat.value}</div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{stat.title}</p>
+                      <div className="text-3xl font-black text-white mt-2 tracking-tight">{stat.value}</div>
                     </div>
-                    <div className={`p-4 rounded-2xl ${stat.bgColor} shadow-inner`}>
-                      <Icon className={`w-7 h-7 ${stat.color}`} />
+                    <div className="p-3.5 rounded-2xl bg-white/10 shadow-inner">
+                      <Icon className={`w-6 h-6 ${stat.color}`} />
                     </div>
                   </div>
-                  <div className="mt-4 flex items-center gap-1.5 text-sm font-medium text-gray-600 bg-gray-50/50 rounded-lg px-3 py-1.5 w-max">
-                    <TrendingUp className="w-4 h-4 text-emerald-500" />
+                  <div className="mt-4 flex items-center gap-1.5 text-xs font-medium text-gray-400 bg-white/5 rounded-lg px-3 py-1.5 w-max">
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-400" />
                     {stat.subtitle}
                   </div>
                 </CardContent>
@@ -219,9 +218,9 @@ export default function AdminDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Client breakdown pie chart */}
         <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
-          <Card className="h-full border-none shadow-lg shadow-gray-200/40 bg-white/60 backdrop-blur-xl">
+          <Card className="h-full border border-white/8 bg-white/5 backdrop-blur-xl">
             <CardHeader>
-              <CardTitle className="text-lg font-bold text-gray-800">Status Breakdown</CardTitle>
+              <CardTitle className="text-base font-bold text-gray-200">Status Breakdown</CardTitle>
             </CardHeader>
             <CardContent>
               {clientBreakdown.length > 0 ? (
@@ -241,24 +240,24 @@ export default function AdminDashboard() {
                         ))}
                       </Pie>
                       <Tooltip 
-                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
+                        contentStyle={{ borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: '#1e2130', color: '#e2e8f0' }}
                       />
                     </PieChart>
                   </ResponsiveContainer>
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {clientBreakdown.map((item) => (
-                      <div key={item.name} className="flex items-center justify-between w-40 p-2 rounded-lg hover:bg-gray-50 transition-colors">
+                      <div key={item.name} className="flex items-center justify-between w-40 p-2 rounded-lg hover:bg-white/5 transition-colors">
                         <div className="flex items-center gap-3">
-                          <div className="w-3.5 h-3.5 rounded-full shadow-inner" style={{ backgroundColor: item.color }} />
-                          <span className="text-sm font-medium text-gray-600">{item.name}</span>
+                          <div className="w-3 h-3 rounded-full" style={{ backgroundColor: item.color }} />
+                          <span className="text-sm font-medium text-gray-300">{item.name}</span>
                         </div>
-                        <span className="text-base font-bold text-gray-900">{item.value}</span>
+                        <span className="text-base font-bold text-white">{item.value}</span>
                       </div>
                     ))}
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-[200px] text-gray-400 font-medium">No client data yet</div>
+                <div className="flex items-center justify-center h-[200px] text-gray-600 font-medium">No client data yet</div>
               )}
             </CardContent>
           </Card>
@@ -266,10 +265,10 @@ export default function AdminDashboard() {
 
         {/* Revenue bar chart */}
         <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
-          <Card className="h-full border-none shadow-lg shadow-gray-200/40 bg-white/60 backdrop-blur-xl">
+          <Card className="h-full border border-white/8 bg-white/5 backdrop-blur-xl">
             <CardHeader className="flex flex-row justify-between items-center">
-              <CardTitle className="text-lg font-bold text-gray-800">Revenue Growth</CardTitle>
-              <div className="text-xs font-bold px-2 py-1 bg-blue-50 text-blue-600 rounded-md">Last 6 Months</div>
+              <CardTitle className="text-base font-bold text-gray-200">Revenue Growth</CardTitle>
+              <div className="text-xs font-bold px-2 py-1 bg-blue-500/20 text-blue-400 rounded-md border border-blue-500/20">Last 6 Months</div>
             </CardHeader>
             <CardContent>
               {revenueData.length > 0 ? (
@@ -279,8 +278,8 @@ export default function AdminDashboard() {
                       <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#64748b', fontWeight: 500 }} axisLine={false} tickLine={false} />
                       <YAxis tick={{ fontSize: 12, fill: '#64748b', fontWeight: 500 }} tickFormatter={(v) => `₹${(v / 1000).toFixed(0)}k`} axisLine={false} tickLine={false} />
                       <Tooltip 
-                        cursor={{ fill: '#f8fafc' }}
-                        contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold' }}
+                        cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                        contentStyle={{ borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: '#1e2130', color: '#e2e8f0', fontWeight: 'bold' }}
                         formatter={(v) => `₹${v.toLocaleString()}`} 
                       />
                       <Bar dataKey="amount" fill="url(#colorRevenue)" radius={[6, 6, 0, 0]} />
@@ -294,7 +293,7 @@ export default function AdminDashboard() {
                   </ResponsiveContainer>
                 </div>
               ) : (
-                <div className="flex items-center justify-center h-[200px] text-gray-400 font-medium">No payment data yet</div>
+                <div className="flex items-center justify-center h-[200px] text-gray-600 font-medium">No payment data yet</div>
               )}
             </CardContent>
           </Card>
@@ -304,30 +303,30 @@ export default function AdminDashboard() {
       {/* Recent activity row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5 }}>
-          <Card className="border-none shadow-lg shadow-gray-200/40 bg-white/60 backdrop-blur-xl">
-            <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
-              <CardTitle className="text-lg font-bold text-gray-800">Recent Clients</CardTitle>
-              <Link to={createPageUrl('AdminClients')} className="text-sm font-semibold text-cyan-600 hover:text-cyan-700 flex items-center gap-1 group">
+          <Card className="border border-white/8 bg-white/5 backdrop-blur-xl">
+            <CardHeader className="flex flex-row items-center justify-between border-b border-white/8 pb-4">
+              <CardTitle className="text-base font-bold text-gray-200">Recent Clients</CardTitle>
+              <Link to={createPageUrl('AdminClients')} className="text-sm font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 group">
                 View all <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
               </Link>
             </CardHeader>
             <CardContent className="pt-4">
               {recentClients.length === 0 ? (
-                <p className="text-sm text-gray-500 py-4 text-center">No clients yet</p>
+                <p className="text-sm text-gray-600 py-4 text-center">No clients yet</p>
               ) : (
                 <div className="space-y-1">
                   {recentClients.map((c) => (
-                    <div key={c.id} className="flex items-center justify-between py-3 px-2 rounded-xl hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-cyan-100 to-blue-100 flex items-center justify-center text-cyan-700 font-bold">
+                    <div key={c.id} className="flex items-center justify-between py-3 px-2 rounded-xl hover:bg-white/5 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-cyan-500/20 to-blue-500/20 flex items-center justify-center text-cyan-400 font-bold text-sm border border-cyan-500/20">
                           {c.company_name?.charAt(0) || 'C'}
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-gray-900">{c.company_name}</p>
-                          <p className="text-xs font-medium text-gray-500">{c.email}</p>
+                          <p className="text-sm font-semibold text-gray-200">{c.company_name}</p>
+                          <p className="text-xs text-gray-500">{c.email}</p>
                         </div>
                       </div>
-                      <Badge variant="outline" className={`border-none px-3 py-1 ${accountColors[c.account_status] || 'bg-gray-100'}`}>
+                      <Badge className={`text-xs px-2 py-0.5 ${accountColors[c.account_status] || 'bg-gray-700 text-gray-300'}`}>
                         {c.account_status || 'unknown'}
                       </Badge>
                     </div>
@@ -339,30 +338,30 @@ export default function AdminDashboard() {
         </motion.div>
 
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6 }}>
-          <Card className="border-none shadow-lg shadow-gray-200/40 bg-white/60 backdrop-blur-xl">
-            <CardHeader className="flex flex-row items-center justify-between border-b pb-4">
-              <CardTitle className="text-lg font-bold text-gray-800">Recent Payments</CardTitle>
-              <Link to={createPageUrl('AdminSubscriptions')} className="text-sm font-semibold text-cyan-600 hover:text-cyan-700 flex items-center gap-1 group">
+          <Card className="border border-white/8 bg-white/5 backdrop-blur-xl">
+            <CardHeader className="flex flex-row items-center justify-between border-b border-white/8 pb-4">
+              <CardTitle className="text-base font-bold text-gray-200">Recent Payments</CardTitle>
+              <Link to={createPageUrl('AdminSubscriptions')} className="text-sm font-semibold text-cyan-400 hover:text-cyan-300 flex items-center gap-1 group">
                 View all <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
               </Link>
             </CardHeader>
             <CardContent className="pt-4">
               {recentPayments.length === 0 ? (
-                <p className="text-sm text-gray-500 py-4 text-center">No payments yet</p>
+                <p className="text-sm text-gray-600 py-4 text-center">No payments yet</p>
               ) : (
                 <div className="space-y-1">
                   {recentPayments.map((p) => (
-                    <div key={p.id} className="flex items-center justify-between py-3 px-2 rounded-xl hover:bg-gray-50 transition-colors">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-                          <IndianRupee className="w-5 h-5" />
+                    <div key={p.id} className="flex items-center justify-between py-3 px-2 rounded-xl hover:bg-white/5 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-emerald-500/15 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+                          <IndianRupee className="w-4 h-4" />
                         </div>
                         <div>
-                          <p className="text-sm font-bold text-gray-900">₹{p.amount?.toLocaleString()}</p>
-                          <p className="text-xs font-medium text-gray-500">{p.description || 'Subscription'}</p>
+                          <p className="text-sm font-semibold text-gray-200">₹{p.amount?.toLocaleString()}</p>
+                          <p className="text-xs text-gray-500">{p.description || 'Subscription'}</p>
                         </div>
                       </div>
-                      <Badge variant="outline" className={`border-none px-3 py-1 ${paymentColors[p.status] || 'bg-gray-100'}`}>
+                      <Badge className={`text-xs px-2 py-0.5 ${paymentColors[p.status] || 'bg-gray-700 text-gray-300'}`}>
                         {p.status}
                       </Badge>
                     </div>
@@ -380,10 +379,10 @@ export default function AdminDashboard() {
 
       {/* Platform Health */}
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8 }}>
-        <Card className="border-none shadow-lg shadow-gray-200/40 bg-white/60 backdrop-blur-xl">
+        <Card className="border border-white/8 bg-white/5 backdrop-blur-xl">
           <CardHeader>
-            <CardTitle className="text-lg font-bold text-gray-800 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-cyan-500" />
+            <CardTitle className="text-base font-bold text-gray-200 flex items-center gap-2">
+              <Activity className="w-5 h-5 text-cyan-400" />
               Platform Infrastructure Health
             </CardTitle>
           </CardHeader>
@@ -394,12 +393,12 @@ export default function AdminDashboard() {
                 { name: 'Azure Voice Gateway', status: 'Connected', icon: Phone },
                 { name: 'Cashfree Engine', status: 'Active', icon: CreditCard },
               ].map((s) => (
-                <div key={s.name} className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-xl shadow-sm hover:shadow-md transition-shadow">
+                <div key={s.name} className="flex items-center justify-between p-4 bg-white/5 border border-white/8 rounded-xl hover:bg-white/8 transition-colors">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 bg-gray-50 rounded-lg text-gray-500"><s.icon className="w-4 h-4" /></div>
-                    <span className="text-sm font-bold text-gray-700">{s.name}</span>
+                    <div className="p-2 bg-white/10 rounded-lg text-gray-400"><s.icon className="w-4 h-4" /></div>
+                    <span className="text-sm font-semibold text-gray-300">{s.name}</span>
                   </div>
-                  <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold bg-green-50 border border-green-100 text-green-700 rounded-full">
+                  <span className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold bg-emerald-500/15 border border-emerald-500/20 text-emerald-400 rounded-full">
                     <CheckCircle2 className="w-3.5 h-3.5" /> {s.status}
                   </span>
                 </div>
