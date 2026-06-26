@@ -13,7 +13,9 @@ export async function runActivityDispatcher() {
       FROM activity a
       JOIN lead l ON a.lead_id = l.id::text
       WHERE a.status = 'scheduled' 
-        AND a.scheduled_date <= NOW() 
+        AND a.scheduled_date IS NOT NULL 
+        AND a.scheduled_date != ''
+        AND a.scheduled_date::timestamp with time zone <= NOW() 
         AND a.type IN ('whatsapp', 'email', 'sms', 'calendar_invite')
       LIMIT 50
     `;
