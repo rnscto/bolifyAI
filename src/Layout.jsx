@@ -62,6 +62,7 @@ export default function Layout({ children, currentPageName }) {
     try {
       const currentUser = await apiClient.auth.me();
       setUser(currentUser);
+      const adminRoles = ['admin', 'master_admin', 'reseller', 'master_reseller'];
       // Prompt non-admin users to set a proper display name if missing
       if (currentUser.role !== 'admin' && !currentUser.display_name && !currentUser.data?.display_name) {
         setNeedsDisplayName(true);
@@ -100,7 +101,7 @@ export default function Layout({ children, currentPageName }) {
             if (brandRows.length > 0) setBrand(brandRows[0]);
           } catch (_) {}
           // If onboarding not completed, redirect
-          if (!clients[0].onboarding_completed) {
+          if (!clients[0].onboarding_completed && !adminRoles.includes(currentUser.role)) {
             window.location.href = createPageUrl('Onboarding');
             return;
           }
@@ -139,20 +140,32 @@ export default function Layout({ children, currentPageName }) {
               try { await apiClient.Client.update(byCreator[0].id, { user_id: currentUser.id }); } catch (_) {}
               try { await apiClient.auth.updateMe({ client_id: byCreator[0].id }); } catch (_) {}
               setClient(byCreator[0]);
-              if (!byCreator[0].onboarding_completed) {
+              if (!byCreator[0].onboarding_completed && !adminRoles.includes(currentUser.role)) {
                 window.location.href = createPageUrl('Onboarding');
                 return;
               }
             } else {
               console.log('No client found for user:', currentUser.email, currentUser.id);
-              window.location.href = createPageUrl('Onboarding');
+              if (!adminRoles.includes(currentUser.role)) {
+                window.location.href = createPageUrl('Onboarding');
+              }
               return;
             }
           } catch (e) {
             console.log('Client filter by created_by failed:', e.message);
-            window.location.href = createPageUrl('Onboarding');
+            if (!adminRoles.includes(currentUser.role)) {
+              window.location.href = createPageUrl('Onboarding');
+            }
             return;
           }
+        }
+      }
+      
+      // Admin dashboard check (should be after setting user to prevent infinite loop if they are admins on onboarding)
+      if (adminRoles.includes(currentUser.role)) {
+        if (isOnboardingPage) {
+          window.location.href = createPageUrl('AdminDashboard');
+          return;
         }
       }
     } catch (error) {
@@ -219,6 +232,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Announcements', path: 'AdminAnnouncements', icon: Megaphone },
     { name: 'Platform Messaging', path: 'AdminPlatformMessaging', icon: MessageSquare },
     { name: 'Partners', path: 'AdminPartners', icon: Handshake },
+    ...(user?.role === 'reseller' || user?.role === 'master_reseller' ? [{ name: 'Custom Domain', path: 'AdminResellerBranding', icon: Globe }] : []),
     ];
 
     const personalNav = [
