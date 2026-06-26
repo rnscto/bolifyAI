@@ -24,7 +24,7 @@ async function invokeUpload({ file, visibility, folder }) {
 
   const { appId, token, appBaseUrl } = appParams;
   const baseUrl = (appBaseUrl || '').replace(/\/+$/, '');
-  const url = `${baseUrl}/api/apps/${appId}/functions/azureBlobUpload`;
+  const url = `${baseUrl}/api/functions/azureBlobUpload`;
 
   const headers = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;

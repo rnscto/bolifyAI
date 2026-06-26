@@ -9,7 +9,7 @@ function parseConnectionString(cs: string) {
   return {
     accountName: parts.AccountName,
     accountKey: parts.AccountKey,
-    endpoint: parts.BlobEndpoint || `https://\${parts.AccountName}.blob.\${parts.EndpointSuffix || 'core.windows.net'}`
+    endpoint: parts.BlobEndpoint || `https://${parts.AccountName}.blob.${parts.EndpointSuffix || 'core.windows.net'}`
   };
 }
 
@@ -29,16 +29,16 @@ async function putBlob(params: { endpoint: string, accountName: string, accountK
   const { endpoint, accountName, accountKey, container, blobName, body, contentType } = params;
   const dateStr = new Date().toUTCString();
   const contentLength = body.byteLength;
-  const canonicalizedHeaders = `x-ms-blob-type:BlockBlob\\nx-ms-date:\${dateStr}\\nx-ms-version:2021-08-06`;
-  const canonicalizedResource = `/\${accountName}/\${container}/\${blobName}`;
+  const canonicalizedHeaders = `x-ms-blob-type:BlockBlob\nx-ms-date:${dateStr}\nx-ms-version:2021-08-06`;
+  const canonicalizedResource = `/${accountName}/${container}/${blobName}`;
   const stringToSign = [
     'PUT', '', '', contentLength, '', contentType, '', '', '', '', '', '',
     canonicalizedHeaders, canonicalizedResource
-  ].join('\\n');
+  ].join('\n');
   const signature = await signSharedKey(stringToSign, accountKey);
-  const auth = `SharedKey \${accountName}:\${signature}`;
+  const auth = `SharedKey ${accountName}:${signature}`;
 
-  const url = `\${endpoint}/\${container}/\${blobName}`;
+  const url = `${endpoint}/${container}/${blobName}`;
   const resp = await fetch(url, {
     method: 'PUT',
     headers: {
@@ -52,7 +52,7 @@ async function putBlob(params: { endpoint: string, accountName: string, accountK
     body: body as any
   });
   if (!resp.ok) {
-    throw new Error(`Azure PUT failed \${resp.status}: \${(await resp.text()).substring(0, 300)}`);
+    throw new Error(`Azure PUT failed ${resp.status}: ${(await resp.text()).substring(0, 300)}`);
   }
   return url;
 }
@@ -79,7 +79,7 @@ export default async function uploadKBToStorage(c: any) {
       try {
         const doc = await base44.entities.KnowledgeBase.get(kbId);
         if (doc && doc.status === 'ready' && doc.content) {
-          parts.push(`[\${doc.title || kbId}]\\n\${doc.content}\\n\\n---\\n\\n`);
+          parts.push(`[${doc.title || kbId}]\n${doc.content}\n\n---\n\n`);
         }
       } catch (_) {}
     }
@@ -95,7 +95,7 @@ export default async function uploadKBToStorage(c: any) {
 
     const hash = await sha256Hex(combined);
     if (agent.kb_file_hash === hash && agent.kb_file_uri) {
-      console.log(`[uploadKBToStorage] Hash match for agent \${agent_id} — skipping upload`);
+      console.log(`[uploadKBToStorage] Hash match for agent ${agent_id} — skipping upload`);
       return c.json({
         data: {
           success: true,
@@ -112,7 +112,7 @@ export default async function uploadKBToStorage(c: any) {
     if (!cs || !container) return c.json({ data: { error: 'Azure storage not configured' } }, 500);
 
     const { accountName, accountKey, endpoint } = parseConnectionString(cs);
-    const blobName = `kb/\${agent_id}/\${Date.now()}-\${hash.slice(0, 12)}.txt`;
+    const blobName = `kb/${agent_id}/${Date.now()}-${hash.slice(0, 12)}.txt`;
     const bytes = new TextEncoder().encode(combined);
 
     const fileUri = await putBlob({
@@ -126,7 +126,7 @@ export default async function uploadKBToStorage(c: any) {
       kb_char_count: charCount
     });
 
-    console.log(`[uploadKBToStorage] Agent \${agent_id} KB uploaded: \${charCount} chars, hash=\${hash.slice(0, 12)}`);
+    console.log(`[uploadKBToStorage] Agent ${agent_id} KB uploaded: ${charCount} chars, hash=${hash.slice(0, 12)}`);
     return c.json({
       data: {
         success: true,
