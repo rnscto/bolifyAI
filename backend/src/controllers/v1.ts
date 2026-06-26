@@ -8,6 +8,29 @@ export const v1Router = new Hono();
 
 const JWT_SECRET = Deno.env.get("JWT_SECRET") || "super_secret_bolifyai_key";
 
+// Dynamic Branding Route for Resellers (PUBLIC)
+v1Router.get("/branding", async (c) => {
+  const domain = c.req.query("domain");
+  if (!domain) return c.json({ error: "domain required" }, 400);
+
+  try {
+    const mappings = await base44ORM.entities.DomainMapping.filter({ custom_domain: domain });
+    if (mappings.length > 0) {
+      return c.json({ success: true, branding: mappings[0] });
+    }
+    // Return default branding
+    return c.json({
+      success: true, branding: {
+        brand_name: "Bolify AI",
+        logo_url: "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/a1247aabb_generated_image.png",
+        theme_colors: { primary: "#00bcd4" }
+      }
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 v1Router.use("*", jwt({ secret: JWT_SECRET, alg: "HS256" }));
 
 const sanitizeTableName = (name: string) => {
@@ -376,25 +399,3 @@ v1Router.route("/trusted-contacts", buildCrudRouter("trustedcontact"));
 v1Router.route("/usage-logs", buildCrudRouter("usagelog"));
 v1Router.route("/users", buildCrudRouter("user"));
 
-// Dynamic Branding Route for Resellers
-v1Router.get("/branding", async (c) => {
-  const domain = c.req.query("domain");
-  if (!domain) return c.json({ error: "domain required" }, 400);
-
-  try {
-    const mappings = await base44ORM.entities.DomainMapping.filter({ custom_domain: domain });
-    if (mappings.length > 0) {
-      return c.json({ success: true, branding: mappings[0] });
-    }
-    // Return default branding
-    return c.json({
-      success: true, branding: {
-        brand_name: "VaaniAI",
-        logo_url: "/logo.png",
-        theme_colors: { primary: "#1a365d" }
-      }
-    });
-  } catch (err: any) {
-    return c.json({ error: err.message }, 500);
-  }
-});

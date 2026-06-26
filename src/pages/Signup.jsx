@@ -23,7 +23,9 @@ export default function Signup() {
     try {
       // Assuming apiClient.auth.signup returns a user with a token automatically
       const user = await apiClient.auth.signup(email, password, fullName);
-      window.location.href = createPageUrl(user.role === 'admin' ? 'AdminDashboard' : 'ClientDashboard');
+      // Role-based routing: all admin and reseller roles go to AdminDashboard
+      const adminRoles = ['admin', 'master_admin', 'reseller', 'master_reseller'];
+      window.location.href = createPageUrl(adminRoles.includes(user.role) ? 'AdminDashboard' : 'ClientDashboard');
     } catch (err) {
       if (err.message.includes('Failed to fetch') || err.message.includes('ConnectionRefused')) {
         setError('Cannot connect to the server. The database or backend might be down.');

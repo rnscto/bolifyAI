@@ -20,9 +20,21 @@ export const AuthProvider = ({ children }) => {
     setIsLoadingPublicSettings(true);
     setAuthError(null);
     
-    // Mock public app settings since we are on the Deno backend now
-    setAppPublicSettings({ id: appParams.appId, public_settings: {} });
-    
+    // Fetch dynamic branding
+    try {
+      const res = await apiClient.branding.getByDomain(window.location.hostname);
+      if (res.success && res.branding) {
+        setAppPublicSettings({ id: appParams.appId, public_settings: {}, brand: res.branding });
+        if (res.branding.theme_colors?.primary) {
+          document.documentElement.style.setProperty('--primary', res.branding.theme_colors.primary);
+        }
+      } else {
+        setAppPublicSettings({ id: appParams.appId, public_settings: {} });
+      }
+    } catch (e) {
+      setAppPublicSettings({ id: appParams.appId, public_settings: {} });
+    }
+
     // Check if user is authenticated via our Deno backend token
     const token = localStorage.getItem("bolifyai_token");
     if (token || appParams.token) {

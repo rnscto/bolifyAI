@@ -192,6 +192,11 @@ export const apiClient = {
       window.location.href = "/Login";
     }
   },
+  branding: {
+    getByDomain: async (domain) => {
+      return await apiFetch(`/v1/branding?domain=${domain}`);
+    }
+  },
 
   // New V1 endpoints mapped to EntityClients
   Lead: new EntityClient('/v1/leads', 'lead'),

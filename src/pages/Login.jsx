@@ -21,8 +21,9 @@ export default function Login() {
 
     try {
       const user = await apiClient.auth.login(email, password);
-      // Wait for AuthContext checkAppState to pick up the new token
-      window.location.href = createPageUrl(user.role === 'admin' ? 'AdminDashboard' : 'ClientDashboard');
+      // Role-based routing: all admin and reseller roles go to AdminDashboard
+      const adminRoles = ['admin', 'master_admin', 'reseller', 'master_reseller'];
+      window.location.href = createPageUrl(adminRoles.includes(user.role) ? 'AdminDashboard' : 'ClientDashboard');
     } catch (err) {
       if (err.message.includes('Failed to fetch') || err.message.includes('ConnectionRefused')) {
         setError('Cannot connect to the server. The database or backend might be down.');

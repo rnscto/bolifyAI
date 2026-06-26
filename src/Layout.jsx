@@ -35,10 +35,12 @@ import AnnouncementMarquee from './components/AnnouncementMarquee';
 import SetDisplayNameDialog from './components/SetDisplayNameDialog';
 import AccountStatusGate from './components/AccountStatusGate';
 import AccountStatusBanner from './components/AccountStatusBanner';
+import { useAuth } from './lib/AuthContext';
 
 export default function Layout({ children, currentPageName }) {
   const [user, setUser] = useState(null);
   const [client, setClient] = useState(null);
+  const { appPublicSettings } = useAuth();
   const [brand, setBrand] = useState(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [authLoading, setAuthLoading] = useState(true);
@@ -164,13 +166,16 @@ export default function Layout({ children, currentPageName }) {
     apiClient.auth.logout();
   };
 
-  const isAdmin = user?.role === 'admin';
+  const adminRoles = ['admin', 'master_admin', 'reseller', 'master_reseller'];
+  const isAdmin = adminRoles.includes(user?.role);
 
-  // White-label branding: use client's custom logo/name/color, fall back to defaults
-  const wlLogoUrl = !isAdmin && brand?.dashboard_logo_url ? brand.dashboard_logo_url : 'https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/a1247aabb_generated_image.png';
-  const wlAppName = !isAdmin && brand?.dashboard_app_name ? brand.dashboard_app_name : 'Bolify AI';
-  const wlPrimary = !isAdmin && brand?.dashboard_primary_color ? brand.dashboard_primary_color : '#00bcd4';
-  const wlFavicon = !isAdmin && brand?.dashboard_favicon_url ? brand.dashboard_favicon_url : null;
+  // White-label branding: use domain brand first, then client brand, then fallback
+  const activeBrand = appPublicSettings?.brand || brand;
+  
+  const wlLogoUrl = !isAdmin && activeBrand?.logo_url ? activeBrand.logo_url : 'https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/a1247aabb_generated_image.png';
+  const wlAppName = !isAdmin && activeBrand?.brand_name ? activeBrand.brand_name : 'Bolify AI';
+  const wlPrimary = !isAdmin && activeBrand?.theme_colors?.primary ? activeBrand.theme_colors.primary : '#00bcd4';
+  const wlFavicon = !isAdmin && activeBrand?.favicon_url ? activeBrand.favicon_url : null;
 
   // Update browser tab title + favicon to reflect white-label
   useEffect(() => {
