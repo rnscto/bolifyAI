@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '@/api/apiClient';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -15,8 +15,8 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow
 } from '@/components/ui/table';
 import {
-  Users, Search, ShieldCheck, UserCog, Ban, CheckCircle2,
-  Loader2, RefreshCw, AlertTriangle, Crown, Eye
+  Search, ShieldCheck, UserCog, Ban, CheckCircle2,
+  Loader2, RefreshCw, AlertTriangle, Crown
 } from 'lucide-react';
 import { toast } from 'sonner';
 import moment from 'moment';
