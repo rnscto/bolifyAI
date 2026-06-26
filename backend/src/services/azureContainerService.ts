@@ -45,7 +45,7 @@ export async function getAzureEnvironmentDetails() {
     console.error("[AzureContainerService] Failed to get environment details:", error.message);
     return {
       success: false,
-      error: "Azure credentials not configured properly on the server, or the environment does not exist.",
+      error: `Azure Configuration Error: ${error.message}`,
       // Fallback details to allow UI to render even if Azure is misconfigured locally
       verificationId: "AZURE_NOT_CONFIGURED",
       fqdn: "app.bolify.ai"
