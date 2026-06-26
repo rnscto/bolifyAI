@@ -1,5 +1,5 @@
 import { Context } from "hono";
-import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 
 export async function qualifyLeadHandler(c: Context) {
   try {
@@ -21,7 +21,6 @@ export async function qualifyLeadHandler(c: Context) {
 
     const score = lead.score || 0;
     const sentiment = lead.sentiment || "neutral";
-    const intents = lead.intent_signals || [];
     const status = lead.status || "new";
 
     let tier = "cold";
@@ -50,10 +49,11 @@ export async function qualifyLeadHandler(c: Context) {
       tier = "disqualified"; reason = "Marked as do not call";
     }
 
-    await base44.entities.Lead.update(leadId, {
-      qualification_tier: tier,
-      qualification_reason: reason,
-    });
+    await client.queryObject(`
+      UPDATE lead 
+      SET qualification_tier = $1, qualification_reason = $2 
+      WHERE id = $3
+    `, [tier, reason, leadId]);
 
     return c.json({ success: true, tier, reason });
   } catch (err: any) {
@@ -90,11 +90,13 @@ export async function rescoreLeadHandler(c: Context) {
     const user = c.get("jwtPayload") as any;
 
     if (lead_id) {
-      const lead = await base44.entities.Lead.get(lead_id);
-      if (!lead) return c.json({ error: "Lead not found" }, 404);
+      const leadRes = await client.queryObject(`SELECT * FROM lead WHERE id = $1`, [lead_id]);
+      if (leadRes.rows.length === 0) return c.json({ error: "Lead not found" }, 404);
+      const lead = leadRes.rows[0] as any;
       if (user.role !== "admin" && lead.client_id !== user.client_id) return c.json({ error: "Forbidden" }, 403);
 
-      const calls = await base44.entities.CallLog.filter({ lead_id: lead.id }, "-created_at", 10);
+      const callsRes = await client.queryObject(`SELECT * FROM calllog WHERE lead_id = $1 ORDER BY created_at DESC LIMIT 10`, [lead.id]);
+      const calls = callsRes.rows as any[];
       const latest = calls.find((c: any) => (c.transcript?.length > 30) || (c.conversation_summary?.length > 20));
       if (!latest) return c.json({ skipped: "no_call_history", lead_id: lead.id });
 
@@ -108,9 +110,11 @@ export async function rescoreLeadHandler(c: Context) {
         }
       );
       
-      await base44.entities.Lead.update(lead.id, {
-        score: aiResult.score, sentiment: aiResult.sentiment, intent_signals: aiResult.intent_signals
-      });
+      await client.queryObject(`
+        UPDATE lead 
+        SET score = $1, sentiment = $2, intent_signals = $3
+        WHERE id = $4
+      `, [aiResult.score, aiResult.sentiment, JSON.stringify(aiResult.intent_signals), lead.id]);
 
       return c.json({ success: true, lead_id: lead.id, new_score: aiResult.score });
     }
@@ -124,10 +128,13 @@ export async function rescoreLeadHandler(c: Context) {
 export async function buildLeadContextHandler(c: Context) {
   try {
     const { lead_id } = await c.req.json();
-    const lead = await base44.entities.Lead.get(lead_id);
-    if (!lead) return c.json({ error: "Lead not found" }, 404);
+    const leadRes = await client.queryObject(`SELECT * FROM lead WHERE id = $1`, [lead_id]);
+    if (leadRes.rows.length === 0) return c.json({ error: "Lead not found" }, 404);
+    const lead = leadRes.rows[0] as any;
 
-    const callLogs = await base44.entities.CallLog.filter({ lead_id: lead.id }, "-created_at", 5);
+    const callLogsRes = await client.queryObject(`SELECT * FROM calllog WHERE lead_id = $1 ORDER BY created_at DESC LIMIT 5`, [lead.id]);
+    const callLogs = callLogsRes.rows as any[];
+    
     const sections = [
       `CUSTOMER PROFILE:`,
       `- Name: ${lead.name || "Unknown"}`,

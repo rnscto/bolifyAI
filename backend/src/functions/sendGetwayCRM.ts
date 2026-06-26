@@ -1,4 +1,4 @@
-import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 
 const BOLIFY_CRM_URL = 'https://login.getwaycrm.com/api/automations/69cb6ef8707f8/execute';
 
@@ -18,13 +18,16 @@ export default async function sendGetwayCRM(c: any) {
     // Auto-fetch lead data if lead_id provided
     if (payload.lead_id) {
       try {
-        const lead = await base44.entities.Lead.get(payload.lead_id);
+        const leadRes = await client.queryObject(`SELECT * FROM lead WHERE id = $1`, [payload.lead_id]);
+        const lead = leadRes.rows[0] as any;
         if (lead) {
           contactName = contactName || lead.name || '';
           contactPhone = contactPhone || lead.phone || '';
           contactEmail = contactEmail || lead.email || '';
         }
-      } catch (_) {}
+      } catch (err: any) {
+        console.error('[sendGetwayCRM] DB Error:', err.message);
+      }
     }
 
     if (!contactPhone && !contactEmail) {
