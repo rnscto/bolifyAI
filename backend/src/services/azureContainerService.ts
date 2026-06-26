@@ -1,5 +1,5 @@
-import { ContainerAppsAPIClient } from "@azure/arm-appcontainers";
-import { DefaultAzureCredential } from "@azure/identity";
+import { ContainerAppsAPIClient } from "npm:@azure/arm-appcontainers";
+import { DefaultAzureCredential } from "npm:@azure/identity";
 
 const subscriptionId = Deno.env.get("AZURE_SUBSCRIPTION_ID") || process.env.AZURE_SUBSCRIPTION_ID || "";
 const resourceGroupName = Deno.env.get("AZURE_RESOURCE_GROUP") || process.env.AZURE_RESOURCE_GROUP || "";
@@ -48,14 +48,17 @@ export async function bindCustomDomain(domain: string) {
   
   // Create Managed Certificate
   // Using beginCreateOrUpdateAndWait to wait for the certificate provisioning
-  const certPoller = await acaClient.managedEnvironmentCertificates.beginCreateOrUpdateAndWait(
+  const certPoller = await acaClient.managedCertificates.beginCreateOrUpdateAndWait(
     resourceGroupName,
     environmentName,
     certName,
     {
-      properties: {
-        domainControlValidation: "CNAME",
-        subjectName: domain
+      managedCertificateEnvelope: {
+        location: app.location,
+        properties: {
+          domainControlValidation: "CNAME",
+          subjectName: domain
+        }
       }
     }
   );
@@ -79,7 +82,9 @@ export async function bindCustomDomain(domain: string) {
     resourceGroupName,
     containerAppName,
     {
+      ...app,
       configuration: {
+        ...app.configuration,
         ingress: {
           ...app.configuration.ingress,
           customDomains: existingDomains

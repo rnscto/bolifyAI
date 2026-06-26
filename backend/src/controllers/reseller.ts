@@ -154,7 +154,7 @@ resellerRouter.post("/admin/pay-commission", async (c) => {
   }
 });
 
-import { bindCustomDomain } from "../services/azureContainerService";
+import { bindCustomDomain } from "../services/azureContainerService.ts";
 
 // POST /api/reseller/custom-domain
 resellerRouter.post("/custom-domain", async (c) => {
