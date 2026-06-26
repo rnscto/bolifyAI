@@ -28,12 +28,19 @@ export async function getAzureEnvironmentDetails() {
   try {
     const acaClient = getClient();
     
+    // Add a 15-second timeout to prevent 504 Gateway Timeout from load balancers
+    const timeout = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error("Azure Connection Timeout. Please check your service principal credentials.")), 15000)
+    );
+
     // Get the Container App to find its default FQDN
-    const app = await acaClient.containerApps.get(resourceGroupName, containerAppName);
+    const appPromise = acaClient.containerApps.get(resourceGroupName, containerAppName);
+    const app = await Promise.race([appPromise, timeout]) as any;
     const defaultFqdn = app.configuration?.ingress?.fqdn || "app.bolify.ai";
 
     // Get the Managed Environment to find the Custom Domain Verification ID
-    const env = await acaClient.managedEnvironments.get(resourceGroupName, environmentName);
+    const envPromise = acaClient.managedEnvironments.get(resourceGroupName, environmentName);
+    const env = await Promise.race([envPromise, timeout]) as any;
     const verificationId = env.customDomainConfiguration?.customDomainVerificationId || "pending-verification-id";
 
     return {
@@ -112,7 +119,11 @@ export async function bindCustomDomain(domain: string) {
     certificateId: certId
   });
 
-  const updatePoller = await acaClient.containerApps.beginUpdateAndWait(
+  const timeout = new Promise<never>((_, reject) => 
+    setTimeout(() => reject(new Error("Azure Connection Timeout. Update took too long.")), 30000)
+  );
+
+  const updatePoller = await Promise.race([acaClient.containerApps.beginUpdateAndWait(
     resourceGroupName,
     containerAppName,
     {
@@ -125,7 +136,7 @@ export async function bindCustomDomain(domain: string) {
         }
       }
     }
-  );
+  ), timeout]);
 
   console.log(`[AzureContainerService] Successfully bound ${domain} to the Container App.`);
   
