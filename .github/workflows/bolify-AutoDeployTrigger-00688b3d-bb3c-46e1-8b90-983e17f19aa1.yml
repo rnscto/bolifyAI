@@ -19,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Node.js (Frontend)
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: '20'
 
@@ -33,7 +33,7 @@ jobs:
         run: npm run lint
 
       - name: Setup Deno (Backend)
-        uses: denoland/setup-deno@v1
+        uses: denoland/setup-deno@v2
         with:
           deno-version: v1.x
 
@@ -52,7 +52,7 @@ jobs:
 
     steps:
       - name: Checkout to the branch
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Azure Login
         uses: azure/login@v2
@@ -62,14 +62,14 @@ jobs:
           subscription-id: ${{ secrets.BOLIFY_AZURE_SUBSCRIPTION_ID }}
 
       - name: Log in to container registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: codeastraregistry.azurecr.io
           username: ${{ secrets.BOLIFY_REGISTRY_USERNAME }}
           password: ${{ secrets.BOLIFY_REGISTRY_PASSWORD }}
 
       - name: Build and push container image
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           push: true
