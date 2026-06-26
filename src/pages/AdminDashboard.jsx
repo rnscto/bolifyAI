@@ -24,8 +24,9 @@ export default function AdminDashboard() {
     // Verify admin role before calling admin-only endpoints
     try {
       const me = await apiClient.auth.me();
-      if (me?.role !== 'admin') {
-        console.warn('[AdminDashboard] Non-admin user attempted access');
+      const allowedRoles = ['admin', 'master_admin', 'reseller', 'master_reseller'];
+      if (!allowedRoles.includes(me?.role)) {
+        console.warn(`[AdminDashboard] Non-admin user attempted access with role: ${me?.role}`);
         setLoading(false);
         return;
       }
