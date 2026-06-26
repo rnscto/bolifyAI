@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { useQuery } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 import { toast } from "@/components/ui/use-toast";
@@ -18,12 +18,12 @@ export default function SocialMediaCalendar() {
 
   useEffect(() => {
     const load = async () => {
-      const user = await base44.auth.me();
+      const user = await apiClient.auth.me();
       if (user.role === 'admin') return;
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      const clients = await apiClient.Client.filter({ user_id: user.id });
       if (clients.length > 0) {
         setClient(clients[0]);
-        const brandSettings = await base44.entities.BrandSettings.filter({ client_id: clients[0].id });
+        const brandSettings = await apiClient.BrandSettings.filter({ client_id: clients[0].id });
         if (brandSettings.length > 0) {
           setCustomOccasions(brandSettings[0].custom_occasions || []);
         }
@@ -34,7 +34,7 @@ export default function SocialMediaCalendar() {
 
   const { data: posts = [], refetch } = useQuery({
     queryKey: ['calendar-posts', client?.id],
-    queryFn: () => client ? base44.entities.SocialMediaPost.filter({ client_id: client.id }, '-scheduled_date', 200) : [],
+    queryFn: () => client ? apiClient.SocialMediaPost.filter({ client_id: client.id }, '-scheduled_date', 200) : [],
     enabled: !!client?.id,
   });
 
@@ -47,7 +47,7 @@ export default function SocialMediaCalendar() {
   };
 
   const handleDrop = async (postId, newDate) => {
-    await base44.entities.SocialMediaPost.update(postId, { scheduled_date: newDate });
+    await apiClient.SocialMediaPost.update(postId, { scheduled_date: newDate });
     toast({ title: "Rescheduled", description: `Post moved to ${newDate}` });
     refetch();
   };
@@ -56,15 +56,15 @@ export default function SocialMediaCalendar() {
     if (!selectedPost) return;
     const sharedOn = [...(selectedPost.shared_on || [])];
     if (!sharedOn.includes(platform)) sharedOn.push(platform);
-    await base44.entities.SocialMediaPost.update(selectedPost.id, { status: 'shared', shared_on: sharedOn });
+    await apiClient.SocialMediaPost.update(selectedPost.id, { status: 'shared', shared_on: sharedOn });
     refetch();
   };
 
   if (!client) return <div className="flex items-center justify-center h-64"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
 
   const reloadClient = async () => {
-    const user = await base44.auth.me();
-    const cs = await base44.entities.Client.filter({ user_id: user.id });
+    const user = await apiClient.auth.me();
+    const cs = await apiClient.Client.filter({ user_id: user.id });
     if (cs.length > 0) setClient(cs[0]);
   };
 

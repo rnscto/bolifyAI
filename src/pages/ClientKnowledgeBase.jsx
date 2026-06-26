@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,19 +39,19 @@ export default function ClientKnowledgeBase() {
 
   const loadData = async () => {
     try {
-      const user = await base44.auth.me();
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      const user = await apiClient.auth.me();
+      const clients = await apiClient.Client.filter({ user_id: user.id });
       
       if (clients.length > 0) {
         const clientData = clients[0];
         setClient(clientData);
 
         const [docsData, agentsData] = await Promise.all([
-          base44.entities.KnowledgeBase.filter(
+          apiClient.KnowledgeBase.filter(
             { client_id: clientData.id },
             '-created_at'
           ),
-          base44.entities.Agent.filter({ client_id: clientData.id })
+          apiClient.Agent.filter({ client_id: clientData.id })
         ]);
 
         setDocuments(docsData);
@@ -115,12 +115,12 @@ export default function ClientKnowledgeBase() {
         };
       }
 
-      const kbDoc = await base44.entities.KnowledgeBase.create(docData);
+      const kbDoc = await apiClient.KnowledgeBase.create(docData);
 
       // For uploaded files, extract text content directly (no automation / integration credits needed)
       if (inputMode === 'file') {
         try {
-          await base44.functions.invoke('extractKBContent', { kb_id: kbDoc.id });
+          await apiClient.functions.invoke('extractKBContent', { kb_id: kbDoc.id });
         } catch (extractErr) {
           console.error('KB extraction failed:', extractErr);
         }
@@ -130,7 +130,7 @@ export default function ClientKnowledgeBase() {
       if (agent) {
         const currentKbIds = agent.knowledge_base_ids || [];
         if (!currentKbIds.includes(kbDoc.id)) {
-          await base44.entities.Agent.update(agent.id, {
+          await apiClient.Agent.update(agent.id, {
             knowledge_base_ids: [...currentKbIds, kbDoc.id]
           });
           toast.success('Document uploaded and synced with agent');
@@ -156,11 +156,11 @@ export default function ClientKnowledgeBase() {
     if (!confirm('Delete this document?')) return;
 
     try {
-      await base44.entities.KnowledgeBase.delete(id);
+      await apiClient.KnowledgeBase.delete(id);
 
       // Remove from agent's knowledge base
       if (agent && agent.knowledge_base_ids?.includes(id)) {
-        await base44.entities.Agent.update(agent.id, {
+        await apiClient.Agent.update(agent.id, {
           knowledge_base_ids: agent.knowledge_base_ids.filter(kbId => kbId !== id)
         });
       }

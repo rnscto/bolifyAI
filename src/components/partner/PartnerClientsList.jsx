@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
@@ -31,7 +31,7 @@ export default function PartnerClientsList({ referrals }) {
 
     // Fetch clients in parallel
     const clientPromises = clientIds.map(id =>
-      base44.entities.Client.get(id).catch(() => null)
+      apiClient.Client.get(id).catch(() => null)
     );
     const clientResults = (await Promise.all(clientPromises)).filter(Boolean);
     setClients(clientResults);
@@ -39,9 +39,9 @@ export default function PartnerClientsList({ referrals }) {
     // Fetch call counts per client
     const counts = {};
     await Promise.all(clientResults.map(async (c) => {
-      const logs = await base44.entities.CallLog.filter({ client_id: c.id }, '-created_at', 1);
+      const logs = await apiClient.CallLog.filter({ client_id: c.id }, '-created_at', 1);
       // We only get the first one to check if there's activity; use list count
-      const allLogs = await base44.entities.CallLog.filter({ client_id: c.id });
+      const allLogs = await apiClient.CallLog.filter({ client_id: c.id });
       counts[c.id] = allLogs.length;
     }));
     setCallCounts(counts);

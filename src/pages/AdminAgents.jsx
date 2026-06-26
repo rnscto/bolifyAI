@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -138,9 +138,9 @@ export default function AdminAgents() {
   const loadData = async () => {
     try {
       const [agentsData, clientsData, didsData] = await Promise.all([
-        base44.entities.Agent.list('-created_at'),
-        base44.entities.Client.list(),
-        base44.entities.DID.list()
+        apiClient.Agent.list('-created_at'),
+        apiClient.Client.list(),
+        apiClient.DID.list()
       ]);
 
       setAgents(agentsData);
@@ -182,9 +182,9 @@ export default function AdminAgents() {
 
       let res;
       if (editingAgent) {
-        res = await base44.functions.invoke('adminManageAgent', { action: 'update', agent_id: editingAgent.id, data: agentData });
+        res = await apiClient.functions.invoke('adminManageAgent', { action: 'update', agent_id: editingAgent.id, data: agentData });
       } else {
-        res = await base44.functions.invoke('adminManageAgent', { action: 'create', data: agentData });
+        res = await apiClient.functions.invoke('adminManageAgent', { action: 'create', data: agentData });
       }
 
       if (res?.error || res?.data?.error) {
@@ -249,7 +249,7 @@ export default function AdminAgents() {
     if (!confirm('Delete this agent?')) return;
     
     try {
-      await base44.functions.invoke('adminManageAgent', { action: 'delete', agent_id: id });
+      await apiClient.functions.invoke('adminManageAgent', { action: 'delete', agent_id: id });
       toast.success('Agent deleted');
       loadData();
     } catch (error) {

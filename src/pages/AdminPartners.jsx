@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -50,9 +50,9 @@ export default function AdminPartners() {
 
   const loadData = async () => {
     const [p, r, pay] = await Promise.all([
-      base44.entities.Partner.list('-created_at'),
-      base44.entities.Referral.list('-created_at'),
-      base44.entities.PartnerPayout.list('-created_at'),
+      apiClient.Partner.list('-created_at'),
+      apiClient.Referral.list('-created_at'),
+      apiClient.PartnerPayout.list('-created_at'),
     ]);
     setPartners(p);
     setReferrals(r);
@@ -62,20 +62,20 @@ export default function AdminPartners() {
 
   // ─── Actions ───
   const handleApprove = async (partner) => {
-    await base44.entities.Partner.update(partner.id, { status: 'approved' });
+    await apiClient.Partner.update(partner.id, { status: 'approved' });
     try { await base44.users.inviteUser(partner.email, 'user'); } catch (e) {}
 
     // Auto-generate partner agreement
     try {
-      const templates = await base44.entities.AgreementTemplate.filter({ status: 'active' });
+      const templates = await apiClient.AgreementTemplate.filter({ status: 'active' });
       if (templates.length > 0) {
         const tmpl = templates[0];
-        const allAgreements = await base44.entities.PartnerAgreement.list();
+        const allAgreements = await apiClient.PartnerAgreement.list();
         const agrNum = `VAANI-AGR-${new Date().getFullYear()}-${String(allAgreements.length + 1).padStart(3, '0')}`;
         const effectiveDate = new Date().toISOString().split('T')[0];
         const expiryDate = new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0];
 
-        await base44.entities.PartnerAgreement.create({
+        await apiClient.PartnerAgreement.create({
           partner_id: partner.id,
           template_id: tmpl.id,
           template_version: tmpl.version,
@@ -101,19 +101,19 @@ export default function AdminPartners() {
   };
 
   const handleReject = async (partner) => {
-    await base44.entities.Partner.update(partner.id, { status: 'rejected' });
+    await apiClient.Partner.update(partner.id, { status: 'rejected' });
     toast.success(`${partner.name} rejected`);
     loadData();
   };
 
   const handleSuspend = async (partner) => {
-    await base44.entities.Partner.update(partner.id, { status: 'suspended' });
+    await apiClient.Partner.update(partner.id, { status: 'suspended' });
     toast.success(`${partner.name} suspended`);
     loadData();
   };
 
   const handleReactivate = async (partner) => {
-    await base44.entities.Partner.update(partner.id, { status: 'approved' });
+    await apiClient.Partner.update(partner.id, { status: 'approved' });
     toast.success(`${partner.name} reactivated!`);
     loadData();
   };
@@ -140,7 +140,7 @@ export default function AdminPartners() {
     for (const id of selectedIds) {
       const p = partners.find(x => x.id === id);
       if (p?.status === 'pending') {
-        await base44.entities.Partner.update(id, { status: 'approved' });
+        await apiClient.Partner.update(id, { status: 'approved' });
         try { await base44.users.inviteUser(p.email, 'user'); } catch (e) {}
       }
     }
@@ -155,7 +155,7 @@ export default function AdminPartners() {
     for (const id of selectedIds) {
       const p = partners.find(x => x.id === id);
       if (p?.status === 'pending') {
-        await base44.entities.Partner.update(id, { status: 'rejected' });
+        await apiClient.Partner.update(id, { status: 'rejected' });
       }
     }
     toast.success(`${selectedIds.size} partner(s) rejected`);
@@ -170,7 +170,7 @@ export default function AdminPartners() {
     setSaving(true);
     const invoiceNum = `VAANI-INV-${new Date().getFullYear()}-${String(payouts.length + 1).padStart(3, '0')}`;
     const netAmount = payoutForm.amount - (payoutForm.tds_amount || 0);
-    await base44.entities.PartnerPayout.create({
+    await apiClient.PartnerPayout.create({
       partner_id: selectedPartner.id, partner_name: selectedPartner.name,
       amount: payoutForm.amount, period_start: payoutForm.period_start,
       period_end: payoutForm.period_end, payment_method: payoutForm.payment_method,
@@ -185,10 +185,10 @@ export default function AdminPartners() {
   };
 
   const handleMarkPaid = async (payout) => {
-    await base44.entities.PartnerPayout.update(payout.id, { status: 'paid', paid_date: new Date().toISOString() });
+    await apiClient.PartnerPayout.update(payout.id, { status: 'paid', paid_date: new Date().toISOString() });
     const partner = partners.find(p => p.id === payout.partner_id);
     if (partner) {
-      await base44.entities.Partner.update(partner.id, {
+      await apiClient.Partner.update(partner.id, {
         total_paid: (partner.total_paid || 0) + (payout.net_amount || payout.amount),
         pending_payout: Math.max(0, (partner.pending_payout || 0) - (payout.net_amount || payout.amount))
       });

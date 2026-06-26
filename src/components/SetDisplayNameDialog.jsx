@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,7 +20,7 @@ export default function SetDisplayNameDialog({ open, onClose, defaultValue = '' 
     if (!trimmed) return;
     setSaving(true);
     try {
-      await base44.auth.updateMe({ display_name: trimmed });
+      await apiClient.auth.updateMe({ display_name: trimmed });
       onClose(trimmed);
     } finally {
       setSaving(false);

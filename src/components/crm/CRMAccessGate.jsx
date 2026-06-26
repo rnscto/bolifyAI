@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -21,7 +21,7 @@ export default function CRMAccessGate({ client, onChange, children }) {
     if (!client) return;
     setRequesting(true);
     try {
-      await base44.entities.Client.update(client.id, {
+      await apiClient.Client.update(client.id, {
         crm_api_access_status: 'requested',
         crm_api_access_requested_at: new Date().toISOString()
       });

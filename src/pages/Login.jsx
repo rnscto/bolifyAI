@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { createPageUrl } from '@/utils';
 
 export default function Login() {
@@ -20,7 +20,7 @@ export default function Login() {
     setLoading(true);
 
     try {
-      const user = await base44.auth.login(email, password);
+      const user = await apiClient.auth.login(email, password);
       // Wait for AuthContext checkAppState to pick up the new token
       window.location.href = createPageUrl(user.role === 'admin' ? 'AdminDashboard' : 'ClientDashboard');
     } catch (err) {

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -18,11 +18,11 @@ export default function AdminTrustedClients() {
 
   const { data: clients = [], isLoading } = useQuery({
     queryKey: ['trusted-clients'],
-    queryFn: () => base44.entities.TrustedClient.list('order', 100),
+    queryFn: () => apiClient.TrustedClient.list('order', 100),
   });
 
   const createMutation = useMutation({
-    mutationFn: (data) => base44.entities.TrustedClient.create(data),
+    mutationFn: (data) => apiClient.TrustedClient.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['trusted-clients'] });
       setDialogOpen(false);
@@ -31,12 +31,12 @@ export default function AdminTrustedClients() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => base44.entities.TrustedClient.update(id, data),
+    mutationFn: ({ id, data }) => apiClient.TrustedClient.update(id, data),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trusted-clients'] }),
   });
 
   const deleteMutation = useMutation({
-    mutationFn: (id) => base44.entities.TrustedClient.delete(id),
+    mutationFn: (id) => apiClient.TrustedClient.delete(id),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['trusted-clients'] }),
   });
 
@@ -44,7 +44,7 @@ export default function AdminTrustedClients() {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const { file_url } = await apiClient.integrations.Core.UploadFile({ file });
     setForm(prev => ({ ...prev, logo_url: file_url }));
     setUploading(false);
   };

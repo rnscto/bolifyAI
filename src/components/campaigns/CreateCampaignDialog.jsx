@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -54,16 +54,16 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
   const loadData = async () => {
     // Sequential (not Promise.all) so 4 big reads don't fire simultaneously and trip
     // Base44's per-second rate limit. Page sizes are capped to what the picker uses.
-    const agentsData = await base44.entities.Agent.filter({ client_id: client.id });
+    const agentsData = await apiClient.Agent.filter({ client_id: client.id });
     setAgents(agentsData.filter(a => a.status === 'active'));
 
-    const groupsData = await base44.entities.LeadGroup.filter({ client_id: client.id }, '-created_at', 100);
+    const groupsData = await apiClient.LeadGroup.filter({ client_id: client.id }, '-created_at', 100);
     setLeadGroups(groupsData);
 
-    const leadsData = await base44.entities.Lead.filter({ client_id: client.id }, '-created_at', 5000);
+    const leadsData = await apiClient.Lead.filter({ client_id: client.id }, '-created_at', 5000);
     setLeads(leadsData);
 
-    const notAnsweredCLs = await base44.entities.CampaignLead.filter({ client_id: client.id, call_status: 'not_answered' }, '-created_at', 2000);
+    const notAnsweredCLs = await apiClient.CampaignLead.filter({ client_id: client.id, call_status: 'not_answered' }, '-created_at', 2000);
     setNotAnsweredIds(new Set(notAnsweredCLs.map(cl => cl.lead_id)));
   };
 
@@ -149,7 +149,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
       // Only include call_script if any section has content
       const hasScript = form.call_script && Object.values(form.call_script).some(v => v && v.trim());
 
-      const campaign = await base44.entities.Campaign.create({
+      const campaign = await apiClient.Campaign.create({
         client_id: client.id,
         name: form.name,
         type: form.type,
@@ -191,7 +191,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
       const CHUNK_SIZE = 500;
       for (let i = 0; i < campaignLeads.length; i += CHUNK_SIZE) {
         const chunk = campaignLeads.slice(i, i + CHUNK_SIZE);
-        await base44.entities.CampaignLead.bulkCreate(chunk);
+        await apiClient.CampaignLead.bulkCreate(chunk);
       }
       if (scheduledISO) {
         const istLabel = new Date(scheduledISO).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' });

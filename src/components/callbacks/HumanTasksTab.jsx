@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -159,7 +159,7 @@ export default function HumanTasksTab({ clientId }) {
     const newActivityStatus = completedStatuses.includes(updateStatus) ? 'completed' : 'scheduled';
     const noteAppend = `\n[Admin Update: ${statusConfig.label}] ${updateNotes || ''} — ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`;
 
-    await base44.entities.Activity.update(activity.id, {
+    await apiClient.Activity.update(activity.id, {
       status: newActivityStatus,
       completed_date: newActivityStatus === 'completed' ? new Date().toISOString() : undefined,
       outcome: statusConfig.label,
@@ -179,7 +179,7 @@ export default function HumanTasksTab({ clientId }) {
         leadUpdates.last_engagement_date = new Date().toISOString();
       }
       if (Object.keys(leadUpdates).length > 0) {
-        await base44.entities.Lead.update(lead.id, leadUpdates);
+        await apiClient.Lead.update(lead.id, leadUpdates);
       }
     }
 
@@ -187,7 +187,7 @@ export default function HumanTasksTab({ clientId }) {
     if (aiFollowup && lead?.id) {
       const followupDate = new Date();
       followupDate.setHours(followupDate.getHours() + 2);
-      await base44.entities.Activity.create({
+      await apiClient.Activity.create({
         client_id: clientId,
         lead_id: lead.id,
         type: 'call',
@@ -199,7 +199,7 @@ export default function HumanTasksTab({ clientId }) {
         auto_created: true,
       });
       // Mark original as completed
-      await base44.entities.Activity.update(activity.id, { status: 'completed', outcome: 'Reassigned to AI' });
+      await apiClient.Activity.update(activity.id, { status: 'completed', outcome: 'Reassigned to AI' });
     }
 
     // If rescheduled, create a new activity for tomorrow
@@ -207,7 +207,7 @@ export default function HumanTasksTab({ clientId }) {
       const newDate = new Date();
       newDate.setDate(newDate.getDate() + 1);
       newDate.setHours(10, 0, 0, 0);
-      await base44.entities.Activity.create({
+      await apiClient.Activity.create({
         client_id: clientId,
         lead_id: lead.id,
         type: activity.type,

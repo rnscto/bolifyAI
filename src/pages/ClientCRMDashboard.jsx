@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -27,8 +27,8 @@ export default function ClientCRMDashboard() {
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
-    const user = await base44.auth.me();
-    const clients = await base44.entities.Client.filter({ user_id: user.id });
+    const user = await apiClient.auth.me();
+    const clients = await apiClient.Client.filter({ user_id: user.id });
     if (clients.length === 0) { setLoading(false); return; }
 
     const clientData = clients[0];
@@ -40,10 +40,10 @@ export default function ClientCRMDashboard() {
     }
 
     const [configs, dealsData, leadsData, activitiesData] = await Promise.all([
-      base44.entities.CRMConfig.filter({ client_id: clientData.id }),
-      base44.entities.Deal.filter({ client_id: clientData.id }, '-created_at'),
-      base44.entities.Lead.filter({ client_id: clientData.id }, '-created_at'),
-      base44.entities.Activity.filter({ client_id: clientData.id }, '-scheduled_date')
+      apiClient.CRMConfig.filter({ client_id: clientData.id }),
+      apiClient.Deal.filter({ client_id: clientData.id }, '-created_at'),
+      apiClient.Lead.filter({ client_id: clientData.id }, '-created_at'),
+      apiClient.Activity.filter({ client_id: clientData.id }, '-scheduled_date')
     ]);
 
     if (configs.length > 0) setCrmConfig(configs[0]);
@@ -57,7 +57,7 @@ export default function ClientCRMDashboard() {
     const deal = deals.find(d => d.id === dealId);
     if (!deal || deal.stage === newStage) return;
 
-    await base44.entities.Deal.update(dealId, { stage: newStage, last_activity_date: new Date().toISOString() });
+    await apiClient.Deal.update(dealId, { stage: newStage, last_activity_date: new Date().toISOString() });
     toast.success(`Deal moved to ${newStage}`);
     setDeals(prev => prev.map(d => d.id === dealId ? { ...d, stage: newStage } : d));
   };

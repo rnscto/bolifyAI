@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,11 +19,11 @@ export default function ClientAutomationEngine() {
   }, []);
 
   const loadClient = async () => {
-    const user = await base44.auth.me();
+    const user = await apiClient.auth.me();
     if (user.role === 'admin') {
       setClient({ id: 'admin' });
     } else {
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      const clients = await apiClient.Client.filter({ user_id: user.id });
       if (clients.length > 0) setClient(clients[0]);
     }
   };
@@ -40,7 +40,7 @@ export default function ClientAutomationEngine() {
         // Loop fetching pages until we get less than pageSize back
         // base44 SDK uses (filter, sort, limit) — we paginate by repeatedly fetching with growing skip via slice in memory is not supported,
         // so we request a very large limit instead.
-        const batch = await base44.entities.Activity.filter(filter, '-scheduled_date', 5000);
+        const batch = await apiClient.Activity.filter(filter, '-scheduled_date', 5000);
         return batch;
       };
       if (client.id === 'admin') {
@@ -61,7 +61,7 @@ export default function ClientAutomationEngine() {
       if (leadIds.length === 0) return [];
       // Fetch each lead individually to ensure none are missed
       const results = await Promise.all(
-        leadIds.map(id => base44.entities.Lead.get(id).catch(() => null))
+        leadIds.map(id => apiClient.Lead.get(id).catch(() => null))
       );
       return results.filter(Boolean);
     },

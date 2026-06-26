@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,7 @@ export default function ShopifySetup({ clientId }) {
 
   const loadIntegration = async () => {
     if (!clientId) return;
-    const results = await base44.entities.MarketplaceIntegration.filter({
+    const results = await apiClient.MarketplaceIntegration.filter({
       client_id: clientId,
       platform: 'shopify'
     });
@@ -54,10 +54,10 @@ export default function ShopifySetup({ clientId }) {
     };
 
     if (integration) {
-      await base44.entities.MarketplaceIntegration.update(integration.id, data);
+      await apiClient.MarketplaceIntegration.update(integration.id, data);
       setIntegration({ ...integration, ...data });
     } else {
-      const created = await base44.entities.MarketplaceIntegration.create(data);
+      const created = await apiClient.MarketplaceIntegration.create(data);
       setIntegration(created);
     }
     toast.success('Shopify integration saved');
@@ -69,7 +69,7 @@ export default function ShopifySetup({ clientId }) {
     const cleanUrl = storeUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
     const testUrl = `https://${cleanUrl}/admin/api/${apiVersion}/shop.json`;
 
-    const res = await base44.functions.invoke('shopifyLookup', {
+    const res = await apiClient.functions.invoke('shopifyLookup', {
       client_id: clientId,
       lookup_type: 'product_search',
       query: 'test'
@@ -78,7 +78,7 @@ export default function ShopifySetup({ clientId }) {
     if (res.data?.success) {
       toast.success('Shopify connection successful!');
       if (integration) {
-        await base44.entities.MarketplaceIntegration.update(integration.id, {
+        await apiClient.MarketplaceIntegration.update(integration.id, {
           status: 'active',
           last_tested: new Date().toISOString(),
           error_message: ''
@@ -88,7 +88,7 @@ export default function ShopifySetup({ clientId }) {
     } else {
       toast.error(res.data?.error || 'Connection failed. Check your store URL and token.');
       if (integration) {
-        await base44.entities.MarketplaceIntegration.update(integration.id, {
+        await apiClient.MarketplaceIntegration.update(integration.id, {
           status: 'error',
           error_message: res.data?.error || 'Test failed'
         });
@@ -100,7 +100,7 @@ export default function ShopifySetup({ clientId }) {
 
   const handleDelete = async () => {
     if (!integration) return;
-    await base44.entities.MarketplaceIntegration.delete(integration.id);
+    await apiClient.MarketplaceIntegration.delete(integration.id);
     setIntegration(null);
     setStoreUrl('');
     setAccessToken('');

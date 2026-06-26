@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Check, X, Pencil, Eye, Calendar, Sparkles, Save } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import ShareMenu from './ShareMenu';
 
 const statusStyles = {
@@ -34,21 +34,21 @@ export default function PostCard({ post, onUpdate }) {
 
   const handleApprove = async () => {
     setLoading(true);
-    await base44.entities.SocialMediaPost.update(post.id, { status: 'approved' });
+    await apiClient.SocialMediaPost.update(post.id, { status: 'approved' });
     onUpdate?.();
     setLoading(false);
   };
 
   const handleReject = async () => {
     setLoading(true);
-    await base44.entities.SocialMediaPost.update(post.id, { status: 'rejected' });
+    await apiClient.SocialMediaPost.update(post.id, { status: 'rejected' });
     onUpdate?.();
     setLoading(false);
   };
 
   const handleSaveEdit = async () => {
     setLoading(true);
-    await base44.entities.SocialMediaPost.update(post.id, { caption: editCaption, hashtags: editHashtags });
+    await apiClient.SocialMediaPost.update(post.id, { caption: editCaption, hashtags: editHashtags });
     setEditing(false);
     onUpdate?.();
     setLoading(false);
@@ -57,7 +57,7 @@ export default function PostCard({ post, onUpdate }) {
   const handleShared = async (platform) => {
     const sharedOn = [...(post.shared_on || [])];
     if (!sharedOn.includes(platform)) sharedOn.push(platform);
-    await base44.entities.SocialMediaPost.update(post.id, { status: 'shared', shared_on: sharedOn });
+    await apiClient.SocialMediaPost.update(post.id, { status: 'shared', shared_on: sharedOn });
     onUpdate?.();
   };
 

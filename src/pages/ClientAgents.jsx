@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,16 +24,16 @@ export default function ClientAgents() {
 
   const loadData = async () => {
     try {
-      const user = await base44.auth.me();
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      const user = await apiClient.auth.me();
+      const clients = await apiClient.Client.filter({ user_id: user.id });
 
       if (clients.length > 0) {
         const clientData = clients[0];
         setClient(clientData);
 
         const [agentsData, kbData] = await Promise.all([
-          base44.entities.Agent.filter({ client_id: clientData.id }),
-          base44.entities.KnowledgeBase.filter({ client_id: clientData.id })
+          apiClient.Agent.filter({ client_id: clientData.id }),
+          apiClient.KnowledgeBase.filter({ client_id: clientData.id })
         ]);
 
         setAgents(agentsData);

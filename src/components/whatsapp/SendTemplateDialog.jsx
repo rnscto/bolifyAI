@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,7 +35,7 @@ export default function SendTemplateDialog({ template, open, onOpenChange }) {
     if (!recipient.trim()) return toast.error('Recipient phone is required');
     setSending(true);
     try {
-      const res = await base44.functions.invoke('whatsappSendTemplate', {
+      const res = await apiClient.functions.invoke('whatsappSendTemplate', {
         template_id: template.id,
         recipient: recipient.trim(),
         variables

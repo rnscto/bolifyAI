@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,7 +32,7 @@ export default function LeadDetail() {
   const handleRescore = async () => {
     setRescoring(true);
     try {
-      const res = await base44.functions.invoke('rescoreLeadFromHistory', { lead_id: leadId });
+      const res = await apiClient.functions.invoke('rescoreLeadFromHistory', { lead_id: leadId });
       if (res.data?.success) {
         toast.success(`Score updated: ${res.data.previous_score} → ${res.data.new_score}`);
         await loadAllData();
@@ -57,29 +57,29 @@ export default function LeadDetail() {
 
   const loadAllData = async () => {
     setLoading(true);
-    const user = await base44.auth.me();
+    const user = await apiClient.auth.me();
     let clientData = null;
 
     if (user.role === 'admin') {
       // Admin: get lead first, then load client from lead's client_id
-      const leadData = await base44.entities.Lead.get(leadId);
+      const leadData = await apiClient.Lead.get(leadId);
       setLead(leadData);
-      clientData = await base44.entities.Client.get(leadData.client_id);
+      clientData = await apiClient.Client.get(leadData.client_id);
     } else {
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      const clients = await apiClient.Client.filter({ user_id: user.id });
       if (clients.length > 0) clientData = clients[0];
-      const leadData = await base44.entities.Lead.get(leadId);
+      const leadData = await apiClient.Lead.get(leadId);
       setLead(leadData);
     }
     setClient(clientData);
 
     // Fetch all related data in parallel
     const [calls, acts, emails, campLeads, agentsData] = await Promise.all([
-      base44.entities.CallLog.filter({ lead_id: leadId }, '-created_at', 50),
-      base44.entities.Activity.filter({ lead_id: leadId }, '-scheduled_date', 50),
-      base44.entities.OutreachLog.filter({ lead_id: leadId }, '-created_at', 50),
-      base44.entities.CampaignLead.filter({ lead_id: leadId }, '-created_at', 20),
-      clientData ? base44.entities.Agent.filter({ client_id: clientData.id }) : Promise.resolve([]),
+      apiClient.CallLog.filter({ lead_id: leadId }, '-created_at', 50),
+      apiClient.Activity.filter({ lead_id: leadId }, '-scheduled_date', 50),
+      apiClient.OutreachLog.filter({ lead_id: leadId }, '-created_at', 50),
+      apiClient.CampaignLead.filter({ lead_id: leadId }, '-created_at', 20),
+      clientData ? apiClient.Agent.filter({ client_id: clientData.id }) : Promise.resolve([]),
     ]);
 
     setCallLogs(calls);
@@ -92,7 +92,7 @@ export default function LeadDetail() {
 
   const sendToGetwayCRM = async () => {
     setSendingWhatsApp(true);
-    const response = await base44.functions.invoke('sendGetwayCRM', {
+    const response = await apiClient.functions.invoke('sendGetwayCRM', {
       lead_id: lead.id,
       contact_name: lead.name,
       contact_phone: lead.phone,
@@ -118,7 +118,7 @@ export default function LeadDetail() {
       return;
     }
     setCallingLead(true);
-    const response = await base44.functions.invoke('initiateCall', {
+    const response = await apiClient.functions.invoke('initiateCall', {
       lead_id: lead.id,
       agent_id: activeAgents[0].id,
       phone_number: lead.phone

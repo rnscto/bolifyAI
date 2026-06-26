@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -55,8 +55,8 @@ export default function WebsiteLeadsSection() {
 
   const loadData = async () => {
     const [allLeads, clients] = await Promise.all([
-      base44.entities.Lead.filter({ source: 'website_voice_agent' }, '-created_at', 50),
-      base44.entities.Client.list('-created_at'),
+      apiClient.Lead.filter({ source: 'website_voice_agent' }, '-created_at', 50),
+      apiClient.Client.list('-created_at'),
     ]);
 
     setLeads(allLeads);

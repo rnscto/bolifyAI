@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,7 @@ export default function EmailSetup({ config, onSave }) {
       return;
     }
     setTesting(true);
-    const res = await base44.functions.invoke('testMessagingConnection', {
+    const res = await apiClient.functions.invoke('testMessagingConnection', {
       channel: 'email',
       test_recipient: testRecipient,
       config: {

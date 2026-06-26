@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -41,14 +41,14 @@ export default function AdminPartnerEditDialog({ partner, open, onOpenChange, on
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const { file_url } = await apiClient.integrations.Core.UploadFile({ file });
     set('brand_logo_url', file_url);
     setUploading(false);
   };
 
   const handleSave = async () => {
     setSaving(true);
-    await base44.entities.Partner.update(partner.id, form);
+    await apiClient.Partner.update(partner.id, form);
     toast.success(`${form.name} updated`);
     setSaving(false);
     onSaved?.();

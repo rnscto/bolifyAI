@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { Loader2 } from 'lucide-react';
@@ -79,7 +79,7 @@ export default function Onboarding() {
 
   const loadUser = async () => {
     try {
-      const currentUser = await withRetry(() => base44.auth.me(), 'auth.me');
+      const currentUser = await withRetry(() => apiClient.auth.me(), 'auth.me');
       setUser(currentUser);
       setProfileData(prev => ({
         ...prev,
@@ -87,11 +87,11 @@ export default function Onboarding() {
       }));
 
       // Check if already has a client account (by user_id, or fallback to email)
-      let clients = await withRetry(() => base44.entities.Client.filter({ user_id: currentUser.id }), 'Client.filter user_id');
+      let clients = await withRetry(() => apiClient.Client.filter({ user_id: currentUser.id }), 'Client.filter user_id');
       if (clients.length === 0) {
-        const byEmail = await withRetry(() => base44.entities.Client.filter({ email: currentUser.email }), 'Client.filter email');
+        const byEmail = await withRetry(() => apiClient.Client.filter({ email: currentUser.email }), 'Client.filter email');
         if (byEmail.length > 0) {
-          await withRetry(() => base44.entities.Client.update(byEmail[0].id, { user_id: currentUser.id }), 'Client.update');
+          await withRetry(() => apiClient.Client.update(byEmail[0].id, { user_id: currentUser.id }), 'Client.update');
           clients = byEmail;
         }
       }
@@ -159,7 +159,7 @@ export default function Onboarding() {
     };
 
     if (existingClient) {
-      await base44.entities.Client.update(existingClient.id, {
+      await apiClient.Client.update(existingClient.id, {
         ...clientPayload,
         account_status: existingClient.account_status || 'trial',
         trial_start_date: existingClient.trial_start_date || now.toISOString(),
@@ -170,7 +170,7 @@ export default function Onboarding() {
       client = { ...existingClient, id: existingClient.id };
     } else {
       clientPayload.user_id = user.id;
-      client = await base44.entities.Client.create(clientPayload);
+      client = await apiClient.Client.create(clientPayload);
     }
 
     // 2. Create Agent
@@ -218,22 +218,22 @@ FOR SPAM/TELEMARKETING:
       agentPayload.assigned_dids = [selectedDID.number];
       // Demo pool DIDs stay as reserved/shared — don't change ownership
       if (!selectedDID.is_demo) {
-        await base44.entities.DID.update(selectedDID.id, {
+        await apiClient.DID.update(selectedDID.id, {
           status: 'assigned',
           client_id: client.id,
         });
       }
     }
 
-    await base44.entities.Agent.create(agentPayload);
+    await apiClient.Agent.create(agentPayload);
 
     // Track referral if referral code was used
     if (referralCode) {
       try {
-        const partners = await base44.entities.Partner.filter({ referral_code: referralCode });
+        const partners = await apiClient.Partner.filter({ referral_code: referralCode });
         if (partners.length > 0) {
           const partner = partners[0];
-          await base44.entities.Referral.create({
+          await apiClient.Referral.create({
             partner_id: partner.id,
             client_id: client.id,
             client_name: profileData.company_name,
@@ -244,7 +244,7 @@ FOR SPAM/TELEMARKETING:
             commission_rate: partner.commission_rate || 20,
             signup_date: new Date().toISOString(),
           });
-          await base44.entities.Partner.update(partner.id, {
+          await apiClient.Partner.update(partner.id, {
             total_referrals: (partner.total_referrals || 0) + 1,
             active_referrals: (partner.active_referrals || 0) + 1,
           });
@@ -256,7 +256,7 @@ FOR SPAM/TELEMARKETING:
     const consentTypes = ['platform_tos', 'dpdp_processing', 'ai_voice_usage', 'data_retention'];
     for (const ct of consentTypes) {
       if (complianceConsents[ct]) {
-        await base44.entities.ConsentLog.create({
+        await apiClient.ConsentLog.create({
           client_id: client.id,
           consent_type: ct,
           consent_given: true,
@@ -267,12 +267,12 @@ FOR SPAM/TELEMARKETING:
       }
     }
     // Update client with DPDP consent flag
-    await base44.entities.Client.update(client.id, {
+    await apiClient.Client.update(client.id, {
       dpdp_consent_given: true,
       dpdp_consent_date: new Date().toISOString(),
     });
     // Audit log
-    await base44.entities.AuditLog.create({
+    await apiClient.AuditLog.create({
       client_id: client.id,
       action_type: 'consent_given',
       actor_email: user.email,
@@ -282,7 +282,7 @@ FOR SPAM/TELEMARKETING:
     // Save client agreement if signed
     if (agrData) {
       try {
-        await base44.entities.ClientAgreement.create({
+        await apiClient.ClientAgreement.create({
           client_id: client.id,
           template_id: agrData.template_id,
           template_version: agrData.template_version,
@@ -303,7 +303,7 @@ FOR SPAM/TELEMARKETING:
         });
         // Notify admin
         try {
-          await base44.functions.invoke('sendAgreementEmail', {
+          await apiClient.functions.invoke('sendAgreementEmail', {
             type: 'client_admin_notify',
             data: { company_name: profileData.company_name, email: user.email, agreement_number: agrData.agreement_number }
           });

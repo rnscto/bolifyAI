@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -77,7 +77,7 @@ export default function ClientLeads() {
     setBulkDeleting(true);
     try {
       const ids = Array.from(selectedIds);
-      await Promise.all(ids.map(id => base44.entities.Lead.delete(id).catch(e => ({ error: e, id }))));
+      await Promise.all(ids.map(id => apiClient.Lead.delete(id).catch(e => ({ error: e, id }))));
       toast.success(`Deleted ${ids.length} lead(s)`);
       setSelectedIds(new Set());
       loadData();
@@ -93,7 +93,7 @@ export default function ClientLeads() {
     if (!confirm('Re-score up to 50 leads with call history? This uses AI credits and may take 1-2 minutes.')) return;
     setBulkRescoring(true);
     try {
-      const res = await base44.functions.invoke('rescoreLeadFromHistory', { client_id: client.id, limit: 50 });
+      const res = await apiClient.functions.invoke('rescoreLeadFromHistory', { client_id: client.id, limit: 50 });
       if (res.data?.success) {
         toast.success(`Re-scored ${res.data.scored} leads (${res.data.skipped} skipped, ${res.data.errors} errors)`);
         loadData();
@@ -139,7 +139,7 @@ export default function ClientLeads() {
     const all = [];
     let skip = 0;
     while (skip < SAFETY_CAP) {
-      const batch = await base44.entities.Lead.filter(
+      const batch = await apiClient.Lead.filter(
         { client_id: clientId }, '-created_at', PAGE_SIZE, skip
       );
       if (!batch || batch.length === 0) break;
@@ -152,8 +152,8 @@ export default function ClientLeads() {
 
   const loadData = async () => {
     try {
-      const user = await base44.auth.me();
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      const user = await apiClient.auth.me();
+      const clients = await apiClient.Client.filter({ user_id: user.id });
       
       if (clients.length > 0) {
         const clientData = clients[0];
@@ -161,8 +161,8 @@ export default function ClientLeads() {
 
         const [leadsData, agentsData, groupsData] = await Promise.all([
           fetchAllLeads(clientData.id),
-          base44.entities.Agent.filter({ client_id: clientData.id }),
-          base44.entities.LeadGroup.filter({ client_id: clientData.id }, '-created_at')
+          apiClient.Agent.filter({ client_id: clientData.id }),
+          apiClient.LeadGroup.filter({ client_id: clientData.id }, '-created_at')
         ]);
 
         setLeads(leadsData);
@@ -193,10 +193,10 @@ export default function ClientLeads() {
       };
 
       if (editingLead) {
-        await base44.entities.Lead.update(editingLead.id, leadData);
+        await apiClient.Lead.update(editingLead.id, leadData);
         toast.success('Lead updated');
       } else {
-        await base44.entities.Lead.create(leadData);
+        await apiClient.Lead.create(leadData);
         toast.success('Lead added');
       }
 
@@ -232,7 +232,7 @@ export default function ClientLeads() {
     if (!confirm('Delete this lead?')) return;
     
     try {
-      await base44.entities.Lead.delete(id);
+      await apiClient.Lead.delete(id);
       toast.success('Lead deleted');
       loadData();
     } catch (error) {
@@ -250,7 +250,7 @@ export default function ClientLeads() {
 
     setCallingLeadId(lead.id);
     try {
-      const response = await base44.functions.invoke('initiateCall', {
+      const response = await apiClient.functions.invoke('initiateCall', {
         lead_id: lead.id,
         agent_id: activeAgents[0].id,
         phone_number: lead.phone

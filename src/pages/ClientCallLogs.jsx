@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
+import { useRealtime } from '@/hooks/useRealtime';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import FeatureGate from '../components/FeatureGate';
@@ -52,32 +53,29 @@ export default function ClientCallLogs() {
 
   // Live updates via WebSocket subscription — replaces the old 60s polling loop.
   // No integration credits, no repeated 1000-row reads. Patches rows in place.
-  useEffect(() => {
+  useRealtime('CallLog', (event) => {
     if (!client?.id) return;
-    const unsub = base44.entities.CallLog.subscribe((event) => {
-      if (event.data?.client_id !== client.id) return;
-      if (event.type === 'create') {
-        setCall(prev => (prev.some(c => c.id === event.id) ? prev : [event.data, ...prev]));
-      } else if (event.type === 'update') {
-        setCall(prev => prev.map(c => (c.id === event.id ? { ...c, ...event.data } : c)));
-        setSelectedCall(prev => (prev?.id === event.id ? { ...prev, ...event.data } : prev));
-      } else if (event.type === 'delete') {
-        setCall(prev => prev.filter(c => c.id !== event.id));
-      }
-    });
-    return () => unsub();
-  }, [client?.id]);
+    if (event.data?.client_id !== client.id) return;
+    if (event.type === 'create') {
+      setCall(prev => (prev.some(c => c.id === event.id) ? prev : [event.data, ...prev]));
+    } else if (event.type === 'update') {
+      setCall(prev => prev.map(c => (c.id === event.id ? { ...c, ...event.data } : c)));
+      setSelectedCall(prev => (prev?.id === event.id ? { ...prev, ...event.data } : prev));
+    } else if (event.type === 'delete') {
+      setCall(prev => prev.filter(c => c.id !== event.id));
+    }
+  });
 
   const loadData = async () => {
     try {
-      const user = await base44.auth.me();
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      const user = await apiClient.auth.me();
+      const clients = await apiClient.Client.filter({ user_id: user.id });
       
       if (clients.length > 0) {
         const clientData = clients[0];
         setClient(clientData);
 
-        const callsData = await base44.entities.CallLog.filter(
+        const callsData = await apiClient.CallLog.filter(
           { client_id: clientData.id },
           '-created_at',
           1000
@@ -93,11 +91,11 @@ export default function ClientCallLogs() {
 
   const fetchRecording = async (callLogId) => {
     setFetchingRecording(callLogId);
-    const res = await base44.functions.invoke('fetchCallRecording', { call_log_id: callLogId });
+    const res = await apiClient.functions.invoke('fetchCallRecording', { call_log_id: callLogId });
     if (res.data?.updated > 0) {
       await loadData();
       if (selectedCall?.id === callLogId) {
-        const updated = await base44.entities.CallLog.get(callLogId);
+        const updated = await apiClient.CallLog.get(callLogId);
         setSelectedCall(updated);
       }
     }
@@ -106,7 +104,7 @@ export default function ClientCallLogs() {
 
   const fetchBulkRecordings = async () => {
     setFetchingBulk(true);
-    await base44.functions.invoke('fetchCallRecording', { bulk: true });
+    await apiClient.functions.invoke('fetchCallRecording', { bulk: true });
     await loadData();
     setFetchingBulk(false);
   };
@@ -133,7 +131,7 @@ export default function ClientCallLogs() {
     try {
       const ids = deleteTarget.type === 'single' ? [deleteTarget.id] : Array.from(selectedIds);
       for (const id of ids) {
-        await base44.entities.CallLog.delete(id);
+        await apiClient.CallLog.delete(id);
       }
       toast.success(`Deleted ${ids.length} call log${ids.length > 1 ? 's' : ''}`);
       setSelectedIds(new Set());

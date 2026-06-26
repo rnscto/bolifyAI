@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +22,7 @@ export default function AgreementGate({ client, user, onSigned }) {
   useEffect(() => { loadTemplate(); }, []);
 
   const loadTemplate = async () => {
-    const templates = await base44.entities.ClientAgreementTemplate.filter({ status: 'active' });
+    const templates = await apiClient.ClientAgreementTemplate.filter({ status: 'active' });
     if (templates.length > 0) {
       setTemplate(templates[0]);
       renderPreview(templates[0]);
@@ -61,12 +61,12 @@ export default function AgreementGate({ client, user, onSigned }) {
 
     const blob = await (await fetch(signatureImage)).blob();
     const file = new File([blob], `client_sig_${Date.now()}.png`, { type: 'image/png' });
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const { file_url } = await apiClient.integrations.Core.UploadFile({ file });
 
     const signedDate = new Date();
     const signedTimestamp = signedDate.toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'medium', timeZone: 'Asia/Kolkata' }) + ' IST';
 
-    const allAgr = await base44.entities.ClientAgreement.list();
+    const allAgr = await apiClient.ClientAgreement.list();
     const agrNum = `BOLIFY-CSA-${signedDate.getFullYear()}-${String(allAgr.length + 1).padStart(3, '0')}`;
     const effectiveDate = signedDate.toISOString().split('T')[0];
     const expiryDate = new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0];
@@ -86,7 +86,7 @@ export default function AgreementGate({ client, user, onSigned }) {
       .replace(/\{\{signed_timestamp\}\}/g, signedTimestamp)
       .replace(/\{\{signed_ip\}\}/g, 'Recorded on server');
 
-    await base44.entities.ClientAgreement.create({
+    await apiClient.ClientAgreement.create({
       client_id: client.id,
       template_id: template.id,
       template_version: template.version,
@@ -108,7 +108,7 @@ export default function AgreementGate({ client, user, onSigned }) {
 
     // Notify admin via ACS
     try {
-      await base44.functions.invoke('sendAgreementEmail', {
+      await apiClient.functions.invoke('sendAgreementEmail', {
         type: 'client_gate_admin_notify',
         data: { company_name: client.company_name, email: user.email, agreement_number: agrNum }
       });

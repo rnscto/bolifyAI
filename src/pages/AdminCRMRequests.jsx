@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -41,10 +41,10 @@ export default function AdminCRMRequests() {
   const load = async () => {
     setLoading(true);
     try {
-      const user = await base44.auth.me();
+      const user = await apiClient.auth.me();
       setMe(user);
       // Pull all clients (admin RLS allows). We'll filter in-memory.
-      const all = await base44.entities.Client.list('-crm_api_access_requested_at', 500);
+      const all = await apiClient.Client.list('-crm_api_access_requested_at', 500);
       setClients(all || []);
     } catch (e) {
       console.error(e);
@@ -75,7 +75,7 @@ export default function AdminCRMRequests() {
       const patch = { crm_api_access_notes: notes || '' };
       if (action === 'reject') patch.crm_api_access_status = 'rejected';
       else if (action === 'revoke') patch.crm_api_access_status = 'revoked';
-      await base44.entities.Client.update(selected.id, patch);
+      await apiClient.Client.update(selected.id, patch);
       toast.success(`CRM access ${action}d for ${selected.company_name}`);
       closeDialog();
       await load();

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Loader2 } from 'lucide-react';
 import CRMTrialBanner from '../components/crm/CRMTrialBanner';
 import SalesReports from '../components/crm/SalesReports';
@@ -15,18 +15,18 @@ export default function ClientCRMReports() {
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
-    const user = await base44.auth.me();
-    const clients = await base44.entities.Client.filter({ user_id: user.id });
+    const user = await apiClient.auth.me();
+    const clients = await apiClient.Client.filter({ user_id: user.id });
     if (clients.length === 0) { setLoading(false); return; }
 
     const clientData = clients[0];
     setClient(clientData);
 
     const [configs, dealsData, leadsData, activitiesData] = await Promise.all([
-      base44.entities.CRMConfig.filter({ client_id: clientData.id }),
-      base44.entities.Deal.filter({ client_id: clientData.id }, '-created_at'),
-      base44.entities.Lead.filter({ client_id: clientData.id }, '-created_at'),
-      base44.entities.Activity.filter({ client_id: clientData.id }, '-scheduled_date')
+      apiClient.CRMConfig.filter({ client_id: clientData.id }),
+      apiClient.Deal.filter({ client_id: clientData.id }, '-created_at'),
+      apiClient.Lead.filter({ client_id: clientData.id }, '-created_at'),
+      apiClient.Activity.filter({ client_id: clientData.id }, '-scheduled_date')
     ]);
 
     if (configs.length > 0) setCrmConfig(configs[0]);

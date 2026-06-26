@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Check, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { motion } from 'framer-motion';
 import { createPageUrl } from '../../utils';
 
@@ -132,7 +132,7 @@ export default function PricingSection() {
                           : 'bg-[#1a365d] hover:bg-[#0f1f3d] text-white'
                     }`}
                     size="lg"
-                    onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding') + (plan.isPersonal ? '?type=personal' : ''))}
+                    onClick={() => apiClient.auth.redirectToLogin(createPageUrl('Onboarding') + (plan.isPersonal ? '?type=personal' : ''))}
                   >
                     {plan.cta} <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -52,12 +52,12 @@ export default function AdminOutreach() {
     }
     setResending(log.id);
     try {
-      await base44.integrations.Core.SendEmail({
+      await apiClient.integrations.Core.SendEmail({
         to: log.recipient_email,
         subject: log.subject || 'Follow-up from VaaniAI',
         body: log.body || '<p>This is a follow-up from VaaniAI.</p>'
       });
-      await base44.entities.OutreachLog.create({
+      await apiClient.OutreachLog.create({
         client_id: log.client_id,
         lead_id: log.lead_id,
         channel: 'email',
@@ -84,9 +84,9 @@ export default function AdminOutreach() {
   const loadData = async () => {
     setLoading(true);
     const [allLogs, allClients, allSequences] = await Promise.all([
-      base44.entities.OutreachLog.list('-created_at', 100),
-      base44.entities.Client.list(),
-      base44.entities.EmailSequence.list('-created_at', 50)
+      apiClient.OutreachLog.list('-created_at', 100),
+      apiClient.Client.list(),
+      apiClient.EmailSequence.list('-created_at', 50)
     ]);
     const clientMap = {};
     allClients.forEach(c => { clientMap[c.id] = c; });

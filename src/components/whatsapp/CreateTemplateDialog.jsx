@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -42,7 +42,7 @@ export default function CreateTemplateDialog({ clientId, open, onOpenChange, onC
     if (!aiGoal.trim()) return toast.error('Describe what the message should achieve');
     setAiDrafting(true);
     try {
-      const res = await base44.functions.invoke('aiTemplateDraft', {
+      const res = await apiClient.functions.invoke('aiTemplateDraft', {
         goal: aiGoal, language, category, tone: 'friendly'
       });
       if (res.data.success && res.data.draft) {
@@ -94,7 +94,7 @@ export default function CreateTemplateDialog({ clientId, open, onOpenChange, onC
 
     setSaving(true);
     try {
-      const res = await base44.functions.invoke('whatsappCreateTemplate', {
+      const res = await apiClient.functions.invoke('whatsappCreateTemplate', {
         client_id: clientId,
         name: name.trim(),
         language,

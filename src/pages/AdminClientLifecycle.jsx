@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -74,7 +74,7 @@ export default function AdminClientLifecycle() {
     if (!confirm('Generate initial lifecycle events from existing Client records? This creates one entry per client based on current status (activation, trial, billing). Safe to run multiple times — duplicates are skipped.')) return;
     setBackfilling(true);
     try {
-      const existing = await base44.entities.ClientLifecycleEvent.list('-created_at', 2000);
+      const existing = await apiClient.ClientLifecycleEvent.list('-created_at', 2000);
       const existingKeys = new Set(existing.map(e => `${e.client_id}:${e.event_type}:backfill`));
       const toCreate = [];
       for (const c of clients) {
@@ -125,7 +125,7 @@ export default function AdminClientLifecycle() {
       if (toCreate.length === 0) {
         alert('No new events to backfill — all clients already have history entries.');
       } else {
-        await base44.entities.ClientLifecycleEvent.bulkCreate(toCreate);
+        await apiClient.ClientLifecycleEvent.bulkCreate(toCreate);
         alert(`✓ Backfilled ${toCreate.length} lifecycle events across ${clients.length} clients.`);
         await loadData();
       }
@@ -139,7 +139,7 @@ export default function AdminClientLifecycle() {
   useEffect(() => {
     (async () => {
       try {
-        const me = await base44.auth.me();
+        const me = await apiClient.auth.me();
         setUser(me);
         if (me.role !== 'admin' || me.email !== MAIN_ADMIN_EMAIL) {
           setAuthError('This page is restricted to the platform main admin.');
@@ -158,8 +158,8 @@ export default function AdminClientLifecycle() {
     setLoading(true);
     try {
       const [evList, clList] = await Promise.all([
-        base44.entities.ClientLifecycleEvent.list('-created_at', 500),
-        base44.entities.Client.list('-created_at', 500),
+        apiClient.ClientLifecycleEvent.list('-created_at', 500),
+        apiClient.Client.list('-created_at', 500),
       ]);
       setEvents(evList || []);
       setClients(clList || []);

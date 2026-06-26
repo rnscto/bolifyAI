@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,16 +32,16 @@ export default function ClientActivities() {
 
   const loadData = async () => {
     try {
-      const user = await base44.auth.me();
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      const user = await apiClient.auth.me();
+      const clients = await apiClient.Client.filter({ user_id: user.id });
       
       if (clients.length > 0) {
         const clientData = clients[0];
         setClient(clientData);
 
         const [activitiesData, leadsData] = await Promise.all([
-          base44.entities.Activity.filter({ client_id: clientData.id }, '-scheduled_date', 500),
-          base44.entities.Lead.filter({ client_id: clientData.id }, '-created_at', 1000)
+          apiClient.Activity.filter({ client_id: clientData.id }, '-scheduled_date', 500),
+          apiClient.Lead.filter({ client_id: clientData.id }, '-created_at', 1000)
         ]);
 
         setActivities(activitiesData);

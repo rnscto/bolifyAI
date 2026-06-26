@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { FileText, Download, Loader2, CheckCircle2 } from 'lucide-react';
@@ -11,7 +11,7 @@ export default function ConceptNote() {
   const handleDownload = async () => {
     setLoading(true);
     setDownloaded(false);
-    const response = await base44.functions.invoke('generateConceptNote', {}, { responseType: 'arraybuffer' });
+    const response = await apiClient.functions.invoke('generateConceptNote', {}, { responseType: 'arraybuffer' });
     const blob = new Blob([response.data], { type: 'application/pdf' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');

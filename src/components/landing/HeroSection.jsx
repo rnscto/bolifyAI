@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { ArrowRight, PhoneCall, TrendingUp, Mic, Bot, Zap } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { motion } from 'framer-motion';
 import { createPageUrl } from '../../utils';
 import AnimatedWaveform from './AnimatedWaveform';
@@ -64,14 +64,14 @@ export default function HeroSection() {
                 size="lg"
                 className="text-white px-8 py-6 text-lg rounded-xl shadow-lg font-semibold border-0"
                 style={{ background: 'linear-gradient(135deg, #00bcd4, #0097a7)', boxShadow: '0 8px 24px rgba(0,188,212,0.35)' }}
-                onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding'))}
+                onClick={() => apiClient.auth.redirectToLogin(createPageUrl('Onboarding'))}
               >
                 For Business <ArrowRight className="w-5 h-5 ml-2" />
               </Button>
               <Button
                 size="lg"
                 className="bg-white/15 hover:bg-white/25 text-white px-8 py-6 text-lg rounded-xl font-semibold border border-white/30 backdrop-blur-sm"
-                onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding') + '?type=personal')}
+                onClick={() => apiClient.auth.redirectToLogin(createPageUrl('Onboarding') + '?type=personal')}
               >
                 Personal AI Assistant <ArrowRight className="w-5 h-5 ml-2" />
               </Button>

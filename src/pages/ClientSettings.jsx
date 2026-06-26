@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -30,11 +30,11 @@ export default function ClientSettings() {
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
-    const currentUser = await base44.auth.me();
+    const currentUser = await apiClient.auth.me();
     setUser(currentUser);
     setFormData(prev => ({ ...prev, display_name: currentUser.display_name || currentUser.full_name || '' }));
 
-    const clients = await base44.entities.Client.filter({ user_id: currentUser.id });
+    const clients = await apiClient.Client.filter({ user_id: currentUser.id });
     if (clients.length > 0) {
       const c = clients[0];
       setClient(c);
@@ -52,9 +52,9 @@ export default function ClientSettings() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      await base44.auth.updateMe({ display_name: formData.display_name });
+      await apiClient.auth.updateMe({ display_name: formData.display_name });
       if (client) {
-        await base44.entities.Client.update(client.id, {
+        await apiClient.Client.update(client.id, {
           company_name: formData.company_name,
           phone: formData.phone,
           registered_address: formData.registered_address,

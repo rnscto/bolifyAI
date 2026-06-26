@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Phone, ArrowLeft, ArrowRight, CheckCircle2, Loader2 } from 'lucide-react';
 import { motion } from 'framer-motion';
@@ -14,12 +14,12 @@ export default function DIDSelectionStep({ selected, onSelect, onNext, onBack })
 
   const loadDIDs = async () => {
     // Show demo pool DIDs for trial onboarding (shared, round-robin)
-    const demoDIDs = await base44.entities.DID.filter({ is_demo: true });
+    const demoDIDs = await apiClient.DID.filter({ is_demo: true });
     if (demoDIDs.length > 0) {
       setDids(demoDIDs);
     } else {
       // Fallback to available DIDs if no demo pool set up
-      const available = await base44.entities.DID.filter({ status: 'available' });
+      const available = await apiClient.DID.filter({ status: 'available' });
       setDids(available);
     }
     setLoading(false);

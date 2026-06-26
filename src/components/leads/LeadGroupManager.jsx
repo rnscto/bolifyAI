@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -23,10 +23,10 @@ export default function LeadGroupManager({ open, onOpenChange, groups, clientId,
   const handleSave = async () => {
     if (!name.trim()) return;
     if (editingGroup) {
-      await base44.entities.LeadGroup.update(editingGroup.id, { name, description, color });
+      await apiClient.LeadGroup.update(editingGroup.id, { name, description, color });
       toast.success('Group updated');
     } else {
-      await base44.entities.LeadGroup.create({ client_id: clientId, name, description, color });
+      await apiClient.LeadGroup.create({ client_id: clientId, name, description, color });
       toast.success('Group created');
     }
     setName(''); setDescription(''); setColor(COLORS[0]); setEditingGroup(null);
@@ -42,7 +42,7 @@ export default function LeadGroupManager({ open, onOpenChange, groups, clientId,
 
   const handleDelete = async (g) => {
     if (!confirm(`Delete group "${g.name}"? Leads in this group will be ungrouped.`)) return;
-    await base44.entities.LeadGroup.delete(g.id);
+    await apiClient.LeadGroup.delete(g.id);
     toast.success('Group deleted');
     onRefresh();
   };

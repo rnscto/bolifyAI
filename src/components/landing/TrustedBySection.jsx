@@ -1,12 +1,12 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { motion } from 'framer-motion';
 
 export default function TrustedBySection() {
   const { data: clients = [] } = useQuery({
     queryKey: ['trusted-clients-public'],
-    queryFn: () => base44.entities.TrustedClient.filter({ is_active: true }, 'order', 100),
+    queryFn: () => apiClient.TrustedClient.filter({ is_active: true }, 'order', 100),
   });
 
   if (clients.length === 0) return null;

@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { toast } from 'sonner';
 import { Loader2, Save, BookOpen, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -34,7 +34,7 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
   const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
-    base44.auth.me().then(u => setIsAdmin(u?.role === 'admin')).catch(() => setIsAdmin(false));
+    apiClient.auth.me().then(u => setIsAdmin(u?.role === 'admin')).catch(() => setIsAdmin(false));
   }, []);
 
   const handleApplyGenerated = ({ system_prompt, greeting_message, language, tone, voice_type }) => {
@@ -71,14 +71,14 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
       const cid = clientId || agent.client_id;
       if (cid) {
         setKbLoading(true);
-        base44.entities.KnowledgeBase.filter({ client_id: cid })
+        apiClient.KnowledgeBase.filter({ client_id: cid })
           .then(docs => setKnowledgeBases(docs || []))
           .catch(() => setKnowledgeBases([]))
           .finally(() => setKbLoading(false));
       }
       // Auto-heal: if agent has KB IDs but no kb_file_uri (stale state), trigger upload silently
       if ((agent.knowledge_base_ids?.length || 0) > 0 && !agent.kb_file_uri) {
-        base44.functions.invoke('uploadKBToStorage', { agent_id: agent.id }).catch(() => {});
+        apiClient.functions.invoke('uploadKBToStorage', { agent_id: agent.id }).catch(() => {});
       }
     }
   }, [agent, open, clientId]);
@@ -105,7 +105,7 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
     const prevKBs = Array.isArray(agent.knowledge_base_ids) ? agent.knowledge_base_ids : [];
     const currentKBs = Array.isArray(selectedKBs) ? selectedKBs : [];
     const kbChanged = JSON.stringify([...prevKBs].sort()) !== JSON.stringify([...currentKBs].sort());
-    await base44.entities.Agent.update(agent.id, {
+    await apiClient.Agent.update(agent.id, {
       name: form.name.trim(),
       industry: form.industry.trim(),
       greeting_message: form.greeting_message.trim(),
@@ -115,7 +115,7 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
     });
     // Rebuild combined KB blob in Azure if KB selection changed (fire-and-forget)
     if (kbChanged) {
-      base44.functions.invoke('uploadKBToStorage', { agent_id: agent.id }).catch(() => {});
+      apiClient.functions.invoke('uploadKBToStorage', { agent_id: agent.id }).catch(() => {});
       toast.success('Agent updated — Knowledge Base is syncing in the background');
     } else {
       toast.success('Agent updated');

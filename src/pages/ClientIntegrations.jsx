@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Loader2, Plug, MessageSquare, Smartphone, Mail, CheckCircle2, ShoppingBag } from 'lucide-react';
 import { toast } from 'sonner';
 import WhatsAppSetup from '../components/integrations/WhatsAppSetup';
@@ -17,36 +17,45 @@ export default function ClientIntegrations() {
 
   useEffect(() => {
     if (client?.id) {
-      base44.entities.MarketplaceIntegration.filter({ client_id: client.id, platform: 'shopify', status: 'active' })
+      apiClient.MarketplaceIntegration.filter({ client_id: client.id, platform: 'shopify', status: 'active' })
         .then(r => setShopifyActive(r.length > 0))
         .catch(() => {});
     }
   }, [client?.id]);
 
   const loadData = async () => {
-    const user = await base44.auth.me();
-    const clients = await base44.entities.Client.filter({ user_id: user.id });
-    if (clients.length > 0) {
-      setClient(clients[0]);
-      const configs = await base44.entities.ClientMessagingConfig.filter({ client_id: clients[0].id });
-      if (configs.length > 0) {
-        setConfig(configs[0]);
-      } else {
-        const newConfig = await base44.entities.ClientMessagingConfig.create({ client_id: clients[0].id });
-        setConfig(newConfig);
+    try {
+      const user = await apiClient.auth.me();
+      const clients = await apiClient.Client.filter({ user_id: user.id });
+      if (clients.length > 0) {
+        setClient(clients[0]);
+        const res = await apiClient.get('/api/integrations/messaging-config');
+        if (res.success && res.config) {
+          setConfig(res.config);
+        } else {
+          // If no config exists yet, create an empty one via POST
+          const initRes = await apiClient.post('/api/integrations/messaging-config', {});
+          if (initRes.success && initRes.config) {
+            setConfig(initRes.config);
+          }
+        }
       }
+    } catch (e) {
+      console.error('Failed to load integrations:', e);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const handleSave = async (updates) => {
-    if (!config) return;
     try {
-      await base44.entities.ClientMessagingConfig.update(config.id, updates);
-      // Re-fetch from DB to confirm what was actually persisted (handles RLS / silent failures)
-      const fresh = await base44.entities.ClientMessagingConfig.get(config.id);
-      setConfig(fresh);
-      toast.success('Integration saved');
+      const res = await apiClient.post('/api/integrations/messaging-config', updates);
+      if (res.success && res.config) {
+        setConfig(res.config);
+        toast.success('Integration saved');
+      } else {
+        throw new Error(res.error || 'Failed to save');
+      }
     } catch (err) {
       console.error('[ClientIntegrations] Save failed:', err);
       toast.error(`Save failed: ${err.message || 'Permission denied'}`, { duration: 8000 });

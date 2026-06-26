@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from '@/components/ui/dialog';
@@ -49,11 +49,11 @@ export default function CEOStatusOverrideDialog({ client, currentUser, open, onO
         patch.trial_end_date = trialEnd.toISOString();
       }
 
-      await base44.entities.Client.update(client.id, patch);
+      await apiClient.Client.update(client.id, patch);
 
       // Best-effort audit log entry (silently ignore if not permitted)
       try {
-        await base44.entities.ClientLifecycleEvent.create({
+        await apiClient.ClientLifecycleEvent.create({
           client_id: client.id,
           client_name: client.company_name,
           event_type: targetStatus === 'suspended' ? 'suspended'

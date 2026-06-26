@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -29,7 +29,7 @@ export default function SequenceList({ sequences, onEdit, onRefresh, onViewEnrol
   const handleToggle = async (seq) => {
     setToggling(seq.id);
     const newStatus = seq.status === 'active' ? 'paused' : 'active';
-    await base44.entities.EmailSequence.update(seq.id, { status: newStatus });
+    await apiClient.EmailSequence.update(seq.id, { status: newStatus });
     toast.success(`Sequence ${newStatus === 'active' ? 'activated' : 'paused'}`);
     onRefresh();
     setToggling(null);
@@ -38,7 +38,7 @@ export default function SequenceList({ sequences, onEdit, onRefresh, onViewEnrol
   const handleDelete = async (seq) => {
     if (!confirm(`Delete sequence "${seq.name}"? This will not affect already-sent emails.`)) return;
     setDeleting(seq.id);
-    await base44.entities.EmailSequence.delete(seq.id);
+    await apiClient.EmailSequence.delete(seq.id);
     toast.success('Sequence deleted');
     onRefresh();
     setDeleting(null);

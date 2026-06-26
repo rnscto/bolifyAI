@@ -1,4 +1,5 @@
 import { client } from "../db/index.ts";
+import { runActivityDispatcher } from '../cron/activityDispatcher.ts';
 
 export async function postCallActionExtractorCore(callLogId: string) {
   try {
@@ -326,6 +327,11 @@ IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backtic
           }).catch(() => {});
         }
       } catch (_) {}
+    }
+
+    if (results.activities_created > 0) {
+      // Execute the dispatcher immediately in the background for instant gratification
+      runActivityDispatcher().catch(e => console.error('[ActionExtractor] Immediate dispatcher error:', e));
     }
 
     return { success: true, ...results };

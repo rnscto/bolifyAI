@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Copy, Key, Eye, EyeOff, RefreshCw, Shield, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -25,7 +25,7 @@ export default function APIDocs() {
 
   const fetchDenoUrl = async () => {
     try {
-      const response = await base44.functions.invoke('getDenoUrl', {});
+      const response = await apiClient.functions.invoke('getDenoUrl', {});
       if (response.data?.deno_url) {
         setDenoUrl(response.data.deno_url);
       } else {
@@ -41,7 +41,7 @@ export default function APIDocs() {
 
   const fetchAuthKey = async () => {
     try {
-      const resp = await base44.functions.invoke('generateAuthKey', {});
+      const resp = await apiClient.functions.invoke('generateAuthKey', {});
       if (resp.data?.api_auth_key) {
         setAuthKey(resp.data.api_auth_key);
       }
@@ -55,7 +55,7 @@ export default function APIDocs() {
   const handleGenerateAuthKey = async () => {
     setGeneratingKey(true);
     try {
-      const resp = await base44.functions.invoke('generateAuthKey', { regenerate: true });
+      const resp = await apiClient.functions.invoke('generateAuthKey', { regenerate: true });
       if (resp.data?.api_auth_key) {
         setAuthKey(resp.data.api_auth_key);
         toast.success('Authorization key generated!');

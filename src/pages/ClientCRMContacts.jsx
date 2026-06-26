@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,11 +24,11 @@ export default function ClientCRMContacts() {
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
-    const user = await base44.auth.me();
-    const clients = await base44.entities.Client.filter({ user_id: user.id });
+    const user = await apiClient.auth.me();
+    const clients = await apiClient.Client.filter({ user_id: user.id });
     if (clients.length > 0) {
       setClient(clients[0]);
-      const data = await base44.entities.Contact.filter({ client_id: clients[0].id }, '-created_at');
+      const data = await apiClient.Contact.filter({ client_id: clients[0].id }, '-created_at');
       setContacts(data);
     }
     setLoading(false);
@@ -43,10 +43,10 @@ export default function ClientCRMContacts() {
     e.preventDefault();
     const data = { ...formData, client_id: client.id };
     if (editingContact) {
-      await base44.entities.Contact.update(editingContact.id, data);
+      await apiClient.Contact.update(editingContact.id, data);
       toast.success('Contact updated');
     } else {
-      await base44.entities.Contact.create(data);
+      await apiClient.Contact.create(data);
       toast.success('Contact created');
     }
     setDialogOpen(false);
@@ -62,7 +62,7 @@ export default function ClientCRMContacts() {
 
   const handleDelete = async (id) => {
     if (!confirm('Delete this contact?')) return;
-    await base44.entities.Contact.delete(id);
+    await apiClient.Contact.delete(id);
     toast.success('Contact deleted');
     loadData();
   };

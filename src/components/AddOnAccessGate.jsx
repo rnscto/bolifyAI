@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -39,7 +39,7 @@ export default function AddOnAccessGate({
         [statusField]: 'requested',
         [requestedAtField]: new Date().toISOString()
       };
-      await base44.entities.Client.update(client.id, patch);
+      await apiClient.Client.update(client.id, patch);
       toast.success('Request submitted. Admin will review shortly.');
       onChange && onChange();
     } catch (e) {

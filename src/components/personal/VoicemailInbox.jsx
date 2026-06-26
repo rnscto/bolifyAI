@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { MessageSquare, Check, AlertTriangle, Clock } from 'lucide-react';
 import moment from 'moment';
 
@@ -28,7 +28,7 @@ export default function VoicemailInbox({ messages, onRefresh }) {
     if (msg.is_read) return;
     // The parent subscribes to VoicemailMessage updates, so the state patches live —
     // no need to force a full reload here.
-    await base44.entities.VoicemailMessage.update(msg.id, { is_read: true });
+    await apiClient.VoicemailMessage.update(msg.id, { is_read: true });
   };
 
   const unreadCount = messages.filter(m => !m.is_read).length;

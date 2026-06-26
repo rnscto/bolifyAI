@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -45,7 +45,7 @@ export default function EmailComposer({ open, onOpenChange, lead, client, activi
   const generateTemplate = async () => {
     setGenerating(true);
     try {
-      const res = await base44.functions.invoke('composeEmail', {
+      const res = await apiClient.functions.invoke('composeEmail', {
         action: 'generate_template',
         lead_id: lead?.id,
         client_id: client?.id,
@@ -75,7 +75,7 @@ export default function EmailComposer({ open, onOpenChange, lead, client, activi
 
     setSending(true);
     try {
-      const res = await base44.functions.invoke('composeEmail', {
+      const res = await apiClient.functions.invoke('composeEmail', {
         action: 'send_email',
         to_email: toEmail,
         from_name: client?.company_name || 'VaaniAI',

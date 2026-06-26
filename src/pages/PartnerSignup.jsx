@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -38,7 +38,7 @@ export default function PartnerSignup() {
     const code = 'BOLIFY-' + form.name.split(' ')[0].toUpperCase().substring(0, 6) + Math.floor(1000 + Math.random() * 9000);
     const referralLink = `${window.location.origin}?ref=${code}`;
 
-    await base44.entities.Partner.create({
+    await apiClient.Partner.create({
       ...form,
       referral_code: code,
       referral_link: referralLink,

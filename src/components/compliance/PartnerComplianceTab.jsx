@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
@@ -22,8 +22,8 @@ export default function PartnerComplianceTab({ partner, referrals }) {
     if (clientIds.length === 0) { setLoading(false); return; }
 
     const [allConsents, allErasures] = await Promise.all([
-      base44.entities.ConsentLog.list('-created_at', 100),
-      base44.entities.DataErasureRequest.list('-created_at', 50),
+      apiClient.ConsentLog.list('-created_at', 100),
+      apiClient.DataErasureRequest.list('-created_at', 50),
     ]);
 
     setConsentLogs(allConsents.filter(c => clientIds.includes(c.client_id)));

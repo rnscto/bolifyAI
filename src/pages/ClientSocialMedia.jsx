@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -18,9 +18,9 @@ export default function ClientSocialMedia() {
 
   useEffect(() => {
     const loadClient = async () => {
-      const user = await base44.auth.me();
+      const user = await apiClient.auth.me();
       if (user.role === 'admin') return;
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      const clients = await apiClient.Client.filter({ user_id: user.id });
       if (clients.length > 0) setClient(clients[0]);
     };
     loadClient();
@@ -28,14 +28,14 @@ export default function ClientSocialMedia() {
 
   const { data: posts = [], isLoading, refetch } = useQuery({
     queryKey: ['social-posts', client?.id],
-    queryFn: () => client ? base44.entities.SocialMediaPost.filter({ client_id: client.id }, '-created_at', 100) : [],
+    queryFn: () => client ? apiClient.SocialMediaPost.filter({ client_id: client.id }, '-created_at', 100) : [],
     enabled: !!client?.id,
   });
 
   const handleGenerate = async () => {
     setGenerating(true);
     try {
-      await base44.functions.invoke('generateSocialContent', { client_id: client.id });
+      await apiClient.functions.invoke('generateSocialContent', { client_id: client.id });
       refetch();
     } catch (err) {
       console.error('Generation failed:', err);
@@ -62,8 +62,8 @@ export default function ClientSocialMedia() {
   }
 
   const reloadClient = async () => {
-    const user = await base44.auth.me();
-    const cs = await base44.entities.Client.filter({ user_id: user.id });
+    const user = await apiClient.auth.me();
+    const cs = await apiClient.Client.filter({ user_id: user.id });
     if (cs.length > 0) setClient(cs[0]);
   };
 

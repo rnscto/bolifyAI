@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -27,18 +27,18 @@ export default function PartnerDashboard() {
   }, []);
 
   const loadData = async () => {
-    const currentUser = await base44.auth.me();
+    const currentUser = await apiClient.auth.me();
     setUser(currentUser);
 
-    const partners = await base44.entities.Partner.filter({ email: currentUser.email });
+    const partners = await apiClient.Partner.filter({ email: currentUser.email });
     if (partners.length > 0) {
       const p = partners[0];
       setPartner(p);
 
       const [refs, pays, agreements] = await Promise.all([
-        base44.entities.Referral.filter({ partner_id: p.id }, '-created_at'),
-        base44.entities.PartnerPayout.filter({ partner_id: p.id }, '-created_at'),
-        base44.entities.PartnerAgreement.filter({ partner_id: p.id }, '-created_at'),
+        apiClient.Referral.filter({ partner_id: p.id }, '-created_at'),
+        apiClient.PartnerPayout.filter({ partner_id: p.id }, '-created_at'),
+        apiClient.PartnerAgreement.filter({ partner_id: p.id }, '-created_at'),
       ]);
       setReferrals(refs);
       setPayouts(pays);

@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { BellOff, Shield, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -22,7 +22,7 @@ export default function QuickActionsPanel({ client, onUpdate }) {
   const handleDNDToggle = async (checked) => {
     setDndEnabled(checked);
     setSaving(true);
-    await base44.entities.Client.update(client.id, { dnd_enabled: checked });
+    await apiClient.Client.update(client.id, { dnd_enabled: checked });
     setSaving(false);
     onUpdate?.({ ...client, dnd_enabled: checked });
     toast.success(checked ? 'Do Not Disturb enabled' : 'Do Not Disturb disabled');
@@ -31,7 +31,7 @@ export default function QuickActionsPanel({ client, onUpdate }) {
   const handleModeChange = async (value) => {
     setResponseMode(value);
     setSaving(true);
-    await base44.entities.Client.update(client.id, { ai_response_mode: value });
+    await apiClient.Client.update(client.id, { ai_response_mode: value });
     setSaving(false);
     onUpdate?.({ ...client, ai_response_mode: value });
     toast.success('AI response mode updated');

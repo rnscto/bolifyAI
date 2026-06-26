@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -26,15 +26,15 @@ export default function ClientAnalytics() {
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
-    const user = await base44.auth.me();
-    const clients = await base44.entities.Client.filter({ user_id: user.id });
+    const user = await apiClient.auth.me();
+    const clients = await apiClient.Client.filter({ user_id: user.id });
     if (clients.length > 0) {
       const c = clients[0];
       setClient(c);
       const [callsData, leadsData, campaignsData] = await Promise.all([
-        base44.entities.CallLog.filter({ client_id: c.id }, '-created_at', 500),
-        base44.entities.Lead.filter({ client_id: c.id }, '-created_at', 1000),
-        base44.entities.Campaign.filter({ client_id: c.id }),
+        apiClient.CallLog.filter({ client_id: c.id }, '-created_at', 500),
+        apiClient.Lead.filter({ client_id: c.id }, '-created_at', 1000),
+        apiClient.Campaign.filter({ client_id: c.id }),
       ]);
       setCalls(callsData);
       setLeads(leadsData);

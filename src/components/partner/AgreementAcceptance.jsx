@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +28,7 @@ export default function AgreementAcceptance({ partner, agreement, onSigned }) {
       setLoading(false);
       return;
     }
-    const tmpl = await base44.entities.AgreementTemplate.get(agreement.template_id);
+    const tmpl = await apiClient.AgreementTemplate.get(agreement.template_id);
     setTemplate(tmpl);
     renderAgreement(tmpl);
     setLoading(false);
@@ -76,7 +76,7 @@ export default function AgreementAcceptance({ partner, agreement, onSigned }) {
     // Upload signature image
     const blob = await (await fetch(signatureImage)).blob();
     const file = new File([blob], `signature_${partner.id}.png`, { type: 'image/png' });
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const { file_url } = await apiClient.integrations.Core.UploadFile({ file });
 
     const signedDate = new Date();
     const signedDateFormatted = signedDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });
@@ -97,7 +97,7 @@ export default function AgreementAcceptance({ partner, agreement, onSigned }) {
       .replace(/\{\{signed_ip\}\}/g, 'Recorded on server');
 
     // Update agreement
-    await base44.entities.PartnerAgreement.update(agreement.id, {
+    await apiClient.PartnerAgreement.update(agreement.id, {
       status: 'signed',
       signature_name: signatureName,
       signature_image_url: file_url,
@@ -108,7 +108,7 @@ export default function AgreementAcceptance({ partner, agreement, onSigned }) {
 
     // Send email notification via ACS
     try {
-      await base44.functions.invoke('sendAgreementEmail', {
+      await apiClient.functions.invoke('sendAgreementEmail', {
         type: 'partner_signed',
         data: { partner_name: partner.name, partner_email: partner.email, agreement_number: agreement.agreement_number, signed_timestamp: signedTimestamp }
       });
@@ -118,7 +118,7 @@ export default function AgreementAcceptance({ partner, agreement, onSigned }) {
 
     // Send copy to admin via ACS
     try {
-      await base44.functions.invoke('sendAgreementEmail', {
+      await apiClient.functions.invoke('sendAgreementEmail', {
         type: 'partner_admin_notify',
         data: { partner_name: partner.name, partner_email: partner.email, partner_company: partner.company_name || 'N/A', agreement_number: agreement.agreement_number, signed_timestamp: signedTimestamp }
       });

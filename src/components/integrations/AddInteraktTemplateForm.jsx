@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,12 +20,12 @@ export default function AddInteraktTemplateForm({ clientId, onAdded }) {
     setSaving(true);
     try {
       // Avoid duplicates for the same name+language
-      const existing = await base44.entities.WhatsAppTemplate.filter({ client_id: clientId, name: codeName });
+      const existing = await apiClient.WhatsAppTemplate.filter({ client_id: clientId, name: codeName });
       const dup = existing.find(t => t.language === language.trim());
       if (dup) {
         toast.info('That template is already added');
       } else {
-        const created = await base44.entities.WhatsAppTemplate.create({
+        const created = await apiClient.WhatsAppTemplate.create({
           client_id: clientId,
           vendor: 'interakt',
           name: codeName,

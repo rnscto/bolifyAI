@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -19,8 +19,8 @@ export default function AdminPayments() {
 
   const loadData = async () => {
     const [paysData, clientsData] = await Promise.all([
-      base44.entities.Payment.list('-created_at', 100),
-      base44.entities.Client.list(),
+      apiClient.Payment.list('-created_at', 100),
+      apiClient.Client.list(),
     ]);
     setPayments(paysData);
     setClients(clientsData);

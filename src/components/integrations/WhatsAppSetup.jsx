@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -67,7 +67,7 @@ export default function WhatsAppSetup({ config, onSave }) {
   const loadTemplates = () => {
     if (!config?.client_id) return;
     setLoadingTemplates(true);
-    base44.entities.WhatsAppTemplate.filter({ client_id: config.client_id, status: 'APPROVED' }, '-created_at', 100)
+    apiClient.WhatsAppTemplate.filter({ client_id: config.client_id, status: 'APPROVED' }, '-created_at', 100)
       .then(setTemplates)
       .catch(() => setTemplates([]))
       .finally(() => setLoadingTemplates(false));
@@ -91,7 +91,7 @@ export default function WhatsAppSetup({ config, onSave }) {
     setTesting(true);
     const tmpl = templates.find(t => t.id === selectedTemplate);
     const creds = cleanCreds();
-    const res = await base44.functions.invoke('testMessagingConnection', {
+    const res = await apiClient.functions.invoke('testMessagingConnection', {
       channel: 'whatsapp',
       test_recipient: testRecipient.trim(),
       template_name: tmpl?.name || '',

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,12 +34,12 @@ export default function DIDManager({ agent, client, onUpdate }) {
 
       if (isDemo) {
         // For demo/trial: load shared demo pool DIDs
-        const allDIDs = await base44.entities.DID.filter({ is_demo: true });
+        const allDIDs = await apiClient.DID.filter({ is_demo: true });
         setDemoDIDs(allDIDs);
         setAvailableDIDs(allDIDs.filter(d => !currentDIDs.includes(d.number)));
       } else {
         // For paid: load client-owned DIDs
-        const allDIDs = await base44.entities.DID.filter({ client_id: client.id });
+        const allDIDs = await apiClient.DID.filter({ client_id: client.id });
         setAvailableDIDs(allDIDs.filter(d => d.status === 'assigned' && !currentDIDs.includes(d.number)));
       }
     } catch (error) {
@@ -71,7 +71,7 @@ export default function DIDManager({ agent, client, onUpdate }) {
     setSaving(true);
     const newDIDs = [...assignedDIDs, didNumber];
     try {
-      await base44.entities.Agent.update(agent.id, {
+      await apiClient.Agent.update(agent.id, {
         assigned_dids: newDIDs,
         assigned_did: newDIDs[0]
       });
@@ -90,7 +90,7 @@ export default function DIDManager({ agent, client, onUpdate }) {
     setSaving(true);
     const newDIDs = assignedDIDs.filter(d => d !== didNumber);
     try {
-      await base44.entities.Agent.update(agent.id, {
+      await apiClient.Agent.update(agent.id, {
         assigned_dids: newDIDs,
         assigned_did: newDIDs[0] || ''
       });

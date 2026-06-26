@@ -12,8 +12,8 @@ export default function BrandVoiceTab({ form, setForm, newTheme, setNewTheme }) 
   const handleLogoUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const { base44 } = await import('@/api/base44Client');
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const { apiClient } = await import('@/api/apiClient');
+    const { file_url } = await apiClient.integrations.Core.UploadFile({ file });
     setForm(f => ({ ...f, logo_url: file_url }));
   };
 

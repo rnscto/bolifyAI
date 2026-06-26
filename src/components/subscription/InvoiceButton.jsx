@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Download, Loader2 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { toast } from 'sonner';
 
 export default function InvoiceButton({ paymentId, size = 'sm' }) {
@@ -11,7 +11,7 @@ export default function InvoiceButton({ paymentId, size = 'sm' }) {
     e.stopPropagation();
     setDownloading(true);
     
-    const response = await base44.functions.invoke('generateInvoice', { payment_id: paymentId });
+    const response = await apiClient.functions.invoke('generateInvoice', { payment_id: paymentId });
     const blob = new Blob([response.data], { type: 'application/pdf' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');

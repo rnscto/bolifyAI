@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Navigate } from 'react-router-dom';
 
 /**
@@ -17,12 +17,12 @@ export default function RootRedirect() {
     let cancelled = false;
     (async () => {
       try {
-        const authed = await base44.auth.isAuthenticated();
+        const authed = await apiClient.auth.isAuthenticated();
         if (!authed) {
           setTarget('/Login');
           return;
         }
-        const user = await base44.auth.me();
+        const user = await apiClient.auth.me();
         if (cancelled) return;
 
         if (user.role === 'admin') {
@@ -32,9 +32,9 @@ export default function RootRedirect() {
 
         // Look up client record
         let clients = [];
-        try { clients = await base44.entities.Client.filter({ user_id: user.id }); } catch (_) {}
+        try { clients = await apiClient.Client.filter({ user_id: user.id }); } catch (_) {}
         if (clients.length === 0) {
-          try { clients = await base44.entities.Client.filter({ email: user.email }); } catch (_) {}
+          try { clients = await apiClient.Client.filter({ email: user.email }); } catch (_) {}
         }
 
         if (clients.length === 0 || !clients[0].onboarding_completed) {

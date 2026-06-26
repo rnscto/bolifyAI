@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Bell, Send, MessageSquare, CheckCircle2, Unlink, Loader2, ExternalLink, Save } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -29,7 +29,7 @@ export default function NotificationSettings({ client, onUpdate }) {
     if (selectedChannel === 'whatsapp') {
       data.owner_whatsapp_number = whatsappNumber;
     }
-    await base44.entities.Client.update(client.id, data);
+    await apiClient.Client.update(client.id, data);
     onUpdate?.({ ...client, ...data });
     setSaving(false);
     toast.success('Notification settings saved');
@@ -43,7 +43,7 @@ export default function NotificationSettings({ client, onUpdate }) {
       telegram_username: '',
       owner_notification_channel: 'whatsapp'
     };
-    await base44.entities.Client.update(client.id, data);
+    await apiClient.Client.update(client.id, data);
     onUpdate?.({ ...client, ...data });
     setSelectedChannel('whatsapp');
     setDisconnectingTg(false);

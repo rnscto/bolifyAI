@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { UserPlus, Trash2, Users, Phone } from 'lucide-react';
 import { toast } from 'sonner';
 import ContactImporter from './ContactImporter';
@@ -27,7 +27,7 @@ export default function TrustedContactsList({ contacts, clientId, onRefresh }) {
   const handleAdd = async () => {
     if (!newContact.phone) return;
     setSaving(true);
-    await base44.entities.TrustedContact.create({
+    await apiClient.TrustedContact.create({
       client_id: clientId,
       name: newContact.name,
       phone: newContact.phone,
@@ -42,7 +42,7 @@ export default function TrustedContactsList({ contacts, clientId, onRefresh }) {
   };
 
   const handleDelete = async (id) => {
-    await base44.entities.TrustedContact.delete(id);
+    await apiClient.TrustedContact.delete(id);
     toast.success('Contact removed');
     onRefresh?.();
   };

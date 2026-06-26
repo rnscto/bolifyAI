@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Users, Phone, PhoneCall, TrendingUp, Clock, CreditCard, AlertTriangle, CheckCircle2 } from 'lucide-react';
@@ -23,7 +23,7 @@ export default function AdminDashboard() {
   const loadStats = async () => {
     // Verify admin role before calling admin-only endpoints
     try {
-      const me = await base44.auth.me();
+      const me = await apiClient.auth.me();
       if (me?.role !== 'admin') {
         console.warn('[AdminDashboard] Non-admin user attempted access');
         setLoading(false);
@@ -39,16 +39,16 @@ export default function AdminDashboard() {
     let dids = [], calls = [], subscriptions = [], payments = [];
     try {
       [clientsRes, dids, calls, subscriptions, payments] = await Promise.all([
-        base44.functions.invoke('adminListClients', { action: 'list' }).catch(err => {
+        apiClient.functions.invoke('adminListClients', { action: 'list' }).catch(err => {
           console.error('[AdminDashboard] adminListClients failed:', err?.message || err);
           return { data: { clients: [] } };
         }),
-        base44.entities.DID.list().catch(() => []),
+        apiClient.DID.list().catch(() => []),
         // Only need recent calls for "today" count + a total estimate. Each CallLog row carries
         // a heavy agent_config_cache (full prompts/scripts), so pulling 5000 was downloading tens of MB.
-        base44.entities.CallLog.list('-created_at', 500).catch(() => []),
-        base44.entities.Subscription.list('-created_at').catch(() => []),
-        base44.entities.Payment.list('-created_at', 10).catch(() => []),
+        apiClient.CallLog.list('-created_at', 500).catch(() => []),
+        apiClient.Subscription.list('-created_at').catch(() => []),
+        apiClient.Payment.list('-created_at', 10).catch(() => []),
       ]);
     } catch (err) {
       console.error('[AdminDashboard] Failed to load dashboard data:', err?.message || err);

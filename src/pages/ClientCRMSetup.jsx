@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -24,11 +24,11 @@ export default function ClientCRMSetup() {
   }, []);
 
   const loadData = async () => {
-    const user = await base44.auth.me();
-    const clients = await base44.entities.Client.filter({ user_id: user.id });
+    const user = await apiClient.auth.me();
+    const clients = await apiClient.Client.filter({ user_id: user.id });
     if (clients.length > 0) setClient(clients[0]);
 
-    const allTemplates = await base44.entities.IndustryTemplate.filter({ status: 'active' });
+    const allTemplates = await apiClient.IndustryTemplate.filter({ status: 'active' });
     setTemplates(allTemplates);
     setLoading(false);
   };
@@ -38,7 +38,7 @@ export default function ClientCRMSetup() {
     setProvisioning(true);
 
     // Prevent duplicate CRM provisioning
-    const existingConfigs = await base44.entities.CRMConfig.filter({ client_id: client.id });
+    const existingConfigs = await apiClient.CRMConfig.filter({ client_id: client.id });
     if (existingConfigs.length > 0) {
       toast.error('CRM is already set up for your account.');
       setProvisioning(false);
@@ -50,7 +50,7 @@ export default function ClientCRMSetup() {
     const trialEnd = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
     // Create CRM config
-    await base44.entities.CRMConfig.create({
+    await apiClient.CRMConfig.create({
       client_id: client.id,
       industry_template_id: selectedTemplate.id,
       industry_name: selectedTemplate.name,
@@ -66,7 +66,7 @@ export default function ClientCRMSetup() {
     });
 
     // Update client
-    await base44.entities.Client.update(client.id, {
+    await apiClient.Client.update(client.id, {
       has_custom_crm: true,
       crm_subscription_status: 'trialing',
       crm_trial_start_date: now.toISOString(),

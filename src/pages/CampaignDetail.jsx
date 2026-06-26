@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
+import { useRealtime } from '@/hooks/useRealtime';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,37 +34,28 @@ export default function CampaignDetail() {
   }, [campaignId]);
 
   // Real-time subscriptions for live status updates
-  useEffect(() => {
+  useRealtime('CampaignLead', (event) => {
     if (!campaignId) return;
+    if (event.data?.campaign_id !== campaignId) return;
+    
+    if (event.type === 'update') {
+      setCampaignLeads(prev => prev.map(cl => cl.id === event.id ? { ...cl, ...event.data } : cl));
+    } else if (event.type === 'create') {
+      setCampaignLeads(prev => {
+        if (prev.some(cl => cl.id === event.id)) return prev;
+        return [...prev, event.data];
+      });
+    } else if (event.type === 'delete') {
+      setCampaignLeads(prev => prev.filter(cl => cl.id !== event.id));
+    }
+  });
 
-    // Subscribe to CampaignLead changes (status, outcome, transcript updates)
-    const unsubLeads = base44.entities.CampaignLead.subscribe((event) => {
-      if (event.data?.campaign_id !== campaignId) return;
-      
-      if (event.type === 'update') {
-        setCampaignLeads(prev => prev.map(cl => cl.id === event.id ? { ...cl, ...event.data } : cl));
-      } else if (event.type === 'create') {
-        setCampaignLeads(prev => {
-          if (prev.some(cl => cl.id === event.id)) return prev;
-          return [...prev, event.data];
-        });
-      } else if (event.type === 'delete') {
-        setCampaignLeads(prev => prev.filter(cl => cl.id !== event.id));
-      }
-    });
-
-    // Subscribe to Campaign changes (status, counters, completion)
-    const unsubCampaign = base44.entities.Campaign.subscribe((event) => {
-      if (event.id === campaignId && event.type === 'update') {
-        setCampaign(prev => prev ? { ...prev, ...event.data } : prev);
-      }
-    });
-
-    return () => {
-      unsubLeads();
-      unsubCampaign();
-    };
-  }, [campaignId]);
+  useRealtime('Campaign', (event) => {
+    if (!campaignId) return;
+    if (event.id === campaignId && event.type === 'update') {
+      setCampaign(prev => prev ? { ...prev, ...event.data } : prev);
+    }
+  });
 
   // Campaigns are capped at 5000 leads, so we fetch in 2 pages (SDK limit is 1000 per call).
   const fetchCampaignLeads = async (cid) => {
@@ -71,7 +63,7 @@ export default function CampaignDetail() {
     const MAX_PAGES = 5; // 5 × 1000 = 5000 (campaign cap)
     const all = [];
     for (let i = 0; i < MAX_PAGES; i++) {
-      const batch = await base44.entities.CampaignLead.filter(
+      const batch = await apiClient.CampaignLead.filter(
         { campaign_id: cid }, 'created_at', PAGE_SIZE, i * PAGE_SIZE
       );
       if (!batch || batch.length === 0) break;
@@ -84,7 +76,7 @@ export default function CampaignDetail() {
   const loadData = async () => {
     try {
       const [campaignData, leadsData] = await Promise.all([
-        base44.entities.Campaign.get(campaignId),
+        apiClient.Campaign.get(campaignId),
         fetchCampaignLeads(campaignId)
       ]);
       setCampaign(campaignData);
@@ -98,7 +90,7 @@ export default function CampaignDetail() {
 
   const handleAction = async (action) => {
     try {
-      const res = await base44.functions.invoke('executeCampaign', {
+      const res = await apiClient.functions.invoke('executeCampaign', {
         campaign_id: campaignId,
         action
       });
@@ -297,7 +289,7 @@ export default function CampaignDetail() {
                     cl.status === 'pending' && cl.followup_call_date && new Date(cl.followup_call_date) > new Date()
                   );
                   for (const cl of waitingLeads) {
-                    await base44.entities.CampaignLead.update(cl.id, { followup_call_date: null });
+                    await apiClient.CampaignLead.update(cl.id, { followup_call_date: null });
                   }
                   toast.success(`${waitingLeads.length} leads cleared for immediate calling`);
                   loadData();

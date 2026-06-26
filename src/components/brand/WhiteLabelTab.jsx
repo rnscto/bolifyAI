@@ -8,8 +8,8 @@ export default function WhiteLabelTab({ form, setForm }) {
   const handleUpload = async (field, e) => {
     const file = e.target.files[0];
     if (!file) return;
-    const { base44 } = await import('@/api/base44Client');
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const { apiClient } = await import('@/api/apiClient');
+    const { file_url } = await apiClient.integrations.Core.UploadFile({ file });
     setForm(f => ({ ...f, [field]: file_url }));
   };
 

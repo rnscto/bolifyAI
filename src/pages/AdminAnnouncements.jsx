@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -34,7 +34,7 @@ export default function AdminAnnouncements() {
   const load = async () => {
     setLoading(true);
     try {
-      const list = await base44.entities.PlatformAnnouncement.list('-created_at', 100);
+      const list = await apiClient.PlatformAnnouncement.list('-created_at', 100);
       setItems(list || []);
     } catch (e) {
       toast.error('Failed to load announcements');
@@ -71,10 +71,10 @@ export default function AdminAnnouncements() {
         ends_at: form.ends_at ? new Date(form.ends_at).toISOString() : undefined,
       };
       if (editing) {
-        await base44.entities.PlatformAnnouncement.update(editing.id, payload);
+        await apiClient.PlatformAnnouncement.update(editing.id, payload);
         toast.success('Announcement updated');
       } else {
-        await base44.entities.PlatformAnnouncement.create(payload);
+        await apiClient.PlatformAnnouncement.create(payload);
         toast.success('Announcement published');
       }
       setDialogOpen(false);
@@ -88,7 +88,7 @@ export default function AdminAnnouncements() {
 
   const toggleActive = async (item) => {
     try {
-      await base44.entities.PlatformAnnouncement.update(item.id, { is_active: !item.is_active });
+      await apiClient.PlatformAnnouncement.update(item.id, { is_active: !item.is_active });
       load();
     } catch { toast.error('Failed to toggle'); }
   };
@@ -96,7 +96,7 @@ export default function AdminAnnouncements() {
   const remove = async (item) => {
     if (!confirm('Delete this announcement?')) return;
     try {
-      await base44.entities.PlatformAnnouncement.delete(item.id);
+      await apiClient.PlatformAnnouncement.delete(item.id);
       toast.success('Deleted');
       load();
     } catch { toast.error('Failed to delete'); }

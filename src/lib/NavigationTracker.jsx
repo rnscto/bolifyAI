@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from './AuthContext';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { pagesConfig } from '@/pages.config';
 
 export default function NavigationTracker() {

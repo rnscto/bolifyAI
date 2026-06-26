@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -25,7 +25,7 @@ export default function PlatformTemplatesTab({ config }) {
   const load = async () => {
     setLoading(true);
     try {
-      const t = await base44.entities.WhatsAppTemplate.filter({ client_id: 'PLATFORM' }, '-created_at', 500);
+      const t = await apiClient.WhatsAppTemplate.filter({ client_id: 'PLATFORM' }, '-created_at', 500);
       setTemplates(t);
     } catch (e) { console.error(e); }
     setLoading(false);
@@ -34,7 +34,7 @@ export default function PlatformTemplatesTab({ config }) {
   const handleSync = async () => {
     setSyncing(true);
     try {
-      const res = await base44.functions.invoke('syncPlatformTemplates', {});
+      const res = await apiClient.functions.invoke('syncPlatformTemplates', {});
       if (res.data.success) {
         toast.success(`Synced ${res.data.synced} templates (${res.data.created} new, ${res.data.updated} updated)`);
         await load();

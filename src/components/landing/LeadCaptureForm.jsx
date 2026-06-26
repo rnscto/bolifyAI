@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { User, Mail, Phone, Briefcase, Loader2, CheckCircle2 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 
 const SOLUTIONS = [
   { value: 'ai_voice_agent', label: 'AI Voice Agent for Sales' },
@@ -46,7 +46,7 @@ export default function LeadCaptureForm({ conversationTranscript, visitorInfo, o
         .join('\n');
 
       try {
-        const analysis = await base44.integrations.Core.InvokeLLM({
+        const analysis = await apiClient.integrations.Core.InvokeLLM({
           prompt: `Analyze this conversation between a website visitor and Bolify AI's voice assistant. Extract:
 1. Intent: Is the visitor "exploring" (just learning), "comparing" (evaluating options), "ready_to_buy" (wants to purchase), or "curious" (casual interest)?
 2. Sentiment: Is the visitor "positive", "neutral", "skeptical", or "negative"?
@@ -80,7 +80,7 @@ ${transcriptText}`,
 
     // Submit lead via backend
     try {
-      await base44.functions.invoke('webVoiceAgent', {
+      await apiClient.functions.invoke('webVoiceAgent', {
         action: 'create_lead',
         name: form.name,
         email: form.email,

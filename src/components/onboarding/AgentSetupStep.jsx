@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Bot, ArrowRight, ArrowLeft, Sparkles, Loader2 } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 
 const toneOptions = [
   { value: 'professional', label: 'Professional' },
@@ -26,7 +26,7 @@ export default function AgentSetupStep({ data, onChange, onNext, onBack, industr
 
   const generatePrompt = async () => {
     setGenerating(true);
-    const res = await base44.integrations.Core.InvokeLLM({
+    const res = await apiClient.integrations.Core.InvokeLLM({
       prompt: `Generate a concise AI voice agent system prompt for a ${industry} business named "${data.name || 'the company'}".
 The agent should:
 - Greet callers warmly

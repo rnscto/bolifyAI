@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,7 +27,7 @@ export default function AgreementTemplateEditor() {
   useEffect(() => { loadTemplates(); }, []);
 
   const loadTemplates = async () => {
-    const t = await base44.entities.AgreementTemplate.list('-created_at');
+    const t = await apiClient.AgreementTemplate.list('-created_at');
     setTemplates(t);
     setLoading(false);
   };
@@ -36,10 +36,10 @@ export default function AgreementTemplateEditor() {
     if (!form.title || !form.body_html) { toast.error('Title and body are required'); return; }
     setSaving(true);
     if (editTemplate) {
-      await base44.entities.AgreementTemplate.update(editTemplate.id, form);
+      await apiClient.AgreementTemplate.update(editTemplate.id, form);
       toast.success('Template updated');
     } else {
-      await base44.entities.AgreementTemplate.create(form);
+      await apiClient.AgreementTemplate.create(form);
       toast.success('Template created');
     }
     setShowEditor(false);
@@ -52,10 +52,10 @@ export default function AgreementTemplateEditor() {
     // Deactivate all others
     for (const t of templates) {
       if (t.id !== tmpl.id && t.status === 'active') {
-        await base44.entities.AgreementTemplate.update(t.id, { status: 'archived', is_active: false });
+        await apiClient.AgreementTemplate.update(t.id, { status: 'archived', is_active: false });
       }
     }
-    await base44.entities.AgreementTemplate.update(tmpl.id, { status: 'active', is_active: true });
+    await apiClient.AgreementTemplate.update(tmpl.id, { status: 'active', is_active: true });
     toast.success('Template activated');
     loadTemplates();
   };

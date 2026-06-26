@@ -3,7 +3,7 @@ import { serveStatic } from "hono/deno";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { connectDB } from "./src/db/index.ts";
-import { entityRouter } from "./src/controllers/entity.ts";
+import { v1Router } from "./src/controllers/v1.ts";
 import { authRouter } from "./src/controllers/auth.ts";
 import { voiceRouter } from "./src/controllers/voice.ts";
 import { integrationRouter } from "./src/controllers/integration.ts";
@@ -20,6 +20,7 @@ import { initCrmPoller } from "./src/cron/crmPoller.ts";
 import { initTrialExpiryCheck } from "./src/cron/trialExpiryCheck.ts";
 import { initBillingSweeper } from "./src/cron/billingSweeper.ts";
 import { initDailyDigest } from "./src/cron/dailyDigest.ts";
+import { initActivityDispatcher } from "./src/cron/activityDispatcher.ts";
 import { handleWebSocket } from "./src/services/realtime.ts";
 import { initStreamSession } from "./src/controllers/voice.ts";
 
@@ -81,11 +82,12 @@ app.get('/api/realtime', (c) => {
 });
 
 app.route("/api/auth", authRouter);
-app.route("/api/entities", entityRouter);
+app.route("/api/v1", v1Router);
 app.route("/api/voice", voiceRouter);
 app.route("/api/webhook", voiceWebhookRouter);
 app.route("/api/campaign", campaignRouter);
 app.route("/api/crm", crmRouter);
+app.route("/api/integrations", integrationRouter);
 app.route("/api/whatsapp", whatsappRouter);
 app.route("/api/telegram", telegramRouter);
 app.route("/api/billing", billingRouter);
@@ -123,6 +125,7 @@ initCrmPoller();
 initTrialExpiryCheck();
 initBillingSweeper();
 initDailyDigest();
+initActivityDispatcher();
 
 // Start DB connection
 connectDB().catch(console.error);

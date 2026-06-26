@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,7 +26,7 @@ export default function ClientAgreementTemplateEditor() {
   useEffect(() => { loadTemplates(); }, []);
 
   const loadTemplates = async () => {
-    const t = await base44.entities.ClientAgreementTemplate.list('-created_at');
+    const t = await apiClient.ClientAgreementTemplate.list('-created_at');
     setTemplates(t);
     setLoading(false);
   };
@@ -35,10 +35,10 @@ export default function ClientAgreementTemplateEditor() {
     if (!form.title || !form.body_html) { toast.error('Title and body are required'); return; }
     setSaving(true);
     if (editTemplate) {
-      await base44.entities.ClientAgreementTemplate.update(editTemplate.id, form);
+      await apiClient.ClientAgreementTemplate.update(editTemplate.id, form);
       toast.success('Template updated');
     } else {
-      await base44.entities.ClientAgreementTemplate.create(form);
+      await apiClient.ClientAgreementTemplate.create(form);
       toast.success('Template created');
     }
     setShowEditor(false);
@@ -50,10 +50,10 @@ export default function ClientAgreementTemplateEditor() {
   const handleSetActive = async (tmpl) => {
     for (const t of templates) {
       if (t.id !== tmpl.id && t.status === 'active') {
-        await base44.entities.ClientAgreementTemplate.update(t.id, { status: 'archived', is_active: false });
+        await apiClient.ClientAgreementTemplate.update(t.id, { status: 'archived', is_active: false });
       }
     }
-    await base44.entities.ClientAgreementTemplate.update(tmpl.id, { status: 'active', is_active: true });
+    await apiClient.ClientAgreementTemplate.update(tmpl.id, { status: 'active', is_active: true });
     toast.success('Template activated');
     loadTemplates();
   };

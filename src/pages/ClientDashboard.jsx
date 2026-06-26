@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bot, Users, PhoneCall, Calendar, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -27,10 +27,10 @@ export default function ClientDashboard() {
 
   const loadData = async () => {
     try {
-      const currentUser = await base44.auth.me();
+      const currentUser = await apiClient.auth.me();
       setUser(currentUser);
 
-      const clients = await base44.entities.Client.filter({ user_id: currentUser.id });
+      const clients = await apiClient.Client.filter({ user_id: currentUser.id });
       if (clients.length > 0) {
         const clientData = clients[0];
         setClient(clientData);
@@ -43,16 +43,16 @@ export default function ClientDashboard() {
         // NOTE: each CallLog row carries a heavy agent_config_cache (full prompts/scripts).
         // For dashboard counts we only need a bounded window, not the full history.
         const [agents, leads, todaysCalls, recentCalls, activities, subs] = await Promise.all([
-          base44.entities.Agent.filter({ client_id: clientData.id }),
-          base44.entities.Lead.filter({ client_id: clientData.id }),
-          base44.entities.CallLog.filter(
+          apiClient.Agent.filter({ client_id: clientData.id }),
+          apiClient.Lead.filter({ client_id: clientData.id }),
+          apiClient.CallLog.filter(
             { client_id: clientData.id, created_at: { $gte: todayStartISO } },
             '-created_at',
             500
           ),
-          base44.entities.CallLog.filter({ client_id: clientData.id }, '-created_at', 500),
-          base44.entities.Activity.filter({ client_id: clientData.id }),
-          base44.entities.Subscription.filter({ client_id: clientData.id, status: 'active' }, '-created_at', 1)
+          apiClient.CallLog.filter({ client_id: clientData.id }, '-created_at', 500),
+          apiClient.Activity.filter({ client_id: clientData.id }),
+          apiClient.Subscription.filter({ client_id: clientData.id, status: 'active' }, '-created_at', 1)
         ]);
         setSubscription(subs[0] || null);
 

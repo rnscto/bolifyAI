@@ -2,7 +2,7 @@ import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Shield, Phone, MessageSquare, Calendar, ArrowRight, UserCheck, Filter, Bell } from 'lucide-react';
 import { motion } from 'framer-motion';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { createPageUrl } from '../../utils';
 
 const features = [
@@ -47,7 +47,7 @@ export default function PersonalAssistantSection() {
               <Button
                 size="lg"
                 className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white px-8 py-5 text-base rounded-xl shadow-lg shadow-purple-500/25 font-semibold"
-                onClick={() => base44.auth.redirectToLogin(createPageUrl('Onboarding') + '?type=personal')}
+                onClick={() => apiClient.auth.redirectToLogin(createPageUrl('Onboarding') + '?type=personal')}
               >
                 Get Your AI Assistant <ArrowRight className="w-5 h-5 ml-2" />
               </Button>

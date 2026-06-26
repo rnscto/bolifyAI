@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -34,7 +34,7 @@ export default function LiveCallActions({ call, onActionComplete }) {
       if (type === 4 && intercom) payload.intercom = intercom;
       if ([1, 2, 3].includes(type) && agentId) payload.agent_id = agentId;
 
-      const res = await base44.functions.invoke('callTransfer', payload);
+      const res = await apiClient.functions.invoke('callTransfer', payload);
       toast.success(`${ACTION_TYPES[type].label} action initiated successfully`);
       onActionComplete?.();
       setOpen(false);

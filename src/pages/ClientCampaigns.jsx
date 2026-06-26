@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
+import { useRealtime } from '@/hooks/useRealtime';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import FeatureGate from '../components/FeatureGate';
@@ -22,30 +23,27 @@ export default function ClientCampaigns() {
 
   // Realtime updates via WebSocket — replaces the old 30s polling that hit rate limits.
   // Patches campaign rows in place as they change (status, counters, etc.).
-  useEffect(() => {
+  useRealtime('Campaign', (event) => {
     if (!client) return;
-    const unsubscribe = base44.entities.Campaign.subscribe((event) => {
-      const row = event.data;
-      if (!row || row.client_id !== client.id) return;
-      setCampaigns(prev => {
-        if (event.type === 'delete') return prev.filter(c => c.id !== event.id);
-        const exists = prev.some(c => c.id === row.id);
-        if (event.type === 'update' || exists) {
-          return prev.map(c => (c.id === row.id ? row : c));
-        }
-        return [row, ...prev];
-      });
+    const row = event.data;
+    if (!row || row.client_id !== client.id) return;
+    setCampaigns(prev => {
+      if (event.type === 'delete') return prev.filter(c => c.id !== event.id);
+      const exists = prev.some(c => c.id === row.id);
+      if (event.type === 'update' || exists) {
+        return prev.map(c => (c.id === row.id ? row : c));
+      }
+      return [row, ...prev];
     });
-    return unsubscribe;
-  }, [client]);
+  });
 
   const loadData = async () => {
     try {
-      const user = await base44.auth.me();
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      const user = await apiClient.auth.me();
+      const clients = await apiClient.Client.filter({ user_id: user.id });
       if (clients.length > 0) {
         setClient(clients[0]);
-        const data = await base44.entities.Campaign.filter(
+        const data = await apiClient.Campaign.filter(
           { client_id: clients[0].id }, '-created_at', 50
         );
         setCampaigns(data);
@@ -60,7 +58,7 @@ export default function ClientCampaigns() {
   const handleStart = async (campaignId) => {
     try {
       toast.info('Starting campaign...');
-      const res = await base44.functions.invoke('executeCampaign', {
+      const res = await apiClient.functions.invoke('executeCampaign', {
         campaign_id: campaignId,
         action: 'start'
       });
@@ -77,7 +75,7 @@ export default function ClientCampaigns() {
 
   const handlePause = async (campaignId) => {
     try {
-      await base44.functions.invoke('executeCampaign', {
+      await apiClient.functions.invoke('executeCampaign', {
         campaign_id: campaignId,
         action: 'pause'
       });

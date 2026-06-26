@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { createPageUrl } from '@/utils';
 
 export default function Signup() {
@@ -21,8 +21,8 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      // Assuming base44.auth.signup returns a user with a token automatically
-      const user = await base44.auth.signup(email, password, fullName);
+      // Assuming apiClient.auth.signup returns a user with a token automatically
+      const user = await apiClient.auth.signup(email, password, fullName);
       window.location.href = createPageUrl(user.role === 'admin' ? 'AdminDashboard' : 'ClientDashboard');
     } catch (err) {
       if (err.message.includes('Failed to fetch') || err.message.includes('ConnectionRefused')) {

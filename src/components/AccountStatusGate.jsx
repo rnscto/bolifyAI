@@ -1,7 +1,7 @@
 import React from 'react';
 import { AlertTriangle, Lock, Clock, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 
 /**
  * Full-screen lockout shown when a client account is not in a usable state.
@@ -65,7 +65,7 @@ export default function AccountStatusGate({ client, currentPageName }) {
           <Button
             variant="outline"
             className="w-full"
-            onClick={() => base44.auth.logout()}
+            onClick={() => apiClient.auth.logout()}
           >
             <LogOut className="w-4 h-4 mr-2" />
             Log out

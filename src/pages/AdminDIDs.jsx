@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,8 +50,8 @@ export default function AdminDIDs() {
   const loadData = async () => {
     try {
       const [didsData, clientsData] = await Promise.all([
-        base44.entities.DID.list('-created_at'),
-        base44.entities.Client.list()
+        apiClient.DID.list('-created_at'),
+        apiClient.Client.list()
       ]);
       setDids(didsData);
       setClients(clientsData);
@@ -74,7 +74,7 @@ export default function AdminDIDs() {
         monthly_cost: formData.monthly_cost
       };
 
-      await base44.entities.DID.create(didData);
+      await apiClient.DID.create(didData);
       toast.success('DID added successfully');
       setDialogOpen(false);
       setFormData({ number: '', country_code: '+91', client_id: '', monthly_cost: 6500 });
@@ -91,7 +91,7 @@ export default function AdminDIDs() {
       const oldClientId = did?.client_id;
 
       // Update DID entity
-      await base44.entities.DID.update(didId, {
+      await apiClient.DID.update(didId, {
         client_id: clientId || null,
         agent_id: clientId ? did?.agent_id : null,
         status: clientId ? 'assigned' : 'available'
@@ -99,12 +99,12 @@ export default function AdminDIDs() {
 
       // If unassigning from old client, remove DID from that client's agents
       if (oldClientId && oldClientId !== clientId && did?.number) {
-        const oldAgents = await base44.entities.Agent.filter({ client_id: oldClientId });
+        const oldAgents = await apiClient.Agent.filter({ client_id: oldClientId });
         for (const agent of oldAgents) {
           const agentDIDs = agent.assigned_dids || (agent.assigned_did ? [agent.assigned_did] : []);
           if (agentDIDs.includes(did.number)) {
             const newDIDs = agentDIDs.filter(d => d !== did.number);
-            await base44.entities.Agent.update(agent.id, {
+            await apiClient.Agent.update(agent.id, {
               assigned_dids: newDIDs,
               assigned_did: newDIDs[0] || ''
             });
@@ -114,18 +114,18 @@ export default function AdminDIDs() {
 
       // If assigning to a new client, auto-assign to their first agent if they have one
       if (clientId && did?.number) {
-        const newAgents = await base44.entities.Agent.filter({ client_id: clientId });
+        const newAgents = await apiClient.Agent.filter({ client_id: clientId });
         if (newAgents.length > 0) {
           const agent = newAgents[0];
           const agentDIDs = agent.assigned_dids || (agent.assigned_did ? [agent.assigned_did] : []);
           if (!agentDIDs.includes(did.number)) {
             const updatedDIDs = [...agentDIDs, did.number];
-            await base44.entities.Agent.update(agent.id, {
+            await apiClient.Agent.update(agent.id, {
               assigned_dids: updatedDIDs,
               assigned_did: updatedDIDs[0]
             });
           }
-          await base44.entities.DID.update(didId, { agent_id: agent.id });
+          await apiClient.DID.update(didId, { agent_id: agent.id });
         }
       }
 
@@ -140,7 +140,7 @@ export default function AdminDIDs() {
   const handleSyncSmartflo = async () => {
     setSyncing(true);
     try {
-      const response = await base44.functions.invoke('fetchSmartfloDIDs', {});
+      const response = await apiClient.functions.invoke('fetchSmartfloDIDs', {});
       if (response.data.success) {
         toast.success(response.data.message);
         loadData();
@@ -162,7 +162,7 @@ export default function AdminDIDs() {
     try {
       if (isReserved) {
         // Unreserve → make available
-        await base44.entities.DID.update(didId, {
+        await apiClient.DID.update(didId, {
           status: 'available',
           reserved_note: '',
           is_demo: false
@@ -170,7 +170,7 @@ export default function AdminDIDs() {
         toast.success('DID unreserved');
       } else {
         const note = markAsDemo ? 'Shared Demo Pool DID' : (prompt('Reserve note (optional):') || '');
-        await base44.entities.DID.update(didId, {
+        await apiClient.DID.update(didId, {
           status: 'reserved',
           client_id: null,
           agent_id: null,
@@ -179,12 +179,12 @@ export default function AdminDIDs() {
         });
         // Remove from any agent
         if (did.client_id && did.number) {
-          const agents = await base44.entities.Agent.filter({ client_id: did.client_id });
+          const agents = await apiClient.Agent.filter({ client_id: did.client_id });
           for (const agent of agents) {
             const agentDIDs = agent.assigned_dids || (agent.assigned_did ? [agent.assigned_did] : []);
             if (agentDIDs.includes(did.number)) {
               const newDIDs = agentDIDs.filter(d => d !== did.number);
-              await base44.entities.Agent.update(agent.id, {
+              await apiClient.Agent.update(agent.id, {
                 assigned_dids: newDIDs,
                 assigned_did: newDIDs[0] || ''
               });

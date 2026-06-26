@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { ChevronDown, ChevronUp, Sparkles, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -48,7 +48,7 @@ export default function CallScriptEditor({ script, onChange, agentName, campaign
   const handleAIGenerate = async () => {
     setGenerating(true);
     try {
-      const result = await base44.integrations.Core.InvokeLLM({
+      const result = await apiClient.integrations.Core.InvokeLLM({
         prompt: `Generate a professional cold calling script for a ${campaignType === 'followup' ? 'follow-up' : 'cold call'} campaign.
 ${agentName ? `Agent name: ${agentName}` : ''}
 

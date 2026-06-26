@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -31,7 +31,7 @@ export default function EnrollmentManager({ sequence, onBack }) {
 
   const loadEnrollments = async () => {
     setLoading(true);
-    const data = await base44.entities.SequenceEnrollment.filter({ sequence_id: sequence.id }, '-created_at', 100);
+    const data = await apiClient.SequenceEnrollment.filter({ sequence_id: sequence.id }, '-created_at', 100);
     setEnrollments(data);
     setLoading(false);
   };
@@ -44,7 +44,7 @@ export default function EnrollmentManager({ sequence, onBack }) {
     const nextSend = new Date();
     nextSend.setDate(nextSend.getDate() + (firstStep?.delay_days || 1));
 
-    await base44.entities.SequenceEnrollment.create({
+    await apiClient.SequenceEnrollment.create({
       sequence_id: sequence.id,
       recipient_email: enrollForm.email,
       recipient_name: enrollForm.name,
@@ -60,7 +60,7 @@ export default function EnrollmentManager({ sequence, onBack }) {
     });
 
     // Update sequence counters
-    await base44.entities.EmailSequence.update(sequence.id, {
+    await apiClient.EmailSequence.update(sequence.id, {
       total_enrolled: (sequence.total_enrolled || 0) + 1
     });
 
@@ -74,11 +74,11 @@ export default function EnrollmentManager({ sequence, onBack }) {
   const handleOptOut = async (enrollment) => {
     if (!confirm(`Opt out ${enrollment.recipient_email}?`)) return;
     setActionId(enrollment.id);
-    await base44.entities.SequenceEnrollment.update(enrollment.id, {
+    await apiClient.SequenceEnrollment.update(enrollment.id, {
       status: 'opted_out',
       opt_out_date: new Date().toISOString()
     });
-    await base44.entities.EmailSequence.update(sequence.id, {
+    await apiClient.EmailSequence.update(sequence.id, {
       total_opted_out: (sequence.total_opted_out || 0) + 1
     });
     toast.success('Contact opted out');
@@ -89,7 +89,7 @@ export default function EnrollmentManager({ sequence, onBack }) {
   const handleTogglePause = async (enrollment) => {
     setActionId(enrollment.id);
     const newStatus = enrollment.status === 'paused' ? 'active' : 'paused';
-    await base44.entities.SequenceEnrollment.update(enrollment.id, { status: newStatus });
+    await apiClient.SequenceEnrollment.update(enrollment.id, { status: newStatus });
     toast.success(newStatus === 'paused' ? 'Enrollment paused' : 'Enrollment resumed');
     loadEnrollments();
     setActionId(null);

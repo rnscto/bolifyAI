@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { toast } from 'sonner';
 import { Loader2, Sparkles, Check, Globe, BookOpen, Mic } from 'lucide-react';
 import { INDIAN_LANGUAGES, AGENT_ROLES, TONE_OPTIONS } from './IndianLanguages';
@@ -38,7 +38,7 @@ export default function PromptGeneratorDialog({
 
   useEffect(() => {
     if (open && clientId) {
-      base44.entities.KnowledgeBase.filter({ client_id: clientId })
+      apiClient.KnowledgeBase.filter({ client_id: clientId })
         .then(kbs => setKnowledgeBases(Array.isArray(kbs) ? kbs.filter(k => k.status === 'ready') : []))
         .catch(() => setKnowledgeBases([]));
     }
@@ -76,7 +76,7 @@ export default function PromptGeneratorDialog({
     setLoading(true);
     setResult(null);
     try {
-      const res = await base44.functions.invoke('generatePromptAndPersona', { ...form, voice_engine: voiceEngine });
+      const res = await apiClient.functions.invoke('generatePromptAndPersona', { ...form, voice_engine: voiceEngine });
       const data = res?.data;
       if (!data?.success) {
         toast.error(data?.error || 'Generation failed');

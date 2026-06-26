@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,9 +35,9 @@ export default function ClientComplianceTab({ client }) {
 
   const loadData = async () => {
     const [c, e, comp] = await Promise.all([
-      base44.entities.ConsentLog.filter({ client_id: client.id }, '-created_at'),
-      base44.entities.DataErasureRequest.filter({ client_id: client.id }, '-created_at'),
-      base44.entities.ComplaintLog.filter({ client_id: client.id }, '-created_at'),
+      apiClient.ConsentLog.filter({ client_id: client.id }, '-created_at'),
+      apiClient.DataErasureRequest.filter({ client_id: client.id }, '-created_at'),
+      apiClient.ComplaintLog.filter({ client_id: client.id }, '-created_at'),
     ]);
     setConsents(c);
     setErasureRequests(e);
@@ -47,8 +47,8 @@ export default function ClientComplianceTab({ client }) {
 
   const handleErasureRequest = async () => {
     setSubmitting(true);
-    const user = await base44.auth.me();
-    await base44.entities.DataErasureRequest.create({
+    const user = await apiClient.auth.me();
+    await apiClient.DataErasureRequest.create({
       client_id: client.id,
       requester_email: user.email,
       requester_name: user.full_name,
@@ -56,7 +56,7 @@ export default function ClientComplianceTab({ client }) {
       description: erasureForm.description,
       status: 'pending',
     });
-    await base44.entities.AuditLog.create({
+    await apiClient.AuditLog.create({
       client_id: client.id,
       action_type: 'data_erasure',
       actor_email: user.email,

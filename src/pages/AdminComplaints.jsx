@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -52,9 +52,9 @@ export default function AdminComplaints() {
 
   const loadData = async () => {
     const [c, cl, d] = await Promise.all([
-      base44.entities.ComplaintLog.list('-created_at', 200),
-      base44.entities.Client.list('-created_at'),
-      base44.entities.DID.list(),
+      apiClient.ComplaintLog.list('-created_at', 200),
+      apiClient.Client.list('-created_at'),
+      apiClient.DID.list(),
     ]);
     setComplaints(c);
     setClients(cl);
@@ -74,15 +74,15 @@ export default function AdminComplaints() {
       if (did?.client_id) clientId = did.client_id;
     }
 
-    await base44.entities.ComplaintLog.create({
+    await apiClient.ComplaintLog.create({
       ...form,
       client_id: clientId,
       status: 'open',
     });
 
     // Audit log
-    const user = await base44.auth.me();
-    await base44.entities.AuditLog.create({
+    const user = await apiClient.auth.me();
+    await apiClient.AuditLog.create({
       client_id: clientId,
       action_type: 'consent_revoked',
       actor_email: user.email,
@@ -106,15 +106,15 @@ export default function AdminComplaints() {
     if (newStatus === 'cooling_off') {
       const did = dids.find(d => d.number === complaint.did_number);
       if (did) {
-        await base44.entities.DID.update(did.id, { status: 'inactive', reserved_note: `Cooling off — complaint ID ${complaint.id}` });
+        await apiClient.DID.update(did.id, { status: 'inactive', reserved_note: `Cooling off — complaint ID ${complaint.id}` });
         updates.auto_action_taken = `DID ${complaint.did_number} suspended (cooling off)`;
         toast.info(`DID ${complaint.did_number} suspended for cooling off`);
       }
     }
 
-    await base44.entities.ComplaintLog.update(complaint.id, updates);
-    const user = await base44.auth.me();
-    await base44.entities.AuditLog.create({
+    await apiClient.ComplaintLog.update(complaint.id, updates);
+    const user = await apiClient.auth.me();
+    await apiClient.AuditLog.create({
       client_id: complaint.client_id,
       action_type: 'emergency_takedown',
       actor_email: user.email,

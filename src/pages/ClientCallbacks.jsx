@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
@@ -33,11 +33,11 @@ export default function ClientCallbacks() {
   }, []);
 
   const loadClient = async () => {
-    const user = await base44.auth.me();
+    const user = await apiClient.auth.me();
     if (user.role === 'admin') {
       setIsAdmin(true);
       // Load all clients for admin selector
-      const clients = await base44.entities.Client.filter({ status: 'active' });
+      const clients = await apiClient.Client.filter({ status: 'active' });
       setAllClients(clients);
       if (clients.length > 0) {
         setClientId(clients[0].id);
@@ -46,7 +46,7 @@ export default function ClientCallbacks() {
         setLoading(false);
       }
     } else {
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      const clients = await apiClient.Client.filter({ user_id: user.id });
       if (clients.length > 0) {
         setClientId(clients[0].id);
         fetchCallbacks(clients[0].id);
@@ -63,7 +63,7 @@ export default function ClientCallbacks() {
     setLoading(true);
     setError(null);
     try {
-      const res = await base44.functions.invoke('parseCallbacks', { client_id: cId });
+      const res = await apiClient.functions.invoke('parseCallbacks', { client_id: cId });
       setCallbacks(res.data.callbacks || []);
     } catch (err) {
       console.error('Failed to load callbacks:', err);
@@ -81,7 +81,7 @@ export default function ClientCallbacks() {
     if (!clientId || backfilling) return;
     setBackfilling(true);
     try {
-      const res = await base44.functions.invoke('backfillCallbackActivities', { client_id: clientId });
+      const res = await apiClient.functions.invoke('backfillCallbackActivities', { client_id: clientId });
       const d = res.data || {};
       if (d.success) {
         toast.success(`Backfilled: scanned ${d.scanned || 0} calls, queued ${d.extractor_invoked || 0} for AI extraction`);
@@ -108,14 +108,14 @@ export default function ClientCallbacks() {
     setCallingLeadId(item.lead_id);
     try {
       // Find an active agent for this client
-      const agents = await base44.entities.Agent.filter({ client_id: clientId, status: 'active' });
+      const agents = await apiClient.Agent.filter({ client_id: clientId, status: 'active' });
       if (!agents || agents.length === 0) {
         toast.error('No active agent available. Activate an agent first.');
         setCallingLeadId(null);
         return;
       }
 
-      const response = await base44.functions.invoke('initiateCall', {
+      const response = await apiClient.functions.invoke('initiateCall', {
         lead_id: item.lead_id,
         agent_id: agents[0].id,
         phone_number: item.lead_phone

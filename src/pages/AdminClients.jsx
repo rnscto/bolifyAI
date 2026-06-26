@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -57,12 +57,12 @@ export default function AdminClients() {
 
   useEffect(() => {
     loadClients();
-    base44.auth.me().then(setCurrentUser).catch(() => {});
+    apiClient.auth.me().then(setCurrentUser).catch(() => {});
   }, []);
 
   const loadClients = async () => {
     try {
-      const res = await base44.functions.invoke('adminListClients', { action: 'list' });
+      const res = await apiClient.functions.invoke('adminListClients', { action: 'list' });
       setClients(res.data.clients || []);
       setUsers(res.data.users || []);
     } catch (error) {
@@ -88,10 +88,10 @@ export default function AdminClients() {
       };
 
       if (editingClient) {
-        await base44.functions.invoke('adminListClients', { action: 'update', client_id: editingClient.id, data: clientData });
+        await apiClient.functions.invoke('adminListClients', { action: 'update', client_id: editingClient.id, data: clientData });
         toast.success('Client updated successfully');
       } else {
-        await base44.functions.invoke('adminListClients', { action: 'create', data: clientData });
+        await apiClient.functions.invoke('adminListClients', { action: 'create', data: clientData });
         toast.success('Client created successfully');
       }
 
@@ -121,7 +121,7 @@ export default function AdminClients() {
     if (!confirm('Are you sure you want to delete this client?')) return;
     
     try {
-      await base44.functions.invoke('adminListClients', { action: 'delete', client_id: id });
+      await apiClient.functions.invoke('adminListClients', { action: 'delete', client_id: id });
       toast.success('Client deleted');
       loadClients();
     } catch (error) {

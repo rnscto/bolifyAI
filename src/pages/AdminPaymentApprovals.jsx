@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -67,11 +67,11 @@ export default function AdminPaymentApprovals() {
   const load = async () => {
     setLoading(true);
     try {
-      const user = await base44.auth.me();
+      const user = await apiClient.auth.me();
       setMe(user);
       const [reqs, cs] = await Promise.all([
-        base44.entities.PaymentApprovalRequest.list('-created_at', 500),
-        base44.entities.Client.list('-created_at', 1000)
+        apiClient.PaymentApprovalRequest.list('-created_at', 500),
+        apiClient.Client.list('-created_at', 1000)
       ]);
       setRequests(reqs || []);
       setClients(cs || []);
@@ -113,7 +113,7 @@ export default function AdminPaymentApprovals() {
     if (!reviewing || !decision) return;
     setSubmitting(true);
     try {
-      const res = await base44.functions.invoke('processPaymentApproval', {
+      const res = await apiClient.functions.invoke('processPaymentApproval', {
         request_id: reviewing.id,
         decision,
         review_notes: reviewNotes

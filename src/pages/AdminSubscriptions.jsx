@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table,
@@ -23,8 +23,8 @@ export default function AdminSubscriptions() {
   const loadData = async () => {
     try {
       const [subsData, clientsData] = await Promise.all([
-        base44.entities.Subscription.list('-created_at'),
-        base44.entities.Client.list()
+        apiClient.Subscription.list('-created_at'),
+        apiClient.Client.list()
       ]);
       setSubscriptions(subsData);
       setClients(clientsData);

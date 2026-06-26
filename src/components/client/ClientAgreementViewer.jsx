@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,7 @@ export default function ClientAgreementViewer({ clientId }) {
   }, [clientId]);
 
   const loadAgreements = async () => {
-    const agrs = await base44.entities.ClientAgreement.filter({ client_id: clientId }, '-created_at');
+    const agrs = await apiClient.ClientAgreement.filter({ client_id: clientId }, '-created_at');
     setAgreements(agrs);
     setLoading(false);
   };

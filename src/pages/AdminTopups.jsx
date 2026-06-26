@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -41,12 +41,12 @@ export default function AdminTopups() {
   const [me, setMe] = useState(null);
   const [raiseOpen, setRaiseOpen] = useState(false);
 
-  useEffect(() => { loadData(); base44.auth.me().then(setMe).catch(() => {}); }, []);
+  useEffect(() => { loadData(); apiClient.auth.me().then(setMe).catch(() => {}); }, []);
 
   const loadData = async () => {
     const [paysData, clientsData] = await Promise.all([
-      base44.entities.Payment.list('-created_at', 500),
-      base44.entities.Client.list('-created_at', 1000),
+      apiClient.Payment.list('-created_at', 500),
+      apiClient.Client.list('-created_at', 1000),
     ]);
     setPayments(paysData);
     setClients(clientsData);

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -65,7 +65,7 @@ export default function KYCUpload({ client }) {
 
   const loadKYC = async () => {
     if (!client) return;
-    const docs = await base44.entities.KYCDocument.filter({ client_id: client.id, entity_type: 'client' });
+    const docs = await apiClient.KYCDocument.filter({ client_id: client.id, entity_type: 'client' });
     if (docs.length > 0) {
       setKycDoc(docs[0]);
       setFormData({
@@ -89,13 +89,13 @@ export default function KYCUpload({ client }) {
     setUploading(prev => ({ ...prev, [field]: true }));
     try {
       // Upload to our own Azure Blob storage (private container) using the shared helper,
-      // which POSTs proper multipart form-data. (base44.functions.invoke serializes the
+      // which POSTs proper multipart form-data. (apiClient.functions.invoke serializes the
       // body as JSON and corrupts FormData — that was breaking KYC uploads.)
       const { file_uri } = await uploadPrivateFile(file, `kyc/${client.id}`);
       const file_url = file_uri;
       if (!file_url) throw new Error('Upload failed');
       if (kycDoc) {
-        await base44.entities.KYCDocument.update(kycDoc.id, { [field]: file_url });
+        await apiClient.KYCDocument.update(kycDoc.id, { [field]: file_url });
         setKycDoc(prev => ({ ...prev, [field]: file_url }));
       } else {
         // Create KYC doc on first upload. Only include company_type if user has selected one
@@ -111,7 +111,7 @@ export default function KYCUpload({ client }) {
         };
         const ct = formData.company_type || client.company_type;
         if (ct) payload.company_type = ct;
-        const newDoc = await base44.entities.KYCDocument.create(payload);
+        const newDoc = await apiClient.KYCDocument.create(payload);
         setKycDoc(newDoc);
       }
       toast.success('Document uploaded');
@@ -133,7 +133,7 @@ export default function KYCUpload({ client }) {
     if (!kycDoc.company_kyc_url) { toast.error('Company KYC document is required'); return; }
 
     setSaving(true);
-    await base44.entities.KYCDocument.update(kycDoc.id, {
+    await apiClient.KYCDocument.update(kycDoc.id, {
       status: 'under_review',
       signatory_name: formData.signatory_name,
       signatory_aadhaar_number: formData.signatory_aadhaar_number,
@@ -141,11 +141,11 @@ export default function KYCUpload({ client }) {
       company_type: formData.company_type,
       company_kyc_doc_type: formData.company_kyc_doc_type,
     });
-    await base44.entities.Client.update(client.id, { kyc_status: 'under_review' });
+    await apiClient.Client.update(client.id, { kyc_status: 'under_review' });
 
     // Notify admin (best-effort, via our own email function — not credit-gated)
     try {
-      await base44.functions.invoke('sendClientEmail', {
+      await apiClient.functions.invoke('sendClientEmail', {
         to: 'yadav.nandkishor73@gmail.com',
         subject: `[KYC Submitted] ${client.company_name}`,
         html: `<p>Client <strong>${client.company_name}</strong> has submitted KYC documents for review.</p>`,
@@ -344,7 +344,7 @@ function DocumentUploadField({ label, field, existingUrl, uploading, onUpload, d
     if (!existingUrl) return;
     setOpening(true);
     try {
-      const resp = await base44.functions.invoke('azureBlobSignedUrl', { file_uri: existingUrl });
+      const resp = await apiClient.functions.invoke('azureBlobSignedUrl', { file_uri: existingUrl });
       const signed = resp.data?.signed_url || existingUrl;
       window.open(signed, '_blank', 'noopener,noreferrer');
     } catch (_) {

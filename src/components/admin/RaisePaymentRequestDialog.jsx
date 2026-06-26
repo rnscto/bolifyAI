@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter
 } from '@/components/ui/dialog';
@@ -55,7 +55,7 @@ export default function RaisePaymentRequestDialog({
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => { base44.auth.me().then(setMe).catch(() => {}); }, []);
+  useEffect(() => { apiClient.auth.me().then(setMe).catch(() => {}); }, []);
   useEffect(() => { if (open) { setType(defaultType); setSelectedClientId(clientId || ''); setAmount(''); setTxn(''); setScreenshotUrl(''); setNotes(''); } }, [open, defaultType, clientId]);
 
   const isCEO = (me?.email || '').toLowerCase() === CEO_EMAIL;
@@ -90,7 +90,7 @@ export default function RaisePaymentRequestDialog({
     if (!screenshotUrl) return toast.error('Upload a payment screenshot');
     setSubmitting(true);
     try {
-      const res = await base44.functions.invoke('submitPaymentApproval', {
+      const res = await apiClient.functions.invoke('submitPaymentApproval', {
         request_type: type,
         client_id: selectedClientId,
         amount: Number(amount),

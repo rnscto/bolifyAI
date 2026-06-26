@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
+import { useRealtime } from '@/hooks/useRealtime';
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -30,35 +31,32 @@ export default function ClientWhatsAppHistory() {
 
   // Realtime updates via WebSocket — no polling, avoids Base44 rate limits.
   // Filters events to this client's WhatsApp logs and patches the list in place.
-  useEffect(() => {
+  useRealtime('OutreachLog', (event) => {
     if (!clientId) return;
-    const unsubscribe = base44.entities.OutreachLog.subscribe((event) => {
-      const row = event.data;
-      if (!row || row.client_id !== clientId || row.channel !== 'whatsapp') return;
-      setLogs(prev => {
-        if (event.type === 'delete') return prev.filter(l => l.id !== event.id);
-        const exists = prev.some(l => l.id === row.id);
-        if (event.type === 'update' || exists) {
-          return prev.map(l => (l.id === row.id ? row : l));
-        }
-        // new record → prepend (keeps newest-first ordering)
-        return [row, ...prev];
-      });
+    const row = event.data;
+    if (!row || row.client_id !== clientId || row.channel !== 'whatsapp') return;
+    setLogs(prev => {
+      if (event.type === 'delete') return prev.filter(l => l.id !== event.id);
+      const exists = prev.some(l => l.id === row.id);
+      if (event.type === 'update' || exists) {
+        return prev.map(l => (l.id === row.id ? row : l));
+      }
+      // new record → prepend (keeps newest-first ordering)
+      return [row, ...prev];
     });
-    return unsubscribe;
-  }, [clientId]);
+  });
 
   const loadData = async () => {
     setLoading(true);
-    const user = await base44.auth.me();
+    const user = await apiClient.auth.me();
     let cid = user.client_id || user.data?.client_id;
     if (!cid) {
-      const clients = await base44.entities.Client.filter({ email: user.email });
+      const clients = await apiClient.Client.filter({ email: user.email });
       cid = clients[0]?.id;
     }
     if (!cid) { setLogs([]); setLoading(false); return; }
     setClientId(cid);
-    const rows = await base44.entities.OutreachLog.filter(
+    const rows = await apiClient.OutreachLog.filter(
       { client_id: cid, channel: 'whatsapp' }, '-created_at', 200
     );
     setLogs(rows);

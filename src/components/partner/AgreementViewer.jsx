@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,7 +16,7 @@ export default function AgreementViewer({ partnerId }) {
   }, [partnerId]);
 
   const loadAgreements = async () => {
-    const agrs = await base44.entities.PartnerAgreement.filter({ partner_id: partnerId }, '-created_at');
+    const agrs = await apiClient.PartnerAgreement.filter({ partner_id: partnerId }, '-created_at');
     setAgreements(agrs);
     setLoading(false);
   };

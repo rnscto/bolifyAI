@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import {
   Dialog,
   DialogContent,
@@ -52,7 +52,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
   const [screenshotUrl, setScreenshotUrl] = useState('');
   const [notes, setNotes] = useState('');
 
-  useEffect(() => { base44.auth.me().then(setMe).catch(() => {}); }, []);
+  useEffect(() => { apiClient.auth.me().then(setMe).catch(() => {}); }, []);
 
   const myEmail = (me?.email || '').toLowerCase();
   const isCEO = myEmail === CEO_EMAIL;
@@ -102,7 +102,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
         next_billing_date: form.next_billing_date || null,
         trial_days: form.trial_end_date ? null : 7
       };
-      const res = await base44.functions.invoke('submitPaymentApproval', {
+      const res = await apiClient.functions.invoke('submitPaymentApproval', {
         request_type: 'client_activation',
         client_id: client.id,
         amount: Number(payAmount),
@@ -147,7 +147,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
       if (form.account_status === 'trial' && form.trial_end_date) {
         updateData.trial_end_date = new Date(form.trial_end_date).toISOString();
       }
-      await base44.entities.Client.update(client.id, updateData);
+      await apiClient.Client.update(client.id, updateData);
       toast.success(`Client "${client.company_name}" updated`);
       onOpenChange(false);
       onUpdated && onUpdated();

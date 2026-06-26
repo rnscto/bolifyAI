@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -74,7 +74,7 @@ export default function SequenceEditor({ sequence, onSave, onCancel }) {
     const stepNum = index + 1;
     const totalSteps = form.steps.length;
 
-    const result = await base44.integrations.Core.InvokeLLM({
+    const result = await apiClient.integrations.Core.InvokeLLM({
       prompt: `Generate a professional follow-up email for step ${stepNum} of ${totalSteps} in a "${form.outreach_type.replace(/_/g, ' ')}" email sequence called "${form.name}".
 ${form.description ? `Sequence description: ${form.description}` : ''}
 
@@ -116,9 +116,9 @@ Return subject and body_html.`,
     };
 
     if (isNew) {
-      await base44.entities.EmailSequence.create(data);
+      await apiClient.EmailSequence.create(data);
     } else {
-      await base44.entities.EmailSequence.update(sequence.id, data);
+      await apiClient.EmailSequence.update(sequence.id, data);
     }
     toast.success(isNew ? 'Sequence created' : 'Sequence updated');
     setSaving(false);

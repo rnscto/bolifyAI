@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { PhoneForwarded, Smartphone, Copy, CheckCircle2, Info, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -16,7 +16,7 @@ export default function CallForwardingGuide({ client }) {
 
   const loadDID = async () => {
     if (!client?.id) return;
-    const agents = await base44.entities.Agent.filter({ client_id: client.id });
+    const agents = await apiClient.Agent.filter({ client_id: client.id });
     if (agents.length > 0) {
       const did = agents[0].assigned_did || (agents[0].assigned_dids && agents[0].assigned_dids[0]) || '';
       setAssignedDID(did);

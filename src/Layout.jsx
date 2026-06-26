@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from './utils';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import {
   LayoutDashboard,
   Users,
@@ -58,7 +58,7 @@ export default function Layout({ children, currentPageName }) {
 
   const loadUser = async () => {
     try {
-      const currentUser = await base44.auth.me();
+      const currentUser = await apiClient.auth.me();
       setUser(currentUser);
       // Prompt non-admin users to set a proper display name if missing
       if (currentUser.role !== 'admin' && !currentUser.display_name && !currentUser.data?.display_name) {
@@ -68,18 +68,18 @@ export default function Layout({ children, currentPageName }) {
       if (currentUser.role !== 'admin') {
         let clients = [];
         try {
-          clients = await base44.entities.Client.filter({ user_id: currentUser.id });
+          clients = await apiClient.Client.filter({ user_id: currentUser.id });
         } catch (e) {
           console.log('Client filter by user_id failed:', e.message);
         }
         // Fallback: match by email if no user_id-linked client found (e.g. admin-created accounts)
         if (clients.length === 0) {
         try {
-          const byEmail = await base44.entities.Client.filter({ email: currentUser.email });
+          const byEmail = await apiClient.Client.filter({ email: currentUser.email });
           if (byEmail.length > 0) {
             // Link user_id for future lookups
-            try { await base44.entities.Client.update(byEmail[0].id, { user_id: currentUser.id }); } catch (_) {}
-            try { await base44.auth.updateMe({ client_id: byEmail[0].id }); } catch (_) {}
+            try { await apiClient.Client.update(byEmail[0].id, { user_id: currentUser.id }); } catch (_) {}
+            try { await apiClient.auth.updateMe({ client_id: byEmail[0].id }); } catch (_) {}
             clients = byEmail;
             }
           } catch (e) {
@@ -90,11 +90,11 @@ export default function Layout({ children, currentPageName }) {
           setClient(clients[0]);
           // Ensure client_id is stored on the user for RLS matching
           if (!currentUser.client_id || currentUser.client_id !== clients[0].id) {
-            try { await base44.auth.updateMe({ client_id: clients[0].id }); } catch (_) {}
+            try { await apiClient.auth.updateMe({ client_id: clients[0].id }); } catch (_) {}
           }
           // Load client's white-label branding (logo, app name, color, favicon)
           try {
-            const brandRows = await base44.entities.BrandSettings.filter({ client_id: clients[0].id });
+            const brandRows = await apiClient.BrandSettings.filter({ client_id: clients[0].id });
             if (brandRows.length > 0) setBrand(brandRows[0]);
           } catch (_) {}
           // If onboarding not completed, redirect
@@ -111,19 +111,19 @@ export default function Layout({ children, currentPageName }) {
             if (clients[0].account_status === 'trial' && clients[0].trial_end_date) {
               const trialEnd = new Date(clients[0].trial_end_date);
               if (trialEnd < new Date()) {
-                try { await base44.entities.Client.update(clients[0].id, { account_status: 'expired' }); } catch (_) {}
+                try { await apiClient.Client.update(clients[0].id, { account_status: 'expired' }); } catch (_) {}
                 clients[0].account_status = 'expired';
               }
             }
         // Check if client has signed agreement
           if (clients[0].onboarding_completed) {
-            const signedAgreements = await base44.entities.ClientAgreement.filter({
+            const signedAgreements = await apiClient.ClientAgreement.filter({
               client_id: clients[0].id,
               status: 'signed'
             });
             if (signedAgreements.length === 0) {
               // Check if there's an active template requiring signing
-              const activeTemplates = await base44.entities.ClientAgreementTemplate.filter({ status: 'active' });
+              const activeTemplates = await apiClient.ClientAgreementTemplate.filter({ status: 'active' });
               if (activeTemplates.length > 0) {
                 setNeedsAgreement(true);
               }
@@ -132,10 +132,10 @@ export default function Layout({ children, currentPageName }) {
         } else {
           // No client record found — try broader search using created_by
           try {
-            const byCreator = await base44.entities.Client.filter({ created_by: currentUser.email });
+            const byCreator = await apiClient.Client.filter({ created_by: currentUser.email });
             if (byCreator.length > 0) {
-              try { await base44.entities.Client.update(byCreator[0].id, { user_id: currentUser.id }); } catch (_) {}
-              try { await base44.auth.updateMe({ client_id: byCreator[0].id }); } catch (_) {}
+              try { await apiClient.Client.update(byCreator[0].id, { user_id: currentUser.id }); } catch (_) {}
+              try { await apiClient.auth.updateMe({ client_id: byCreator[0].id }); } catch (_) {}
               setClient(byCreator[0]);
               if (!byCreator[0].onboarding_completed) {
                 window.location.href = createPageUrl('Onboarding');
@@ -161,7 +161,7 @@ export default function Layout({ children, currentPageName }) {
   };
 
   const handleLogout = () => {
-    base44.auth.logout();
+    apiClient.auth.logout();
   };
 
   const isAdmin = user?.role === 'admin';
@@ -271,7 +271,7 @@ export default function Layout({ children, currentPageName }) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
         <p className="text-gray-600">Please log in to access the dashboard.</p>
-        <button onClick={() => base44.auth.redirectToLogin()} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+        <button onClick={() => apiClient.auth.redirectToLogin()} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
           Log In
         </button>
       </div>

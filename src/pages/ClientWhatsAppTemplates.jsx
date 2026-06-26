@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -26,16 +26,16 @@ export default function ClientWhatsAppTemplates() {
 
   const loadAll = async () => {
     try {
-      const user = await base44.auth.me();
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      const user = await apiClient.auth.me();
+      const clients = await apiClient.Client.filter({ user_id: user.id });
       if (clients.length === 0) { setLoading(false); return; }
       const c = clients[0];
       setClient(c);
 
-      const configs = await base44.entities.ClientMessagingConfig.filter({ client_id: c.id });
+      const configs = await apiClient.ClientMessagingConfig.filter({ client_id: c.id });
       if (configs.length > 0) setConfig(configs[0]);
 
-      const tmpl = await base44.entities.WhatsAppTemplate.filter({ client_id: c.id }, '-created_at', 500);
+      const tmpl = await apiClient.WhatsAppTemplate.filter({ client_id: c.id }, '-created_at', 500);
       setTemplates(tmpl);
     } catch (e) {
       console.error(e);
@@ -48,7 +48,7 @@ export default function ClientWhatsAppTemplates() {
     if (!client) return;
     setSyncing(true);
     try {
-      const res = await base44.functions.invoke('whatsappListTemplates', { client_id: client.id });
+      const res = await apiClient.functions.invoke('whatsappListTemplates', { client_id: client.id });
       if (res.data.success) {
         toast.success(`Synced ${res.data.synced} templates (${res.data.created} new, ${res.data.updated} updated)`);
         await loadAll();

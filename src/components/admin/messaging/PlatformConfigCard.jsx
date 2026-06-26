@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,7 +22,7 @@ export default function PlatformConfigCard({ config, onSaved }) {
   const handleTest = async () => {
     setTesting(true);
     try {
-      const res = await base44.functions.invoke('testPlatformWhatsAppConnection', {
+      const res = await apiClient.functions.invoke('testPlatformWhatsAppConnection', {
         provider, api_key: apiKey, phone_number_id: phoneNumberId, business_id: businessId
       });
       if (res.data.success) toast.success(res.data.message);
@@ -36,7 +36,7 @@ export default function PlatformConfigCard({ config, onSaved }) {
     setLifecycleEnabled(val);
     try {
       if (config?.id) {
-        await base44.entities.PlatformMessagingConfig.update(config.id, { lifecycle_enabled: val });
+        await apiClient.PlatformMessagingConfig.update(config.id, { lifecycle_enabled: val });
       }
       onSaved && onSaved();
     } catch (e) { toast.error(e.message); }

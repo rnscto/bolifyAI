@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Upload, FileText, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -41,7 +41,7 @@ export default function ContactImporter({ clientId, onImported }) {
       // Import contacts
       let added = 0;
       let skipped = 0;
-      const existing = await base44.entities.TrustedContact.filter({ client_id: clientId });
+      const existing = await apiClient.TrustedContact.filter({ client_id: clientId });
       const existingPhones = new Set(existing.map(c => c.phone.replace(/\D/g, '').slice(-10)));
 
       for (const contact of contacts) {
@@ -50,7 +50,7 @@ export default function ContactImporter({ clientId, onImported }) {
           skipped++;
           continue;
         }
-        await base44.entities.TrustedContact.create({
+        await apiClient.TrustedContact.create({
           client_id: clientId,
           name: contact.name || '',
           phone: contact.phone,

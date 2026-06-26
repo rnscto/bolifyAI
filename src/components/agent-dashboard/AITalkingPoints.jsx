@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Sparkles, Loader2, RefreshCw, MessageSquare } from 'lucide-react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import ReactMarkdown from 'react-markdown';
 
 export default function AITalkingPoints({ activeCalls, agent, leads }) {
@@ -37,7 +37,7 @@ Generate SHORT, actionable bullet points the agent should use during THIS call. 
 - Closing technique suggestion
 - Follow-up hook`;
 
-    const result = await base44.integrations.Core.InvokeLLM({
+    const result = await apiClient.integrations.Core.InvokeLLM({
       prompt,
       response_json_schema: {
         type: "object",

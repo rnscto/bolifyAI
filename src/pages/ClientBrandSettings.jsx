@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Save, Loader2, MessageSquare, ShoppingBag, Phone, CalendarDays, Sparkles } from 'lucide-react';
@@ -32,12 +32,12 @@ export default function ClientBrandSettings() {
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
-    const user = await base44.auth.me();
-    const clients = await base44.entities.Client.filter({ user_id: user.id });
+    const user = await apiClient.auth.me();
+    const clients = await apiClient.Client.filter({ user_id: user.id });
     if (clients.length === 0) { setLoading(false); return; }
     setClient(clients[0]);
 
-    const existing = await base44.entities.BrandSettings.filter({ client_id: clients[0].id });
+    const existing = await apiClient.BrandSettings.filter({ client_id: clients[0].id });
     if (existing.length > 0) {
       const s = existing[0];
       setSettingsId(s.id);
@@ -54,9 +54,9 @@ export default function ClientBrandSettings() {
     setSaving(true);
     const data = { ...form, client_id: client.id };
     if (settingsId) {
-      await base44.entities.BrandSettings.update(settingsId, data);
+      await apiClient.BrandSettings.update(settingsId, data);
     } else {
-      const created = await base44.entities.BrandSettings.create(data);
+      const created = await apiClient.BrandSettings.create(data);
       setSettingsId(created.id);
     }
     toast({ title: "Saved!", description: "Brand settings updated successfully." });

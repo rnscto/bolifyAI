@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Mic, MicOff, X, Phone, PhoneOff, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import LeadCaptureForm from './LeadCaptureForm';
 import PreChatForm from './PreChatForm';
 
@@ -245,7 +245,7 @@ export default function VoiceAgentPopup() {
     
     let wsUrl, apiKey;
     try {
-      const res = await base44.functions.invoke('getRealtimeConfig', {});
+      const res = await apiClient.functions.invoke('getRealtimeConfig', {});
       wsUrl = res.data.url;
       apiKey = res.data.key;
       vlog('info', `✅ Got config: url=${wsUrl?.substring(0, 60)}...`);
@@ -390,7 +390,7 @@ export default function VoiceAgentPopup() {
           setMessages(prev => [...prev, { role: 'system', text: `📧 Sending ${args.template_type?.replace('_', ' ')} email to ${args.email}...` }]);
           
           // Fire the email in background
-          base44.functions.invoke('sendVoiceAgentEmail', {
+          apiClient.functions.invoke('sendVoiceAgentEmail', {
             email: args.email,
             name: args.name || '',
             template_type: args.template_type || 'free_trial'

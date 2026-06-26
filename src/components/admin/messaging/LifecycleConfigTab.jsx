@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -22,7 +22,7 @@ export default function LifecycleConfigTab({ config, onSaved }) {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    base44.entities.WhatsAppTemplate.filter({ client_id: 'PLATFORM', status: 'APPROVED' }, '-created_at', 500)
+    apiClient.WhatsAppTemplate.filter({ client_id: 'PLATFORM', status: 'APPROVED' }, '-created_at', 500)
       .then(setTemplates).catch(() => setTemplates([]));
   }, []);
 
@@ -30,9 +30,9 @@ export default function LifecycleConfigTab({ config, onSaved }) {
     setSaving(true);
     try {
       if (config?.id) {
-        await base44.entities.PlatformMessagingConfig.update(config.id, { lifecycle_templates: mapping });
+        await apiClient.PlatformMessagingConfig.update(config.id, { lifecycle_templates: mapping });
       } else {
-        await base44.entities.PlatformMessagingConfig.create({ is_singleton: true, lifecycle_templates: mapping });
+        await apiClient.PlatformMessagingConfig.create({ is_singleton: true, lifecycle_templates: mapping });
       }
       toast.success('Lifecycle template mapping saved');
       onSaved && onSaved();

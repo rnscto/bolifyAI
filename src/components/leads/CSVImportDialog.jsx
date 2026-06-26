@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -124,7 +124,7 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
     if (!clientId) { toast.error('Client not loaded'); return; }
     setCreatingGroup(true);
     try {
-      const created = await base44.entities.LeadGroup.create({ client_id: clientId, name, color: '#3b82f6' });
+      const created = await apiClient.LeadGroup.create({ client_id: clientId, name, color: '#3b82f6' });
       setLocalGroups(prev => [created, ...prev]);
       setSelectedGroupId(created.id);
       setNewGroupName('');
@@ -180,7 +180,7 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
     if (ext === '.xlsx' || ext === '.xls') {
       // Excel: upload and extract server-side
       try {
-        const uploadRes = await base44.integrations.Core.UploadFile({ file: selectedFile });
+        const uploadRes = await apiClient.integrations.Core.UploadFile({ file: selectedFile });
         const file_url = uploadRes?.file_url;
         if (!file_url) {
           toast.error('Failed to upload file (no URL returned)');
@@ -189,7 +189,7 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
           e.target.value = '';
           return;
         }
-        const extracted = await base44.integrations.Core.ExtractDataFromUploadedFile({
+        const extracted = await apiClient.integrations.Core.ExtractDataFromUploadedFile({
           file_url,
           json_schema: {
             type: "object",
@@ -386,7 +386,7 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
     let imported = 0;
     for (let i = 0; i < leadsToCreate.length; i += chunkSize) {
       const chunk = leadsToCreate.slice(i, i + chunkSize);
-      await base44.entities.Lead.bulkCreate(chunk);
+      await apiClient.Lead.bulkCreate(chunk);
       imported += chunk.length;
     }
 

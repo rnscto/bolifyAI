@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Loader2, Settings, FileText, Zap, Megaphone } from 'lucide-react';
 import PlatformConfigCard from '../components/admin/messaging/PlatformConfigCard';
@@ -16,7 +16,7 @@ export default function AdminPlatformMessaging() {
   const load = async () => {
     setLoading(true);
     try {
-      const cfgs = await base44.entities.PlatformMessagingConfig.list('-created_at', 1);
+      const cfgs = await apiClient.PlatformMessagingConfig.list('-created_at', 1);
       setConfig(cfgs[0] || null);
     } catch (e) { console.error(e); }
     setLoading(false);

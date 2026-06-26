@@ -79,9 +79,10 @@ async function apiFetch(path, options = {}) {
   return response.json();
 }
 
-class EntityHandler {
-  constructor(entityName) {
-    this.entityName = entityName.toLowerCase();
+class EntityClient {
+  constructor(endpoint, subscriptionName) {
+    this.endpoint = endpoint;
+    this.subscriptionName = subscriptionName; // e.g. "campaignlead" to maintain realtime compatibility
   }
 
   async filter(params = {}, sort = "", limit = 100) {
@@ -93,7 +94,7 @@ class EntityHandler {
     }
     if (sort) searchParams.append("sort", sort);
     if (limit) searchParams.append("limit", limit);
-    return apiFetch(`/entities/${this.entityName}?${searchParams.toString()}`);
+    return apiFetch(`${this.endpoint}?${searchParams.toString()}`);
   }
 
   async list(sort = "", limit = 100) {
@@ -101,106 +102,49 @@ class EntityHandler {
   }
 
   async get(id) {
-    return apiFetch(`/entities/${this.entityName}/${id}`);
+    return apiFetch(`${this.endpoint}/${id}`);
   }
 
   async create(data) {
-    return apiFetch(`/entities/${this.entityName}`, {
+    return apiFetch(this.endpoint, {
       method: "POST",
       body: JSON.stringify(data),
     });
   }
 
   async update(id, data) {
-    return apiFetch(`/entities/${this.entityName}/${id}`, {
+    return apiFetch(`${this.endpoint}/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     });
   }
 
   async delete(id) {
-    return apiFetch(`/entities/${this.entityName}/${id}`, {
+    return apiFetch(`${this.endpoint}/${id}`, {
       method: "DELETE",
     });
   }
 
   subscribe(callback) {
-    if (!subscribers[this.entityName]) {
-      subscribers[this.entityName] = [];
+    const entityName = this.subscriptionName;
+    if (!subscribers[entityName]) {
+      subscribers[entityName] = [];
     }
-    subscribers[this.entityName].push(callback);
+    subscribers[entityName].push(callback);
     
     if (!ws || ws.readyState === WebSocket.CLOSED) {
       connectWebSocket();
     } else if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ action: "subscribe", entity: this.entityName }));
+      ws.send(JSON.stringify({ action: "subscribe", entity: entityName }));
     }
 
     return () => {
-      subscribers[this.entityName] = subscribers[this.entityName].filter(cb => cb !== callback);
+      subscribers[entityName] = subscribers[entityName].filter(cb => cb !== callback);
     };
   }
 }
 
-const entitiesProxy = new Proxy({}, {
-  get: function(target, prop) {
-    if (typeof prop === "string") {
-      if (!target[prop]) {
-        target[prop] = new EntityHandler(prop);
-      }
-      return target[prop];
-    }
-    return target[prop];
-  }
-});
-
-const functionsProxy = new Proxy({}, {
-  get: function(target, prop) {
-    if (prop === "invoke") {
-      return async (functionName, args) => {
-        try {
-          const res = await apiFetch(`/functions/${functionName}`, {
-            method: "POST",
-            body: JSON.stringify(args)
-          });
-          return res;
-        } catch (err) {
-          console.error(`Error invoking function ${functionName}:`, err);
-          return { data: { success: false, error: err.message } };
-        }
-      };
-    }
-    return target[prop];
-  }
-});
-
-const integrationsProxy = new Proxy({}, {
-  get: function(target, prop) {
-    if (prop === "Core") {
-      return {
-        UploadFile: async ({ file }) => {
-          console.warn("Mocking UploadFile");
-          return { file_url: "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg" };
-        },
-        InvokeLLM: async (args) => {
-          console.warn("Mocking InvokeLLM", args);
-          return { result: "Mocked LLM Output" };
-        },
-        ExtractDataFromUploadedFile: async (args) => {
-          console.warn("Mocking ExtractDataFromUploadedFile");
-          return { data: [] };
-        },
-        SendEmail: async (args) => {
-          console.warn("Mocking SendEmail");
-          return { success: true };
-        }
-      };
-    }
-    return target[prop];
-  }
-});
-
-export const base44 = {
+export const apiClient = {
   auth: {
     login: async (email, password) => {
       const res = await apiFetch("/auth/login", {
@@ -244,11 +188,64 @@ export const base44 = {
       if (redirectUrl) window.location.href = redirectUrl;
       else window.location.href = "/Home";
     },
-    redirectToLogin: (redirectUrl) => {
+    redirectToLogin: () => {
       window.location.href = "/Login"; 
     }
   },
-  entities: entitiesProxy,
-  functions: functionsProxy,
-  integrations: integrationsProxy,
+  
+  // New V1 endpoints mapped to EntityClients
+  Lead: new EntityClient('/v1/leads', 'lead'),
+  CampaignLead: new EntityClient('/v1/campaign-leads', 'campaignlead'),
+  Campaign: new EntityClient('/v1/campaigns', 'campaign'),
+  Activity: new EntityClient('/v1/activities', 'activity'),
+  Agent: new EntityClient('/v1/agents', 'agent'),
+  Client: new EntityClient('/v1/clients', 'client'),
+  DID: new EntityClient('/v1/dids', 'did'),
+  CallLog: new EntityClient('/v1/call-logs', 'calllog'),
+  Deal: new EntityClient('/v1/deals', 'deal'),
+  CRMConfig: new EntityClient('/v1/crm-config', 'crmconfig'),
+  EmailSequence: new EntityClient('/v1/email-sequences', 'emailsequence'),
+  SequenceEnrollment: new EntityClient('/v1/sequence-enrollments', 'sequenceenrollment'),
+  ClientIntegration: new EntityClient('/v1/client-integrations', 'clientintegration'),
+  PlatformAnnouncement: new EntityClient('/v1/platform-announcements', 'platformannouncement'),
+  ClientLifecycleEvent: new EntityClient('/v1/client-lifecycle-events', 'clientlifecycleevent'),
+  Subscription: new EntityClient('/v1/subscriptions', 'subscription'),
+  VoicemailMessage: new EntityClient('/v1/voicemail-messages', 'voicemailmessage'),
+  OutreachLog: new EntityClient('/v1/outreach-logs', 'outreachlog'),
+
+  functions: {
+    invoke: async (functionName, args) => {
+      try {
+        const res = await apiFetch(`/functions/${functionName}`, {
+          method: "POST",
+          body: JSON.stringify(args)
+        });
+        return res;
+      } catch (err) {
+        console.error(`Error invoking function ${functionName}:`, err);
+        return { data: { success: false, error: err.message } };
+      }
+    }
+  },
+
+  integrations: {
+    Core: {
+      UploadFile: async ({ file }) => {
+        console.warn("Mocking UploadFile");
+        return { file_url: "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg" };
+      },
+      InvokeLLM: async (args) => {
+        console.warn("Mocking InvokeLLM", args);
+        return { result: "Mocked LLM Output" };
+      },
+      ExtractDataFromUploadedFile: async (args) => {
+        console.warn("Mocking ExtractDataFromUploadedFile");
+        return { data: [] };
+      },
+      SendEmail: async (args) => {
+        console.warn("Mocking SendEmail");
+        return { success: true };
+      }
+    }
+  }
 };

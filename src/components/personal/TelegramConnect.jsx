@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Send, Link2, Unlink, Loader2, ExternalLink, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -17,7 +17,7 @@ export default function TelegramConnect({ client, onUpdate }) {
 
   const handleDisconnect = async () => {
     setDisconnecting(true);
-    await base44.entities.Client.update(client.id, {
+    await apiClient.Client.update(client.id, {
       telegram_chat_id: '',
       telegram_connected: false,
       telegram_username: '',

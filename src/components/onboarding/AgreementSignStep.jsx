@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -26,7 +26,7 @@ export default function AgreementSignStep({ onNext, onBack, profileData, user })
   }, []);
 
   const loadTemplate = async () => {
-    const templates = await base44.entities.ClientAgreementTemplate.filter({ status: 'active' });
+    const templates = await apiClient.ClientAgreementTemplate.filter({ status: 'active' });
     if (templates.length > 0) {
       setTemplate(templates[0]);
       renderPreview(templates[0]);
@@ -67,13 +67,13 @@ export default function AgreementSignStep({ onNext, onBack, profileData, user })
     // Upload signature
     const blob = await (await fetch(signatureImage)).blob();
     const file = new File([blob], `client_sig_${Date.now()}.png`, { type: 'image/png' });
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const { file_url } = await apiClient.integrations.Core.UploadFile({ file });
 
     const signedDate = new Date();
     const signedTimestamp = signedDate.toLocaleString('en-IN', { dateStyle: 'long', timeStyle: 'medium', timeZone: 'Asia/Kolkata' }) + ' IST';
 
     // Generate agreement number
-    const allAgr = await base44.entities.ClientAgreement.list();
+    const allAgr = await apiClient.ClientAgreement.list();
     const agrNum = `BOLIFY-CSA-${signedDate.getFullYear()}-${String(allAgr.length + 1).padStart(3, '0')}`;
     const effectiveDate = signedDate.toISOString().split('T')[0];
     const expiryDate = new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0];

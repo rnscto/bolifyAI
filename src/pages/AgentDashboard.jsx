@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Bot, RefreshCw } from 'lucide-react';
@@ -25,24 +25,24 @@ export default function AgentDashboard() {
 
   const loadData = async () => {
     setLoading(true);
-    const user = await base44.auth.me();
-    const clients = await base44.entities.Client.filter({ user_id: user.id });
+    const user = await apiClient.auth.me();
+    const clients = await apiClient.Client.filter({ user_id: user.id });
     if (clients.length === 0) { setLoading(false); return; }
 
     const clientData = clients[0];
     setClient(clientData);
 
-    const agents = await base44.entities.Agent.filter({ client_id: clientData.id });
+    const agents = await apiClient.Agent.filter({ client_id: clientData.id });
     if (agents.length === 0) { setLoading(false); return; }
 
     const agentData = agents[0];
     setAgent(agentData);
 
     const [calls, cLeads, allLeads, acts] = await Promise.all([
-      base44.entities.CallLog.filter({ client_id: clientData.id, agent_id: agentData.id }, '-created_at', 200),
-      base44.entities.CampaignLead.filter({ client_id: clientData.id }, '-created_at', 500),
-      base44.entities.Lead.filter({ client_id: clientData.id }, '-created_at', 500),
-      base44.entities.Activity.filter({ client_id: clientData.id }, '-created_at', 100),
+      apiClient.CallLog.filter({ client_id: clientData.id, agent_id: agentData.id }, '-created_at', 200),
+      apiClient.CampaignLead.filter({ client_id: clientData.id }, '-created_at', 500),
+      apiClient.Lead.filter({ client_id: clientData.id }, '-created_at', 500),
+      apiClient.Activity.filter({ client_id: clientData.id }, '-created_at', 100),
     ]);
 
     setCallLogs(calls);

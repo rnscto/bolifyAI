@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ArrowDownLeft, ArrowUpRight, Phone, Plus, Gift, RotateCcw } from 'lucide-react';
@@ -19,7 +19,7 @@ export default function UsageHistory({ clientId }) {
 
   useEffect(() => {
     if (clientId) {
-      base44.entities.UsageLog.filter({ client_id: clientId }, '-created_at', 50)
+      apiClient.UsageLog.filter({ client_id: clientId }, '-created_at', 50)
         .then(setLogs)
         .finally(() => setLoading(false));
     }

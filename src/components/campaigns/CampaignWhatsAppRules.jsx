@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 import {
@@ -52,7 +52,7 @@ export default function CampaignWhatsAppRules({ clientId, value, onChange }) {
     if (!clientId) return;
     (async () => {
       try {
-        const all = await base44.entities.WhatsAppTemplate.filter({ client_id: clientId }, '-updated_date', 200);
+        const all = await apiClient.WhatsAppTemplate.filter({ client_id: clientId }, '-updated_date', 200);
         setTemplates(all.filter(t => t.status === 'APPROVED'));
       } finally {
         setLoading(false);

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 
 // Computes LIVE campaign stats directly from CampaignLead records.
 // This does NOT depend on integration credits — the denormalized counters on the
@@ -15,7 +15,7 @@ export function useCampaignLiveStats(campaigns) {
     await Promise.all(
       campaigns.map(async (c) => {
         try {
-          const leads = await base44.entities.CampaignLead.filter(
+          const leads = await apiClient.CampaignLead.filter(
             { campaign_id: c.id }, 'created_at', 2000
           );
           const outcomes = { neutral: 0, interested: 0, not_interested: 0, not_answered: 0, callback: 0, converted: 0, do_not_call: 0 };

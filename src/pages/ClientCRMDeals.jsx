@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,17 +31,17 @@ export default function ClientCRMDeals() {
   useEffect(() => { loadData(); }, []);
 
   const loadData = async () => {
-    const user = await base44.auth.me();
-    const clients = await base44.entities.Client.filter({ user_id: user.id });
+    const user = await apiClient.auth.me();
+    const clients = await apiClient.Client.filter({ user_id: user.id });
     if (clients.length === 0) { setLoading(false); return; }
 
     const clientData = clients[0];
     setClient(clientData);
 
     const [configs, dealsData, leadsData] = await Promise.all([
-      base44.entities.CRMConfig.filter({ client_id: clientData.id }),
-      base44.entities.Deal.filter({ client_id: clientData.id }, '-created_at'),
-      base44.entities.Lead.filter({ client_id: clientData.id })
+      apiClient.CRMConfig.filter({ client_id: clientData.id }),
+      apiClient.Deal.filter({ client_id: clientData.id }, '-created_at'),
+      apiClient.Lead.filter({ client_id: clientData.id })
     ]);
 
     if (configs.length > 0) setCrmConfig(configs[0]);
@@ -63,10 +63,10 @@ export default function ClientCRMDeals() {
     const data = { ...formData, client_id: client.id, value: parseFloat(formData.value) || 0, probability: parseInt(formData.probability) || 10 };
 
     if (editingDeal) {
-      await base44.entities.Deal.update(editingDeal.id, data);
+      await apiClient.Deal.update(editingDeal.id, data);
       toast.success('Deal updated');
     } else {
-      await base44.entities.Deal.create(data);
+      await apiClient.Deal.create(data);
       toast.success('Deal created');
     }
     setDialogOpen(false);
@@ -87,20 +87,20 @@ export default function ClientCRMDeals() {
 
   const handleDelete = async (id) => {
     if (!confirm('Delete this deal?')) return;
-    await base44.entities.Deal.delete(id);
+    await apiClient.Deal.delete(id);
     toast.success('Deal deleted');
     loadData();
   };
 
   const handleStageDrop = async (dealId, newStage) => {
-    await base44.entities.Deal.update(dealId, { stage: newStage, last_activity_date: new Date().toISOString() });
+    await apiClient.Deal.update(dealId, { stage: newStage, last_activity_date: new Date().toISOString() });
     toast.success(`Deal moved to ${newStage}`);
     setDeals(prev => prev.map(d => d.id === dealId ? { ...d, stage: newStage } : d));
   };
 
   const handleProposalUpload = async (dealId, file) => {
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
-    await base44.entities.Deal.update(dealId, {
+    const { file_url } = await apiClient.integrations.Core.UploadFile({ file });
+    await apiClient.Deal.update(dealId, {
       proposal_uploaded: true, proposal_url: file_url,
       last_activity_date: new Date().toISOString()
     });

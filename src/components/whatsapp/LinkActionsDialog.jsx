@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
@@ -30,7 +30,7 @@ export default function LinkActionsDialog({ template, open, onOpenChange, onSave
   const handleSave = async () => {
     setSaving(true);
     try {
-      await base44.entities.WhatsAppTemplate.update(template.id, { linked_actions: selected });
+      await apiClient.WhatsAppTemplate.update(template.id, { linked_actions: selected });
       toast.success('Use points updated');
       onSaved?.();
       onOpenChange(false);

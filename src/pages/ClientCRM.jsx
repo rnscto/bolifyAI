@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,12 +37,12 @@ export default function ClientCRM() {
 
   const loadData = async () => {
     try {
-      const user = await base44.auth.me();
-      const clients = await base44.entities.Client.filter({ user_id: user.id });
+      const user = await apiClient.auth.me();
+      const clients = await apiClient.Client.filter({ user_id: user.id });
       if (clients.length > 0) {
         const clientData = clients[0];
         setClient(clientData);
-        const integrationsData = await base44.entities.CRMIntegration.filter({ client_id: clientData.id });
+        const integrationsData = await apiClient.CRMIntegration.filter({ client_id: clientData.id });
         setIntegrations(integrationsData);
       }
     } catch (error) {
@@ -58,10 +58,10 @@ export default function ClientCRM() {
     // Prevent duplicate active integrations of the same type — update existing instead of creating a new row.
     const existing = integrations.find(i => i.crm_type === formData.crm_type);
     if (existing) {
-      await base44.entities.CRMIntegration.update(existing.id, integrationData);
+      await apiClient.CRMIntegration.update(existing.id, integrationData);
       toast.success('CRM integration updated');
     } else {
-      await base44.entities.CRMIntegration.create(integrationData);
+      await apiClient.CRMIntegration.create(integrationData);
       toast.success('CRM integration created');
     }
     setDialogOpen(false);
@@ -70,7 +70,7 @@ export default function ClientCRM() {
   };
 
   const handleDelete = async (id) => {
-    await base44.entities.CRMIntegration.delete(id);
+    await apiClient.CRMIntegration.delete(id);
     toast.success('CRM integration deleted');
     loadData();
   };

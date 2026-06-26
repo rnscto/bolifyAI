@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Menu, X } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { createPageUrl } from '../../utils';
 
 const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/a1247aabb_generated_image.png";
@@ -21,10 +21,10 @@ export default function Navbar() {
 
   useEffect(() => {
     const checkAuth = async () => {
-      const authenticated = await base44.auth.isAuthenticated();
+      const authenticated = await apiClient.auth.isAuthenticated();
       if (authenticated) {
         setIsLoggedIn(true);
-        const user = await base44.auth.me();
+        const user = await apiClient.auth.me();
         setUserRole(user?.role);
       }
     };

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -55,7 +55,7 @@ export default function RCSSetup({ config, onSave }) {
   const handleTest = async () => {
     setTesting(true);
     const creds = cleanCreds();
-    const res = await base44.functions.invoke('testMessagingConnection', {
+    const res = await apiClient.functions.invoke('testMessagingConnection', {
       channel: 'rcs',
       test_recipient: testRecipient.trim(),
       config: creds

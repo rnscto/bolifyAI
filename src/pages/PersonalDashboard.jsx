@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
+import { useRealtime } from '@/hooks/useRealtime';
 import TrialBanner from '../components/TrialBanner';
 import CallSummaryCards from '../components/personal/CallSummaryCards';
 import RecentCallList from '../components/personal/RecentCallList';
@@ -25,43 +26,42 @@ export default function PersonalDashboard() {
 
   // Live updates via WebSocket subscriptions — replaces the old 60s polling loop.
   // No integration credits, no repeated reads. Patches calls + voicemails in place.
-  useEffect(() => {
+  useRealtime('CallLog', (event) => {
     if (!client?.id) return;
-    const unsubCalls = base44.entities.CallLog.subscribe((event) => {
-      if (event.data?.client_id !== client.id) return;
-      if (event.type === 'create') {
-        setCalls(prev => (prev.some(c => c.id === event.id) ? prev : [event.data, ...prev]));
-      } else if (event.type === 'update') {
-        setCalls(prev => prev.map(c => (c.id === event.id ? { ...c, ...event.data } : c)));
-      } else if (event.type === 'delete') {
-        setCalls(prev => prev.filter(c => c.id !== event.id));
-      }
-    });
-    const unsubVoicemails = base44.entities.VoicemailMessage.subscribe((event) => {
-      if (event.data?.client_id !== client.id) return;
-      if (event.type === 'create') {
-        setMessages(prev => (prev.some(m => m.id === event.id) ? prev : [event.data, ...prev]));
-      } else if (event.type === 'update') {
-        setMessages(prev => prev.map(m => (m.id === event.id ? { ...m, ...event.data } : m)));
-      } else if (event.type === 'delete') {
-        setMessages(prev => prev.filter(m => m.id !== event.id));
-      }
-    });
-    return () => { unsubCalls(); unsubVoicemails(); };
-  }, [client?.id]);
+    if (event.data?.client_id !== client.id) return;
+    if (event.type === 'create') {
+      setCalls(prev => (prev.some(c => c.id === event.id) ? prev : [event.data, ...prev]));
+    } else if (event.type === 'update') {
+      setCalls(prev => prev.map(c => (c.id === event.id ? { ...c, ...event.data } : c)));
+    } else if (event.type === 'delete') {
+      setCalls(prev => prev.filter(c => c.id !== event.id));
+    }
+  });
+
+  useRealtime('VoicemailMessage', (event) => {
+    if (!client?.id) return;
+    if (event.data?.client_id !== client.id) return;
+    if (event.type === 'create') {
+      setMessages(prev => (prev.some(m => m.id === event.id) ? prev : [event.data, ...prev]));
+    } else if (event.type === 'update') {
+      setMessages(prev => prev.map(m => (m.id === event.id ? { ...m, ...event.data } : m)));
+    } else if (event.type === 'delete') {
+      setMessages(prev => prev.filter(m => m.id !== event.id));
+    }
+  });
 
   const loadData = async () => {
     try {
-      const currentUser = await base44.auth.me();
+      const currentUser = await apiClient.auth.me();
       setUser(currentUser);
 
-      const clients = await base44.entities.Client.filter({ user_id: currentUser.id });
+      const clients = await apiClient.Client.filter({ user_id: currentUser.id });
       if (clients.length > 0) {
         setClient(clients[0]);
         const [callLogs, trustedContacts, voicemails] = await Promise.all([
-          base44.entities.CallLog.filter({ client_id: clients[0].id }, '-created_at', 100),
-          base44.entities.TrustedContact.filter({ client_id: clients[0].id }),
-          base44.entities.VoicemailMessage.filter({ client_id: clients[0].id }, '-created_at', 50)
+          apiClient.CallLog.filter({ client_id: clients[0].id }, '-created_at', 100),
+          apiClient.TrustedContact.filter({ client_id: clients[0].id }),
+          apiClient.VoicemailMessage.filter({ client_id: clients[0].id }, '-created_at', 50)
         ]);
         setCalls(callLogs);
         setContacts(trustedContacts);

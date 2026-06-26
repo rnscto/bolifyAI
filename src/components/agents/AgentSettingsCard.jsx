@@ -4,7 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { toast } from 'sonner';
 import { Settings, Save, Loader2, AlertTriangle, ChevronDown, ChevronUp } from 'lucide-react';
 import StreamingSetupGuide from './StreamingSetupGuide';
@@ -28,7 +28,7 @@ export default function AgentSettingsCard({ agent, onUpdate }) {
 
   const handleSave = async () => {
     setSaving(true);
-    await base44.entities.Agent.update(agent.id, {
+    await apiClient.Agent.update(agent.id, {
       smartflo_agent_id: smartfloAgentId.trim(),
       smartflo_api_token: smartfloApiToken.trim(),
       human_transfer_number: humanTransferNumber.trim(),

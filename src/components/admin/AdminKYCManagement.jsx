@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -55,8 +55,8 @@ export default function AdminKYCManagement() {
 
   const loadData = async () => {
     const [docs, cls] = await Promise.all([
-      base44.entities.KYCDocument.list('-created_at', 200),
-      base44.entities.Client.list('-created_at', 500),
+      apiClient.KYCDocument.list('-created_at', 200),
+      apiClient.Client.list('-created_at', 500),
     ]);
     setKycDocs(docs);
     setClients(cls);
@@ -68,14 +68,14 @@ export default function AdminKYCManagement() {
 
   const handleApprove = async (doc) => {
     setProcessing(true);
-    const user = await base44.auth.me();
-    await base44.entities.KYCDocument.update(doc.id, {
+    const user = await apiClient.auth.me();
+    await apiClient.KYCDocument.update(doc.id, {
       status: 'approved',
       reviewed_by: user.email,
       reviewed_date: new Date().toISOString(),
     });
     if (doc.client_id) {
-      await base44.entities.Client.update(doc.client_id, { kyc_status: 'approved' });
+      await apiClient.Client.update(doc.client_id, { kyc_status: 'approved' });
     }
     toast.success('KYC approved');
     setReviewOpen(false);
@@ -86,21 +86,21 @@ export default function AdminKYCManagement() {
   const handleReject = async (doc) => {
     if (!rejectionReason.trim()) { toast.error('Please provide a rejection reason'); return; }
     setProcessing(true);
-    const user = await base44.auth.me();
-    await base44.entities.KYCDocument.update(doc.id, {
+    const user = await apiClient.auth.me();
+    await apiClient.KYCDocument.update(doc.id, {
       status: 'rejected',
       rejection_reason: rejectionReason,
       reviewed_by: user.email,
       reviewed_date: new Date().toISOString(),
     });
     if (doc.client_id) {
-      await base44.entities.Client.update(doc.client_id, { kyc_status: 'rejected' });
+      await apiClient.Client.update(doc.client_id, { kyc_status: 'rejected' });
     }
     // Notify client (via our own email function — not credit-gated)
     const cl = clientMap[doc.client_id];
     if (cl?.email) {
       try {
-        await base44.functions.invoke('sendClientEmail', {
+        await apiClient.functions.invoke('sendClientEmail', {
           client_id: doc.client_id,
           to: cl.email,
           subject: `[Action Required] KYC Verification Rejected — VaaniAI`,
@@ -303,7 +303,7 @@ function DocLink({ label, url }) {
     if (!url) return;
     setOpening(true);
     try {
-      const resp = await base44.functions.invoke('azureBlobSignedUrl', { file_uri: url });
+      const resp = await apiClient.functions.invoke('azureBlobSignedUrl', { file_uri: url });
       window.open(resp.data?.signed_url || url, '_blank', 'noopener,noreferrer');
     } catch (_) {
       window.open(url, '_blank', 'noopener,noreferrer');

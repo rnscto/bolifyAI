@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Play, Pause, RotateCcw } from 'lucide-react';
@@ -24,11 +24,11 @@ export default function AdminRetention() {
 
   const loadData = async () => {
     const [configList, didsData, agentsData, clientsData, callLogsData] = await Promise.all([
-      base44.entities.RetentionConfig.list('-created_at', 1),
-      base44.entities.DID.list(),
-      base44.entities.Agent.list(),
-      base44.entities.Client.list(),
-      base44.entities.CallLog.list('-created_at', 100),
+      apiClient.RetentionConfig.list('-created_at', 1),
+      apiClient.DID.list(),
+      apiClient.Agent.list(),
+      apiClient.Client.list(),
+      apiClient.CallLog.list('-created_at', 100),
     ]);
 
     setConfig(configList[0] || null);
@@ -42,9 +42,9 @@ export default function AdminRetention() {
   const handleSaveSettings = async (formData) => {
     setSaving(true);
     if (config) {
-      await base44.entities.RetentionConfig.update(config.id, formData);
+      await apiClient.RetentionConfig.update(config.id, formData);
     } else {
-      await base44.entities.RetentionConfig.create(formData);
+      await apiClient.RetentionConfig.create(formData);
     }
     toast.success('Retention settings saved');
     await loadData();
@@ -54,9 +54,9 @@ export default function AdminRetention() {
   const handleSaveHandlers = async (handlers) => {
     setSaving(true);
     if (config) {
-      await base44.entities.RetentionConfig.update(config.id, { objection_handlers: handlers });
+      await apiClient.RetentionConfig.update(config.id, { objection_handlers: handlers });
     } else {
-      await base44.entities.RetentionConfig.create({ objection_handlers: handlers });
+      await apiClient.RetentionConfig.create({ objection_handlers: handlers });
     }
     toast.success('Objection handlers saved');
     await loadData();
@@ -66,9 +66,9 @@ export default function AdminRetention() {
   const handleToggleSystem = async () => {
     const newState = config?.is_active === false;
     if (config) {
-      await base44.entities.RetentionConfig.update(config.id, { is_active: newState });
+      await apiClient.RetentionConfig.update(config.id, { is_active: newState });
     } else {
-      await base44.entities.RetentionConfig.create({ is_active: newState });
+      await apiClient.RetentionConfig.create({ is_active: newState });
     }
     toast.success(newState ? 'Retention system activated' : 'Retention system paused');
     loadData();
@@ -76,7 +76,7 @@ export default function AdminRetention() {
 
   const handleManualTrigger = async () => {
     setTriggeringManual(true);
-    const response = await base44.functions.invoke('retentionCall', { force: true });
+    const response = await apiClient.functions.invoke('retentionCall', { force: true });
     if (response.data?.success) {
       const initiated = response.data.calls_initiated?.length || 0;
       const errors = response.data.errors?.length || 0;

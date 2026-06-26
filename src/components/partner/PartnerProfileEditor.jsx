@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -33,7 +33,7 @@ export default function PartnerProfileEditor({ partner, onSaved }) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
-    const { file_url } = await base44.integrations.Core.UploadFile({ file });
+    const { file_url } = await apiClient.integrations.Core.UploadFile({ file });
     set('brand_logo_url', file_url);
     setUploading(false);
     toast.success('Logo uploaded');
@@ -41,7 +41,7 @@ export default function PartnerProfileEditor({ partner, onSaved }) {
 
   const handleSave = async () => {
     setSaving(true);
-    await base44.entities.Partner.update(partner.id, form);
+    await apiClient.Partner.update(partner.id, form);
     toast.success('Profile updated!');
     setSaving(false);
     onSaved?.();

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
@@ -34,7 +34,7 @@ export default function PartnerReferral() {
     const code = urlParams.get('code') || urlParams.get('ref');
     if (!code) { setLoading(false); return; }
 
-    const partners = await base44.entities.Partner.filter({ referral_code: code });
+    const partners = await apiClient.Partner.filter({ referral_code: code });
     if (partners.length > 0) setPartner(partners[0]);
     setLoading(false);
   };
@@ -49,7 +49,7 @@ export default function PartnerReferral() {
     setError('');
 
     // Create a referral record
-    await base44.entities.Referral.create({
+    await apiClient.Referral.create({
       partner_id: partner.id,
       client_name: form.company_name,
       client_email: form.email,
@@ -61,7 +61,7 @@ export default function PartnerReferral() {
     });
 
     // Update partner referral count
-    await base44.entities.Partner.update(partner.id, {
+    await apiClient.Partner.update(partner.id, {
       total_referrals: (partner.total_referrals || 0) + 1,
     });
 

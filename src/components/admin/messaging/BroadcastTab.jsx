@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { base44 } from '@/api/base44Client';
+import { apiClient } from '@/api/apiClient';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -24,7 +24,7 @@ export default function BroadcastTab() {
   const [result, setResult] = useState(null);
 
   useEffect(() => {
-    base44.entities.WhatsAppTemplate.filter({ client_id: 'PLATFORM', status: 'APPROVED' }, '-created_at', 500)
+    apiClient.WhatsAppTemplate.filter({ client_id: 'PLATFORM', status: 'APPROVED' }, '-created_at', 500)
       .then(setTemplates).catch(() => setTemplates([]));
   }, []);
 
@@ -39,7 +39,7 @@ export default function BroadcastTab() {
     setResult(null);
     try {
       const vars = variables.split('|').map(v => v.trim()).filter(Boolean);
-      const res = await base44.functions.invoke('platformBroadcast', {
+      const res = await apiClient.functions.invoke('platformBroadcast', {
         template_id: templateId, audience, default_variables: vars
       });
       if (res.data.success) {
