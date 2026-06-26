@@ -188,209 +188,209 @@ export default function ClientAnalytics() {
           })}
         </div>
 
-        </div>
+      </div>
 
-        {/* ADVANCED AI METRICS */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <CheckCircle2 className="w-5 h-5 text-indigo-500" />
-                Objection Resolution Rate
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-slate-900">{advancedMetrics.objectionSuccessRate}%</div>
-              <p className="text-sm text-gray-500 mt-1">of all detected objections successfully handled by AI</p>
-            </CardContent>
-          </Card>
+      {/* ADVANCED AI METRICS */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-indigo-500" />
+              Objection Resolution Rate
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-slate-900">{advancedMetrics.objectionSuccessRate}%</div>
+            <p className="text-sm text-gray-500 mt-1">of all detected objections successfully handled by AI</p>
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <Users className="w-5 h-5 text-emerald-500" />
-                Auto-Extracted Intent Actions
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-3xl font-bold text-slate-900">
-                {advancedMetrics.intentBreakdown.reduce((sum, item) => sum + item.value, 0).toLocaleString()}
-              </div>
-              <p className="text-sm text-gray-500 mt-1">actions pushed to workflows (email, whatsapp, demo)</p>
-            </CardContent>
-          </Card>
-        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Users className="w-5 h-5 text-emerald-500" />
+              Auto-Extracted Intent Actions
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-slate-900">
+              {advancedMetrics.intentBreakdown.reduce((sum, item) => sum + item.value, 0).toLocaleString()}
+            </div>
+            <p className="text-sm text-gray-500 mt-1">actions pushed to workflows (email, whatsapp, demo)</p>
+          </CardContent>
+        </Card>
+      </div>
 
-        {/* Charts Row 1 */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle className="text-base">Calls Over Time</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {dailyData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={250}>
-                  <LineChart data={dailyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <Tooltip />
-                    <Line type="monotone" dataKey="calls" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
-                  </LineChart>
-                </ResponsiveContainer>
-              ) : <p className="text-sm text-gray-500 py-10 text-center">No call data for this period</p>}
-            </CardContent>
-          </Card>
+      {/* Charts Row 1 */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="lg:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base">Calls Over Time</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {dailyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={250}>
+                <LineChart data={dailyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip />
+                  <Line type="monotone" dataKey="calls" stroke="#3b82f6" strokeWidth={2} dot={{ r: 3 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : <p className="text-sm text-gray-500 py-10 text-center">No call data for this period</p>}
+          </CardContent>
+        </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Call Direction</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {directionData.length > 0 ? (
-                <div className="flex flex-col items-center">
-                  <ResponsiveContainer width={180} height={180}>
-                    <PieChart>
-                      <Pie data={directionData} dataKey="value" cx="50%" cy="50%" outerRadius={75} innerRadius={45}>
-                        {directionData.map((e, i) => <Cell key={i} fill={e.color} />)}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  <div className="flex gap-4 mt-2">
-                    {directionData.map(d => (
-                      <div key={d.name} className="flex items-center gap-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
-                        <span className="text-xs text-gray-600">{d.name}: <strong>{d.value}</strong></span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : <p className="text-sm text-gray-500 py-10 text-center">No data</p>}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Charts Row 2 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Call Status Breakdown</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {statusData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={statusData}>
-                    <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                      {statusData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : <p className="text-sm text-gray-500 py-10 text-center">No data</p>}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Peak Call Hours</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {hourlyData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={hourlyData}>
-                    <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <Tooltip />
-                    <Bar dataKey="calls" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : <p className="text-sm text-gray-500 py-10 text-center">No data</p>}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Charts Row 3 */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Lead Conversion Funnel</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {funnelData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={funnelData} layout="vertical">
-                    <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
-                    <Tooltip />
-                    <Bar dataKey="value" radius={[0, 4, 4, 0]}>
-                      {funnelData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
-                    </Bar>
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : <p className="text-sm text-gray-500 py-10 text-center">No leads yet</p>}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Campaign Performance</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {campaignData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={220}>
-                  <BarChart data={campaignData}>
-                    <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <Tooltip />
-                    <Legend />
-                    <Bar dataKey="completed" fill="#22c55e" name="Completed" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="failed" fill="#ef4444" name="Failed" radius={[4, 4, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
-              ) : <p className="text-sm text-gray-500 py-10 text-center">No campaigns yet</p>}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* AI Intent Extraction Pie Chart */}
-        <div className="grid grid-cols-1 gap-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">AI Intent Extraction Breakdown</CardTitle>
-            </CardHeader>
-            <CardContent className="h-[300px]">
-              {advancedMetrics.intentBreakdown.length > 0 ? (
-                <ResponsiveContainer width="100%" height="100%">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Call Direction</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {directionData.length > 0 ? (
+              <div className="flex flex-col items-center">
+                <ResponsiveContainer width={180} height={180}>
                   <PieChart>
-                    <Pie
-                      data={advancedMetrics.intentBreakdown}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={80}
-                      outerRadius={120}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {advancedMetrics.intentBreakdown.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
+                    <Pie data={directionData} dataKey="value" cx="50%" cy="50%" outerRadius={75} innerRadius={45}>
+                      {directionData.map((e, i) => <Cell key={i} fill={e.color} />)}
                     </Pie>
                     <Tooltip />
-                    <Legend />
                   </PieChart>
                 </ResponsiveContainer>
-              ) : (
-                <div className="h-full flex items-center justify-center text-gray-400">
-                  No actions extracted in this period.
+                <div className="flex gap-4 mt-2">
+                  {directionData.map(d => (
+                    <div key={d.name} className="flex items-center gap-1.5">
+                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: d.color }} />
+                      <span className="text-xs text-gray-600">{d.name}: <strong>{d.value}</strong></span>
+                    </div>
+                  ))}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+              </div>
+            ) : <p className="text-sm text-gray-500 py-10 text-center">No data</p>}
+          </CardContent>
+        </Card>
+      </div>
 
-      </FeatureGate>
+      {/* Charts Row 2 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Call Status Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {statusData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={statusData}>
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                    {statusData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <p className="text-sm text-gray-500 py-10 text-center">No data</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Peak Call Hours</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {hourlyData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={hourlyData}>
+                  <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip />
+                  <Bar dataKey="calls" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <p className="text-sm text-gray-500 py-10 text-center">No data</p>}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Charts Row 3 */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Lead Conversion Funnel</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {funnelData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={funnelData} layout="vertical">
+                  <XAxis type="number" tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={100} />
+                  <Tooltip />
+                  <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                    {funnelData.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <p className="text-sm text-gray-500 py-10 text-center">No leads yet</p>}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Campaign Performance</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {campaignData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={campaignData}>
+                  <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="completed" fill="#22c55e" name="Completed" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="failed" fill="#ef4444" name="Failed" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <p className="text-sm text-gray-500 py-10 text-center">No campaigns yet</p>}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* AI Intent Extraction Pie Chart */}
+      <div className="grid grid-cols-1 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">AI Intent Extraction Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent className="h-[300px]">
+            {advancedMetrics.intentBreakdown.length > 0 ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={advancedMetrics.intentBreakdown}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={80}
+                    outerRadius={120}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {advancedMetrics.intentBreakdown.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-full flex items-center justify-center text-gray-400">
+                No actions extracted in this period.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+    </FeatureGate>
   );
 }

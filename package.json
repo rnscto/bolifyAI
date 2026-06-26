@@ -12,6 +12,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@azure/arm-appcontainers": "^3.0.0",
+    "@azure/identity": "^4.13.1",
     "@hello-pangea/dnd": "^17.0.0",
     "@hono/node-server": "^2.0.6",
     "@hookform/resolvers": "^4.1.2",

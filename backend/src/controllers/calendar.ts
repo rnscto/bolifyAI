@@ -29,14 +29,14 @@ calendarRouter.post("/connect", async (c) => {
     const user = c.get("jwtPayload") as any;
     const clientId = user.client_id;
     const { provider, auth_code } = await c.req.json();
-    
+
     if (!provider || !auth_code) {
       return c.json({ error: "Missing provider or auth_code" }, 400);
     }
 
     // In a real production scenario, you would exchange the auth_code for an access_token
     // using the provider's OAuth token endpoint (e.g., https://oauth2.googleapis.com/token)
-    
+
     // For now, this is a placeholder that saves the credentials
     const mockEmail = `user@${provider}.com`;
     const mockAccessToken = `mock_access_token_${Date.now()}`;

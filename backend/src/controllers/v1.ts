@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { jwt } from "hono/jwt";
 import { client } from "../db/index.ts";
+import { base44ORM } from "../db/orm.ts";
 import { broadcastEntityChange } from "../services/realtime.ts";
 
 export const v1Router = new Hono();
@@ -36,7 +37,7 @@ const buildCrudRouter = (tableName: string) => {
   router.get("/", async (c) => {
     const queryParams = c.req.query();
     const user = c.get("jwtPayload") as any;
-    
+
     const validCols = await getValidColumns(entity);
     if (validCols.size === 0) {
       return c.json({ error: "Entity not found" }, 404);
@@ -48,14 +49,18 @@ const buildCrudRouter = (tableName: string) => {
     let paramIndex = 1;
 
     // MULTI-TENANCY ENFORCEMENT
-    if (user.role !== 'admin') {
+    if (user.role !== 'admin' && user.role !== 'master_admin') {
       if (validCols.has("client_id")) {
         conditions.push(`"client_id" = $${paramIndex}`);
         args.push(user.client_id);
         paramIndex++;
       } else if (entity === "client") {
-        // If querying the client table, user can only query their own client
-        conditions.push(`"id" = $${paramIndex}`);
+        if (user.role === 'reseller' || user.role === 'master_reseller') {
+          conditions.push(`("id" = $${paramIndex} OR "upline_id" = $${paramIndex})`);
+        } else {
+          // If querying the client table, normal users can only query their own client
+          conditions.push(`"id" = $${paramIndex}`);
+        }
         args.push(user.client_id);
         paramIndex++;
       }
@@ -86,7 +91,7 @@ const buildCrudRouter = (tableName: string) => {
     if (queryParams.limit) {
       query += ` LIMIT ${parseInt(queryParams.limit) || 100}`;
     } else {
-      query += ` LIMIT 100`; 
+      query += ` LIMIT 100`;
     }
 
     try {
@@ -109,12 +114,16 @@ const buildCrudRouter = (tableName: string) => {
       const args: any[] = [id];
 
       // MULTI-TENANCY ENFORCEMENT
-      if (user.role !== 'admin') {
+      if (user.role !== 'admin' && user.role !== 'master_admin') {
         if (validCols.has("client_id")) {
           query += ` AND client_id = $2`;
           args.push(user.client_id);
         } else if (entity === "client") {
-          query += ` AND id = $2`;
+          if (user.role === 'reseller' || user.role === 'master_reseller') {
+            query += ` AND (id = $2 OR upline_id = $2)`;
+          } else {
+            query += ` AND id = $2`;
+          }
           args.push(user.client_id);
         }
       }
@@ -135,7 +144,7 @@ const buildCrudRouter = (tableName: string) => {
   router.post("/", async (c) => {
     const body = await c.req.json();
     const user = c.get("jwtPayload") as any;
-    
+
     const validCols = await getValidColumns(entity);
     if (validCols.size === 0) {
       return c.json({ error: "Entity not found" }, 404);
@@ -148,19 +157,24 @@ const buildCrudRouter = (tableName: string) => {
       }
     }
 
-    if (validCols.has("client_id") && user.role !== 'admin') {
+    if (validCols.has("client_id") && user.role !== 'admin' && user.role !== 'master_admin') {
       filteredBody["client_id"] = user.client_id;
+    }
+    
+    // Auto-assign upline_id when resellers create a downline client
+    if (entity === "client" && (user.role === 'reseller' || user.role === 'master_reseller')) {
+      filteredBody["upline_id"] = user.client_id;
     }
 
     const columns = Object.keys(filteredBody).map(k => `"${k}"`).join(", ");
     const placeholders = Object.keys(filteredBody).map((_, i) => `$${i + 1}`).join(", ");
-    const values = Object.values(filteredBody).map(v => 
+    const values = Object.values(filteredBody).map(v =>
       (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v
     );
 
     let query = `INSERT INTO "${entity}" DEFAULT VALUES RETURNING *`;
     if (columns.length > 0) {
-       query = `INSERT INTO "${entity}" (${columns}) VALUES (${placeholders}) RETURNING *`;
+      query = `INSERT INTO "${entity}" (${columns}) VALUES (${placeholders}) RETURNING *`;
     }
 
     try {
@@ -179,7 +193,7 @@ const buildCrudRouter = (tableName: string) => {
     const id = c.req.param("id");
     const body = await c.req.json();
     const user = c.get("jwtPayload") as any;
-    
+
     const validCols = await getValidColumns(entity);
     if (validCols.size === 0) {
       return c.json({ error: "Entity not found" }, 404);
@@ -202,13 +216,13 @@ const buildCrudRouter = (tableName: string) => {
     }
 
     const setClauses = Object.keys(filteredBody).map((k, i) => `"${k}" = $${i + 2}`).join(", ");
-    const values = [id, ...Object.values(filteredBody).map(v => 
+    const values = [id, ...Object.values(filteredBody).map(v =>
       (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v
     )];
-    
+
     let query = `UPDATE "${entity}" SET ${setClauses} WHERE id = $1`;
 
-    if (validCols.has("client_id") && user.role !== 'admin') {
+    if (validCols.has("client_id") && user.role !== 'admin' && user.role !== 'master_admin') {
       query += ` AND client_id = $${values.length + 1}`;
       values.push(user.client_id);
     }
@@ -240,7 +254,7 @@ const buildCrudRouter = (tableName: string) => {
       let query = `DELETE FROM "${entity}" WHERE id = $1`;
       const args: any[] = [id];
 
-      if (validCols.has("client_id") && user.role !== 'admin') {
+      if (validCols.has("client_id") && user.role !== 'admin' && user.role !== 'master_admin') {
         query += ` AND client_id = $2`;
         args.push(user.client_id);
       }
@@ -278,6 +292,53 @@ v1Router.route("/email-sequences", buildCrudRouter("emailsequence"));
 v1Router.route("/sequence-enrollments", buildCrudRouter("sequenceenrollment"));
 v1Router.route("/client-integrations", buildCrudRouter("clientintegration"));
 v1Router.route("/platform-announcements", buildCrudRouter("platformannouncement"));
+const ALL_ENTITIES = [
+  "Client",
+  "Campaign",
+  "Agent",
+  "CallLog",
+  "Lead",
+  "ApiKey",
+  "WebhookSetting",
+  "User",
+  "UserSetting",
+  "Payment",
+  "Subscription",
+  "Invoice",
+  "UsageLog",
+  "Notification",
+  "Template",
+  "AuditLog",
+  "Integration",
+  "SystemSetting",
+  "AdminAction",
+  "SupportTicket",
+  "FAQ",
+  "KnowledgeBase",
+  "PaymentApprovalRequest",
+  "WebhookLog",
+  "Partner",
+  "PartnerPayout",
+  "PlatformMessagingConfig",
+  "PartnerAgreement",
+  "DataErasureRequest",
+  "CampaignLead",
+  "CRMConfig",
+  "Referral",
+  "DID",
+  "ClientAgreementTemplate",
+  "KYCDocument",
+  "Meeting",
+  "Note",
+  "Deal",
+  "Task",
+  "Contact",
+  "OutreachLog",
+  "DomainMapping",
+  "CommissionLedger",
+  "Ticket",
+  "TicketMessage"
+];
 v1Router.route("/client-lifecycle-events", buildCrudRouter("clientlifecycleevent"));
 v1Router.route("/subscriptions", buildCrudRouter("subscription"));
 v1Router.route("/voicemail-messages", buildCrudRouter("voicemailmessage"));
@@ -314,3 +375,26 @@ v1Router.route("/trusted-clients", buildCrudRouter("trustedclient"));
 v1Router.route("/trusted-contacts", buildCrudRouter("trustedcontact"));
 v1Router.route("/usage-logs", buildCrudRouter("usagelog"));
 v1Router.route("/users", buildCrudRouter("user"));
+
+// Dynamic Branding Route for Resellers
+v1Router.get("/branding", async (c) => {
+  const domain = c.req.query("domain");
+  if (!domain) return c.json({ error: "domain required" }, 400);
+
+  try {
+    const mappings = await base44ORM.entities.DomainMapping.filter({ custom_domain: domain });
+    if (mappings.length > 0) {
+      return c.json({ success: true, branding: mappings[0] });
+    }
+    // Return default branding
+    return c.json({
+      success: true, branding: {
+        brand_name: "VaaniAI",
+        logo_url: "/logo.png",
+        theme_colors: { primary: "#1a365d" }
+      }
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});

@@ -13,7 +13,7 @@ export default function WebhookSetup({ clientId }) {
   const [webhooks, setWebhooks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
-  
+
   const [newWebhook, setNewWebhook] = useState({
     crm_type: 'webhook',
     webhook_url: '',
@@ -40,7 +40,7 @@ export default function WebhookSetup({ clientId }) {
       toast.error('Webhook URL must be a valid HTTPS URL');
       return;
     }
-    
+
     try {
       await apiClient.CrmIntegration.create({
         client_id: clientId,
@@ -49,7 +49,7 @@ export default function WebhookSetup({ clientId }) {
         api_key: newWebhook.api_key || null,
         status: 'active'
       });
-      
+
       toast.success('Webhook added successfully');
       setNewWebhook({ crm_type: 'webhook', webhook_url: '', api_key: '' });
       setAdding(false);
@@ -91,7 +91,7 @@ export default function WebhookSetup({ clientId }) {
           )}
         </div>
       </CardHeader>
-      
+
       <CardContent className="p-6 space-y-6">
         {webhooks.length > 0 && (
           <div className="space-y-3">
@@ -121,7 +121,7 @@ export default function WebhookSetup({ clientId }) {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Destination Type</Label>
-                <Select value={newWebhook.crm_type} onValueChange={v => setNewWebhook({...newWebhook, crm_type: v})}>
+                <Select value={newWebhook.crm_type} onValueChange={v => setNewWebhook({ ...newWebhook, crm_type: v })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -134,19 +134,19 @@ export default function WebhookSetup({ clientId }) {
               </div>
               <div className="space-y-1.5">
                 <Label>Webhook URL</Label>
-                <Input 
-                  placeholder="https://hooks.zapier.com/..." 
+                <Input
+                  placeholder="https://hooks.zapier.com/..."
                   value={newWebhook.webhook_url}
-                  onChange={e => setNewWebhook({...newWebhook, webhook_url: e.target.value})}
+                  onChange={e => setNewWebhook({ ...newWebhook, webhook_url: e.target.value })}
                 />
               </div>
             </div>
             <div className="space-y-1.5">
               <Label>Secret / Signing Key (Optional)</Label>
-              <Input 
-                placeholder="Enter a secret string to sign the payload (HMAC SHA-256)" 
+              <Input
+                placeholder="Enter a secret string to sign the payload (HMAC SHA-256)"
                 value={newWebhook.api_key}
-                onChange={e => setNewWebhook({...newWebhook, api_key: e.target.value})}
+                onChange={e => setNewWebhook({ ...newWebhook, api_key: e.target.value })}
               />
               <p className="text-xs text-gray-500 mt-1">If provided, we will send an `x-bolify-signature` header.</p>
             </div>

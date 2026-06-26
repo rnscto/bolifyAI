@@ -43,7 +43,7 @@ export async function sendCalendarInvite(
     };
 
     console.log(`[Calendar] Dispatching invite to ${leadEmail} via ${integration.provider}`);
-    
+
     // 3. Make the API Call
     // In production, you would branch depending on integration.provider ('google' vs 'calendly')
     // and make an HTTP POST to https://www.googleapis.com/calendar/v3/calendars/primary/events

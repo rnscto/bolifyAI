@@ -53,7 +53,7 @@ export default function BrandVoiceTab({ form, setForm, newTheme, setNewTheme }) 
               <Select value={form.tone} onValueChange={v => setForm(f => ({ ...f, tone: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {['professional','casual','witty','inspirational','bold','friendly','formal'].map(t => (
+                  {['professional', 'casual', 'witty', 'inspirational', 'bold', 'friendly', 'formal'].map(t => (
                     <SelectItem key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</SelectItem>
                   ))}
                 </SelectContent>

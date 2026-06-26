@@ -20,7 +20,7 @@ export default function ClientIntegrations() {
     if (client?.id) {
       apiClient.MarketplaceIntegration.filter({ client_id: client.id, platform: 'shopify', status: 'active' })
         .then(r => setShopifyActive(r.length > 0))
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [client?.id]);
 

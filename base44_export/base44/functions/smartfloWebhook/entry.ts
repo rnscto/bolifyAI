@@ -42,8 +42,8 @@ async function sendTelegramDirect(client, { caller_number, caller_name, category
     else if (urgency === 'urgent') emoji = '🚨';
 
     const notifType = type || 'call';
-    let message = notifType === 'summary' 
-      ? `📋 <b>Call Summary</b>\n\n` 
+    let message = notifType === 'summary'
+      ? `📋 <b>Call Summary</b>\n\n`
       : `${emoji} <b>Incoming Call</b>\n\n`;
     message += `📱 From: <b>${caller_name || caller_number || 'Unknown'}</b>\n`;
     if (caller_name && caller_number) message += `📞 Number: ${caller_number}\n`;
@@ -269,7 +269,7 @@ Deno.serve(async (req) => {
           if (resolvedAgent) {
             console.log(`[smartfloWebhook] Fallback: DID ${calledDID} → Agent "${resolvedAgent.name}" via assigned_dids`);
             if (!resolvedClient && resolvedAgent.client_id) {
-              try { resolvedClient = await base44.entities.Client.get(resolvedAgent.client_id); } catch (_) {}
+              try { resolvedClient = await base44.entities.Client.get(resolvedAgent.client_id); } catch (_) { }
             }
           }
         }
@@ -312,7 +312,7 @@ Deno.serve(async (req) => {
             const trustedContacts = await base44.entities.TrustedContact.filter({ client_id: resolvedClient.id });
             const match = trustedContacts.find(tc => tc.phone && tc.phone.replace(/\D/g, '').slice(-10) === last10);
             if (match) { isTrusted = true; trustedName = match.name || ''; }
-          } catch (_) {}
+          } catch (_) { }
 
           personalScreeningInstructions = '\n\n--- PERSONAL AI ASSISTANT MODE ---';
           if (aiMode === 'block_all') {
@@ -758,13 +758,13 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
           const billableMinutes = Math.ceil(parseInt(duration) / 60);
           const rate = Number(client.per_minute_rate) || 4.0;
           const amountToDeduct = isPayg ? (billableMinutes * rate) : 0;
-          
+
           const freeBefore = Number(client.free_minutes_remaining) || 0;
           const balanceBefore = Number(client.wallet_balance) || 0;
-          
+
           let freeAfter = freeBefore;
           let balanceAfter = balanceBefore;
-          
+
           if (isPayg) {
             if (freeBefore >= billableMinutes) {
               freeAfter = freeBefore - billableMinutes;
@@ -773,7 +773,7 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
               freeAfter = 0;
               balanceAfter = balanceBefore - (remainingMinutes * rate);
             }
-            
+
             await base44.entities.Client.update(client.id, {
               free_minutes_remaining: freeAfter,
               wallet_balance: balanceAfter,
@@ -859,10 +859,10 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
       // Previously, updating CallLog would trigger entity automations for
       // campaignPostCall and postCallFollowup. Now we call them directly.
       // ═══════════════════════════════════════════════════════════════════
-      
+
       // Re-read fresh CallLog to pass complete data
       const freshCallLog = await base44.entities.CallLog.get(callLog.id);
-      
+
       // 1. Campaign post-call processing — handles lead progression + triggers next call
       //    IMPORTANT: We do this INLINE instead of via functions.invoke() because:
       //    - functions.invoke() adds latency and can timeout
@@ -870,27 +870,27 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
       //    - Inline execution ensures the next call triggers immediately
       try {
         console.log(`[smartfloWebhook] Processing campaign post-call for CallLog ${callLog.id}`);
-        
+
         // Check if this is a campaign call
         const campaignLeads = await base44.entities.CampaignLead.filter({ call_log_id: callLog.id });
-        
+
         if (campaignLeads.length > 0) {
           const campaignLead = campaignLeads[0];
-          
+
           // Skip if already processed
           if (!['calling'].includes(campaignLead.status)) {
             console.log(`[smartfloWebhook] CampaignLead ${campaignLead.id} already ${campaignLead.status} — skipping`);
           } else {
             // Lock it
             await base44.entities.CampaignLead.update(campaignLead.id, { status: 'processing' });
-            
+
             // Wait briefly for streamAudio to finish saving transcript
             // (streamAudio may still be writing when Smartflo fires the webhook)
             await new Promise(r => setTimeout(r, 2000));
-            
+
             // Re-read CallLog to get latest data (streamAudio may have updated it)
             const latestCallLog = await base44.entities.CallLog.get(callLog.id);
-            
+
             // Determine basic outcome (fast, no LLM)
             let outcome = 'neutral';
             let clCallStatus = 'answered';
@@ -919,7 +919,7 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
               outcome = statusToOutcome[latestCallLog.lead_status_updated] || 'neutral';
               clSummary = latestCallLog.conversation_summary || clSummary;
             }
-            
+
             // Mark completed — include transcript/recording from latest CallLog
             await base44.entities.CampaignLead.update(campaignLead.id, {
               status: 'completed', outcome, call_status: clCallStatus,
@@ -928,7 +928,7 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
               call_duration: latestCallLog.duration || parseInt(duration) || 0
             });
             console.log(`[smartfloWebhook] CampaignLead ${campaignLead.lead_name} → ${outcome}`);
-            
+
             // Handle no-answer retry — do NOT change lead status/score for unanswered calls
             if (outcome === 'not_answered') {
               // Only update engagement metadata on the lead, preserve status/score
@@ -939,9 +939,9 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
                     last_engagement_date: new Date().toISOString()
                   });
                   console.log(`[smartfloWebhook] Lead ${campaignLead.lead_id} — not_answered, preserved existing status/score`);
-                } catch (_) {}
+                } catch (_) { }
               }
-              
+
               const campaign = await base44.entities.Campaign.get(campaignLead.campaign_id);
               const rules = campaign?.followup_rules || {};
               const attemptNumber = (campaignLead.attempt_count || 0) + 1;
@@ -1046,7 +1046,7 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
 
             // TRIGGER NEXT CALL IMMEDIATELY (inline — no function invoke)
             await triggerNextCampaignCall(base44, campaignLead.campaign_id);
-            
+
             // Update campaign stats — bounded count reads instead of a full-table scan.
             // (Detailed outcomes_summary is recomputed by campaignPostCall's slow path; here we
             //  just keep the completed/failed counters fresh without paginating every webhook.)
@@ -1061,7 +1061,7 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
         } else {
           console.log(`[smartfloWebhook] Not a campaign call — skipping campaign processing`);
         }
-        
+
         // Invoke campaignPostCall for SLOW AI analysis (emails, scoring, sequences)
         // This runs async — next call is already triggered above
         try {
@@ -1070,8 +1070,8 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
             data: freshCallLog,
             old_data: { ...freshCallLog, status: callLog.status }
           }).catch(e => console.error(`[smartfloWebhook] campaignPostCall async failed: ${e.message}`));
-        } catch (_) {}
-        
+        } catch (_) { }
+
       } catch (pcErr) {
         console.error(`[smartfloWebhook] Campaign processing failed: ${pcErr.message}`);
       }
@@ -1087,7 +1087,7 @@ Generate: greeting, likely_intent, qualifying_questions, routing, is_potential_l
             else if (summaryLower.includes('promotional') || summaryLower.includes('offer')) category = 'promotional';
             else if (summaryLower.includes('family') || summaryLower.includes('friend')) category = 'family';
             else if (summaryLower.includes('business') || summaryLower.includes('meeting') || summaryLower.includes('work')) category = 'business';
-            
+
             let urgency = 'medium';
             if (summaryLower.includes('urgent') || summaryLower.includes('emergency')) urgency = 'urgent';
             else if (category === 'spam' || category === 'promotional') urgency = 'low';
@@ -1350,7 +1350,7 @@ async function triggerNextCampaignCall(base44, campaignId) {
           leadContext = ctxParts.join('\n');
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     const personalizedPrompt = [
       agent.system_prompt || '',
@@ -1384,7 +1384,7 @@ async function triggerNextCampaignCall(base44, campaignId) {
       if (clientData && (clientData.account_status === 'trial' || clientData.account_status === 'onboarding')) {
         smartfloApiKey = Deno.env.get('SMARTFLO_API_KEY');
       }
-    } catch (_) {}
+    } catch (_) { }
 
     // Normalize caller_id (10-digit → prefix 91, like executeCampaign)
     let cleanCallerID = selectedDID.replace(/[^0-9]/g, '');

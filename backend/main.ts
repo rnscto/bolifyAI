@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { connectDB } from "./src/db/index.ts";
 import { v1Router } from "./src/controllers/v1.ts";
+import { resellerRouter } from "./src/controllers/reseller.ts";
 import { authRouter } from "./src/controllers/auth.ts";
 import { voiceRouter } from "./src/controllers/voice.ts";
 import { integrationRouter } from "./src/controllers/integration.ts";
@@ -23,6 +24,7 @@ import { initTrialExpiryCheck } from "./src/cron/trialExpiryCheck.ts";
 import { initBillingSweeper } from "./src/cron/billingSweeper.ts";
 import { initDailyDigest } from "./src/cron/dailyDigest.ts";
 import { initActivityDispatcher } from "./src/cron/activityDispatcher.ts";
+import { initTicketAutoResponder } from "./src/cron/ticketAutoResponder.ts";
 import { handleWebSocket } from "./src/services/realtime.ts";
 import { initStreamSession } from "./src/controllers/voice.ts";
 
@@ -85,6 +87,7 @@ app.get('/api/realtime', (c) => {
 
 app.route("/api/auth", authRouter);
 app.route("/api/v1", v1Router);
+app.route("/api/reseller", resellerRouter);
 app.route("/api/voice", voiceRouter);
 app.route("/api/webhook", voiceWebhookRouter);
 app.route("/api/campaign", campaignRouter);
@@ -130,6 +133,7 @@ initTrialExpiryCheck();
 initBillingSweeper();
 initDailyDigest();
 initActivityDispatcher();
+initTicketAutoResponder();
 
 // Start DB connection
 connectDB().catch(console.error);

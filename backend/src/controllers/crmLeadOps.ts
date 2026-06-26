@@ -109,7 +109,7 @@ export async function rescoreLeadHandler(c: Context) {
           required: ["score", "sentiment", "intent_signals"]
         }
       );
-      
+
       await client.queryObject(`
         UPDATE lead 
         SET score = $1, sentiment = $2, intent_signals = $3
@@ -118,7 +118,7 @@ export async function rescoreLeadHandler(c: Context) {
 
       return c.json({ success: true, lead_id: lead.id, new_score: aiResult.score });
     }
-    
+
     return c.json({ error: "Bulk mode skipped in simplified version." }, 501);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -134,7 +134,7 @@ export async function buildLeadContextHandler(c: Context) {
 
     const callLogsRes = await client.queryObject(`SELECT * FROM calllog WHERE lead_id = $1 ORDER BY created_at DESC LIMIT 5`, [lead.id]);
     const callLogs = callLogsRes.rows as any[];
-    
+
     const sections = [
       `CUSTOMER PROFILE:`,
       `- Name: ${lead.name || "Unknown"}`,

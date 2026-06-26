@@ -22,7 +22,7 @@ walkDir('./src', (filePath) => {
   // Matches: import { base44 } from '@/api/base44Client';
   // Matches: import { base44 } from '../../api/base44Client';
   content = content.replace(/import\s*\{\s*base44\s*\}\s*from\s*['"](.*?)base44Client['"]/g, "import { apiClient } from '$1apiClient'");
-  
+
   // Also handle cases where they import something else alongside base44 (unlikely but possible)
   // or default imports if any exist.
 

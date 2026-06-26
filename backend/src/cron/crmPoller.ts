@@ -26,7 +26,7 @@ export async function processOutboundPush() {
   try {
     const allIntegrationsRes = await client.queryObject(`SELECT * FROM crmintegration WHERE status = 'active'`);
     const allIntegrations = allIntegrationsRes.rows as any[];
-    
+
     const integrationsByClient: any = {};
     for (const int of allIntegrations) {
       if (!int.webhook_url) continue;
@@ -46,7 +46,7 @@ export async function processOutboundPush() {
       ORDER BY COALESCE(updated_date, created_at) DESC 
       LIMIT 100
     `, [activeClientIds, safetyCutoff]);
-    
+
     const toPushCalls = (recentCallsRes.rows as any[]).filter(isEligibleForRetry).slice(0, 8);
 
     for (const call of toPushCalls) {

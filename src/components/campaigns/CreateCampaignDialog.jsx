@@ -220,11 +220,11 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label>Campaign Name</Label>
-              <Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} required placeholder="e.g. Q1 Cold Outreach" />
+              <Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} required placeholder="e.g. Q1 Cold Outreach" />
             </div>
             <div>
               <Label>Type</Label>
-              <Select value={form.type} onValueChange={v => setForm({...form, type: v})}>
+              <Select value={form.type} onValueChange={v => setForm({ ...form, type: v })}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="cold_call">Cold Call</SelectItem>
@@ -237,7 +237,7 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
           <div className="grid grid-cols-1 gap-4">
             <div>
               <Label>Agent</Label>
-              <Select value={form.agent_id} onValueChange={v => setForm({...form, agent_id: v})}>
+              <Select value={form.agent_id} onValueChange={v => setForm({ ...form, agent_id: v })}>
                 <SelectTrigger><SelectValue placeholder="Select agent" /></SelectTrigger>
                 <SelectContent>
                   {agents.map(a => <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>)}
@@ -295,19 +295,19 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
             <div className="space-y-2 pb-3 border-b">
               <p className="text-xs font-semibold text-green-700 uppercase tracking-wide">When Interested</p>
               <div className="flex items-center gap-2">
-                <Checkbox checked={form.interested_email} onCheckedChange={v => setForm({...form, interested_email: v})} />
+                <Checkbox checked={form.interested_email} onCheckedChange={v => setForm({ ...form, interested_email: v })} />
                 <span className="text-sm">Send follow-up email</span>
               </div>
               {form.interested_email && (
                 <div className="flex items-center gap-2 ml-6">
-                  <Checkbox checked={form.interested_ai_email} onCheckedChange={v => setForm({...form, interested_ai_email: v})} />
+                  <Checkbox checked={form.interested_ai_email} onCheckedChange={v => setForm({ ...form, interested_ai_email: v })} />
                   <span className="text-sm text-gray-600">✨ AI-personalize email from call transcript</span>
                 </div>
               )}
               <div className="flex items-center gap-3">
                 <span className="text-sm text-gray-600">Schedule callback after</span>
                 <Input type="number" className="w-16" min={1} max={14} value={form.interested_callback_days}
-                  onChange={e => setForm({...form, interested_callback_days: parseInt(e.target.value) || 2})} />
+                  onChange={e => setForm({ ...form, interested_callback_days: parseInt(e.target.value) || 2 })} />
                 <span className="text-sm text-gray-600">days</span>
               </div>
             </div>
@@ -316,17 +316,17 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
             <div className="space-y-2 pb-3 border-b">
               <p className="text-xs font-semibold text-yellow-700 uppercase tracking-wide">When Callback Requested</p>
               <div className="flex items-center gap-2">
-                <Checkbox checked={form.callback_create_task} onCheckedChange={v => setForm({...form, callback_create_task: v})} />
+                <Checkbox checked={form.callback_create_task} onCheckedChange={v => setForm({ ...form, callback_create_task: v })} />
                 <span className="text-sm">Auto-create callback task for agent</span>
               </div>
               {form.callback_create_task && (
                 <div className="flex items-center gap-2 ml-6">
-                  <Checkbox checked={form.callback_ai_talking_points} onCheckedChange={v => setForm({...form, callback_ai_talking_points: v})} />
+                  <Checkbox checked={form.callback_ai_talking_points} onCheckedChange={v => setForm({ ...form, callback_ai_talking_points: v })} />
                   <span className="text-sm text-gray-600">✨ Generate AI talking points from transcript</span>
                 </div>
               )}
               <div className="flex items-center gap-2">
-                <Checkbox checked={form.callback_email} onCheckedChange={v => setForm({...form, callback_email: v})} />
+                <Checkbox checked={form.callback_email} onCheckedChange={v => setForm({ ...form, callback_email: v })} />
                 <span className="text-sm">Send confirmation email</span>
               </div>
             </div>
@@ -335,17 +335,17 @@ export default function CreateCampaignDialog({ open, onOpenChange, client, onCre
             <div className="space-y-2">
               <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">When No Answer</p>
               <div className="flex items-center gap-2">
-                <Checkbox checked={form.no_answer_retry} onCheckedChange={v => setForm({...form, no_answer_retry: v})} />
+                <Checkbox checked={form.no_answer_retry} onCheckedChange={v => setForm({ ...form, no_answer_retry: v })} />
                 <span className="text-sm">Auto-retry no-answer leads</span>
               </div>
               {form.no_answer_retry && (
                 <div className="flex items-center gap-3 ml-6">
                   <span className="text-sm text-gray-600">Retry after</span>
                   <Input type="number" className="w-16" min={1} max={48} value={form.no_answer_retry_hours}
-                    onChange={e => setForm({...form, no_answer_retry_hours: parseInt(e.target.value) || 4})} />
+                    onChange={e => setForm({ ...form, no_answer_retry_hours: parseInt(e.target.value) || 4 })} />
                   <span className="text-sm text-gray-600">hours, max</span>
                   <Input type="number" className="w-16" min={1} max={10} value={form.no_answer_max_retries}
-                    onChange={e => setForm({...form, no_answer_max_retries: parseInt(e.target.value) || 3})} />
+                    onChange={e => setForm({ ...form, no_answer_max_retries: parseInt(e.target.value) || 3 })} />
                   <span className="text-sm text-gray-600">retries</span>
                 </div>
               )}

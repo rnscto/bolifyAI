@@ -1,6 +1,7 @@
 import { Context, Hono } from "hono";
 import { jwt } from "hono/jwt";
 import { base44ORM as base44 } from "../db/orm.ts";
+import { distributeCommission } from "../utils/commissionDistributor.ts";
 import { jsPDF } from "jspdf";
 
 export const billingRouter = new Hono();
@@ -101,7 +102,7 @@ billingRouter.post("/verify-payment", jwt({ secret: JWT_SECRET, alg: "HS256" }),
       });
 
       let planDetails: any = {};
-      try { planDetails = JSON.parse(payment.description); } catch (e) {}
+      try { planDetails = JSON.parse(payment.description); } catch (e) { }
 
       if (planDetails.type === "wallet_topup") {
         const topupAmount = planDetails.amount || payment.amount;
@@ -113,6 +114,9 @@ billingRouter.post("/verify-payment", jwt({ secret: JWT_SECRET, alg: "HS256" }),
           client_id: payment.client_id, type: "topup", direction: "credit", amount: topupAmount,
           balance_before: client?.wallet_balance || 0, balance_after: newBalance, description: `Wallet top-up ₹${topupAmount}`, payment_id: payment.id,
         });
+
+        console.log(`[Verify Payment] Processed Topup for ${payment.client_id}: ₹${topupAmount}`);
+        await distributeCommission(payment.id, payment.client_id, Number(topupAmount), 1, true);
 
         return c.json({ status: "paid", type: "wallet_topup", order_status: cfData.order_status, amount: topupAmount, new_balance: newBalance });
       }
@@ -139,6 +143,9 @@ billingRouter.post("/verify-payment", jwt({ secret: JWT_SECRET, alg: "HS256" }),
       if (subs.length) await base44.entities.Subscription.update(subs[0].id, subData);
       else await base44.entities.Subscription.create(subData);
 
+      console.log(`[Verify Payment] Processed Subscription for ${payment.client_id}`);
+      await distributeCommission(payment.id, payment.client_id, Number(payment.amount), subscribedChannels, false);
+
       return c.json({ status: "paid", order_status: cfData.order_status, amount: payment.amount });
     } else {
       const newStatus = cfData.order_status === "EXPIRED" ? "failed" : "pending";
@@ -163,7 +170,7 @@ billingRouter.post("/webhook", async (c) => {
     const encoder = new TextEncoder();
     const keyData = encoder.encode(CASHFREE_SECRET_KEY || "");
     const messageData = encoder.encode(timestamp + rawBody);
-    
+
     const key = await crypto.subtle.importKey("raw", keyData, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
     const signatureBuffer = await crypto.subtle.sign("HMAC", key, messageData);
     const generatedSignature = btoa(String.fromCharCode(...new Uint8Array(signatureBuffer)));
@@ -178,7 +185,7 @@ billingRouter.post("/webhook", async (c) => {
     if (payload.type === "PAYMENT_SUCCESS_WEBHOOK") {
       const order_id = payload.data.order.order_id;
       const cashfree_payment_id = payload.data.payment.cf_payment_id?.toString();
-      
+
       const payments = await base44.entities.Payment.filter({ cashfree_order_id: order_id });
       if (!payments.length) return c.json({ error: "Payment not found" }, 404);
       const payment = payments[0];
@@ -190,7 +197,7 @@ billingRouter.post("/webhook", async (c) => {
       });
 
       let planDetails: any = {};
-      try { planDetails = JSON.parse(payment.description); } catch (e) {}
+      try { planDetails = JSON.parse(payment.description); } catch (e) { }
 
       if (planDetails.type === "wallet_topup") {
         const topupAmount = planDetails.amount || payment.amount;
@@ -204,6 +211,7 @@ billingRouter.post("/webhook", async (c) => {
         });
 
         console.log(`[Cashfree Webhook] Processed Topup for ${payment.client_id}: ₹${topupAmount}`);
+        await distributeCommission(payment.id, payment.client_id, Number(topupAmount), 1, true);
         return c.json({ success: true });
       }
 
@@ -230,6 +238,7 @@ billingRouter.post("/webhook", async (c) => {
       else await base44.entities.Subscription.create(subData);
 
       console.log(`[Cashfree Webhook] Processed Subscription for ${payment.client_id}`);
+      await distributeCommission(payment.id, payment.client_id, Number(payment.amount), subscribedChannels, false);
       return c.json({ success: true });
     }
 
@@ -244,7 +253,7 @@ billingRouter.post("/webhook", async (c) => {
 billingRouter.post("/submit-payment-approval", jwt({ secret: JWT_SECRET, alg: "HS256" }), async (c) => {
   try {
     const user = c.get("jwtPayload") as any;
-    if (user.role !== "admin" || (user.email || "").toLowerCase() !== CEO_EMAIL) {
+    if ((user.role !== "admin" && user.role !== "master_admin") || (user.email || "").toLowerCase() !== CEO_EMAIL) {
       return c.json({ error: "Only the CEO admin may raise payment approval requests." }, 403);
     }
 
@@ -263,7 +272,7 @@ billingRouter.post("/submit-payment-approval", jwt({ secret: JWT_SECRET, alg: "H
     });
 
     if (request_type === "client_activation" && client.account_status !== "active") {
-      await base44.entities.Client.update(client_id, { account_status: "activation_pending" }).catch(() => {});
+      await base44.entities.Client.update(client_id, { account_status: "activation_pending" }).catch(() => { });
     }
 
     return c.json({ success: true, id: reqRec.id, request: reqRec });

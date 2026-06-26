@@ -34,11 +34,11 @@ export async function crmInboundHandler(c: Context) {
     switch (action) {
       case "create_lead": {
         if (!data.phone && !data.email) return c.json({ error: "Requires phone or email" }, 400);
-        
+
         const keys = ["client_id", "source", "status", ...Object.keys(data)];
         const values = [clientId, "crm_api", "new", ...Object.values(data)];
         const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
-        
+
         const createRes = await client.queryObject(`
           INSERT INTO lead (${keys.join(", ")})
           VALUES (${placeholders})
@@ -63,11 +63,11 @@ export async function crmInboundHandler(c: Context) {
           lead = leadRes?.rows[0];
         }
         if (!lead) return c.json({ error: "Lead not found" }, 404);
-        
+
         const updateKeys = Object.keys(data).filter(k => k !== 'id');
         const updateValues = updateKeys.map(k => data[k]);
         const setClause = updateKeys.map((k, i) => `${k} = $${i + 2}`).join(", ");
-        
+
         const updateRes = await client.queryObject(`
           UPDATE lead SET ${setClause} WHERE id = $1 RETURNING *
         `, [(lead as any).id, ...updateValues]);
@@ -114,7 +114,7 @@ export async function crmFetchDataHandler(c: Context) {
     const allowedEntities = ['lead', 'contact', 'deal', 'calllog', 'activity'];
     const tableMap: any = { 'leads': 'lead', 'contacts': 'contact', 'deals': 'deal', 'call_logs': 'calllog', 'activities': 'activity' };
     const tableName = tableMap[entity];
-    
+
     if (!tableName || !allowedEntities.includes(tableName)) {
       return c.json({ error: "Unknown entity" }, 400);
     }
@@ -142,7 +142,7 @@ export async function crmFetchDataHandler(c: Context) {
       ORDER BY ${sortField} ${sortDir} 
       LIMIT ${maxLimit}
     `, queryParams);
-    
+
     return c.json({ success: true, entity, count: recordsRes.rows.length, data: recordsRes.rows });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
@@ -174,7 +174,7 @@ export async function crmOutboundPushHandler(c: Context) {
         });
         results.push({ crm: intObj.crm_type, status: res.ok ? "sent" : "failed", http_status: res.status });
         if (res.ok) {
-           await client.queryObject(`UPDATE crmintegration SET last_sync = $1, status = 'active' WHERE id = $2`, [new Date().toISOString(), intObj.id]);
+          await client.queryObject(`UPDATE crmintegration SET last_sync = $1, status = 'active' WHERE id = $2`, [new Date().toISOString(), intObj.id]);
         }
       } catch (err: any) {
         results.push({ crm: intObj.crm_type, status: "error", error: err.message });

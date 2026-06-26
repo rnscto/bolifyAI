@@ -15,7 +15,7 @@ export async function runActivityDispatcher() {
       WHERE a.status = 'scheduled' 
         AND a.scheduled_date IS NOT NULL 
         AND a.scheduled_date != ''
-        AND a.scheduled_date::timestamp with time zone <= NOW() 
+        AND CAST(a.scheduled_date AS timestamp with time zone) <= NOW() 
         AND a.type IN ('whatsapp', 'email', 'sms', 'calendar_invite')
       LIMIT 50
     `;
@@ -24,7 +24,7 @@ export async function runActivityDispatcher() {
 
     for (const activity of activities) {
       console.log(`[ActivityDispatcher] Dispatching ${activity.type} for Lead ${activity.lead_id} (Activity ${activity.id})`);
-      
+
       let success = false;
       let errorMsg = "";
 
@@ -35,7 +35,7 @@ export async function runActivityDispatcher() {
           // E.g., title: "Whatsapp asked details" -> template could be 'follow_up_details'
           // We can parse the description if it contains JSON or variables, for now just use a default template or one specified in title
           let templateName = 'follow_up_details';
-          
+
           // Try to get a template that matches "demo" or "followup", otherwise get the first approved template
           const tplQuery = `SELECT name FROM whatsapptemplate WHERE client_id = $1 AND status = 'APPROVED' ORDER BY created_at DESC LIMIT 1`;
           const tplRes = await client.queryObject(tplQuery, [activity.client_id]);
@@ -44,7 +44,7 @@ export async function runActivityDispatcher() {
           }
 
           success = await sendWhatsAppMessage(activity.lead_phone, templateName, [activity.first_name || 'Customer'], activity.client_id);
-        } 
+        }
         else if (activity.type === 'email') {
           if (!activity.lead_email) throw new Error("Lead missing email address");
           const subject = activity.title || "Follow up from our call";
@@ -68,12 +68,12 @@ export async function runActivityDispatcher() {
             `UPDATE activity SET status = 'completed', updated_date = NOW() WHERE id = $1`,
             [activity.id]
           );
-          
+
           // Log it to outreach log
           await client.queryObject(
-            `INSERT INTO outreachlog (lead_id, campaign_id, type, direction, status, notes)
+            `INSERT INTO outreachlog (client_id, lead_id, channel, direction, status, notes)
              VALUES ($1, $2, $3, 'outbound', 'delivered', $4)`,
-            [activity.lead_id, activity.campaign_id, activity.type, `Automated dispatch successful: ${activity.title}`]
+            [activity.client_id, activity.lead_id, activity.type, `Automated dispatch successful: ${activity.title}`]
           );
         } else {
           throw new Error("Provider returned false");
@@ -97,7 +97,7 @@ export function initActivityDispatcher() {
   setInterval(() => {
     runActivityDispatcher().catch(console.error);
   }, 60 * 1000);
-  
+
   // Run once immediately
   setTimeout(() => runActivityDispatcher(), 5000);
 }

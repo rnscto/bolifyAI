@@ -24,13 +24,13 @@ function connectWebSocket() {
       const cbs = subscribers[entity] || [];
       const typeMap = { created: 'create', updated: 'update', deleted: 'delete' };
       const eventType = typeMap[data.type] || data.type;
-      
+
       const event = {
         type: eventType,
         id: data.record?.id,
         data: data.record
       };
-      
+
       cbs.forEach(cb => cb(event));
     } catch (err) {
       console.error("WS Parse Error:", err);
@@ -57,7 +57,7 @@ async function apiFetch(path, options = {}) {
     "Content-Type": "application/json",
     ...options.headers,
   };
-  
+
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
@@ -72,7 +72,7 @@ async function apiFetch(path, options = {}) {
     try {
       const err = await response.json();
       errorMsg = err?.data?.error || err?.error || err?.message || errorMsg;
-    } catch (e) {}
+    } catch (e) { }
     throw new Error(errorMsg);
   }
 
@@ -131,7 +131,7 @@ class EntityClient {
       subscribers[entityName] = [];
     }
     subscribers[entityName].push(callback);
-    
+
     if (!ws || ws.readyState === WebSocket.CLOSED) {
       connectWebSocket();
     } else if (ws.readyState === WebSocket.OPEN) {
@@ -189,10 +189,10 @@ export const apiClient = {
       else window.location.href = "/Home";
     },
     redirectToLogin: () => {
-      window.location.href = "/Login"; 
+      window.location.href = "/Login";
     }
   },
-  
+
   // New V1 endpoints mapped to EntityClients
   Lead: new EntityClient('/v1/leads', 'lead'),
   LeadGroup: new EntityClient('/v1/lead-groups', 'leadgroup'),
@@ -213,6 +213,10 @@ export const apiClient = {
   Subscription: new EntityClient('/v1/subscriptions', 'subscription'),
   VoicemailMessage: new EntityClient('/v1/voicemail-messages', 'voicemailmessage'),
   OutreachLog: new EntityClient('/v1/outreach-logs', 'outreachlog'),
+  DomainMapping: new EntityClient('/v1/domain-mappings', 'domainmapping'),
+  CommissionLedger: new EntityClient('/v1/commission-ledgers', 'commissionledger'),
+  Ticket: new EntityClient('/v1/tickets', 'ticket'),
+  TicketMessage: new EntityClient('/v1/ticket-messages', 'ticketmessage'),
   ClientAgreement: new EntityClient('/v1/client-agreements', 'clientagreement'),
   ClientAgreementTemplate: new EntityClient('/v1/client-agreement-templates', 'clientagreementtemplate'),
   AgreementTemplate: new EntityClient('/v1/agreement-templates', 'agreementtemplate'),

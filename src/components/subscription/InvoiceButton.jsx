@@ -35,7 +35,7 @@ export default function InvoiceButton({ paymentId, size = 'sm' }) {
     } catch (e) {
       toast.error(e.message);
     }
-    
+
     setDownloading(false);
   };
 

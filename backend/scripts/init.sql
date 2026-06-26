@@ -534,7 +534,7 @@ CREATE TABLE IF NOT EXISTS "user" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
-  "role" TEXT,
+  "role" TEXT, -- master_admin, master_reseller, reseller, client
   "client_id" TEXT,
   "display_name" TEXT,
   "email" TEXT UNIQUE,
@@ -663,7 +663,9 @@ CREATE TABLE IF NOT EXISTS "client" (
   "social_media_access_requested_at" TEXT,
   "social_media_access_activated_at" TEXT,
   "social_media_access_activated_by" TEXT,
-  "social_media_access_notes" TEXT
+  "social_media_access_notes" TEXT,
+  "upline_id" TEXT,
+  "commission_balance" NUMERIC DEFAULT 0
 );
 
 
@@ -1397,5 +1399,77 @@ CREATE TABLE IF NOT EXISTS "outreachlog" (
 DROP TRIGGER IF EXISTS update_outreachlog_updated_at ON "outreachlog";
 CREATE TRIGGER update_outreachlog_updated_at
 BEFORE UPDATE ON "outreachlog"
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TABLE IF NOT EXISTS "domainmapping" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "reseller_id" TEXT,
+  "custom_domain" TEXT,
+  "logo_url" TEXT,
+  "theme_colors" JSONB,
+  "brand_name" TEXT
+);
+
+DROP TRIGGER IF EXISTS update_domainmapping_updated_at ON "domainmapping";
+CREATE TRIGGER update_domainmapping_updated_at
+BEFORE UPDATE ON "domainmapping"
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TABLE IF NOT EXISTS "commissionledger" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "transaction_id" TEXT,
+  "from_client_id" TEXT,
+  "to_reseller_id" TEXT,
+  "amount" NUMERIC,
+  "status" TEXT,
+  "type" TEXT
+);
+
+DROP TRIGGER IF EXISTS update_commissionledger_updated_at ON "commissionledger";
+CREATE TRIGGER update_commissionledger_updated_at
+BEFORE UPDATE ON "commissionledger"
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TABLE IF NOT EXISTS "ticket" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "created_by" TEXT,
+  "assigned_to" TEXT,
+  "category" TEXT,
+  "status" TEXT,
+  "subject" TEXT,
+  "description" TEXT,
+  "escalated_to_admin" BOOLEAN
+);
+
+DROP TRIGGER IF EXISTS update_ticket_updated_at ON "ticket";
+CREATE TRIGGER update_ticket_updated_at
+BEFORE UPDATE ON "ticket"
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TABLE IF NOT EXISTS "ticketmessage" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "ticket_id" TEXT,
+  "sender_id" TEXT,
+  "sender_role" TEXT,
+  "message" TEXT,
+  "is_draft" BOOLEAN,
+  "is_internal" BOOLEAN
+);
+
+DROP TRIGGER IF EXISTS update_ticketmessage_updated_at ON "ticketmessage";
+CREATE TRIGGER update_ticketmessage_updated_at
+BEFORE UPDATE ON "ticketmessage"
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();

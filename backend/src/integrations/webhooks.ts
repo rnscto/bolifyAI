@@ -57,7 +57,7 @@ export async function sendWebhookEvent(clientId: string, eventType: string, payl
         console.error(`[Webhook] Error sending to ${integration.webhook_url}:`, err.message);
       }
     }
-    
+
     return true;
   } catch (error) {
     console.error("[Webhook] Dispatcher Error:", error);

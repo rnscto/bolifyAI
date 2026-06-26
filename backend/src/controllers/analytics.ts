@@ -39,14 +39,14 @@ analyticsRouter.get("/overview", async (c) => {
       FROM activity WHERE client_id = $1 AND created_at >= NOW() - INTERVAL '30 days'
       GROUP BY type
     `, [clientId]);
-    
+
     const intentBreakdown = activitiesRes.rows.map((r: any) => ({
       name: r.type,
       value: Number(r.count)
     }));
 
-    return c.json({ 
-      success: true, 
+    return c.json({
+      success: true,
       overview: {
         totalCalls,
         totalMinutes,
