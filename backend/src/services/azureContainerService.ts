@@ -42,10 +42,10 @@ export async function getAzureEnvironmentDetails() {
       fqdn: defaultFqdn
     };
   } catch (error: any) {
-    console.error("[AzureContainerService] Failed to get environment details:", error.message);
+    console.error("[AzureContainerService] Failed to get environment details:", error.message || error);
     return {
       success: false,
-      error: `Azure Configuration Error: ${error.message}`,
+      error: `Azure Configuration Error: ${error.message || "Unknown error"}`,
       // Fallback details to allow UI to render even if Azure is misconfigured locally
       verificationId: "AZURE_NOT_CONFIGURED",
       fqdn: "app.bolify.ai"

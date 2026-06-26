@@ -23,10 +23,14 @@ export default function AdminResellerBranding() {
   const loadData = async () => {
     try {
       // 1. Fetch current domain binding
-      const res = await apiFetch('/reseller/custom-domain');
-      if (res && res.custom_domain) {
-        setDomain(res.custom_domain);
-        setCurrentDomain(res.custom_domain);
+      try {
+        const res = await apiFetch('/reseller/custom-domain');
+        if (res && res.custom_domain) {
+          setDomain(res.custom_domain);
+          setCurrentDomain(res.custom_domain);
+        }
+      } catch (e) {
+        console.warn('Failed to load current domain binding:', e);
       }
       
       // 2. Fetch Azure DNS Requirements
