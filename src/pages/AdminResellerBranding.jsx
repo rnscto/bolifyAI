@@ -31,14 +31,21 @@ export default function AdminResellerBranding() {
       
       // 2. Fetch Azure DNS Requirements
       const configRes = await apiFetch('/reseller/custom-domain-config');
-      if (configRes && configRes.success) {
+      if (configRes) {
         setDnsConfig({
+          success: configRes.success,
           verificationId: configRes.verificationId,
-          fqdn: configRes.fqdn
+          fqdn: configRes.fqdn,
+          error: configRes.error
         });
       }
     } catch (e) {
       console.error('Failed to load custom domain data:', e);
+      setDnsConfig({
+        success: false,
+        verificationId: 'AZURE_NOT_CONFIGURED',
+        error: e.message || 'Failed to connect to Azure configuration server'
+      });
       toast.error('Failed to connect to Azure configuration server');
     } finally {
       setLoading(false);
@@ -166,9 +173,9 @@ export default function AdminResellerBranding() {
               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 flex items-start gap-3">
                 <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-semibold text-amber-300">Azure Configuration Missing</p>
-                  <p className="text-xs text-amber-500 mt-1">
-                    The backend is not fully configured with Azure credentials. Custom domain binding via ARM API requires <code className="bg-black/30 px-1 py-0.5 rounded text-amber-200">AZURE_SUBSCRIPTION_ID</code>, Tenant, and Client ID in the server `.env`.
+                  <p className="text-sm font-semibold text-amber-300">Azure Configuration Error</p>
+                  <p className="text-xs text-amber-500 mt-1 break-all">
+                    {dnsConfig?.error || "The backend is not fully configured with Azure credentials."}
                   </p>
                 </div>
               </div>
