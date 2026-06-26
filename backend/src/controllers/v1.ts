@@ -280,3 +280,7 @@ v1Router.route("/client-lifecycle-events", buildCrudRouter("clientlifecycleevent
 v1Router.route("/subscriptions", buildCrudRouter("subscription"));
 v1Router.route("/voicemail-messages", buildCrudRouter("voicemailmessage"));
 v1Router.route("/outreach-logs", buildCrudRouter("outreachlog"));
+v1Router.route("/client-agreements", buildCrudRouter("clientagreement"));
+v1Router.route("/client-agreement-templates", buildCrudRouter("clientagreementtemplate"));
+v1Router.route("/agreement-templates", buildCrudRouter("agreementtemplate"));
+v1Router.route("/partner-agreements", buildCrudRouter("partneragreement"));

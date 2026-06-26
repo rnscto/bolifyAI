@@ -42,19 +42,16 @@ export default function ClientDashboard() {
 
         // NOTE: each CallLog row carries a heavy agent_config_cache (full prompts/scripts).
         // For dashboard counts we only need a bounded window, not the full history.
-        const [agents, leads, todaysCalls, recentCalls, activities, subs] = await Promise.all([
+        const [agents, leads, recentCalls, activities, subs] = await Promise.all([
           apiClient.Agent.filter({ client_id: clientData.id }),
           apiClient.Lead.filter({ client_id: clientData.id }),
-          apiClient.CallLog.filter(
-            { client_id: clientData.id, created_at: { $gte: todayStartISO } },
-            '-created_at',
-            500
-          ),
           apiClient.CallLog.filter({ client_id: clientData.id }, '-created_at', 500),
           apiClient.Activity.filter({ client_id: clientData.id }),
           apiClient.Subscription.filter({ client_id: clientData.id, status: 'active' }, '-created_at', 1)
         ]);
         setSubscription(subs[0] || null);
+
+        const todaysCalls = recentCalls.filter(c => new Date(c.created_at) >= todayStart);
 
         const upcoming = activities.filter(a => 
           a.status === 'scheduled' && new Date(a.scheduled_date) > new Date()

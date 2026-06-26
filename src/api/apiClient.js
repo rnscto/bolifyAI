@@ -212,7 +212,10 @@ export const apiClient = {
   Subscription: new EntityClient('/v1/subscriptions', 'subscription'),
   VoicemailMessage: new EntityClient('/v1/voicemail-messages', 'voicemailmessage'),
   OutreachLog: new EntityClient('/v1/outreach-logs', 'outreachlog'),
-
+  ClientAgreement: new EntityClient('/v1/client-agreements', 'clientagreement'),
+  ClientAgreementTemplate: new EntityClient('/v1/client-agreement-templates', 'clientagreementtemplate'),
+  AgreementTemplate: new EntityClient('/v1/agreement-templates', 'agreementtemplate'),
+  PartnerAgreement: new EntityClient('/v1/partner-agreements', 'partneragreement'),
   functions: {
     invoke: async (functionName, args) => {
       try {
