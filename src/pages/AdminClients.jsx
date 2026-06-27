@@ -35,7 +35,8 @@ import AdminSignedAgreements from '../components/admin/AdminSignedAgreements';
 import AdminKYCManagement from '../components/admin/AdminKYCManagement';
 import ActivateClientDialog from '../components/admin/ActivateClientDialog';
 import CEOStatusOverrideDialog from '../components/admin/CEOStatusOverrideDialog';
-import { ArrowDownCircle } from 'lucide-react';
+import ResellerTopupDialog from '../components/reseller/ResellerTopupDialog';
+import { ArrowDownCircle, ArrowRightLeft } from 'lucide-react';
 
 export default function AdminClients() {
   const [clients, setClients] = useState([]);
@@ -45,6 +46,7 @@ export default function AdminClients() {
   const [users, setUsers] = useState([]);
   const [activateClient, setActivateClient] = useState(null);
   const [overrideClient, setOverrideClient] = useState(null);
+  const [resellerTopupClient, setResellerTopupClient] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [pricingLimits, setPricingLimits] = useState(null);
@@ -491,7 +493,17 @@ export default function AdminClients() {
                         >
                           <CreditCard className="w-4 h-4 text-blue-600" />
                         </Button>
-                        {(currentUser?.email || '').toLowerCase() === 'yadavnand886@gmail.com' && (
+                        {['reseller', 'master_reseller'].includes(currentUser?.role) && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Top-Up Downline Wallet"
+                            onClick={() => setResellerTopupClient(client)}
+                          >
+                            <ArrowRightLeft className="w-4 h-4 text-green-600" />
+                          </Button>
+                        )}
+                        {['admin', 'master_admin'].includes(currentUser?.role) && (
                           <Button
                             size="sm"
                             variant="ghost"
@@ -572,6 +584,15 @@ export default function AdminClients() {
           open={!!overrideClient}
           onOpenChange={(open) => { if (!open) setOverrideClient(null); }}
           onUpdated={loadClients}
+        />
+      )}
+      {resellerTopupClient && (
+        <ResellerTopupDialog
+          client={resellerTopupClient}
+          me={currentUser}
+          open={!!resellerTopupClient}
+          onOpenChange={(open) => { if (!open) setResellerTopupClient(null); }}
+          onSubmitted={loadClients}
         />
       )}
     </div>

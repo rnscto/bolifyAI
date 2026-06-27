@@ -22,8 +22,6 @@ const TYPE_LABELS = {
   other: 'Other'
 };
 
-const CEO_EMAIL = 'yadavnand886@gmail.com';
-
 /**
  * Generic dialog the CEO admin uses to raise any payment approval request.
  * Props:
@@ -58,7 +56,7 @@ export default function RaisePaymentRequestDialog({
   useEffect(() => { apiClient.auth.me().then(setMe).catch(() => {}); }, []);
   useEffect(() => { if (open) { setType(defaultType); setSelectedClientId(clientId || ''); setAmount(''); setTxn(''); setScreenshotUrl(''); setNotes(''); } }, [open, defaultType, clientId]);
 
-  const isCEO = (me?.email || '').toLowerCase() === CEO_EMAIL;
+  const isAdmin = ['admin', 'master_admin'].includes(me?.role);
 
   const handleUpload = async (file) => {
     if (!file) return;
@@ -112,13 +110,13 @@ export default function RaisePaymentRequestDialog({
     }
   };
 
-  if (!isCEO && me) {
+  if (!isAdmin && me) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
           <DialogHeader><DialogTitle>Restricted</DialogTitle></DialogHeader>
           <p className="text-sm text-gray-700">
-            Only <code className="bg-gray-100 px-1 rounded">{CEO_EMAIL}</code> may raise payment approval requests.
+            Only <code className="bg-gray-100 px-1 rounded">admins</code> may raise payment approval requests.
           </p>
           <DialogFooter><Button onClick={() => onOpenChange(false)}>Close</Button></DialogFooter>
         </DialogContent>

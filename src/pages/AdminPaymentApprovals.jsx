@@ -14,9 +14,6 @@ import {
 import RaisePaymentRequestDialog from '../components/admin/RaisePaymentRequestDialog';
 import { getSignedUrl } from '@/lib/azureBlob';
 
-const CEO_EMAIL = 'yadavnand886@gmail.com';
-const MAIN_ADMIN_EMAIL = 'yadavnand886@gmail.com';
-
 const TYPE_LABELS = {
   client_activation: 'Client Activation',
   wallet_topup: 'Wallet Top-Up',
@@ -82,8 +79,7 @@ export default function AdminPaymentApprovals() {
     }
   };
 
-  const isCEO = (me?.email || '').toLowerCase() === CEO_EMAIL;
-  const isMain = (me?.email || '').toLowerCase() === MAIN_ADMIN_EMAIL;
+  const isAdmin = ['admin', 'master_admin'].includes(me?.role);
 
   const counts = {
     pending: requests.filter(r => r.status === 'pending').length,
@@ -146,10 +142,10 @@ export default function AdminPaymentApprovals() {
             <ShieldCheck className="w-7 h-7 text-indigo-600" /> Payment Approvals
           </h1>
           <p className="text-gray-600 mt-1">
-            CEO ({CEO_EMAIL}) raises requests with payment proof. Main admin ({MAIN_ADMIN_EMAIL}) approves.
+            Manage and approve payment requests.
           </p>
         </div>
-        {isCEO && (
+        {isAdmin && (
           <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => setRaiseOpen(true)}>
             <Plus className="w-4 h-4 mr-1" /> Raise New Request
           </Button>
@@ -234,7 +230,7 @@ export default function AdminPaymentApprovals() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right space-x-1">
-                          {r.status === 'pending' && isMain && (
+                          {isAdmin && r.status === 'pending' && (
                             <>
                               <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={() => openReview(r, 'approve')}>
                                 <CheckCircle2 className="w-4 h-4 mr-1" /> Approve

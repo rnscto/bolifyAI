@@ -59,9 +59,12 @@ resellerRouter.post("/downlines/:id/pricing", async (c) => {
 resellerRouter.post("/topup-downline", async (c) => {
   try {
     const user = c.get("jwtPayload") as any;
-    const { downline_id, amount } = await c.req.json();
+    const { downline_id, amount, source_wallet = 'commission_balance' } = await c.req.json();
 
     if (amount <= 0) return c.json({ error: "Amount must be greater than 0" }, 400);
+    if (!['commission_balance', 'wallet_balance'].includes(source_wallet)) {
+      return c.json({ error: "Invalid source wallet" }, 400);
+    }
 
     const resellerClient = await base44.entities.Client.get(user.client_id);
     if (!resellerClient) return c.json({ error: "Reseller not found" }, 404);
@@ -71,30 +74,42 @@ resellerRouter.post("/topup-downline", async (c) => {
       return c.json({ error: "Downline not found or unauthorized" }, 403);
     }
 
-    const currentCommBal = Number(resellerClient.commission_balance || 0);
-    if (currentCommBal < amount) {
-      return c.json({ error: "Insufficient commission balance" }, 400);
+    const currentBalance = Number(resellerClient[source_wallet] || 0);
+    if (currentBalance < amount) {
+      return c.json({ error: `Insufficient ${source_wallet.replace('_', ' ')}` }, 400);
     }
 
     // Deduct from reseller
     await base44.entities.Client.update(user.client_id, {
-      commission_balance: currentCommBal - amount
+      [source_wallet]: currentBalance - amount
     });
+
+    if (source_wallet === 'wallet_balance') {
+      await base44.entities.UsageLog.create({
+        client_id: user.client_id,
+        type: "topup_transfer",
+        direction: "debit",
+        amount: amount,
+        balance_before: currentBalance,
+        balance_after: currentBalance - amount,
+        description: `Transferred funds to downline ${downlineClient.company_name || downline_id}`
+      });
+    } else {
+      // Record in ledger for commission deduction
+      await base44.entities.CommissionLedger.create({
+        transaction_id: `TOPUP-${Date.now()}`,
+        from_client_id: user.client_id,
+        to_reseller_id: downline_id,
+        amount: amount,
+        status: 'completed',
+        type: 'topup_use'
+      });
+    }
 
     // Credit to downline
     const downlineBal = Number(downlineClient.wallet_balance || 0);
     await base44.entities.Client.update(downline_id, {
       wallet_balance: downlineBal + amount
-    });
-
-    // Record in ledger
-    await base44.entities.CommissionLedger.create({
-      transaction_id: `TOPUP-${Date.now()}`,
-      from_client_id: user.client_id,
-      to_reseller_id: downline_id,
-      amount: amount,
-      status: 'completed',
-      type: 'topup_use'
     });
 
     // Create UsageLog for downline
@@ -105,7 +120,7 @@ resellerRouter.post("/topup-downline", async (c) => {
       amount: amount,
       balance_before: downlineBal,
       balance_after: downlineBal + amount,
-      description: `Wallet top-up via Reseller Commission`
+      description: `Wallet top-up via Reseller`
     });
 
     await writeAuditLog({
@@ -115,11 +130,11 @@ resellerRouter.post("/topup-downline", async (c) => {
       entity_id: downline_id,
       actor_email: user.email,
       actor_role: user.role || 'reseller',
-      details: `Reseller ${user.client_id} topped up downline wallet by ₹${amount}`,
-      metadata: { amount, reseller_id: user.client_id },
+      details: `Reseller ${user.client_id} topped up downline wallet by ₹${amount} from ${source_wallet}`,
+      metadata: { amount, source_wallet, reseller_id: user.client_id },
     });
 
-    return c.json({ success: true, new_balance: currentCommBal - amount });
+    return c.json({ success: true, new_balance: currentBalance - amount });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }

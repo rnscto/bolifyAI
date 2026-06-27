@@ -22,8 +22,6 @@ import { Loader2, CreditCard, Calendar, Wallet, Upload, FileImage, ShieldCheck, 
 import { toast } from 'sonner';
 import { uploadPrivateFile, getSignedUrl } from '@/lib/azureBlob';
 
-const CEO_EMAIL = 'yadavnand886@gmail.com';
-const MAIN_ADMIN_EMAIL = 'yadavnand886@gmail.com';
 
 export default function ActivateClientDialog({ client, open, onOpenChange, onUpdated }) {
   const [me, setMe] = useState(null);
@@ -54,9 +52,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
 
   useEffect(() => { apiClient.auth.me().then(setMe).catch(() => {}); }, []);
 
-  const myEmail = (me?.email || '').toLowerCase();
-  const isCEO = myEmail === CEO_EMAIL;
-  const isMainAdmin = myEmail === MAIN_ADMIN_EMAIL;
+  const isAdmin = ['admin', 'master_admin'].includes(me?.role);
 
   const handleUpload = async (file) => {
     if (!file) return;
@@ -161,8 +157,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
   if (!client) return null;
   if (!me) return null;
 
-  // Block other admins (not CEO, not main admin)
-  if (!isCEO && !isMainAdmin) {
+  if (!isAdmin) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
@@ -170,7 +165,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
             <DialogTitle>Restricted</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-gray-700">
-            Only the CEO ({CEO_EMAIL}) or main admin ({MAIN_ADMIN_EMAIL}) may manage client billing.
+            Only admins may manage client billing.
           </p>
           <div className="flex justify-end">
             <Button onClick={() => onOpenChange(false)}>Close</Button>
@@ -198,21 +193,12 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
           </DialogTitle>
         </DialogHeader>
 
-        {/* Mode banner */}
-        {isCEO && (
+        {isAdmin && (
           <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-3 flex items-start gap-2">
             <ShieldCheck className="w-4 h-4 text-indigo-700 mt-0.5 shrink-0" />
             <p className="text-xs text-indigo-800">
               <strong>Two-tier approval:</strong> Set the target billing/status below, attach payment proof, and submit.
-              The main admin ({MAIN_ADMIN_EMAIL}) will review and approve — your changes will be applied only after approval.
-            </p>
-          </div>
-        )}
-        {isMainAdmin && (
-          <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2">
-            <AlertTriangle className="w-4 h-4 text-green-700 mt-0.5 shrink-0" />
-            <p className="text-xs text-green-800">
-              <strong>Main admin mode:</strong> Direct save (no payment proof required). To approve a CEO-submitted request, go to <em>Payment Approvals</em>.
+              Alternatively, use <strong>Save Changes</strong> for a direct update without approval.
             </p>
           </div>
         )}
@@ -362,8 +348,8 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
             </>
           )}
 
-          {/* Payment proof block — CEO only */}
-          {isCEO && (
+          {/* Payment proof block */}
+          {isAdmin && (
             <div className="border-2 border-indigo-200 rounded-lg p-3 space-y-3 bg-indigo-50/40">
               <div className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
                 <Upload className="w-4 h-4" /> Payment Proof (required)
@@ -424,14 +410,15 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
 
           <div className="flex gap-3 justify-end pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            {isCEO ? (
-              <Button onClick={handleSubmitForApproval} disabled={saving || uploading} className="bg-indigo-600 hover:bg-indigo-700">
-                {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Submitting…</> : <><Upload className="w-4 h-4 mr-2" /> Submit to Main Admin</>}
-              </Button>
-            ) : (
-              <Button onClick={handleDirectSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
-                {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Saving…</> : 'Save Changes'}
-              </Button>
+            {isAdmin && (
+              <>
+                <Button onClick={handleSubmitForApproval} disabled={saving || uploading} className="bg-indigo-600 hover:bg-indigo-700">
+                  {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Submitting…</> : <><Upload className="w-4 h-4 mr-2" /> Submit for Approval</>}
+                </Button>
+                <Button onClick={handleDirectSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700">
+                  {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Saving…</> : 'Direct Save Changes'}
+                </Button>
+              </>
             )}
           </div>
         </div>

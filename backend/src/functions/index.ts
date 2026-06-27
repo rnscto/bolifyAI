@@ -25,6 +25,7 @@ import sendGetwayCRM from "./sendGetwayCRM.ts";
 import shopifyLookup from "./shopifyLookup.ts";
 
 // Billing & Payments
+import adminDirectTopup from "./adminDirectTopup.ts";
 import submitPaymentApproval from "./submitPaymentApproval.ts";
 import processPaymentApproval from "./processPaymentApproval.ts";
 import createPaymentOrder from "./createPaymentOrder.ts";
@@ -95,6 +96,7 @@ export const functionRegistry: Record<string, Function> = {
   retentionCall,
   
   // Billing & Payments
+  adminDirectTopup,
   submitPaymentApproval,
   processPaymentApproval,
   createPaymentOrder,

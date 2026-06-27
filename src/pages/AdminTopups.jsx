@@ -14,8 +14,7 @@ import InvoiceButton from '../components/subscription/InvoiceButton';
 import { Button } from '@/components/ui/button';
 import RaisePaymentRequestDialog from '../components/admin/RaisePaymentRequestDialog';
 
-const CEO_EMAIL = 'yadavnand886@gmail.com';
-
+import AdminDirectTopupDialog from '../components/admin/AdminDirectTopupDialog';
 const statusColors = {
   paid: 'bg-green-100 text-green-800',
   pending: 'bg-yellow-100 text-yellow-800',
@@ -40,6 +39,7 @@ export default function AdminTopups() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [me, setMe] = useState(null);
   const [raiseOpen, setRaiseOpen] = useState(false);
+  const [directTopupOpen, setDirectTopupOpen] = useState(false);
 
   useEffect(() => { loadData(); apiClient.auth.me().then(setMe).catch(() => {}); }, []);
 
@@ -53,8 +53,7 @@ export default function AdminTopups() {
     setLoading(false);
   };
 
-  const isCEO = (me?.email || '').toLowerCase() === CEO_EMAIL;
-
+  const isAdmin = ['admin', 'master_admin'].includes(me?.role);
   const getClient = (id) => clients.find(c => c.id === id);
 
   // Only top-up payments
@@ -100,10 +99,15 @@ export default function AdminTopups() {
           <h1 className="text-3xl font-bold text-gray-900">Wallet Top-Ups</h1>
           <p className="text-gray-600 mt-1">All wallet top-up transactions, minutes sold & GST billing</p>
         </div>
-        {isCEO && (
-          <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => setRaiseOpen(true)}>
-            <Upload className="w-4 h-4 mr-1" /> Raise Top-Up Approval
-          </Button>
+        {isAdmin && (
+          <div className="flex gap-2">
+            <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setDirectTopupOpen(true)}>
+              <Upload className="w-4 h-4 mr-1" /> Direct Top-Up
+            </Button>
+            <Button variant="outline" onClick={() => setRaiseOpen(true)}>
+              Raise Approval
+            </Button>
+          </div>
         )}
       </div>
 
@@ -111,6 +115,13 @@ export default function AdminTopups() {
         open={raiseOpen}
         onOpenChange={setRaiseOpen}
         defaultType="wallet_topup"
+        clients={clients}
+        onSubmitted={loadData}
+      />
+
+      <AdminDirectTopupDialog
+        open={directTopupOpen}
+        onOpenChange={setDirectTopupOpen}
         clients={clients}
         onSubmitted={loadData}
       />
