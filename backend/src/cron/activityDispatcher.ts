@@ -10,7 +10,7 @@ export async function runActivityDispatcher() {
     // Find scheduled activities that are due to be sent now
     // We target whatsapp, email, sms types that haven't been completed yet
     const query = `
-      SELECT a.*, l.phone as lead_phone, l.email as lead_email, l.name as lead_name, a.client_id
+      SELECT a.*, l.phone as lead_phone, l.email as lead_email, l.name as lead_name
       FROM activity a
       JOIN lead l ON a.lead_id = l.id::text
       WHERE a.status = 'scheduled' 
@@ -119,13 +119,13 @@ export async function runActivityDispatcher() {
 
         if (success) {
           await client.queryObject(
-            `UPDATE activity SET status = 'completed', updated_date = NOW() WHERE id = $1`,
+            `UPDATE "activity" SET status = 'completed', updated_at = NOW() WHERE id = $1`,
             [activity.id]
           );
 
           // Log it to outreach log
           await client.queryObject(
-            `INSERT INTO outreachlog (client_id, lead_id, channel, direction, status, notes)
+            `INSERT INTO outreachlog (client_id, lead_id, channel, direction, status, body)
              VALUES ($1, $2, $3, 'outbound', 'delivered', $4)`,
             [activity.client_id, activity.lead_id, activity.type, `Automated dispatch successful: ${activity.title}`]
           );
@@ -136,7 +136,7 @@ export async function runActivityDispatcher() {
       } catch (dispatchErr: any) {
         console.error(`[ActivityDispatcher] Failed to dispatch ${activity.type} ${activity.id}:`, dispatchErr);
         await client.queryObject(
-          `UPDATE activity SET status = 'failed', updated_date = NOW(), notes = $2 WHERE id = $1`,
+          `UPDATE activity SET status = 'failed', updated_at = NOW(), notes = $2 WHERE id = $1`,
           [activity.id, `Failed to dispatch: ${dispatchErr.message || dispatchErr}`]
         );
       }
