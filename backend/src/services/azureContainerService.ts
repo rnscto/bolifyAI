@@ -96,73 +96,101 @@ export async function bindCustomDomain(domain: string) {
     throw new Error("Container App or Ingress configuration not found");
   }
 
-  // Check if already bound
+  // Azure ARM requires us to NOT send scrubbed secrets back on PUT/PATCH
+  if (app.configuration.secrets) {
+    delete app.configuration.secrets;
+  }
+
   const existingDomains = app.configuration.ingress.customDomains || [];
-  if (existingDomains.find(d => d.name === domain)) {
-    console.log(`[AzureContainerService] Domain ${domain} is already bound.`);
-    return { success: true, message: "Domain already bound" };
+  const existingDomain = existingDomains.find(d => d.name === domain);
+
+  // Check if already fully bound
+  if (existingDomain && existingDomain.bindingType === "SniEnabled" && existingDomain.certificateId) {
+    console.log(`[AzureContainerService] Domain ${domain} is already fully bound with SSL.`);
+    return { success: true, message: "Domain already bound with SSL" };
   }
 
-  // 2. Create a Managed Certificate for the environment
-  const certName = `cert-${domain.replace(/\./g, "-")}`;
-  console.log(`[AzureContainerService] Provisioning Managed Environment Certificate: ${certName}`);
-  
-  // Create Managed Certificate
-  // Using beginCreateOrUpdateAndWait to wait for the certificate provisioning
-  const certPoller = await acaClient.managedCertificates.beginCreateOrUpdateAndWait(
-    resourceGroupName,
-    environmentName,
-    certName,
-    {
-      managedCertificateEnvelope: {
-        location: app.location,
-        properties: {
-          domainControlValidation: "CNAME",
-          subjectName: domain
-        }
-      }
+  // 2. Bind domain to Container App WITHOUT SSL to synchronously validate DNS (TXT/CNAME)
+  if (!existingDomain) {
+    console.log(`[AzureContainerService] Validating DNS and binding ${domain} (Disabled binding)...`);
+    existingDomains.push({
+      name: domain,
+      bindingType: "Disabled"
+    });
+
+    try {
+      await acaClient.containerApps.beginUpdateAndWait(
+        resourceGroupName,
+        containerAppName,
+        app
+      );
+      console.log(`[AzureContainerService] DNS validation successful for ${domain}`);
+    } catch (err: any) {
+      // If this throws, it's usually because the TXT record or CNAME is missing
+      console.error("[AzureContainerService] DNS Validation failed:", err.message);
+      throw new Error(err.message || "Domain DNS validation failed. Ensure TXT and CNAME records are correct.");
     }
-  );
-  
-  const certId = certPoller.id;
-  if (!certId) {
-    throw new Error("Failed to retrieve the created certificate ID.");
   }
-  console.log(`[AzureContainerService] Certificate created with ID: ${certId}`);
 
-  // 3. Update the Container App Ingress with the new Custom Domain and bound Certificate
-  console.log(`[AzureContainerService] Updating Container App Ingress to bind domain...`);
-  
-  existingDomains.push({
-    name: domain,
-    bindingType: "SniEnabled",
-    certificateId: certId
-  });
+  // 3. Kick off Managed Certificate creation and SSL binding in the background
+  // We do not await this because it can take 5-15 minutes, which causes frontend timeouts.
+  provisionSslInBackground(domain, app.location!, resourceGroupName, environmentName, containerAppName);
 
-  const timeout = new Promise<never>((_, reject) => 
-    setTimeout(() => reject(new Error("Azure Connection Timeout. Update took too long.")), 30000)
-  );
-
-  const updatePoller = await Promise.race([acaClient.containerApps.beginUpdateAndWait(
-    resourceGroupName,
-    containerAppName,
-    {
-      ...app,
-      configuration: {
-        ...app.configuration,
-        ingress: {
-          ...app.configuration.ingress,
-          customDomains: existingDomains
-        }
-      }
-    }
-  ), timeout]);
-
-  console.log(`[AzureContainerService] Successfully bound ${domain} to the Container App.`);
-  
   return { 
     success: true, 
-    message: "Domain verified and bound successfully",
-    fqdn: updatePoller.configuration?.ingress?.fqdn
+    message: "Domain verified! SSL certificate is provisioning in the background (may take 5-15 minutes to secure).",
+    fqdn: app.configuration?.ingress?.fqdn
   };
+}
+
+async function provisionSslInBackground(
+  domain: string, 
+  location: string, 
+  rg: string, 
+  envName: string, 
+  appName: string
+) {
+  try {
+    const acaClient = getClient();
+    const certName = `cert-${domain.replace(/\./g, "-")}`;
+    console.log(`[AzureContainerService] [Background] Provisioning Certificate: ${certName}`);
+    
+    const certPoller = await acaClient.managedCertificates.beginCreateOrUpdateAndWait(
+      rg,
+      envName,
+      certName,
+      {
+        managedCertificateEnvelope: {
+          location: location,
+          properties: {
+            domainControlValidation: "CNAME",
+            subjectName: domain
+          }
+        }
+      }
+    );
+    
+    const certId = certPoller.id;
+    if (!certId) throw new Error("Failed to retrieve the created certificate ID.");
+    console.log(`[AzureContainerService] [Background] Certificate created: ${certId}`);
+
+    // Refresh app state
+    console.log(`[AzureContainerService] [Background] Updating Container App Ingress with SSL...`);
+    const appRefresh = await acaClient.containerApps.get(rg, appName);
+    if (appRefresh.configuration?.secrets) {
+      delete appRefresh.configuration.secrets;
+    }
+    
+    const domainsRefresh = appRefresh.configuration?.ingress?.customDomains || [];
+    const domainEntry = domainsRefresh.find(d => d.name === domain);
+    
+    if (domainEntry) {
+      domainEntry.bindingType = "SniEnabled";
+      domainEntry.certificateId = certId;
+      await acaClient.containerApps.beginUpdateAndWait(rg, appName, appRefresh);
+      console.log(`[AzureContainerService] [Background] Successfully secured ${domain} with SSL!`);
+    }
+  } catch (err: any) {
+    console.error(`[AzureContainerService] [Background] SSL provisioning failed for ${domain}:`, err.message || err);
+  }
 }

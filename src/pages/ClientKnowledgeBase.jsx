@@ -146,7 +146,13 @@ export default function ClientKnowledgeBase() {
       // Auto-sync with assigned agent
       setUploadProgress('Syncing with agent...');
       if (agent) {
-        const currentKbIds = agent.knowledge_base_ids || [];
+        // knowledge_base_ids from the DB may be a JSON string, null, or already an array
+        let currentKbIds = agent.knowledge_base_ids;
+        if (typeof currentKbIds === 'string') {
+          try { currentKbIds = JSON.parse(currentKbIds); } catch { currentKbIds = []; }
+        }
+        if (!Array.isArray(currentKbIds)) currentKbIds = [];
+
         if (!currentKbIds.includes(kbDoc.id)) {
           await apiClient.Agent.update(agent.id, {
             knowledge_base_ids: [...currentKbIds, kbDoc.id]
