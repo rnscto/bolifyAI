@@ -296,12 +296,16 @@ export default function APIDocs() {
                 <code className="flex-1 bg-white p-3 rounded text-sm border border-emerald-300 font-mono break-all">
                   {showAuthKey ? authKey : '••••••••••••••••••••••••••••••••••••••••'}
                 </code>
-                <button onClick={() => setShowAuthKey(!showAuthKey)} className="px-2 py-2 bg-white border border-emerald-300 rounded hover:bg-emerald-50">
-                  {showAuthKey ? <EyeOff className="w-4 h-4 text-emerald-700" /> : <Eye className="w-4 h-4 text-emerald-700" />}
-                </button>
-                <button onClick={() => copyToClipboard(authKey)} className="px-3 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 flex items-center gap-1">
-                  <Copy className="w-4 h-4" /> Copy
-                </button>
+                {!authKey?.includes('(Hashed)') && (
+                  <>
+                    <button onClick={() => setShowAuthKey(!showAuthKey)} className="px-2 py-2 bg-white border border-emerald-300 rounded hover:bg-emerald-50">
+                      {showAuthKey ? <EyeOff className="w-4 h-4 text-emerald-700" /> : <Eye className="w-4 h-4 text-emerald-700" />}
+                    </button>
+                    <button onClick={() => copyToClipboard(authKey)} className="px-3 py-2 bg-emerald-600 text-white rounded hover:bg-emerald-700 flex items-center gap-1">
+                      <Copy className="w-4 h-4" /> Copy
+                    </button>
+                  </>
+                )}
               </div>
               <Button variant="outline" size="sm" onClick={handleGenerateAuthKey} disabled={generatingKey} className="text-emerald-700 border-emerald-300 hover:bg-emerald-100">
                 {generatingKey ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <RefreshCw className="w-4 h-4 mr-1" />}

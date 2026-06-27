@@ -11,7 +11,16 @@ export async function crmInboundHandler(c: Context) {
     let clientRec;
 
     if (authKey) {
-      const clientsRes = await client.queryObject(`SELECT * FROM client WHERE api_auth_key = $1`, [authKey]);
+      const dataToHash = new TextEncoder().encode(authKey);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", dataToHash);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashedAuthKey = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      let clientsRes = await client.queryObject(`SELECT * FROM client WHERE api_auth_key = $1`, [hashedAuthKey]);
+      if (clientsRes.rows.length === 0) {
+        // Backward compatibility
+        clientsRes = await client.queryObject(`SELECT * FROM client WHERE api_auth_key = $1`, [authKey]);
+      }
       if (clientsRes.rows.length === 0) return c.json({ error: "Invalid auth key" }, 403);
       clientRec = clientsRes.rows[0] as any;
       clientId = clientRec.id;
@@ -92,7 +101,16 @@ export async function crmFetchDataHandler(c: Context) {
     let clientId;
     let clientRec;
     if (authKey) {
-      const clientsRes = await client.queryObject(`SELECT * FROM client WHERE api_auth_key = $1`, [authKey]);
+      const dataToHash = new TextEncoder().encode(authKey);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", dataToHash);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashedAuthKey = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      let clientsRes = await client.queryObject(`SELECT * FROM client WHERE api_auth_key = $1`, [hashedAuthKey]);
+      if (clientsRes.rows.length === 0) {
+        // Backward compatibility
+        clientsRes = await client.queryObject(`SELECT * FROM client WHERE api_auth_key = $1`, [authKey]);
+      }
       if (clientsRes.rows.length === 0) return c.json({ error: "Invalid auth key" }, 403);
       clientRec = clientsRes.rows[0] as any;
       clientId = clientRec.id;

@@ -13,8 +13,19 @@ export async function universalAuth(c: Context, next: Next) {
 
   try {
     if (authKey) {
-      // Platform auth key logic
-      const res = await client.queryObject(`SELECT id FROM "client" WHERE api_auth_key = $1 LIMIT 1`, [authKey]);
+      // Platform auth key logic (Check Hash first for Enterprise Security)
+      const dataToHash = new TextEncoder().encode(authKey);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", dataToHash);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      const hashedAuthKey = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+      let res = await client.queryObject(`SELECT id FROM "client" WHERE api_auth_key = $1 LIMIT 1`, [hashedAuthKey]);
+      
+      // Backward compatibility: If no match, check raw (for clients who haven't regenerated yet)
+      if (res.rows.length === 0) {
+         res = await client.queryObject(`SELECT id FROM "client" WHERE api_auth_key = $1 LIMIT 1`, [authKey]);
+      }
+
       if (res.rows.length === 0) {
         return c.json({ success: false, error: "Invalid x-auth-key" }, 403);
       }

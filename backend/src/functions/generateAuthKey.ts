@@ -24,22 +24,32 @@ export default async function generateAuthKey(c: any) {
 
     const client = clients[0];
 
-    // If already has a key and not regenerating, return existing
+    // If already has a key and not regenerating, return masked existing key
     if (client.api_auth_key && !regenerate) {
-      return c.json({ data: { success: true, api_auth_key: client.api_auth_key } });
+       // We only store the hash, so we cannot return the raw key.
+       // Return a masked placeholder so the UI knows a key exists.
+      return c.json({ data: { success: true, api_auth_key: 'gwk_•••••••••••••••••••••••••••••••• (Hashed)' } });
     }
 
     // Generate a secure key: gwk_ + 40 hex chars
     const bytes = new Uint8Array(20);
     crypto.getRandomValues(bytes);
     const hex = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
-    const newKey = `gwk_${hex}`;
+    const newKeyRaw = `gwk_${hex}`;
 
-    await base44.entities.Client.update(client.id, { api_auth_key: newKey });
+    // Hash the key using SHA-256 for secure storage
+    const dataToHash = new TextEncoder().encode(newKeyRaw);
+    const hashBuffer = await crypto.subtle.digest("SHA-256", dataToHash);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const newKeyHashed = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 
-    console.log(`[generateAuthKey] Key ${regenerate ? 'regenerated' : 'created'} for client ${client.id}`);
+    // Store the HASH in the database
+    await base44.entities.Client.update(client.id, { api_auth_key: newKeyHashed });
 
-    return c.json({ data: { success: true, api_auth_key: newKey } });
+    console.log(`[generateAuthKey] Key ${regenerate ? 'regenerated' : 'created'} (hashed) for client ${client.id}`);
+
+    // Return the RAW key ONLY ONCE to the user
+    return c.json({ data: { success: true, api_auth_key: newKeyRaw } });
 
   } catch (error: any) {
     console.error('[generateAuthKey] Error:', error.message);
