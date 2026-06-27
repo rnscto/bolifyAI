@@ -18,12 +18,7 @@ export const GEMINI_VOICES = [
   { name: "Charon", gender: "Male", style: "Neutral, authoritative" },
   { name: "Fenrir", gender: "Male", style: "Neutral, deep" },
   { name: "Kore", gender: "Female", style: "Neutral, bright" },
-  { name: "Puck", gender: "Male", style: "Neutral, engaging" },
-  { name: "Leto", gender: "Female", style: "Warm, professional" },
-  { name: "Lumina", gender: "Female", style: "Friendly, natural" },
-  { name: "Orion", gender: "Male", style: "Clear, dynamic" },
-  { name: "Vega", gender: "Female", style: "Smooth, articulate" },
-  { name: "Rigel", gender: "Male", style: "Professional, confident" }
+  { name: "Puck", gender: "Male", style: "Neutral, engaging" }
 ];
 
 export const AZURE_SPEECH_VOICES = [
