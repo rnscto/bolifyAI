@@ -16,8 +16,7 @@ import {
   CheckCircle2, XCircle, AlertTriangle, ArrowRightLeft, Plus, Lock,
 } from 'lucide-react';
 
-const MAIN_ADMIN_EMAIL = 'yadavnand886@gmail.com';
-
+// Roles are now checked dynamically via me?.role
 const EVENT_META = {
   activated:           { label: 'Activated',           color: 'bg-green-100 text-green-800',   Icon: CheckCircle2 },
   trial_started:       { label: 'Trial Started',       color: 'bg-blue-100 text-blue-800',     Icon: Calendar },
@@ -141,8 +140,8 @@ export default function AdminClientLifecycle() {
       try {
         const me = await apiClient.auth.me();
         setUser(me);
-        if (me.role !== 'admin' || me.email !== MAIN_ADMIN_EMAIL) {
-          setAuthError('This page is restricted to the platform main admin.');
+        if (!['admin', 'master_admin'].includes(me.role)) {
+          setAuthError('This page is restricted to platform admins.');
           setLoading(false);
           return;
         }

@@ -12,8 +12,7 @@ import { toast } from 'sonner';
 import { CheckCircle2, XCircle, Database, Clock, Ban, IndianRupee, Upload } from 'lucide-react';
 import RaisePaymentRequestDialog from '../components/admin/RaisePaymentRequestDialog';
 
-const CEO_EMAIL = 'yadavnand886@gmail.com';
-const MAIN_ADMIN_EMAIL = 'yadavnand886@gmail.com';
+// Roles are now checked dynamically via me?.role
 
 const STATUS_META = {
   not_requested: { label: 'Not requested', color: 'bg-gray-100 text-gray-700' },
@@ -196,25 +195,25 @@ export default function AdminCRMRequests() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right space-x-1">
-                          {/* Activation (any non-active status) → CEO raises payment approval request */}
-                          {status !== 'active' && (me?.email || '').toLowerCase() === CEO_EMAIL && (
+                          {/* Activation (any non-active status) → Admin raises payment approval request */}
+                          {status !== 'active' && ['admin', 'master_admin'].includes(me?.role) && (
                             <Button size="sm" className="bg-indigo-600 hover:bg-indigo-700" onClick={() => setRaiseClient(c)}>
                               <Upload className="w-4 h-4 mr-1" /> Raise Payment Approval
                             </Button>
                           )}
-                          {/* Reject (only main admin, direct) */}
-                          {status === 'requested' && (me?.email || '').toLowerCase() === MAIN_ADMIN_EMAIL && (
+                          {/* Reject (any admin, direct) */}
+                          {status === 'requested' && ['admin', 'master_admin'].includes(me?.role) && (
                             <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => openAction(c, 'reject')}>
                               <XCircle className="w-4 h-4 mr-1" /> Reject
                             </Button>
                           )}
-                          {/* Revoke (main admin only, direct) */}
-                          {status === 'active' && (me?.email || '').toLowerCase() === MAIN_ADMIN_EMAIL && (
+                          {/* Revoke (any admin, direct) */}
+                          {status === 'active' && ['admin', 'master_admin'].includes(me?.role) && (
                             <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => openAction(c, 'revoke')}>
                               <Ban className="w-4 h-4 mr-1" /> Revoke
                             </Button>
                           )}
-                          {status === 'active' && (me?.email || '').toLowerCase() !== MAIN_ADMIN_EMAIL && (
+                          {status === 'active' && !['admin', 'master_admin'].includes(me?.role) && (
                             <span className="text-xs text-gray-400">—</span>
                           )}
                         </td>

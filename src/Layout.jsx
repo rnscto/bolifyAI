@@ -183,7 +183,7 @@ export default function Layout({ children, currentPageName }) {
   const pureAdminRoles = ['admin', 'master_admin'];
   const isAdmin = pureAdminRoles.includes(user?.role);
   const isReseller = user?.role === 'reseller' || user?.role === 'master_reseller';
-
+  const isMainAdmin = user?.role === 'master_admin' || user?.role === 'admin';
   // White-label branding: use domain brand first, then client brand, then fallback
   const activeBrand = appPublicSettings?.brand || brand;
   
@@ -209,8 +209,6 @@ export default function Layout({ children, currentPageName }) {
   if (isPublicPage || isOnboardingPage) {
     return <>{children}</>;
   }
-
-  const isMainAdmin = isAdmin && user?.email === 'yadavnand886@gmail.com';
 
   const adminNav = [
     { name: 'Dashboard', path: 'AdminDashboard', icon: LayoutDashboard },

@@ -29,7 +29,8 @@ export default function CEOStatusOverrideDialog({ client, currentUser, open, onO
   const [trialDays, setTrialDays] = useState(7);
   const [saving, setSaving] = useState(false);
 
-  const isCEO = (currentUser?.email || '').toLowerCase() === 'yadavnand886@gmail.com';
+  // Any admin or master_admin can bypass checks
+  const isCEO = ['admin', 'master_admin'].includes(currentUser?.role);
   if (!isCEO || !client) return null;
 
   const handleSave = async () => {
