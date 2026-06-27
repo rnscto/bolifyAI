@@ -9,6 +9,7 @@ import FeatureGate from '../components/FeatureGate';
 import DIDManager from '../components/agents/DIDManager';
 import AgentSettingsCard from '../components/agents/AgentSettingsCard';
 import AgentEditDialog from '../components/agents/AgentEditDialog';
+import AgentToolsBuilder from '../components/agents/AgentToolsBuilder';
 
 export default function ClientAgents() {
   const [agents, setAgents] = useState([]);
@@ -161,6 +162,7 @@ export default function ClientAgents() {
                     )}
 
                     <AgentSettingsCard agent={agent} onUpdate={loadData} />
+                    <AgentToolsBuilder agent={agent} client={client} />
                     <DIDManager agent={agent} client={client} onUpdate={loadData} />
 
                     <Card>

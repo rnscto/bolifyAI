@@ -1,5 +1,6 @@
 import { Hono, Context } from "hono";
 import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 
 export const agentsRouter = new Hono();
 
@@ -288,6 +289,42 @@ Return JSON only.`,
     });
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
+  }
+});
+// 5. Agent Tools CRUD
+agentsRouter.get('/:agent_id/tools', async (c: Context) => {
+  try {
+    const agent_id = c.req.param('agent_id');
+    const res = await client.queryObject(`SELECT * FROM "agent_tools" WHERE agent_id = $1 ORDER BY created_at DESC`, [agent_id]);
+    return c.json({ success: true, tools: res.rows });
+  } catch(e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+agentsRouter.post('/:agent_id/tools', async (c: Context) => {
+  try {
+    const agent_id = c.req.param('agent_id');
+    const body = await c.req.json();
+    const { client_id, name, description, method, url, headers, parameters_schema } = body;
+    const res = await client.queryObject(
+      `INSERT INTO "agent_tools" (agent_id, client_id, name, description, method, url, headers, parameters_schema) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+      [agent_id, client_id, name, description, method, url, JSON.stringify(headers || {}), JSON.stringify(parameters_schema || {})]
+    );
+    return c.json({ success: true, tool: res.rows[0] });
+  } catch(e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+agentsRouter.delete('/tools/:tool_id', async (c: Context) => {
+  try {
+    const tool_id = c.req.param('tool_id');
+    await client.queryObject(`DELETE FROM "agent_tools" WHERE id = $1`, [tool_id]);
+    return c.json({ success: true });
+  } catch(e: any) {
+    return c.json({ error: e.message }, 500);
   }
 });
 

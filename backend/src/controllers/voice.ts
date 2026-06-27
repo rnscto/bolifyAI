@@ -430,7 +430,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
        }
        
        if (!session._agentConfigReady) {
-           const agentResult = await client.queryObject(`SELECT client_id, system_prompt, greeting_message, persona FROM "agent" WHERE id = $1 LIMIT 1`, [agentId]);
+           const agentResult = await client.queryObject(`SELECT client_id, system_prompt, greeting_message, persona, human_transfer_number FROM "agent" WHERE id = $1 LIMIT 1`, [agentId]);
            if (agentResult.rows.length > 0) {
               const agent = agentResult.rows[0] as any;
               session.clientId = agent.client_id;
@@ -442,6 +442,16 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
                 if (personaObj.human_transfer_number) session.humanTransferNumber = personaObj.human_transfer_number;
                 if (personaObj.enable_auto_transfer) session.enableAutoTransfer = personaObj.enable_auto_transfer;
               }
+              if (agent.human_transfer_number) session.humanTransferNumber = agent.human_transfer_number;
+           }
+           
+           // Load Agent Tools
+           try {
+             const toolsRes = await client.queryObject(`SELECT name, description, method, url, headers, parameters_schema FROM "agent_tools" WHERE agent_id = $1 AND is_active = true`, [agentId]);
+             session.apiTools = toolsRes.rows;
+           } catch(e) {
+             console.error(`[${reqId}] Failed to load agent tools:`, e);
+             session.apiTools = [];
            }
            
            // Load KB
@@ -488,6 +498,15 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
     if (session._kbChunks.length > 0) {
       decls.push({ name: 'search_knowledge_base', description: 'Search KB for product/pricing/feature/policy info. ALWAYS use for company facts.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } });
     }
+    if (session.apiTools && session.apiTools.length > 0) {
+      for (const t of session.apiTools) {
+        decls.push({
+          name: t.name,
+          description: t.description,
+          parameters: t.parameters_schema || { type: 'object', properties: {} }
+        });
+      }
+    }
     session.tools = decls;
     return decls;
   }
@@ -498,6 +517,51 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
       const results = searchKBChunks(args.query || '');
       return { results: results || 'No relevant info.' };
     }
+    if (name === 'transfer_to_human') {
+      const reason = args.reason || 'user_requested_transfer';
+      session.transcript.push({ speaker: 'System', text: `[Transferring to human: ${reason}]` });
+      if (smartfloSocket?.readyState === WebSocket.OPEN && streamId) {
+         smartfloSocket.send(JSON.stringify({
+            event: 'transfer',
+            streamSid: streamId,
+            transferTo: session.humanTransferNumber
+         }));
+      }
+      setTimeout(() => {
+        session._callEnded = true;
+        if (geminiSocket?.readyState === WebSocket.OPEN) geminiSocket.close();
+        if (smartfloSocket?.readyState === WebSocket.OPEN) smartfloSocket.close();
+      }, 500);
+      return { success: true, message: "Call transferred." };
+    }
+    
+    if (session.apiTools) {
+      const tool = session.apiTools.find((t: any) => t.name === name);
+      if (tool) {
+        try {
+          const fetchOpts: any = { method: tool.method || 'GET' };
+          if (tool.headers) fetchOpts.headers = tool.headers;
+          let fetchUrl = tool.url;
+          if (fetchOpts.method !== 'GET' && fetchOpts.method !== 'HEAD') {
+             fetchOpts.body = JSON.stringify(args);
+             fetchOpts.headers = { ...fetchOpts.headers, 'Content-Type': 'application/json' };
+          } else {
+             const qs = new URLSearchParams(args).toString();
+             if (qs) fetchUrl += (fetchUrl.includes('?') ? '&' : '?') + qs;
+          }
+          const resp = await fetch(fetchUrl, fetchOpts);
+          const data = await resp.text();
+          try {
+             return JSON.parse(data);
+          } catch(e) {
+             return { result: data };
+          }
+        } catch(e: any) {
+          return { error: `Failed to execute API call: ${e.message}` };
+        }
+      }
+    }
+
     if (name === 'end_call') {
       const elapsed = (Date.now() - session.startTime) / 1000;
       if (elapsed < 10) return { error: 'Call just started. Continue the conversation naturally.' };
@@ -520,7 +584,8 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
     if (session._setupSent) return;
     session._setupSent = true;
     const tools = buildGeminiTools();
-    const voiceRules = `[GREETING] Always start with a very short greeting immediately.\n[LANGUAGE] Speak ONLY Hindi (Devanagari/Roman) + English (Indian accent). Keep replies SHORT (1-2 sentences).\n[END-CALL GUARD] Use the end_call tool IMMEDIATELY if the customer says goodbye, asks to call back later, shows disinterest, or if the conversation has naturally concluded. Do not wait for further input.`;
+    const transferRule = session.humanTransferNumber ? `\n[TRANSFER] If the user explicitly asks to speak to a human or becomes extremely frustrated, use the transfer_to_human tool immediately.` : '';
+    const voiceRules = `[GREETING] Always start with a very short greeting immediately.\n[LANGUAGE] Speak ONLY Hindi (Devanagari/Roman) + English (Indian accent). Keep replies SHORT (1-2 sentences).\n[END-CALL GUARD] Use the end_call tool IMMEDIATELY if the customer says goodbye, asks to call back later, shows disinterest, or if the conversation has naturally concluded. Do not wait for further input.${transferRule}`;
     const kbHeader = session._kbChunks.length > 0 ? `\n[KB] For any price/product/feature/policy/location fact: CALL search_knowledge_base FIRST. Never guess.\n` : '';
     const fullPrompt = voiceRules + '\n' + kbHeader + '\n' + session.systemPrompt;
 

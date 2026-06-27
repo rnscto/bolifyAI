@@ -22,8 +22,8 @@ export default async function getClientAnalyticsStats(c: any) {
       }
     }
 
-    // 1. Calls Overview
-    const callsQuery = await client.queryObject<any>(
+    // 1. Calls Overview (Outbound vs Inbound, Durations)
+    const callsQuery = await client.queryObject(
       `SELECT 
         COUNT(id) as total_calls,
         SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_calls,
@@ -34,49 +34,49 @@ export default async function getClientAnalyticsStats(c: any) {
        FROM "calllog" WHERE client_id = $1 ${dateFilter}`, 
       args
     );
-    const row = callsQuery.rows[0];
-    const totalCalls = parseInt(row.total_calls || '0', 10);
-    const completedCalls = parseInt(row.completed_calls || '0', 10);
-    const failedCalls = parseInt(row.failed_calls || '0', 10);
-    const totalDuration = parseInt(row.total_duration || '0', 10);
+    const row = callsQuery.rows[0] as any;
+    
+    const totalCalls = parseInt(row?.total_calls || '0', 10);
+    const completedCalls = parseInt(row?.completed_calls || '0', 10);
+    const failedCalls = parseInt(row?.failed_calls || '0', 10);
+    const totalDuration = parseInt(row?.total_duration || '0', 10);
     const avgDuration = completedCalls > 0 ? Math.round(totalDuration / completedCalls) : 0;
     const connectRate = totalCalls > 0 ? Math.round((completedCalls / totalCalls) * 100) : 0;
 
     // Direction Data
     const directionData = [
-      { name: 'Outbound', value: parseInt(row.outbound_calls || '0', 10), color: '#22c55e' },
-      { name: 'Inbound', value: parseInt(row.inbound_calls || '0', 10), color: '#3b82f6' }
+      { name: 'Outbound', value: parseInt(row?.outbound_calls || '0', 10), color: '#22c55e' },
+      { name: 'Inbound', value: parseInt(row?.inbound_calls || '0', 10), color: '#3b82f6' }
     ].filter(d => d.value > 0);
 
-    // 2. Calls By Day
-    const callsByDayRes = await client.queryObject<any>(
+    // 2. Call Volume Over Time (Last X Days)
+    const callsByDayRes = await client.queryObject(
       `SELECT DATE(created_at) as date, COUNT(id) as count FROM "calllog" WHERE client_id = $1 ${dateFilter} GROUP BY DATE(created_at) ORDER BY date ASC`,
       args
     );
-    const dailyData = callsByDayRes.rows.map(r => ({
+    const dailyData = callsByDayRes.rows.map((r: any) => ({
       date: new Date(r.date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
       calls: parseInt(r.count, 10)
     }));
 
-    // 3. Status Breakdown
-    const statusRes = await client.queryObject<any>(
+    // 3. Call Outcomes / Status
+    const statusRes = await client.queryObject(
       `SELECT status, COUNT(id) as count FROM "calllog" WHERE client_id = $1 ${dateFilter} GROUP BY status`,
       args
     );
-    const statusData = statusRes.rows.map(r => ({
+    const statusData = statusRes.rows.map((r: any) => ({
       name: r.status,
       value: parseInt(r.count, 10)
     }));
 
-    // 4. Calls by Hour
-    const hourRes = await client.queryObject<any>(
-      `SELECT EXTRACT(HOUR FROM call_start_time::timestamp) as hour, COUNT(id) as count 
-       FROM "calllog" 
+    // 4. Hourly Call Volume (Heatmap data proxy)
+    const hourRes = await client.queryObject(
+      `SELECT EXTRACT(HOUR FROM call_start_time::timestamp) as hour, COUNT(id) as count FROM "calllog" 
        WHERE client_id = $1 AND call_start_time IS NOT NULL ${dateFilter} 
        GROUP BY hour ORDER BY hour ASC`,
       args
     );
-    const hourlyData = hourRes.rows.map(r => ({
+    const hourlyData = hourRes.rows.map((r: any) => ({
       hour: `${String(r.hour).padStart(2, '0')}:00`,
       calls: parseInt(r.count, 10)
     }));
@@ -87,12 +87,12 @@ export default async function getClientAnalyticsStats(c: any) {
       const days = parseInt(period, 10);
       leadDateFilter = `AND created_at >= NOW() - INTERVAL '${days} days'`;
     }
-    const leadFunnelRes = await client.queryObject<any>(
+    const leadFunnelRes = await client.queryObject(
       `SELECT status, COUNT(id) as count FROM "lead" WHERE client_id = $1 ${leadDateFilter} GROUP BY status`,
       args
     );
     const leadStatusCounts: any = {};
-    leadFunnelRes.rows.forEach(r => { leadStatusCounts[r.status] = parseInt(r.count, 10); });
+    leadFunnelRes.rows.forEach((r: any) => { leadStatusCounts[r.status] = parseInt(r.count, 10); });
     
     const funnelOrder = ['new', 'contacted', 'interested', 'callback', 'converted', 'not_interested', 'do_not_call'];
     const funnelData = funnelOrder
@@ -100,11 +100,11 @@ export default async function getClientAnalyticsStats(c: any) {
       .map(s => ({ name: s.replace(/_/g, ' '), value: leadStatusCounts[s] }));
 
     // 6. Campaign Performance
-    const campaignRes = await client.queryObject<any>(
+    const campaignRes = await client.queryObject(
       `SELECT name, calls_completed, calls_failed FROM "campaign" WHERE client_id = $1 ORDER BY created_at DESC LIMIT 10`,
       [client_id]
     );
-    const campaignData = campaignRes.rows.map(r => ({
+    const campaignData = campaignRes.rows.map((r: any) => ({
       name: r.name?.substring(0, 15) || 'Unnamed',
       completed: parseInt(r.calls_completed || '0', 10),
       failed: parseInt(r.calls_failed || '0', 10)

@@ -19,7 +19,7 @@ export default async function getAgentDashboardStats(c: any) {
     }
 
     // Verify agent belongs to client
-    const agentRes = await client.queryObject<{ id: string }>(`SELECT id FROM "agent" WHERE id = $1 AND client_id = $2`, [agent_id, client_id]);
+    const agentRes = await client.queryObject(`SELECT id FROM "agent" WHERE id = $1 AND client_id = $2`, [agent_id, client_id]);
     if (agentRes.rows.length === 0) {
       return c.json({ data: { error: 'Agent not found' } }, 404);
     }
@@ -33,30 +33,30 @@ export default async function getAgentDashboardStats(c: any) {
       totalOutcomesRes,
       avgScoreRes
     ] = await Promise.all([
-      client.queryObject<{ count: string, total_duration: string }>(
+      client.queryObject(
         `SELECT COUNT(id), COALESCE(SUM(duration), 0) as total_duration FROM "calllog" WHERE agent_id = $1`, 
         [agent_id]
       ),
-      client.queryObject<{ count: string }>(
+      client.queryObject(
         `SELECT COUNT(id) FROM "calllog" WHERE agent_id = $1 AND status = 'completed'`, 
         [agent_id]
       ),
-      client.queryObject<{ count: string }>(`SELECT COUNT(id) FROM "campaign" WHERE agent_id = $1`, [agent_id]),
-      client.queryObject<{ count: string }>(
-        `SELECT COUNT(cl.id) FROM "campaignlead" cl JOIN "campaign" c ON cl.campaign_id = c.id WHERE c.agent_id = $1`, 
+      client.queryObject(`SELECT COUNT(id) FROM "campaign" WHERE agent_id = $1`, [agent_id]),
+      client.queryObject(
+        `SELECT COUNT(id) FROM "campaignlead" WHERE agent_id = $1`, 
         [agent_id]
       ),
-      client.queryObject<{ count: string }>(
-        `SELECT COUNT(cl.id) FROM "campaignlead" cl JOIN "campaign" c ON cl.campaign_id = c.id WHERE c.agent_id = $1 AND cl.outcome IN ('interested', 'converted')`, 
+      client.queryObject(
+        `SELECT COUNT(id) FROM "campaignlead" WHERE agent_id = $1 AND outcome = 'interested'`, 
         [agent_id]
       ),
-      client.queryObject<{ count: string }>(
-        `SELECT COUNT(cl.id) FROM "campaignlead" cl JOIN "campaign" c ON cl.campaign_id = c.id WHERE c.agent_id = $1 AND cl.outcome IS NOT NULL`, 
+      client.queryObject(
+        `SELECT COUNT(id) FROM "campaignlead" WHERE agent_id = $1 AND outcome IS NOT NULL`, 
         [agent_id]
       ),
-      client.queryObject<{ avg_score: string }>(
-        `SELECT COALESCE(AVG(score), 0) as avg_score FROM "lead" WHERE client_id = $1`,
-        [client_id]
+      client.queryObject(
+        `SELECT AVG(score) as avg_score FROM "lead" WHERE agent_id = $1`, 
+        [agent_id]
       )
     ]);
 
@@ -64,14 +64,14 @@ export default async function getAgentDashboardStats(c: any) {
       data: {
         success: true,
         stats: {
-          totalCalls: parseInt(callsRes.rows[0]?.count || '0', 10),
-          completedCalls: parseInt(completedCallsRes.rows[0]?.count || '0', 10),
-          totalDuration: parseInt(callsRes.rows[0]?.total_duration || '0', 10),
-          totalCampaigns: parseInt(campaignsRes.rows[0]?.count || '0', 10),
-          totalLeads: parseInt(leadsRes.rows[0]?.count || '0', 10),
-          interestedLeads: parseInt(interestedLeadsRes.rows[0]?.count || '0', 10),
-          totalOutcomes: parseInt(totalOutcomesRes.rows[0]?.count || '0', 10),
-          avgLeadScore: Math.round(parseFloat(avgScoreRes.rows[0]?.avg_score || '0'))
+          totalCalls: parseInt((callsRes.rows[0] as any)?.count || '0', 10),
+          completedCalls: parseInt((completedCallsRes.rows[0] as any)?.count || '0', 10),
+          totalDuration: parseInt((callsRes.rows[0] as any)?.total_duration || '0', 10),
+          totalCampaigns: parseInt((campaignsRes.rows[0] as any)?.count || '0', 10),
+          totalLeads: parseInt((leadsRes.rows[0] as any)?.count || '0', 10),
+          interestedLeads: parseInt((interestedLeadsRes.rows[0] as any)?.count || '0', 10),
+          totalOutcomes: parseInt((totalOutcomesRes.rows[0] as any)?.count || '0', 10),
+          avgLeadScore: Math.round(parseFloat((avgScoreRes.rows[0] as any)?.avg_score || '0'))
         }
       }
     });

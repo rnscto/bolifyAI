@@ -19,13 +19,15 @@ export default function ClientAutomationEngine() {
   }, []);
 
   const loadClient = async () => {
-    const user = await apiClient.auth.me();
-    if (user.role === 'admin') {
-      setClient({ id: 'admin' });
-    } else {
+    try {
+      const user = await apiClient.auth.me();
+      if (user.role === 'admin' || user.role === 'master_admin') {
+        // Block admins explicitly as requested
+        return;
+      }
       const clients = await apiClient.Client.filter({ user_id: user.id });
       if (clients.length > 0) setClient(clients[0]);
-    }
+    } catch (err) {}
   };
 
   const { data: activities = [], refetch: refetchActivities } = useQuery({
@@ -36,10 +38,6 @@ export default function ClientAutomationEngine() {
         // Limit to 200 recent/upcoming activities to prevent massive payload issues
         return await apiClient.Activity.filter(filter, '-scheduled_date', 200);
       };
-      
-      if (client.id === 'admin') {
-        return fetchActivities({ auto_created: true });
-      }
       return fetchActivities({ client_id: client.id, auto_created: true });
     },
     enabled: !!client,
@@ -51,9 +49,6 @@ export default function ClientAutomationEngine() {
     queryFn: async () => {
       if (!client || activities.length === 0) return [];
       // Fetch a bulk list of recent leads for the client instead of N+1 individual queries
-      if (client.id === 'admin') {
-         return await apiClient.Lead.filter({}, '-created_at', 500);
-      }
       return await apiClient.Lead.filter({ client_id: client.id }, '-created_at', 500);
     },
     enabled: !!client && activities.length > 0,

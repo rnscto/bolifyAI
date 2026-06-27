@@ -517,6 +517,28 @@ BEFORE UPDATE ON "agent"
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TABLE IF NOT EXISTS "agent_tools" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "agent_id" TEXT,
+  "client_id" TEXT,
+  "name" TEXT,
+  "description" TEXT,
+  "method" TEXT,
+  "url" TEXT,
+  "headers" JSONB,
+  "parameters_schema" JSONB,
+  "is_active" BOOLEAN DEFAULT true
+);
+
+DROP TRIGGER IF EXISTS update_agent_tools_updated_at ON "agent_tools";
+CREATE TRIGGER update_agent_tools_updated_at
+BEFORE UPDATE ON "agent_tools"
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+
 CREATE TABLE IF NOT EXISTS "trustedclient" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,

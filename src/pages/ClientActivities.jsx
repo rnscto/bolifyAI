@@ -11,9 +11,14 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Calendar, CheckCircle2, XCircle, Mail, AlertCircle } from 'lucide-react';
+import { Calendar, CheckCircle2, XCircle, Mail, AlertCircle, Edit2, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { toast } from 'sonner';
 import FeatureGate from '../components/FeatureGate';
 import EmailComposer from '../components/email/EmailComposer';
 
@@ -26,6 +31,15 @@ export default function ClientActivities() {
   const [selectedActivity, setSelectedActivity] = useState(null);
   const [selectedLead, setSelectedLead] = useState(null);
 
+  // Filtering states
+  const [filterType, setFilterType] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('all');
+
+  // Edit dialog states
+  const [editActivity, setEditActivity] = useState(null);
+  const [editStatus, setEditStatus] = useState('');
+  const [editDate, setEditDate] = useState('');
+
   useEffect(() => {
     loadData();
   }, []);
@@ -33,6 +47,11 @@ export default function ClientActivities() {
   const loadData = async () => {
     try {
       const user = await apiClient.auth.me();
+      if (user.role === 'admin' || user.role === 'master_admin') {
+         // Block admins explicitly as requested
+         return;
+      }
+
       const clients = await apiClient.Client.filter({ user_id: user.id });
       
       if (clients.length > 0) {
@@ -99,6 +118,51 @@ export default function ClientActivities() {
     a.status === 'scheduled' && new Date(a.scheduled_date) > new Date()
   );
 
+  const handleUpdateActivity = async () => {
+    if (!editActivity) return;
+    try {
+      await apiClient.Activity.update(editActivity.id, {
+        status: editStatus,
+        scheduled_date: new Date(editDate).toISOString()
+      });
+      toast.success("Activity updated successfully");
+      setEditActivity(null);
+      loadData();
+    } catch (err) {
+      toast.error(err.message || "Failed to update activity");
+    }
+  };
+
+  const openEditDialog = (activity) => {
+    setEditActivity(activity);
+    setEditStatus(activity.status || 'scheduled');
+    // Format date for datetime-local input
+    if (activity.scheduled_date) {
+      const d = new Date(activity.scheduled_date);
+      // yyyy-MM-ddThh:mm
+      const local = new Date(d.getTime() - (d.getTimezoneOffset() * 60000)).toISOString().slice(0, 16);
+      setEditDate(local);
+    } else {
+      setEditDate('');
+    }
+  };
+
+  const filteredActivities = activities.filter(a => {
+    let match = true;
+    if (filterType !== 'all' && a.type !== filterType) match = false;
+    
+    if (filterStatus !== 'all') {
+      if (filterStatus === 'overdue') {
+        if (a.status !== 'scheduled' || new Date(a.scheduled_date) >= new Date()) match = false;
+      } else if (filterStatus === 'upcoming') {
+        if (a.status !== 'scheduled' || new Date(a.scheduled_date) <= new Date()) match = false;
+      } else {
+        if (a.status !== filterStatus) match = false;
+      }
+    }
+    return match;
+  });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -156,10 +220,42 @@ export default function ClientActivities() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between pb-2 border-b">
           <CardTitle>All Activities</CardTitle>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-4 h-4 text-gray-400" />
+              <Select value={filterType} onValueChange={setFilterType}>
+                <SelectTrigger className="w-32 h-8 text-xs">
+                  <SelectValue placeholder="All Types" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Types</SelectItem>
+                  {Object.keys(typeColors).map(type => (
+                    <SelectItem key={type} value={type}>{type.charAt(0).toUpperCase() + type.slice(1)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="w-36 h-8 text-xs">
+                  <SelectValue placeholder="All Statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Statuses</SelectItem>
+                  <SelectItem value="upcoming">Upcoming</SelectItem>
+                  <SelectItem value="overdue">Overdue</SelectItem>
+                  <SelectItem value="scheduled">Scheduled</SelectItem>
+                  <SelectItem value="completed">Completed</SelectItem>
+                  <SelectItem value="cancelled">Cancelled</SelectItem>
+                  <SelectItem value="no_show">No Show</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="pt-4">
           <Table>
             <TableHeader>
               <TableRow>
@@ -173,14 +269,14 @@ export default function ClientActivities() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {activities.length === 0 ? (
+              {filteredActivities.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center text-gray-500">
-                    No activities scheduled
+                  <TableCell colSpan={7} className="text-center text-gray-500 py-8">
+                    No activities found matching filters
                   </TableCell>
                 </TableRow>
               ) : (
-                activities.map((activity) => (
+                filteredActivities.map((activity) => (
                   <TableRow key={activity.id} className={isHumanEmailAction(activity) ? 'bg-amber-50/50' : ''}>
                     <TableCell>
                       <div className="flex items-center gap-1.5">
@@ -212,15 +308,24 @@ export default function ClientActivities() {
                       {activity.notes || '-'}
                     </TableCell>
                     <TableCell>
-                      {isHumanEmailAction(activity) && (
+                      <div className="flex items-center gap-2">
+                        {isHumanEmailAction(activity) && (
+                          <Button
+                            size="sm" variant="outline"
+                            className="gap-1 text-blue-700 border-blue-200 hover:bg-blue-50"
+                            onClick={() => openEmailComposer(activity)}
+                          >
+                            <Mail className="w-3.5 h-3.5" /> Compose
+                          </Button>
+                        )}
                         <Button
-                          size="sm" variant="outline"
-                          className="gap-1 text-blue-700 border-blue-200 hover:bg-blue-50"
-                          onClick={() => openEmailComposer(activity)}
+                          size="sm" variant="ghost"
+                          className="text-gray-500 hover:text-gray-900"
+                          onClick={() => openEditDialog(activity)}
                         >
-                          <Mail className="w-3.5 h-3.5" /> Compose
+                          <Edit2 className="w-4 h-4" />
                         </Button>
-                      )}
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))
@@ -238,6 +343,48 @@ export default function ClientActivities() {
         activity={selectedActivity}
         onEmailSent={loadData}
       />
+
+      <Dialog open={!!editActivity} onOpenChange={(open) => !open && setEditActivity(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Activity</DialogTitle>
+          </DialogHeader>
+          {editActivity && (
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label>Title</Label>
+                <Input value={editActivity.title || ''} disabled />
+              </div>
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select value={editStatus} onValueChange={setEditStatus}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="scheduled">Scheduled</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                    <SelectItem value="no_show">No Show</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Scheduled Date & Time</Label>
+                <Input 
+                  type="datetime-local" 
+                  value={editDate}
+                  onChange={(e) => setEditDate(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditActivity(null)}>Cancel</Button>
+            <Button onClick={handleUpdateActivity}>Save Changes</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </FeatureGate>
   );
 }

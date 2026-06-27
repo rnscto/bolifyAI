@@ -3,6 +3,7 @@ import { sendWhatsAppMessage } from "../integrations/whatsapp.ts";
 import { sendEmail } from "../integrations/email.ts";
 import { sendSMS } from "../integrations/sms.ts";
 import { sendCalendarInvite } from "../integrations/calendar.ts";
+import { triggerSmartfloOutboundCall } from "../services/smartflo.ts";
 
 export async function runActivityDispatcher() {
   try {
@@ -16,7 +17,7 @@ export async function runActivityDispatcher() {
         AND a.scheduled_date IS NOT NULL 
         AND a.scheduled_date != ''
         AND CAST(a.scheduled_date AS timestamp with time zone) <= NOW() 
-        AND a.type IN ('whatsapp', 'email', 'sms', 'calendar_invite')
+        AND a.type IN ('whatsapp', 'email', 'sms', 'calendar_invite', 'call', 'followup')
       LIMIT 50
     `;
     const res = await client.queryObject(query);
@@ -61,6 +62,59 @@ export async function runActivityDispatcher() {
           const subject = activity.title || "Meeting Invitation from BolifyAI";
           const body = activity.description || "Please find the calendar invite attached.";
           success = await sendCalendarInvite(activity.lead_email, subject, body, activity.scheduled_date, activity.client_id);
+        }
+        else if (activity.type === 'call' || activity.type === 'followup') {
+          if (!activity.lead_phone) throw new Error("Lead missing phone number");
+
+          // We need an agent and smartflo token. Let's try assigned_to first, or default to client's primary agent
+          let agentId = activity.assigned_to;
+          let agentQuery = `SELECT id, assigned_did, assigned_dids, smartflo_api_token, client_id FROM "agent" WHERE status = 'active' `;
+          const agentParams: any[] = [];
+          
+          if (agentId) {
+             agentQuery += `AND id = $1 LIMIT 1`;
+             agentParams.push(agentId);
+          } else {
+             agentQuery += `AND client_id = $1 LIMIT 1`;
+             agentParams.push(activity.client_id);
+          }
+
+          const agentRes = await client.queryObject(agentQuery, agentParams);
+          if (agentRes.rows.length === 0) throw new Error("No active agent found to place the call");
+          
+          const agent = agentRes.rows[0] as any;
+          const smartfloApiKey = agent.smartflo_api_token || Deno.env.get("SMARTFLO_API_KEY");
+          if (!smartfloApiKey) throw new Error("No Smartflo API Key configured");
+          
+          let callerDID = agent.assigned_did;
+          if (!callerDID && typeof agent.assigned_dids === 'string') {
+              try { const arr = JSON.parse(agent.assigned_dids); if (arr.length > 0) callerDID = arr[0]; } catch(_) {}
+          } else if (!callerDID && Array.isArray(agent.assigned_dids) && agent.assigned_dids.length > 0) {
+              callerDID = agent.assigned_dids[0];
+          }
+          if (!callerDID) throw new Error("Agent has no assigned DID to dial out");
+          
+          // Create a new calllog for this follow-up
+          const callLogRes = await client.queryObject(`
+            INSERT INTO "calllog" (client_id, agent_id, lead_id, caller_id, callee_number, direction, status, call_start_time)
+            VALUES ($1, $2, $3, $4, $5, 'outbound', 'initiated', NOW())
+            RETURNING id
+          `, [agent.client_id, agent.id, activity.lead_id, callerDID, activity.lead_phone]);
+          
+          const callLogId = (callLogRes.rows[0] as any).id;
+
+          const callResult = await triggerSmartfloOutboundCall({
+            smartfloApiKey,
+            calleeNumber: activity.lead_phone,
+            callerId: callerDID,
+            callLogId: callLogId
+          });
+
+          if (callResult.success) {
+             success = true;
+          } else {
+             throw new Error(callResult.message || "Smartflo API rejected the call");
+          }
         }
 
         if (success) {

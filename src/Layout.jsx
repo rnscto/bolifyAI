@@ -224,7 +224,6 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Payments', path: 'AdminPayments', icon: IndianRupee },
     { name: 'Wallet Top-Ups', path: 'AdminTopups', icon: Wallet },
     { name: 'Outreach', path: 'AdminOutreach', icon: Activity },
-    { name: 'Callbacks', path: 'ClientCallbacks', icon: PhoneForwarded },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
     { name: 'Concept Note', path: 'ConceptNote', icon: FileText },
     { name: 'Trusted Logos', path: 'AdminTrustedClients', icon: Globe },

@@ -12,7 +12,8 @@ export default async function getCampaignLiveStats(c: any) {
     }
     if (!client_id) return c.json({ data: { error: 'client_id is required' } }, 400);
 
-    const statsRes = await client.queryObject<any>(
+    // 1. Fetch aggregated stats per campaign
+    const statsRes = await client.queryObject(
       `SELECT 
         campaign_id,
         COUNT(id) as total_leads,
@@ -32,7 +33,7 @@ export default async function getCampaignLiveStats(c: any) {
     );
 
     const statsMap: Record<string, any> = {};
-    for (const row of statsRes.rows) {
+    statsRes.rows.forEach((row: any) => {
       statsMap[row.campaign_id] = {
         total_leads: parseInt(row.total_leads, 10),
         calls_completed: parseInt(row.calls_completed, 10),
@@ -47,7 +48,7 @@ export default async function getCampaignLiveStats(c: any) {
           do_not_call: parseInt(row.o_do_not_call, 10)
         }
       };
-    }
+    });
 
     return c.json({
       data: {

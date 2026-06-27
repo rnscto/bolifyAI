@@ -28,39 +28,39 @@ export default async function getClientDashboardStats(c: any) {
       didsRes,
       campaignsRes
     ] = await Promise.all([
-      client.queryObject<{ count: string }>(`SELECT COUNT(id) FROM "lead" WHERE client_id = $1`, [client_id]),
-      client.queryObject<{ count: string, total_duration: string }>(
+      client.queryObject(`SELECT COUNT(id) FROM "lead" WHERE client_id = $1`, [client_id]),
+      client.queryObject(
         `SELECT COUNT(id), COALESCE(SUM(duration), 0) as total_duration FROM "calllog" WHERE client_id = $1`, 
         [client_id]
       ),
-      client.queryObject<{ count: string }>(
+      client.queryObject(
         `SELECT COUNT(id) FROM "calllog" WHERE client_id = $1 AND created_at >= CURRENT_DATE`, 
         [client_id]
       ),
-      client.queryObject<{ count: string }>(`SELECT COUNT(id) FROM "agent" WHERE client_id = $1`, [client_id]),
-      client.queryObject<{ count: string }>(`SELECT COUNT(id) FROM "activity" WHERE client_id = $1`, [client_id]),
-      client.queryObject<{ count: string }>(
+      client.queryObject(`SELECT COUNT(id) FROM "agent" WHERE client_id = $1`, [client_id]),
+      client.queryObject(`SELECT COUNT(id) FROM "activity" WHERE client_id = $1`, [client_id]),
+      client.queryObject(
         `SELECT COUNT(id) FROM "activity" WHERE client_id = $1 AND status = 'scheduled' AND scheduled_date > NOW()::text`, 
         [client_id]
       ),
-      client.queryObject<{ count: string }>(`SELECT COUNT(id) FROM "did" WHERE client_id = $1`, [client_id]),
-      client.queryObject<{ count: string }>(`SELECT COUNT(id) FROM "campaign" WHERE client_id = $1`, [client_id])
+      client.queryObject(`SELECT COUNT(id) FROM "did" WHERE client_id = $1`, [client_id]),
+      client.queryObject(`SELECT COUNT(id) FROM "campaign" WHERE client_id = $1`, [client_id])
     ]);
 
     return c.json({
       data: {
         success: true,
         stats: {
-          totalLeads: parseInt(leadsRes.rows[0]?.count || '0', 10),
-          totalCalls: parseInt(callsRes.rows[0]?.count || '0', 10),
-          callsToday: parseInt(callsTodayRes.rows[0]?.count || '0', 10),
-          totalDuration: parseInt(callsRes.rows[0]?.total_duration || '0', 10),
-          totalAgents: parseInt(agentsRes.rows[0]?.count || '0', 10),
-          activeAgents: parseInt(agentsRes.rows[0]?.count || '0', 10), // For simplicity, all count as active, or add a query for status='active'
-          totalActivities: parseInt(activitiesRes.rows[0]?.count || '0', 10),
-          upcomingActivities: parseInt(upcomingRes.rows[0]?.count || '0', 10),
-          totalDids: parseInt(didsRes.rows[0]?.count || '0', 10),
-          totalCampaigns: parseInt(campaignsRes.rows[0]?.count || '0', 10),
+          totalLeads: parseInt((leadsRes.rows[0] as any)?.count || '0', 10),
+          totalCalls: parseInt((callsRes.rows[0] as any)?.count || '0', 10),
+          callsToday: parseInt((callsTodayRes.rows[0] as any)?.count || '0', 10),
+          totalDuration: parseInt((callsRes.rows[0] as any)?.total_duration || '0', 10),
+          totalAgents: parseInt((agentsRes.rows[0] as any)?.count || '0', 10),
+          activeAgents: parseInt((agentsRes.rows[0] as any)?.count || '0', 10),
+          totalActivities: parseInt((activitiesRes.rows[0] as any)?.count || '0', 10),
+          upcomingActivities: parseInt((upcomingRes.rows[0] as any)?.count || '0', 10),
+          totalDids: parseInt((didsRes.rows[0] as any)?.count || '0', 10),
+          totalCampaigns: parseInt((campaignsRes.rows[0] as any)?.count || '0', 10),
         }
       }
     });

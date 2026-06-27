@@ -6,7 +6,6 @@ import {
   Phone, RefreshCw, Calendar as CalendarIcon, List,
   AlertTriangle, Clock, CheckCircle2, ClipboardList, Wand2
 } from 'lucide-react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CallbackStats from '../components/callbacks/CallbackStats';
 import CallbackList from '../components/callbacks/CallbackList';
 import CallbackCalendar from '../components/callbacks/CallbackCalendar';
@@ -32,24 +31,23 @@ export default function ClientCallbacks() {
   }, []);
 
   const loadClient = async () => {
-    const user = await apiClient.auth.me();
-    if (user.role === 'admin') {
-      setIsAdmin(true);
-      // Load all clients for admin selector
-      const clients = await apiClient.Client.filter({ status: 'active' });
-      setAllClients(clients);
+    try {
+      const user = await apiClient.auth.me();
+      if (user.role === 'admin' || user.role === 'master_admin') {
+        // Block admins explicitly as requested
+        setLoading(false);
+        return;
+      }
+      const clients = await apiClient.Client.filter({ user_id: user.id });
       if (clients.length > 0) {
         setClientId(clients[0].id);
         fetchCallbacks(clients[0].id);
       } else {
         setLoading(false);
       }
-    } else {
-      const clients = await apiClient.Client.filter({ user_id: user.id });
-      if (clients.length > 0) {
-        setClientId(clients[0].id);
-        fetchCallbacks(clients[0].id);
-      }
+    } catch (err) {
+      setError('Failed to load client');
+      setLoading(false);
     }
   };
 
@@ -151,31 +149,17 @@ export default function ClientCallbacks() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-[1400px] mx-auto">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
             <Phone className="w-6 h-6 text-blue-600" />
             Callbacks & Tasks
           </h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-gray-500 text-sm mt-1">
             AI-parsed follow-ups & tasks requiring your attention
           </p>
-        </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          {isAdmin && allClients.length > 0 && (
-            <Select value={clientId || ''} onValueChange={handleClientChange}>
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Select client" />
-              </SelectTrigger>
-              <SelectContent>
-                {allClients.map(c => (
-                  <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
         </div>
       </div>
 
