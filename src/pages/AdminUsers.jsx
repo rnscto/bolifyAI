@@ -25,17 +25,17 @@ import moment from 'moment';
 const MASTER_ADMIN_EMAIL = 'yadav.nandkishor73@gmail.com';
 
 const ROLE_STYLES = {
-  master_admin:    'bg-amber-500/20 text-amber-400 border border-amber-500/30',
+  master_admin:    'bg-amber-100 text-amber-700 border border-amber-500/30',
   admin:           'bg-purple-500/20 text-purple-400 border border-purple-500/30',
-  master_reseller: 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30',
-  reseller:        'bg-blue-500/20 text-blue-400 border border-blue-500/30',
-  client:          'bg-gray-500/20 text-gray-300 border border-gray-500/20',
+  master_reseller: 'bg-blue-100 text-blue-700 border border-cyan-500/30',
+  reseller:        'bg-blue-100 text-blue-700 border border-blue-500/30',
+  client:          'bg-slate-100 text-gray-600 border border-slate-200',
 };
 
 const STATUS_STYLES = {
-  active:   'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20',
-  inactive: 'bg-gray-500/20 text-gray-400 border border-gray-500/20',
-  suspended:'bg-red-500/20 text-red-400 border border-red-500/20',
+  active:   'bg-green-100 text-green-700 border border-green-100',
+  inactive: 'bg-slate-100 text-gray-500 border border-slate-200',
+  suspended:'bg-red-100 text-red-700 border border-red-200',
 };
 
 export default function AdminUsers() {
@@ -146,8 +146,8 @@ export default function AdminUsers() {
   if (currentUserEmail && currentUserEmail !== MASTER_ADMIN_EMAIL) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <AlertTriangle className="w-12 h-12 text-red-400" />
-        <p className="text-gray-400 font-medium">Access Denied — Master Admin only</p>
+        <AlertTriangle className="w-12 h-12 text-red-700" />
+        <p className="text-gray-500 font-medium">Access Denied — Master Admin only</p>
       </div>
     );
   }
@@ -157,8 +157,8 @@ export default function AdminUsers() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Crown className="w-6 h-6 text-amber-400" />
+          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+            <Crown className="w-6 h-6 text-amber-700" />
             Platform Users
           </h1>
           <p className="text-gray-500 text-sm mt-1">All registered users — across every role and status</p>
@@ -167,7 +167,7 @@ export default function AdminUsers() {
           onClick={loadUsers}
           variant="outline"
           size="sm"
-          className="border-white/10 text-gray-300 hover:text-white hover:bg-white/5"
+          className="border-slate-200 text-gray-600 hover:text-gray-900 hover:bg-white"
         >
           <RefreshCw className="w-4 h-4 mr-2" /> Refresh
         </Button>
@@ -176,13 +176,13 @@ export default function AdminUsers() {
       {/* Stats row */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
-          { label: 'Total Users', val: stats.total, color: 'text-white' },
-          { label: 'Admins', val: stats.admins, color: 'text-amber-400' },
-          { label: 'Resellers', val: stats.resellers, color: 'text-cyan-400' },
-          { label: 'Clients', val: stats.clients, color: 'text-blue-400' },
-          { label: 'Suspended', val: stats.suspended, color: 'text-red-400' },
+          { label: 'Total Users', val: stats.total, color: 'text-gray-900' },
+          { label: 'Admins', val: stats.admins, color: 'text-amber-700' },
+          { label: 'Resellers', val: stats.resellers, color: 'text-blue-700' },
+          { label: 'Clients', val: stats.clients, color: 'text-blue-700' },
+          { label: 'Suspended', val: stats.suspended, color: 'text-red-700' },
         ].map(s => (
-          <Card key={s.label} className="border border-white/8 bg-white/5">
+          <Card key={s.label} className="border border-slate-200 bg-white">
             <CardContent className="py-3 px-4 text-center">
               <p className={`text-2xl font-bold ${s.color}`}>{s.val}</p>
               <p className="text-xs text-gray-600 mt-0.5">{s.label}</p>
@@ -199,14 +199,14 @@ export default function AdminUsers() {
             placeholder="Search by name or email..."
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="pl-9 bg-white/5 border-white/10 text-gray-200 placeholder:text-gray-600"
+            className="pl-9 bg-white border-slate-200 text-gray-900 placeholder:text-gray-600"
           />
         </div>
         <Select value={filterRole} onValueChange={setFilterRole}>
-          <SelectTrigger className="w-44 bg-white/5 border-white/10 text-gray-300">
+          <SelectTrigger className="w-44 bg-white border-slate-200 text-gray-600">
             <SelectValue placeholder="Filter by role" />
           </SelectTrigger>
-          <SelectContent className="bg-[#1e2130] border-white/10 text-gray-200">
+          <SelectContent className="bg-white border-slate-200 text-gray-900">
             <SelectItem value="all">All Roles</SelectItem>
             <SelectItem value="master_admin">Master Admin</SelectItem>
             <SelectItem value="admin">Admin</SelectItem>
@@ -216,10 +216,10 @@ export default function AdminUsers() {
           </SelectContent>
         </Select>
         <Select value={filterStatus} onValueChange={setFilterStatus}>
-          <SelectTrigger className="w-40 bg-white/5 border-white/10 text-gray-300">
+          <SelectTrigger className="w-40 bg-white border-slate-200 text-gray-600">
             <SelectValue placeholder="Filter by status" />
           </SelectTrigger>
-          <SelectContent className="bg-[#1e2130] border-white/10 text-gray-200">
+          <SelectContent className="bg-white border-slate-200 text-gray-900">
             <SelectItem value="all">All Statuses</SelectItem>
             <SelectItem value="active">Active</SelectItem>
             <SelectItem value="inactive">Inactive</SelectItem>
@@ -229,16 +229,16 @@ export default function AdminUsers() {
       </div>
 
       {/* Table */}
-      <Card className="border border-white/8 bg-white/5">
+      <Card className="border border-slate-200 bg-white shadow-sm">
         <CardContent className="p-0">
           {loading ? (
             <div className="flex justify-center py-16">
-              <Loader2 className="w-8 h-8 animate-spin text-cyan-400" />
+              <Loader2 className="w-8 h-8 animate-spin text-blue-700" />
             </div>
           ) : (
             <Table>
               <TableHeader>
-                <TableRow className="border-white/8 hover:bg-transparent">
+                <TableRow className="border-slate-200 hover:bg-transparent">
                   <TableHead className="text-gray-500">User</TableHead>
                   <TableHead className="text-gray-500">Role</TableHead>
                   <TableHead className="text-gray-500">Status</TableHead>
@@ -255,17 +255,17 @@ export default function AdminUsers() {
                     </TableCell>
                   </TableRow>
                 ) : filtered.map(u => (
-                  <TableRow key={u.id} className="border-white/5 hover:bg-white/5 transition-colors">
+                  <TableRow key={u.id} className="border-slate-100 hover:bg-white transition-colors">
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <div className="w-9 h-9 rounded-full bg-gradient-to-tr from-indigo-500/20 to-purple-500/20 border border-purple-500/20 flex items-center justify-center text-purple-300 font-bold text-sm shrink-0">
                           {(u.display_name || u.email || '?').charAt(0).toUpperCase()}
                         </div>
                         <div>
-                          <p className="text-sm font-medium text-gray-200">
+                          <p className="text-sm font-medium text-gray-900">
                             {u.display_name || '—'}
                             {u.email === MASTER_ADMIN_EMAIL && (
-                              <Crown className="w-3.5 h-3.5 text-amber-400 inline ml-1" />
+                              <Crown className="w-3.5 h-3.5 text-amber-700 inline ml-1" />
                             )}
                           </p>
                           <p className="text-xs text-gray-500 font-mono">{u.email}</p>
@@ -295,7 +295,7 @@ export default function AdminUsers() {
                           variant="ghost"
                           onClick={() => openEdit(u)}
                           disabled={u.email === MASTER_ADMIN_EMAIL}
-                          className="text-gray-400 hover:text-white hover:bg-white/10 h-8 w-8 p-0"
+                          className="text-gray-500 hover:text-gray-900 hover:bg-slate-50 h-8 w-8 p-0"
                           title="Edit Role"
                         >
                           <UserCog className="w-4 h-4" />
@@ -306,8 +306,8 @@ export default function AdminUsers() {
                           onClick={() => handleToggleSuspend(u)}
                           disabled={u.email === MASTER_ADMIN_EMAIL}
                           className={`h-8 w-8 p-0 ${u.status === 'suspended'
-                            ? 'text-emerald-400 hover:bg-emerald-400/10'
-                            : 'text-red-400 hover:bg-red-400/10'
+                            ? 'text-green-700 hover:bg-emerald-400/10'
+                            : 'text-red-700 hover:bg-red-400/10'
                           }`}
                           title={u.status === 'suspended' ? 'Reactivate' : 'Suspend'}
                         >
@@ -328,26 +328,26 @@ export default function AdminUsers() {
 
       {/* Edit Role Dialog */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="bg-[#161920] border border-white/10 text-gray-100 max-w-md">
+        <DialogContent className="bg-white border border-slate-200 text-gray-800 max-w-md">
           <DialogHeader>
-            <DialogTitle className="text-white flex items-center gap-2">
-              <UserCog className="w-5 h-5 text-cyan-400" />
+            <DialogTitle className="text-gray-900 flex items-center gap-2">
+              <UserCog className="w-5 h-5 text-blue-700" />
               Edit User Role
             </DialogTitle>
           </DialogHeader>
           {selectedUser && (
             <div className="space-y-4 py-2">
-              <div className="p-3 rounded-xl bg-white/5 border border-white/8">
-                <p className="text-sm font-medium text-gray-200">{selectedUser.display_name || '—'}</p>
+              <div className="p-3 rounded-xl bg-white border border-slate-200">
+                <p className="text-sm font-medium text-gray-900">{selectedUser.display_name || '—'}</p>
                 <p className="text-xs text-gray-500 font-mono">{selectedUser.email}</p>
               </div>
               <div>
-                <Label className="text-gray-400 text-sm">Assign Role</Label>
+                <Label className="text-gray-500 text-sm">Assign Role</Label>
                 <Select value={editRole} onValueChange={setEditRole}>
-                  <SelectTrigger className="mt-1.5 bg-white/5 border-white/10 text-gray-200">
+                  <SelectTrigger className="mt-1.5 bg-white border-slate-200 text-gray-900">
                     <SelectValue />
                   </SelectTrigger>
-                  <SelectContent className="bg-[#1e2130] border-white/10 text-gray-200">
+                  <SelectContent className="bg-white border-slate-200 text-gray-900">
                     <SelectItem value="client">Client</SelectItem>
                     <SelectItem value="reseller">Reseller</SelectItem>
                     <SelectItem value="master_reseller">Master Reseller</SelectItem>
@@ -355,17 +355,17 @@ export default function AdminUsers() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 text-xs text-amber-300 flex items-start gap-2">
+              <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 text-xs text-amber-600 flex items-start gap-2">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                 Changing this user's role will immediately affect their dashboard access and permissions.
               </div>
             </div>
           )}
           <DialogFooter className="gap-2">
-            <Button variant="ghost" onClick={() => setEditOpen(false)} className="text-gray-400 hover:text-white">
+            <Button variant="ghost" onClick={() => setEditOpen(false)} className="text-gray-500 hover:text-gray-900">
               Cancel
             </Button>
-            <Button onClick={handleSaveRole} disabled={saving} className="bg-cyan-600 hover:bg-cyan-500 text-white">
+            <Button onClick={handleSaveRole} disabled={saving} className="bg-cyan-600 hover:bg-cyan-500 text-gray-900">
               {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ShieldCheck className="w-4 h-4 mr-2" />}
               Save Role
             </Button>

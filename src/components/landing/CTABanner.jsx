@@ -22,7 +22,7 @@ export default function CTABanner() {
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#00bcd4]/20 text-[#b2ebf2] text-sm font-medium mb-4">
             <Sparkles className="w-3.5 h-3.5" /> Limited Time Offer
           </div>
-          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-white mb-3">
+          <h2 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-3">
             AI For Your Business. AI For You.
           </h2>
           <p className="text-cyan-100 mb-6 max-w-lg mx-auto">
@@ -31,7 +31,7 @@ export default function CTABanner() {
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Button
               size="lg"
-              className="text-white px-8 py-5 text-base rounded-xl font-semibold border-0"
+              className="text-gray-900 px-8 py-5 text-base rounded-xl font-semibold border-0"
               style={{ background: 'linear-gradient(135deg, #00bcd4, #0097a7)', boxShadow: '0 8px 24px rgba(0,188,212,0.35)' }}
               onClick={() => apiClient.auth.redirectToLogin(createPageUrl('Onboarding'))}>
               
@@ -39,7 +39,7 @@ export default function CTABanner() {
             </Button>
             <Button
               size="lg"
-              className="bg-white/15 hover:bg-white/25 text-white px-8 py-5 text-base rounded-xl font-semibold border border-white/30"
+              className="bg-white/15 hover:bg-white/25 text-gray-900 px-8 py-5 text-base rounded-xl font-semibold border border-slate-200/30"
               onClick={() => apiClient.auth.redirectToLogin(createPageUrl('Onboarding') + '?type=personal')}>
               
               Personal AI Assistant <ArrowRight className="w-5 h-5 ml-1" />

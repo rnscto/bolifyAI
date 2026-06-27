@@ -271,7 +271,7 @@ export default function ClientKnowledgeBase() {
                     className="min-h-[200px]"
                     required
                   />
-                  <p className="text-xs text-gray-400 mt-1">{formData.textContent.length} characters</p>
+                  <p className="text-xs text-gray-500 mt-1">{formData.textContent.length} characters</p>
                 </div>
               )}
               <div className="flex gap-3 justify-end">
@@ -306,7 +306,7 @@ export default function ClientKnowledgeBase() {
       {documents.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <FileText className="w-16 h-16 text-gray-300 mb-4" />
+            <FileText className="w-16 h-16 text-gray-600 mb-4" />
             <p className="text-gray-500 mb-4">No documents uploaded yet</p>
             <Button onClick={() => setDialogOpen(true)} className="bg-blue-600 hover:bg-blue-700">
               <Upload className="w-4 h-4 mr-2" />

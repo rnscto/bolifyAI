@@ -182,9 +182,9 @@ Return subject and body_html.`,
             <div key={i} className="border rounded-lg p-4 space-y-3 bg-gray-50/50">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <GripVertical className="w-4 h-4 text-gray-300" />
+                  <GripVertical className="w-4 h-4 text-gray-600" />
                   <span className="text-sm font-semibold text-gray-700">Step {i + 1}</span>
-                  <span className="text-xs text-gray-400">
+                  <span className="text-xs text-gray-500">
                     — sends {step.delay_days} day{step.delay_days !== 1 ? 's' : ''} after {i === 0 ? 'enrollment' : `step ${i}`}
                   </span>
                 </div>
@@ -200,7 +200,7 @@ Return subject and body_html.`,
                     AI Generate
                   </Button>
                   {form.steps.length > 1 && (
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-400" onClick={() => removeStep(i)}>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-red-700" onClick={() => removeStep(i)}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
                   )}

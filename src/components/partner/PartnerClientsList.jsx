@@ -59,7 +59,7 @@ export default function PartnerClientsList({ referrals }) {
   if (clients.length === 0) {
     return (
       <Card><CardContent className="py-12 text-center text-gray-500">
-        <Users className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+        <Users className="w-10 h-10 mx-auto mb-2 text-gray-600" />
         <p className="font-medium">No active clients yet</p>
         <p className="text-sm">Once your referrals sign up and create accounts, they'll appear here.</p>
       </CardContent></Card>
@@ -134,7 +134,7 @@ export default function PartnerClientsList({ referrals }) {
                       <TableCell className="font-medium">₹{monthlyVal.toLocaleString('en-IN')}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1">
-                          <Phone className="w-3 h-3 text-gray-400" />
+                          <Phone className="w-3 h-3 text-gray-500" />
                           {callCounts[c.id] || 0}
                         </div>
                       </TableCell>

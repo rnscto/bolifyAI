@@ -38,7 +38,7 @@ export default function ClientAgreementViewer({ clientId }) {
     return (
       <Card>
         <CardContent className="py-8 text-center text-gray-500">
-          <FileText className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+          <FileText className="w-10 h-10 mx-auto mb-3 text-gray-600" />
           <p className="font-medium">No agreements found</p>
           <p className="text-sm mt-1">Your service agreement will appear here once signed.</p>
         </CardContent>
@@ -85,7 +85,7 @@ export default function ClientAgreementViewer({ clientId }) {
               </div>
             </div>
             {agr.status === 'signed' && (
-              <div className="mt-3 pt-3 border-t text-xs text-gray-400 flex gap-4 flex-wrap">
+              <div className="mt-3 pt-3 border-t text-xs text-gray-500 flex gap-4 flex-wrap">
                 <span>Signed by: <strong className="text-gray-600">{agr.signature_name}</strong></span>
                 <span>Effective: {agr.effective_date}</span>
                 <span>Expires: {agr.expiry_date}</span>

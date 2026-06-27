@@ -60,7 +60,7 @@ export default function PlatformTemplatesTab({ config }) {
 
       {templates.length === 0 ? (
         <Card><CardContent className="py-12 text-center">
-          <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <MessageSquare className="w-12 h-12 text-gray-600 mx-auto mb-3" />
           <p className="text-gray-600 font-medium">No platform templates yet</p>
           <p className="text-sm text-gray-500 mt-1">Click "Sync from Vendor" once your platform connection is configured.</p>
         </CardContent></Card>
@@ -77,7 +77,7 @@ export default function PlatformTemplatesTab({ config }) {
                   <Badge className={STATUS_COLORS[t.status] || 'bg-gray-100'}>{t.status}</Badge>
                 </div>
                 <p className="text-xs text-gray-700 line-clamp-3 bg-gray-50 p-2 rounded mt-2">{t.body_text}</p>
-                {t.send_count > 0 && <p className="text-xs text-gray-400 mt-2">Sent {t.send_count} times</p>}
+                {t.send_count > 0 && <p className="text-xs text-gray-500 mt-2">Sent {t.send_count} times</p>}
               </CardContent>
             </Card>
           ))}

@@ -242,7 +242,7 @@ export default function PromptGeneratorDialog({
                       <label key={kb.id} className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5">
                         <Checkbox checked={form.knowledge_base_ids.includes(kb.id)} onCheckedChange={() => toggleKB(kb.id)} />
                         <span className="flex-1 truncate">{kb.title}</span>
-                        <span className="text-xs text-gray-400">{kb.category || kb.file_type?.toUpperCase()}</span>
+                        <span className="text-xs text-gray-500">{kb.category || kb.file_type?.toUpperCase()}</span>
                       </label>
                     ))}
                   </div>

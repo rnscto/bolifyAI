@@ -22,7 +22,7 @@ export default function PayoutHistory({ payouts }) {
       <CardContent>
         {payouts.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            <FileText className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+            <FileText className="w-10 h-10 mx-auto mb-2 text-gray-600" />
             <p className="font-medium">No payouts yet</p>
             <p className="text-sm">Payouts will appear here once your referrals generate revenue.</p>
           </div>

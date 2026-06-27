@@ -125,9 +125,9 @@ export default function AdminTrustedClients() {
       ) : clients.length === 0 ? (
         <Card>
           <CardContent className="py-16 text-center">
-            <Image className="w-12 h-12 mx-auto text-gray-300 mb-3" />
+            <Image className="w-12 h-12 mx-auto text-gray-600 mb-3" />
             <p className="text-gray-500">No client logos added yet</p>
-            <p className="text-sm text-gray-400 mt-1">Add logos to show in the "Trusted By" section on the homepage</p>
+            <p className="text-sm text-gray-500 mt-1">Add logos to show in the "Trusted By" section on the homepage</p>
           </CardContent>
         </Card>
       ) : (
@@ -135,20 +135,20 @@ export default function AdminTrustedClients() {
           {clients.map(client => (
             <Card key={client.id} className="overflow-hidden">
               <div className="flex items-center gap-4 p-4">
-                <GripVertical className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                <GripVertical className="w-4 h-4 text-gray-600 flex-shrink-0" />
                 <div className="w-24 h-12 bg-gray-50 rounded-lg flex items-center justify-center flex-shrink-0">
                   <img src={client.logo_url} alt={client.name} className="h-8 max-w-[90px] object-contain" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-gray-900 truncate">{client.name}</p>
-                  <p className="text-xs text-gray-400">Order: {client.order || 0}</p>
+                  <p className="text-xs text-gray-500">Order: {client.order || 0}</p>
                 </div>
                 <div className="flex items-center gap-3 flex-shrink-0">
                   <div className="flex items-center gap-2">
                     {client.is_active ? (
                       <Badge className="bg-green-50 text-green-700 border-green-200">Visible</Badge>
                     ) : (
-                      <Badge variant="outline" className="text-gray-400">Hidden</Badge>
+                      <Badge variant="outline" className="text-gray-500">Hidden</Badge>
                     )}
                     <Switch
                       checked={client.is_active !== false}
@@ -158,7 +158,7 @@ export default function AdminTrustedClients() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="text-red-400 hover:text-red-600 hover:bg-red-50"
+                    className="text-red-700 hover:text-red-600 hover:bg-red-50"
                     onClick={() => { if (confirm('Delete this logo?')) deleteMutation.mutate(client.id); }}
                   >
                     <Trash2 className="w-4 h-4" />

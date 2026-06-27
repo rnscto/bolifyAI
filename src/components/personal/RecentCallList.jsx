@@ -34,7 +34,7 @@ export default function RecentCallList({ calls }) {
         </CardHeader>
         <CardContent>
           <div className="text-center py-8 text-gray-500">
-            <Phone className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+            <Phone className="w-10 h-10 mx-auto mb-3 text-gray-600" />
             <p>No calls yet. Your AI assistant is ready to screen calls.</p>
           </div>
         </CardContent>
@@ -70,7 +70,7 @@ export default function RecentCallList({ calls }) {
                   )}
                 </div>
                 <p className="text-xs text-gray-500 mt-1 line-clamp-2">{summary}</p>
-                <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-400">
+                <div className="flex items-center gap-3 mt-1.5 text-xs text-gray-500">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {moment(call.created_at).fromNow()}

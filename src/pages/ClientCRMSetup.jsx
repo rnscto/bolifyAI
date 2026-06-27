@@ -94,7 +94,7 @@ export default function ClientCRMSetup() {
         {STEPS.map((s, i) => (
           <React.Fragment key={s}>
             <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
-              i <= step ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-400'
+              i <= step ? 'bg-indigo-100 text-indigo-700' : 'bg-gray-100 text-gray-500'
             }`}>
               {i < step ? <Check className="w-4 h-4" /> : <span>{i + 1}</span>}
               <span className="hidden sm:inline">{s}</span>
@@ -146,7 +146,7 @@ export default function ClientCRMSetup() {
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: stage.color }} />
                     <span className="text-sm">{stage.name}</span>
                     {i < (selectedTemplate.default_deal_stages?.length || 0) - 1 && (
-                      <ArrowRight className="w-3 h-3 text-gray-300" />
+                      <ArrowRight className="w-3 h-3 text-gray-600" />
                     )}
                   </div>
                 ))}

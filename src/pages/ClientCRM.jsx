@@ -189,7 +189,7 @@ export default function ClientCRM() {
       {integrations.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Database className="w-16 h-16 text-gray-300 mb-4" />
+            <Database className="w-16 h-16 text-gray-600 mb-4" />
             <p className="text-gray-500 mb-4">No external CRM integrations configured</p>
           </CardContent>
         </Card>
@@ -207,7 +207,7 @@ export default function ClientCRM() {
                     <Badge className={statusColors[i.status]}>{i.status}</Badge>
                     <AlertDialog>
                       <AlertDialogTrigger asChild>
-                        <button className="text-gray-400 hover:text-red-600" title="Delete integration">
+                        <button className="text-gray-500 hover:text-red-600" title="Delete integration">
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </AlertDialogTrigger>
@@ -237,10 +237,10 @@ export default function ClientCRM() {
                     <code className="text-xs bg-gray-100 px-2 py-1 rounded font-mono">
                       {showApiKey[i.id] ? i.api_key : '••••••••••••'}
                     </code>
-                    <button onClick={() => setShowApiKey(prev => ({...prev, [i.id]: !prev[i.id]}))} className="text-gray-400 hover:text-gray-600">
+                    <button onClick={() => setShowApiKey(prev => ({...prev, [i.id]: !prev[i.id]}))} className="text-gray-500 hover:text-gray-600">
                       {showApiKey[i.id] ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                     </button>
-                    <button onClick={() => { navigator.clipboard.writeText(i.api_key); toast.success('API key copied!'); }} className="text-gray-400 hover:text-gray-600">
+                    <button onClick={() => { navigator.clipboard.writeText(i.api_key); toast.success('API key copied!'); }} className="text-gray-500 hover:text-gray-600">
                       <Copy className="w-3.5 h-3.5" />
                     </button>
                   </div>

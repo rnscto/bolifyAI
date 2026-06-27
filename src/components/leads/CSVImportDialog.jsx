@@ -426,9 +426,9 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
           <div className="flex items-center gap-2 mb-2">
             {['Upload', 'Map Fields', 'Preview'].map((label, i) => (
               <React.Fragment key={label}>
-                <div className={`flex items-center gap-1.5 ${step >= i + 1 ? 'text-blue-600' : 'text-gray-400'}`}>
+                <div className={`flex items-center gap-1.5 ${step >= i + 1 ? 'text-blue-600' : 'text-gray-500'}`}>
                   <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold ${
-                    step > i + 1 ? 'bg-blue-600 text-white' : step === i + 1 ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-gray-100 text-gray-400'
+                    step > i + 1 ? 'bg-blue-600 text-gray-900' : step === i + 1 ? 'bg-blue-100 text-blue-700 border border-blue-300' : 'bg-gray-100 text-gray-500'
                   }`}>
                     {step > i + 1 ? '✓' : i + 1}
                   </div>
@@ -467,9 +467,9 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
 
             {inputMode === 'file' ? (
               <div className="border-2 border-dashed border-gray-200 rounded-xl p-8 text-center hover:border-blue-300 transition-colors">
-                <Upload className="w-10 h-10 text-gray-400 mx-auto mb-3" />
+                <Upload className="w-10 h-10 text-gray-500 mx-auto mb-3" />
                 <p className="text-sm font-medium text-gray-700 mb-1">Upload CSV or Excel file</p>
-                <p className="text-xs text-gray-400 mb-4">Supports .csv, .xlsx, .xls</p>
+                <p className="text-xs text-gray-500 mb-4">Supports .csv, .xlsx, .xls</p>
                 <label className="cursor-pointer">
                   <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleFileSelect} className="hidden" />
                   <Button variant="outline" asChild disabled={uploading}>
@@ -488,7 +488,7 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
                   />
                 </div>
                 {pasteText.trim() && (
-                  <p className="text-xs text-gray-400">{pasteText.trim().split('\n').length - 1} data row(s) detected</p>
+                  <p className="text-xs text-gray-500">{pasteText.trim().split('\n').length - 1} data row(s) detected</p>
                 )}
                 <Button type="button" onClick={handlePasteSubmit} disabled={!pasteText.trim()} className="w-full bg-blue-600 hover:bg-blue-700">
                   <ArrowRight className="w-4 h-4 mr-2" /> Continue to Mapping
@@ -516,7 +516,7 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
                 <FileSpreadsheet className="w-4 h-4 text-blue-600" />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-700 truncate">{file.name}</p>
-                  <p className="text-xs text-gray-400">{rawData.length} rows detected</p>
+                  <p className="text-xs text-gray-500">{rawData.length} rows detected</p>
                 </div>
               </div>
             )}
@@ -532,7 +532,7 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
                   <div className="w-28 flex-shrink-0">
                     <span className="text-sm text-gray-600">{field.label}</span>
                   </div>
-                  <ArrowLeft className="w-4 h-4 text-gray-300 flex-shrink-0" />
+                  <ArrowLeft className="w-4 h-4 text-gray-600 flex-shrink-0" />
                   <Select
                     value={fieldMapping[field.key] || '_skip'}
                     onValueChange={(val) => {
@@ -548,12 +548,12 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
                       <SelectValue placeholder="Skip this field" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="_skip"><span className="text-gray-400">— Skip —</span></SelectItem>
+                      <SelectItem value="_skip"><span className="text-gray-500">— Skip —</span></SelectItem>
                       {fileHeaders.map(h => <SelectItem key={h} value={h}>{h}</SelectItem>)}
                     </SelectContent>
                   </Select>
                   {fieldMapping[field.key] && (
-                    <button onClick={() => setFieldMapping(prev => { const u = { ...prev }; delete u[field.key]; return u; })} className="text-gray-400 hover:text-red-500">
+                    <button onClick={() => setFieldMapping(prev => { const u = { ...prev }; delete u[field.key]; return u; })} className="text-gray-500 hover:text-red-500">
                       <X className="w-4 h-4" />
                     </button>
                   )}
@@ -654,10 +654,10 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
                     const isValid = (lead.phone && lead.phone.length > 0) || (lead.name && lead.name.length > 0) || (lead.email && lead.email.length > 0);
                     return (
                       <TableRow key={i} className={!isValid ? 'bg-yellow-50/50' : ''}>
-                        <TableCell className="text-xs text-gray-400">{lead._row}</TableCell>
+                        <TableCell className="text-xs text-gray-500">{lead._row}</TableCell>
                         {LEAD_FIELDS.filter(f => fieldMapping[f.key]).map(f => (
                           <TableCell key={f.key} className="text-xs max-w-[120px] truncate">
-                            {lead[f.key] || <span className="text-gray-300">—</span>}
+                            {lead[f.key] || <span className="text-gray-600">—</span>}
                           </TableCell>
                         ))}
                         <TableCell>
@@ -673,7 +673,7 @@ export default function CSVImportDialog({ open, onOpenChange, clientId, onComple
                 </TableBody>
               </Table>
               {rawData.length > 20 && (
-                <p className="text-xs text-gray-400 text-center py-2">Showing first 20 of {rawData.length} rows</p>
+                <p className="text-xs text-gray-500 text-center py-2">Showing first 20 of {rawData.length} rows</p>
               )}
             </div>
             {/* Group assignment summary (set in step 2) */}

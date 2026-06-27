@@ -42,7 +42,7 @@ const features = [
     title: 'Sales Pipeline Automation',
     description: 'Automate deal creation from qualified leads, schedule follow-ups, and move opportunities through your sales funnel automatically.',
     color: 'from-[#FF9933] to-[#e67e22]',
-    iconBg: 'bg-amber-500/10 text-amber-600'
+    iconBg: 'bg-amber-50 text-amber-600'
   },
   {
     icon: Globe,
@@ -63,7 +63,7 @@ const features = [
     title: 'AI Lead Scoring & Qualification',
     description: 'Real-time AI lead scoring based on call outcomes, engagement frequency, and buying signals — never miss a hot lead.',
     color: 'from-[#1a365d] to-[#2a4a7f]',
-    iconBg: 'bg-cyan-500/10 text-cyan-600'
+    iconBg: 'bg-blue-50 text-cyan-600'
   },
   {
     icon: Shield,

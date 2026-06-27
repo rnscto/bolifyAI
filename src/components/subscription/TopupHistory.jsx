@@ -59,9 +59,9 @@ export default function TopupHistory({ payments, rate = 4 }) {
       <CardContent>
         {topups.length === 0 ? (
           <div className="text-center py-8">
-            <ArrowUpCircle className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+            <ArrowUpCircle className="w-10 h-10 text-gray-600 mx-auto mb-2" />
             <p className="text-sm text-gray-500">No top-ups yet</p>
-            <p className="text-xs text-gray-400 mt-1">Your top-up transactions will appear here</p>
+            <p className="text-xs text-gray-500 mt-1">Your top-up transactions will appear here</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -88,7 +88,7 @@ export default function TopupHistory({ payments, rate = 4 }) {
                     <tr key={p.id} className="border-b last:border-0 hover:bg-gray-50">
                       <td className="py-3">
                         {new Date(dateStr).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-500">
                           {new Date(dateStr).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </td>
@@ -97,7 +97,7 @@ export default function TopupHistory({ payments, rate = 4 }) {
                       <td className="text-right font-semibold">₹{total.toLocaleString()}</td>
                       <td className="text-right">
                         <span className="text-emerald-700 font-medium">{minutes}</span>
-                        <span className="text-xs text-gray-400 ml-1">min</span>
+                        <span className="text-xs text-gray-500 ml-1">min</span>
                       </td>
                       <td className="text-center">
                         <Badge className={statusColors[p.status] || 'bg-gray-100 text-gray-800'}>

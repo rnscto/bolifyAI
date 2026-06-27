@@ -126,7 +126,7 @@ export default function ClientWhatsAppTemplates() {
       {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-[240px]">
-          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500" />
           <Input
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -151,7 +151,7 @@ export default function ClientWhatsAppTemplates() {
       {/* Templates Grid */}
       {filtered.length === 0 ? (
         <div className="border-2 border-dashed rounded-xl p-12 text-center">
-          <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+          <MessageSquare className="w-12 h-12 text-gray-600 mx-auto mb-3" />
           <p className="text-gray-600 font-medium">No templates yet</p>
           <p className="text-sm text-gray-500 mt-1">
             {isMetaCloud && hasCredentials

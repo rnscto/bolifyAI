@@ -69,7 +69,7 @@ export default function HowItWorksSection() {
                 )}
                 <div className="w-24 h-24 rounded-2xl bg-white shadow-md border border-gray-100 flex items-center justify-center mx-auto mb-5 relative group-hover:shadow-lg transition-shadow">
                   <Icon className="w-10 h-10 text-[#1a365d]" />
-                  <span className={`absolute -top-2 -right-2 w-8 h-8 rounded-full ${step.color} text-white text-xs font-bold flex items-center justify-center shadow-md`}>
+                  <span className={`absolute -top-2 -right-2 w-8 h-8 rounded-full ${step.color} text-gray-900 text-xs font-bold flex items-center justify-center shadow-md`}>
                     {step.step}
                   </span>
                 </div>

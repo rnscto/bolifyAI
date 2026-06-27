@@ -42,7 +42,7 @@ export default function HeroSection() {
               Business Automation Platform — Speak · Connect · Automate
             </div>
 
-            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-white leading-tight mb-6">
+            <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold text-gray-900 leading-tight mb-6">
               AI CRM · AI Agent
               <span className="block mt-2">
                 IVR ·{' '}
@@ -53,16 +53,16 @@ export default function HeroSection() {
             </h1>
 
             <h2 className="text-lg text-cyan-100 max-w-xl mb-8 leading-relaxed font-normal">
-              <strong className="text-white">For Business:</strong> AI sales agent that qualifies leads, makes calls & closes deals 24/7.
+              <strong className="text-gray-900">For Business:</strong> AI sales agent that qualifies leads, makes calls & closes deals 24/7.
               <br />
-              <strong className="text-white">For You:</strong> Personal AI assistant that screens your calls, blocks spam & keeps you in control.
+              <strong className="text-gray-900">For You:</strong> Personal AI assistant that screens your calls, blocks spam & keeps you in control.
             </h2>
 
             {/* CTAs */}
             <div className="flex flex-col sm:flex-row gap-4">
               <Button
                 size="lg"
-                className="text-white px-8 py-6 text-lg rounded-xl shadow-lg font-semibold border-0"
+                className="text-gray-900 px-8 py-6 text-lg rounded-xl shadow-lg font-semibold border-0"
                 style={{ background: 'linear-gradient(135deg, #00bcd4, #0097a7)', boxShadow: '0 8px 24px rgba(0,188,212,0.35)' }}
                 onClick={() => apiClient.auth.redirectToLogin(createPageUrl('Onboarding'))}
               >
@@ -70,7 +70,7 @@ export default function HeroSection() {
               </Button>
               <Button
                 size="lg"
-                className="bg-white/15 hover:bg-white/25 text-white px-8 py-6 text-lg rounded-xl font-semibold border border-white/30 backdrop-blur-sm"
+                className="bg-white/15 hover:bg-white/25 text-gray-900 px-8 py-6 text-lg rounded-xl font-semibold border border-slate-200/30 "
                 onClick={() => apiClient.auth.redirectToLogin(createPageUrl('Onboarding') + '?type=personal')}
               >
                 Personal AI Assistant <ArrowRight className="w-5 h-5 ml-2" />
@@ -85,7 +85,7 @@ export default function HeroSection() {
                 { icon: TrendingUp, value: '100%', label: 'Privacy Protected' },
               ].map((stat) => (
                 <div key={stat.label}>
-                  <p className="text-2xl sm:text-3xl font-bold text-white">{stat.value}</p>
+                  <p className="text-2xl sm:text-3xl font-bold text-gray-900">{stat.value}</p>
                   <p className="text-sm text-cyan-200 mt-1">{stat.label}</p>
                 </div>
               ))}
@@ -104,7 +104,7 @@ export default function HeroSection() {
               <div className="absolute inset-0 -m-8 rounded-full bg-gradient-to-br from-[#00bcd4]/30 via-transparent to-[#00e5ff]/20 blur-2xl" />
               
               {/* Logo display */}
-              <div className="relative bg-white/10 backdrop-blur-sm border border-white/20 rounded-3xl p-8">
+              <div className="relative bg-slate-50  border border-slate-200/20 rounded-3xl p-8">
                 <img src={LOGO_URL} alt="Bolify AI" className="w-80 h-auto drop-shadow-2xl rounded-xl" />
                 
                 {/* Voice waveform overlay */}

@@ -112,7 +112,7 @@ export default function TrustedContactsList({ contacts, clientId, onRefresh }) {
       <CardContent>
         {contacts.length === 0 ? (
           <div className="text-center py-6 text-gray-500">
-            <Phone className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+            <Phone className="w-8 h-8 mx-auto mb-2 text-gray-600" />
             <p className="text-sm">No trusted contacts yet.</p>
             <p className="text-xs mt-1">Add contacts to auto-connect them without screening.</p>
           </div>
@@ -135,7 +135,7 @@ export default function TrustedContactsList({ contacts, clientId, onRefresh }) {
                   </div>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => handleDelete(contact.id)}>
-                  <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" />
+                  <Trash2 className="w-4 h-4 text-gray-500 hover:text-red-500" />
                 </Button>
               </div>
             ))}

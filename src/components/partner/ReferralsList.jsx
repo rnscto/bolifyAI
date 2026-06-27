@@ -21,7 +21,7 @@ export default function ReferralsList({ referrals }) {
       <CardContent>
         {referrals.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            <Users className="w-10 h-10 mx-auto mb-2 text-gray-300" />
+            <Users className="w-10 h-10 mx-auto mb-2 text-gray-600" />
             <p className="font-medium">No referrals yet</p>
             <p className="text-sm">Share your referral code or link to start earning!</p>
           </div>

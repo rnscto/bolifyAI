@@ -40,14 +40,14 @@ export default function VoicemailInbox({ messages, onRefresh }) {
           <MessageSquare className="w-5 h-5" />
           Messages
           {unreadCount > 0 && (
-            <Badge className="bg-purple-600 text-white ml-1">{unreadCount} new</Badge>
+            <Badge className="bg-purple-600 text-gray-900 ml-1">{unreadCount} new</Badge>
           )}
         </CardTitle>
       </CardHeader>
       <CardContent>
         {sorted.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            <MessageSquare className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+            <MessageSquare className="w-10 h-10 mx-auto mb-3 text-gray-600" />
             <p className="text-sm">No messages yet.</p>
             <p className="text-xs mt-1">Messages taken by your AI will appear here.</p>
           </div>
@@ -84,7 +84,7 @@ export default function VoicemailInbox({ messages, onRefresh }) {
                       <p className={`text-xs text-gray-500 mt-1 ${isExpanded ? '' : 'line-clamp-2'}`}>
                         {msg.message || 'No message content'}
                       </p>
-                      <span className="text-xs text-gray-400 mt-1 block">
+                      <span className="text-xs text-gray-500 mt-1 block">
                         {moment(msg.created_at).fromNow()}
                       </span>
                     </div>

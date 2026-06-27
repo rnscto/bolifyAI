@@ -72,7 +72,7 @@ function CallbackCard({ item, onCall }) {
               {ex.urgency === 'high' && <AlertTriangle className="w-3 h-3 mr-1" />}
               {ex.urgency || 'low'}
             </Badge>
-            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-white h-8" onClick={() => onCall(item)}>
+            <Button size="sm" className="bg-green-600 hover:bg-green-700 text-gray-900 h-8" onClick={() => onCall(item)}>
               <Phone className="w-3.5 h-3.5 mr-1" /> Call
             </Button>
           </div>
@@ -144,7 +144,7 @@ function CallbackCard({ item, onCall }) {
             )}
             {item.summary && (
               <div className="text-xs text-gray-600 bg-gray-50 rounded p-2 mt-1">
-                <MessageSquare className="w-3 h-3 inline mr-1 text-gray-400" />
+                <MessageSquare className="w-3 h-3 inline mr-1 text-gray-500" />
                 {item.summary}
               </div>
             )}
@@ -182,7 +182,7 @@ export default function CallbackList({ callbacks, filter, onCall }) {
     return (
       <Card>
         <CardContent className="p-8 text-center text-gray-500">
-          <Phone className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+          <Phone className="w-10 h-10 mx-auto mb-3 text-gray-600" />
           <p className="font-medium">No callbacks in this category</p>
           <p className="text-sm mt-1">All clear!</p>
         </CardContent>

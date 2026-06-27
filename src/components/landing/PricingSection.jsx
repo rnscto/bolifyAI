@@ -101,7 +101,7 @@ export default function PricingSection() {
               }`}>
                 {plan.popular && (
                   <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                    <Badge className="bg-gradient-to-r from-[#e67e22] to-[#f39c12] text-white px-4 py-1 border-0">Most Popular</Badge>
+                    <Badge className="bg-gradient-to-r from-[#e67e22] to-[#f39c12] text-gray-900 px-4 py-1 border-0">Most Popular</Badge>
                   </div>
                 )}
                 <CardHeader className="text-center pt-8">
@@ -111,7 +111,7 @@ export default function PricingSection() {
                     <span className="text-4xl font-bold text-[#1a365d]">{plan.price}</span>
                     <span className="text-gray-500 text-sm">{plan.period}</span>
                   </div>
-                  <p className="text-xs text-gray-400 font-medium mt-0.5">{plan.gst}</p>
+                  <p className="text-xs text-gray-500 font-medium mt-0.5">{plan.gst}</p>
                   <p className="text-xs text-[#e67e22] font-semibold mt-1">{plan.billing}</p>
                 </CardHeader>
                 <CardContent className="pb-8">
@@ -126,10 +126,10 @@ export default function PricingSection() {
                   <Button
                     className={`w-full font-semibold ${
                       plan.popular
-                        ? 'bg-gradient-to-r from-[#e67e22] to-[#f39c12] hover:from-[#d35400] hover:to-[#e67e22] text-white shadow-md shadow-orange-200'
+                        ? 'bg-gradient-to-r from-[#e67e22] to-[#f39c12] hover:from-[#d35400] hover:to-[#e67e22] text-gray-900 shadow-md shadow-orange-200'
                         : plan.isPersonal
-                          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md shadow-purple-200'
-                          : 'bg-[#1a365d] hover:bg-[#0f1f3d] text-white'
+                          ? 'bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-gray-900 shadow-md shadow-purple-200'
+                          : 'bg-[#1a365d] hover:bg-[#0f1f3d] text-gray-900'
                     }`}
                     size="lg"
                     onClick={() => apiClient.auth.redirectToLogin(createPageUrl('Onboarding') + (plan.isPersonal ? '?type=personal' : ''))}

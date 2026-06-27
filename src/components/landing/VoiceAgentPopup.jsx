@@ -549,7 +549,7 @@ export default function VoiceAgentPopup() {
             exit={{ scale: 0, opacity: 0 }}
             transition={{ type: 'spring', stiffness: 260, damping: 20, delay: 2 }}
             onClick={() => setIsOpen(true)}
-            className="fixed bottom-6 right-6 z-[60] w-16 h-16 rounded-full bg-gradient-to-br from-[#1a365d] to-[#2563eb] text-white shadow-2xl flex items-center justify-center hover:scale-110 transition-transform group"
+            className="fixed bottom-6 right-6 z-[60] w-16 h-16 rounded-full bg-gradient-to-br from-[#1a365d] to-[#2563eb] text-gray-900 shadow-2xl flex items-center justify-center hover:scale-110 transition-transform group"
             aria-label="Talk to Bolify AI"
           >
             {showPulse && (
@@ -559,7 +559,7 @@ export default function VoiceAgentPopup() {
               </>
             )}
             <Mic className="w-7 h-7 relative z-10" />
-            <span className="absolute bottom-full right-0 mb-3 px-3 py-1.5 bg-gray-900 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+            <span className="absolute bottom-full right-0 mb-3 px-3 py-1.5 bg-gray-900 text-gray-900 text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
               Talk to Bolify AI Assistant
             </span>
           </motion.button>
@@ -581,14 +581,14 @@ export default function VoiceAgentPopup() {
               <div className="flex items-center gap-2.5">
                 <img src={LOGO_URL} alt="Bolify AI" className="h-8 brightness-0 invert" />
                 <div>
-                  <p className="text-white text-sm font-semibold leading-tight">Voice Assistant</p>
+                  <p className="text-gray-900 text-sm font-semibold leading-tight">Voice Assistant</p>
                   <div className="flex items-center gap-1.5">
                     <span className={`w-2 h-2 rounded-full ${statusColor[status]}`} />
-                    <span className="text-white/70 text-[10px]">{statusText[status]}</span>
+                    <span className="text-gray-900/70 text-[10px]">{statusText[status]}</span>
                   </div>
                 </div>
               </div>
-              <button onClick={handleClose} className="text-white/70 hover:text-white transition-colors">
+              <button onClick={handleClose} className="text-gray-900/70 hover:text-gray-900 transition-colors">
                 <X className="w-5 h-5" />
               </button>
             </div>
@@ -610,7 +610,7 @@ export default function VoiceAgentPopup() {
                     <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[82%] px-3 py-2 rounded-xl text-sm ${
                         msg.role === 'user'
-                          ? 'bg-[#1a365d] text-white rounded-br-sm'
+                          ? 'bg-[#1a365d] text-gray-900 rounded-br-sm'
                           : msg.role === 'ai'
                           ? 'bg-white border border-gray-200 text-gray-800 rounded-bl-sm shadow-sm'
                           : 'bg-blue-50 text-blue-600 text-xs text-center w-full rounded-lg'
@@ -676,7 +676,7 @@ export default function VoiceAgentPopup() {
                       </Button>
                     </form>
                     <div className="flex justify-between items-center">
-                      <p className="text-[10px] text-gray-400">Powered by Bolify AI</p>
+                      <p className="text-[10px] text-gray-500">Powered by Bolify AI</p>
                       <button
                         onClick={handleEndConversation}
                         className="text-[10px] text-red-500 hover:text-red-600 flex items-center gap-1"

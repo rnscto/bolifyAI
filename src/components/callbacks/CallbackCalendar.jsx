@@ -78,7 +78,7 @@ export default function CallbackCalendar({ callbacks, onCall }) {
               <div
                 key={idx}
                 className={`min-h-[72px] rounded-lg border p-1 text-xs transition-colors ${
-                  !isCurrentMonth ? 'bg-gray-50 text-gray-300 border-gray-100' :
+                  !isCurrentMonth ? 'bg-gray-50 text-gray-600 border-gray-100' :
                   isToday ? 'bg-blue-50 border-blue-300' :
                   hasOverdue ? 'bg-red-50 border-red-200' :
                   dayCallbacks.length > 0 ? 'bg-green-50 border-green-200' :
