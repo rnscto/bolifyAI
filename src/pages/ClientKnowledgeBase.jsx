@@ -49,7 +49,8 @@ export default function ClientKnowledgeBase() {
         const [docsData, agentsData] = await Promise.all([
           apiClient.KnowledgeBase.filter(
             { client_id: clientData.id },
-            '-created_at'
+            '-created_at',
+            100
           ),
           apiClient.Agent.filter({ client_id: clientData.id })
         ]);

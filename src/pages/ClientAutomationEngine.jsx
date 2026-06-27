@@ -32,21 +32,15 @@ export default function ClientAutomationEngine() {
     queryKey: ['automation-activities', client?.id],
     queryFn: async () => {
       if (!client) return [];
-      // Fetch ALL activities (paginated) — no artificial limit
-      const fetchAll = async (filter) => {
-        const all = [];
-        let skip = 0;
-        const pageSize = 500;
-        // Loop fetching pages until we get less than pageSize back
-        // base44 SDK uses (filter, sort, limit) — we paginate by repeatedly fetching with growing skip via slice in memory is not supported,
-        // so we request a very large limit instead.
-        const batch = await apiClient.Activity.filter(filter, '-scheduled_date', 5000);
-        return batch;
+      const fetchActivities = async (filter) => {
+        // Limit to 200 recent/upcoming activities to prevent massive payload issues
+        return await apiClient.Activity.filter(filter, '-scheduled_date', 200);
       };
+      
       if (client.id === 'admin') {
-        return fetchAll({ auto_created: true });
+        return fetchActivities({ auto_created: true });
       }
-      return fetchAll({ client_id: client.id, auto_created: true });
+      return fetchActivities({ client_id: client.id, auto_created: true });
     },
     enabled: !!client,
     refetchInterval: 30000,
@@ -56,14 +50,11 @@ export default function ClientAutomationEngine() {
     queryKey: ['automation-leads', client?.id, activities],
     queryFn: async () => {
       if (!client || activities.length === 0) return [];
-      // Collect all unique lead_ids from activities
-      const leadIds = [...new Set(activities.map(a => a.lead_id).filter(Boolean))];
-      if (leadIds.length === 0) return [];
-      // Fetch each lead individually to ensure none are missed
-      const results = await Promise.all(
-        leadIds.map(id => apiClient.Lead.get(id).catch(() => null))
-      );
-      return results.filter(Boolean);
+      // Fetch a bulk list of recent leads for the client instead of N+1 individual queries
+      if (client.id === 'admin') {
+         return await apiClient.Lead.filter({}, '-created_at', 500);
+      }
+      return await apiClient.Lead.filter({ client_id: client.id }, '-created_at', 500);
     },
     enabled: !!client && activities.length > 0,
     refetchInterval: 30000,

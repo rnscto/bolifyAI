@@ -18,6 +18,7 @@ export default function AgentDashboard() {
   const [leads, setLeads] = useState([]);
   const [activities, setActivities] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({});
 
   useEffect(() => {
     loadData();
@@ -38,12 +39,17 @@ export default function AgentDashboard() {
     const agentData = agents[0];
     setAgent(agentData);
 
-    const [calls, cLeads, allLeads, acts] = await Promise.all([
-      apiClient.CallLog.filter({ client_id: clientData.id, agent_id: agentData.id }, '-created_at', 200),
-      apiClient.CampaignLead.filter({ client_id: clientData.id }, '-created_at', 500),
-      apiClient.Lead.filter({ client_id: clientData.id }, '-created_at', 500),
-      apiClient.Activity.filter({ client_id: clientData.id }, '-created_at', 100),
+    const [calls, cLeads, allLeads, acts, statsRes] = await Promise.all([
+      apiClient.CallLog.filter({ client_id: clientData.id, agent_id: agentData.id }, '-created_at', 50),
+      apiClient.CampaignLead.filter({ client_id: clientData.id }, '-created_at', 100),
+      apiClient.Lead.filter({ client_id: clientData.id }, '-created_at', 100),
+      apiClient.Activity.filter({ client_id: clientData.id }, '-created_at', 50),
+      apiClient.functions.invoke('getAgentDashboardStats', { client_id: clientData.id, agent_id: agentData.id })
     ]);
+
+    if (statsRes && statsRes.data && statsRes.data.success) {
+      setStats(statsRes.data.stats);
+    }
 
     setCallLogs(calls);
     setCampaignLeads(cLeads);
@@ -95,7 +101,7 @@ export default function AgentDashboard() {
       </div>
 
       {/* Performance KPIs */}
-      <AgentPerformanceCards callLogs={callLogs} campaignLeads={campaignLeads} leads={leads} />
+      <AgentPerformanceCards stats={stats} />
 
       {/* AI Talking Points for active calls */}
       <AITalkingPoints activeCalls={callLogs} agent={agent} leads={leads} />

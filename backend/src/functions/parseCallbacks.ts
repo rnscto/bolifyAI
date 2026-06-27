@@ -15,21 +15,18 @@ export default async function parseCallbacks(c: any) {
     const { client_id } = await c.req.json().catch(() => ({}));
 
     // Fetch callback AND interested leads for this client
-    const callbackLeads = await base44.entities.Lead.filter({ client_id, status: 'callback' });
-    const interestedLeads = await base44.entities.Lead.filter({ client_id, status: 'interested' });
+    const callbackLeads = await base44.entities.Lead.filter({ client_id, status: 'callback' }, '-created_at', 500);
+    const interestedLeads = await base44.entities.Lead.filter({ client_id, status: 'interested' }, '-created_at', 500);
     const allCallbackLeads = [...callbackLeads, ...interestedLeads];
 
     // Fetch recent campaign leads with callback or interested outcome
-    // We don't have a CampaignLead table mapped explicitly yet, so we assume 'campaign_leads'
-    // Let's add CampaignLead to orm.ts if it isn't, but orm.ts handles unknown tables gracefully by lowercase.
-    // Actually we didn't add CampaignLead to TABLE_MAP, it will become campaignlead. Let's rely on standard orm logic or explicit table name.
-    const campaignCallbacks = await base44.entities.CampaignLead.filter({ client_id, outcome: 'callback' });
-    const campaignInterested = await base44.entities.CampaignLead.filter({ client_id, outcome: 'interested' });
+    const campaignCallbacks = await base44.entities.CampaignLead.filter({ client_id, outcome: 'callback' }, '-created_at', 500);
+    const campaignInterested = await base44.entities.CampaignLead.filter({ client_id, outcome: 'interested' }, '-created_at', 500);
     const campaignLeads = [...campaignCallbacks, ...campaignInterested];
 
     // Fetch scheduled followup activities (all types that need action)
-    const followupActivities = await base44.entities.Activity.filter({ client_id, type: 'followup', status: 'scheduled' });
-    const callActivities = await base44.entities.Activity.filter({ client_id, type: 'call', status: 'scheduled' });
+    const followupActivities = await base44.entities.Activity.filter({ client_id, type: 'followup', status: 'scheduled' }, '-scheduled_date', 200);
+    const callActivities = await base44.entities.Activity.filter({ client_id, type: 'call', status: 'scheduled' }, '-scheduled_date', 200);
     const activities = [...followupActivities, ...callActivities];
 
     // Also surface auto-scheduled callbacks where the Lead's status is NOT

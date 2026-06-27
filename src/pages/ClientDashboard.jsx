@@ -35,36 +35,17 @@ export default function ClientDashboard() {
         const clientData = clients[0];
         setClient(clientData);
 
-        // Fetch today's calls directly via date filter (avoids 100-row cap on /list).
-        const todayStart = new Date();
-        todayStart.setHours(0, 0, 0, 0);
-        const todayStartISO = todayStart.toISOString();
-
-        // NOTE: each CallLog row carries a heavy agent_config_cache (full prompts/scripts).
-        // For dashboard counts we only need a bounded window, not the full history.
-        const [agents, leads, recentCalls, activities, subs] = await Promise.all([
-          apiClient.Agent.filter({ client_id: clientData.id }),
-          apiClient.Lead.filter({ client_id: clientData.id }),
-          apiClient.CallLog.filter({ client_id: clientData.id }, '-created_at', 500),
-          apiClient.Activity.filter({ client_id: clientData.id }),
+        // Use the new highly optimized backend Edge function instead of fetching thousands of records
+        const [statsRes, subs] = await Promise.all([
+          apiClient.functions.invoke('getClientDashboardStats', { client_id: clientData.id }),
           apiClient.Subscription.filter({ client_id: clientData.id, status: 'active' }, '-created_at', 1)
         ]);
+
         setSubscription(subs[0] || null);
 
-        const todaysCalls = recentCalls.filter(c => new Date(c.created_at) >= todayStart);
-
-        const upcoming = activities.filter(a => 
-          a.status === 'scheduled' && new Date(a.scheduled_date) > new Date()
-        ).length;
-
-        setStats({
-          totalAgents: agents.length,
-          activeAgents: agents.filter(a => a.status === 'active').length,
-          totalLeads: leads.length,
-          totalCalls: recentCalls.length,
-          callsToday: todaysCalls.length,
-          upcomingActivities: upcoming
-        });
+        if (statsRes && statsRes.data && statsRes.data.success) {
+          setStats(statsRes.data.stats);
+        }
       }
     } catch (error) {
       console.error('Error loading data:', error);

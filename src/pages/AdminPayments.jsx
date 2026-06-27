@@ -19,8 +19,8 @@ export default function AdminPayments() {
 
   const loadData = async () => {
     const [paysData, clientsData] = await Promise.all([
-      apiClient.Payment.list('-created_at', 100),
-      apiClient.Client.list(),
+      apiClient.Payment.filter({}, '-created_at', 500),
+      apiClient.Client.filter({}, '-created_at', 1000),
     ]);
     setPayments(paysData);
     setClients(clientsData);

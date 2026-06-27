@@ -16,9 +16,7 @@ const COLORS = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899'
 
 export default function ClientAnalytics() {
   const [client, setClient] = useState(null);
-  const [calls, setCalls] = useState([]);
-  const [leads, setLeads] = useState([]);
-  const [campaigns, setCampaigns] = useState([]);
+  const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [period, setPeriod] = useState('30');
   const [advancedMetrics, setAdvancedMetrics] = useState({
@@ -26,107 +24,43 @@ export default function ClientAnalytics() {
     intentBreakdown: []
   });
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [period]);
 
   const loadData = async () => {
+    setLoading(true);
     const user = await apiClient.auth.me();
     const clients = await apiClient.Client.filter({ user_id: user.id });
     if (clients.length > 0) {
       const c = clients[0];
       setClient(c);
-      const [callsData, leadsData, campaignsData] = await Promise.all([
-        apiClient.CallLog.filter({ client_id: c.id }, '-created_at', 500),
-        apiClient.Lead.filter({ client_id: c.id }, '-created_at', 1000),
-        apiClient.Campaign.filter({ client_id: c.id }),
-      ]);
-      setCalls(callsData);
-      setLeads(leadsData);
-      const token = localStorage.getItem('token');
-      const analyticsRes = await fetch('/api/v1/analytics/overview', {
-        headers: { 'Authorization': `Bearer ${token}` }
+      
+      const statsRes = await apiClient.functions.invoke('getClientAnalyticsStats', { 
+        client_id: c.id, 
+        period: period 
       });
-      const analyticsJson = await analyticsRes.json();
-      if (analyticsJson.success) {
-        setAdvancedMetrics(analyticsJson.overview);
+
+      if (statsRes && statsRes.data && statsRes.data.success) {
+        setStats(statsRes.data.stats);
+        setAdvancedMetrics(statsRes.data.stats.advancedMetrics);
       }
     }
     setLoading(false);
   };
 
-  const filteredCalls = calls.filter(c => {
-    if (period === 'all') return true;
-    const days = parseInt(period);
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    return new Date(c.created_at) >= cutoff;
-  });
-
-  // --- Stat calculations ---
-  const totalCalls = filteredCalls.length;
-  const completedCalls = filteredCalls.filter(c => c.status === 'completed').length;
-  const failedCalls = filteredCalls.filter(c => c.status === 'failed' || c.status === 'no_answer').length;
-  const avgDuration = completedCalls > 0
-    ? Math.round(filteredCalls.filter(c => c.duration).reduce((s, c) => s + c.duration, 0) / completedCalls)
-    : 0;
-  const connectRate = totalCalls > 0 ? Math.round((completedCalls / totalCalls) * 100) : 0;
-
-  // --- Calls per day ---
-  const callsByDay = {};
-  filteredCalls.forEach(c => {
-    const day = c.created_at?.split('T')[0];
-    if (day) callsByDay[day] = (callsByDay[day] || 0) + 1;
-  });
-  const dailyData = Object.entries(callsByDay)
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, count]) => ({
-      date: new Date(date).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
-      calls: count
-    }));
-
-  // --- Call status breakdown ---
-  const statusCounts = {};
-  filteredCalls.forEach(c => {
-    statusCounts[c.status] = (statusCounts[c.status] || 0) + 1;
-  });
-  const statusData = Object.entries(statusCounts).map(([name, value]) => ({ name, value }));
-
-  // --- Direction breakdown ---
-  const outbound = filteredCalls.filter(c => c.direction === 'outbound').length;
-  const inbound = filteredCalls.filter(c => c.direction === 'inbound').length;
-  const directionData = [
-    { name: 'Outbound', value: outbound, color: '#22c55e' },
-    { name: 'Inbound', value: inbound, color: '#8b5cf6' },
-  ].filter(d => d.value > 0);
-
-  // --- Lead status funnel ---
-  const leadStatusCounts = {};
-  leads.forEach(l => {
-    leadStatusCounts[l.status] = (leadStatusCounts[l.status] || 0) + 1;
-  });
-  const funnelOrder = ['new', 'contacted', 'interested', 'callback', 'converted', 'not_interested', 'do_not_call'];
-  const funnelData = funnelOrder
-    .filter(s => leadStatusCounts[s])
-    .map(s => ({ name: s.replace('_', ' '), value: leadStatusCounts[s] }));
-
-  // --- Calls by hour of day ---
-  const hourCounts = Array(24).fill(0);
-  filteredCalls.forEach(c => {
-    if (c.call_start_time) {
-      const h = new Date(c.call_start_time).getHours();
-      hourCounts[h]++;
-    }
-  });
-  const hourlyData = hourCounts.map((count, h) => ({
-    hour: `${h.toString().padStart(2, '0')}:00`,
-    calls: count
-  })).filter(d => d.calls > 0);
-
-  // --- Campaign performance ---
-  const campaignData = campaigns.map(camp => ({
-    name: camp.name?.substring(0, 15) || 'Unnamed',
-    completed: camp.calls_completed || 0,
-    failed: camp.calls_failed || 0,
-  }));
+  // --- Destructure Stats ---
+  const {
+    totalCalls = 0,
+    completedCalls = 0,
+    failedCalls = 0,
+    avgDuration = 0,
+    connectRate = 0,
+    dailyData = [],
+    statusData = [],
+    directionData = [],
+    hourlyData = [],
+    funnelData = [],
+    campaignData = []
+  } = stats || {};
 
   const formatDuration = (s) => `${Math.floor(s / 60)}m ${s % 60}s`;
 
@@ -303,7 +237,7 @@ export default function ClientAnalytics() {
                   <XAxis dataKey="hour" tick={{ fontSize: 10 }} />
                   <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                   <Tooltip />
-                  <Bar dataKey="calls" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="calls" fill="#3b82f6" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : <p className="text-sm text-gray-500 py-10 text-center">No data</p>}

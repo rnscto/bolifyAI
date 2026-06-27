@@ -8,6 +8,10 @@ import azureBlobSignedUrl from "./azureBlobSignedUrl.ts";
 import azureBlobUpload from "./azureBlobUpload.ts";
 import extractKBContent from "./extractKBContent.ts";
 import generateConceptNote from "./generateConceptNote.ts";
+import getClientDashboardStats from "./getClientDashboardStats.ts";
+import getAgentDashboardStats from "./getAgentDashboardStats.ts";
+import getClientAnalyticsStats from "./getClientAnalyticsStats.ts";
+import getCampaignLiveStats from "./getCampaignLiveStats.ts";
 
 import adminManageAgent from "./adminManageAgent.ts";
 
@@ -70,6 +74,10 @@ export const functionRegistry: Record<string, Function> = {
   azureBlobUpload,
   extractKBContent,
   generateConceptNote,
+  getClientDashboardStats,
+  getAgentDashboardStats,
+  getClientAnalyticsStats,
+  getCampaignLiveStats,
   
   // AI Add-ons & Agents
   generatePromptAndPersona,

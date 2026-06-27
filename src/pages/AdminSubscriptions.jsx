@@ -23,8 +23,8 @@ export default function AdminSubscriptions() {
   const loadData = async () => {
     try {
       const [subsData, clientsData] = await Promise.all([
-        apiClient.Subscription.list('-created_at'),
-        apiClient.Client.list()
+        apiClient.Subscription.filter({}, '-created_at', 1000),
+        apiClient.Client.filter({}, '-created_at', 1000)
       ]);
       setSubscriptions(subsData);
       setClients(clientsData);
