@@ -24,7 +24,7 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
     industry: '',
     greeting_message: '',
     system_prompt: '',
-    persona: { voice_engine: 'realtime', voice_type: 'alloy', tone: 'friendly', language: 'en-IN' }
+    persona: { voice_engine: 'gemini_realtime', voice_type: 'Aoede', tone: 'friendly', language: 'en-IN' }
   });
   const [saving, setSaving] = useState(false);
   const [genOpen, setGenOpen] = useState(false);
@@ -60,8 +60,8 @@ export default function AgentEditDialog({ agent, open, onOpenChange, onSaved, cl
         greeting_message: agent.greeting_message || '',
         system_prompt: agent.system_prompt || '',
         persona: {
-          voice_engine: agent.persona?.voice_engine || 'realtime',
-          voice_type: agent.persona?.voice_type || 'alloy',
+          voice_engine: agent.persona?.voice_engine || 'gemini_realtime',
+          voice_type: agent.persona?.voice_type || 'Aoede',
           tone: agent.persona?.tone || 'friendly',
           language: agent.persona?.language || 'en-IN',
         }
