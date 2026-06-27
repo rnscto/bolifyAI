@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/AuthContext';
 import { apiClient } from '@/api/apiClient';
-import { Wallet, TrendingUp, IndianRupee, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
+import { Wallet, TrendingUp, ArrowDownCircle, ArrowUpCircle } from 'lucide-react';
 import {
   Card,
   CardContent,
