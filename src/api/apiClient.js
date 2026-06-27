@@ -145,6 +145,7 @@ class EntityClient {
 }
 
 export const apiClient = {
+  baseUrl: API_BASE_URL,
   auth: {
     login: async (email, password) => {
       const res = await apiFetch("/auth/login", {

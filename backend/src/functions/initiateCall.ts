@@ -235,9 +235,6 @@ export default async function initiateCall(c: any) {
       return c.json({ data: { success: false, error: `Invalid phone number. Must be a valid 10-digit Indian mobile.` } }, 400);
     }
 
-    let cleanCallerID = callerDID.replace(/[^0-9]/g, '');
-    if (cleanCallerID.length === 10) cleanCallerID = '91' + cleanCallerID;
-
     const dialNumber = '91' + callee10;
 
     const smartfloResponse = await fetch('https://api-smartflo.tatateleservices.com/v1/click_to_call_support', {
@@ -246,7 +243,7 @@ export default async function initiateCall(c: any) {
       body: JSON.stringify({
         api_key: smartfloApiKey,
         customer_number: dialNumber,
-        caller_id: cleanCallerID,
+        caller_id: callerDID.trim(),
         custom_identifier: callLog.id,
         async: 1
       })
