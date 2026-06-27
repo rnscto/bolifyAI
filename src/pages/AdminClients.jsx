@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, Edit, Trash2, FileText, CreditCard, Download, Users, Crown } from 'lucide-react';
+import { Plus, Edit, Trash2, FileText, CreditCard, Download, Crown } from 'lucide-react';
 import { toast } from 'sonner';
 import ClientAgreementTemplateEditor from '../components/admin/ClientAgreementTemplateEditor';
 import AdminSignedAgreements from '../components/admin/AdminSignedAgreements';
