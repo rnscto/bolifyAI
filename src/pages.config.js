@@ -91,6 +91,7 @@ import PartnerDashboard from './pages/PartnerDashboard';
 import PartnerSignup from './pages/PartnerSignup';
 import PrivacyPolicy from './pages/PrivacyPolicy';
 import RefundPolicy from './pages/RefundPolicy';
+import ResellerCommissionWallet from './pages/ResellerCommissionWallet';
 import TermsOfService from './pages/TermsOfService';
 import __Layout from './Layout.jsx';
 
@@ -140,6 +141,7 @@ export const PAGES = {
     "PartnerSignup": PartnerSignup,
     "PrivacyPolicy": PrivacyPolicy,
     "RefundPolicy": RefundPolicy,
+    "ResellerCommissionWallet": ResellerCommissionWallet,
     "TermsOfService": TermsOfService,
 }
 

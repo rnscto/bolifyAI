@@ -25,8 +25,8 @@ export default function RootRedirect() {
         const user = await apiClient.auth.me();
         if (cancelled) return;
 
-        const adminRoles = ['admin', 'master_admin', 'reseller', 'master_reseller'];
-        if (adminRoles.includes(user.role)) {
+        const pureAdminRoles = ['admin', 'master_admin'];
+        if (pureAdminRoles.includes(user.role)) {
           setTarget('/AdminDashboard');
           return;
         }

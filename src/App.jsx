@@ -39,8 +39,14 @@ const LayoutWrapper = ({ children, currentPageName }) => Layout ?
   <Layout currentPageName={currentPageName}>{children}</Layout>
   : <>{children}</>;
 
-const AdminLayoutWrapper = ({ children, currentPageName }) => 
-  <AdminLayout currentPageName={currentPageName}>{children}</AdminLayout>;
+const AdminLayoutWrapper = ({ children, currentPageName }) => {
+  const { user } = useAuth();
+  const isReseller = user?.role === 'reseller' || user?.role === 'master_reseller';
+  if (isReseller) {
+    return <LayoutWrapper currentPageName={currentPageName}>{children}</LayoutWrapper>;
+  }
+  return <AdminLayout currentPageName={currentPageName}>{children}</AdminLayout>;
+};
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();

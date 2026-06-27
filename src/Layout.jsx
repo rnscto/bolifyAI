@@ -62,7 +62,8 @@ export default function Layout({ children, currentPageName }) {
     try {
       const currentUser = await apiClient.auth.me();
       setUser(currentUser);
-      const adminRoles = ['admin', 'master_admin', 'reseller', 'master_reseller'];
+      const pureAdminRoles = ['admin', 'master_admin'];
+      const isReseller = currentUser.role === 'reseller' || currentUser.role === 'master_reseller';
       // Prompt non-admin users to set a proper display name if missing
       if (currentUser.role !== 'admin' && !currentUser.display_name && !currentUser.data?.display_name) {
         setNeedsDisplayName(true);
@@ -101,7 +102,7 @@ export default function Layout({ children, currentPageName }) {
             if (brandRows.length > 0) setBrand(brandRows[0]);
           } catch (_) {}
           // If onboarding not completed, redirect
-          if (!clients[0].onboarding_completed && !adminRoles.includes(currentUser.role)) {
+          if (!clients[0].onboarding_completed && !pureAdminRoles.includes(currentUser.role)) {
             window.location.href = createPageUrl('Onboarding');
             return;
           }
@@ -146,14 +147,14 @@ export default function Layout({ children, currentPageName }) {
               }
             } else {
               console.log('No client found for user:', currentUser.email, currentUser.id);
-              if (!adminRoles.includes(currentUser.role)) {
+              if (!pureAdminRoles.includes(currentUser.role)) {
                 window.location.href = createPageUrl('Onboarding');
               }
               return;
             }
           } catch (e) {
             console.log('Client filter by created_by failed:', e.message);
-            if (!adminRoles.includes(currentUser.role)) {
+            if (!pureAdminRoles.includes(currentUser.role)) {
               window.location.href = createPageUrl('Onboarding');
             }
             return;
@@ -161,8 +162,8 @@ export default function Layout({ children, currentPageName }) {
         }
       }
       
-      // Admin dashboard check (should be after setting user to prevent infinite loop if they are admins on onboarding)
-      if (adminRoles.includes(currentUser.role)) {
+      // Admin dashboard check
+      if (pureAdminRoles.includes(currentUser.role)) {
         if (isOnboardingPage) {
           window.location.href = createPageUrl('AdminDashboard');
           return;
@@ -179,8 +180,9 @@ export default function Layout({ children, currentPageName }) {
     apiClient.auth.logout();
   };
 
-  const adminRoles = ['admin', 'master_admin', 'reseller', 'master_reseller'];
-  const isAdmin = adminRoles.includes(user?.role);
+  const pureAdminRoles = ['admin', 'master_admin'];
+  const isAdmin = pureAdminRoles.includes(user?.role);
+  const isReseller = user?.role === 'reseller' || user?.role === 'master_reseller';
 
   // White-label branding: use domain brand first, then client brand, then fallback
   const activeBrand = appPublicSettings?.brand || brand;
@@ -242,7 +244,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Settings', path: 'ClientSettings', icon: UserCog },
     ];
 
-    const businessNav = [
+    const baseBusinessNav = [
     { name: 'Dashboard', path: 'ClientDashboard', icon: LayoutDashboard },
     { name: 'Agent Performance', path: 'AgentDashboard', icon: BarChart3 },
     { name: 'Agents', path: 'ClientAgents', icon: Cpu },
@@ -265,6 +267,16 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Partner Dashboard', path: 'PartnerDashboard', icon: Handshake },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
     ];
+
+    const resellerSection = isReseller ? [
+      { name: 'My Clients', path: 'AdminClients', icon: Users },
+      { name: 'Commission Wallet', path: 'ResellerCommissionWallet', icon: Wallet },
+      { name: 'Custom Domain', path: 'AdminResellerBranding', icon: Globe },
+      { name: 'Subscriptions', path: 'AdminSubscriptions', icon: CreditCard },
+      { name: 'Payments', path: 'AdminPayments', icon: IndianRupee },
+    ] : [];
+
+    const businessNav = [...baseBusinessNav, ...resellerSection];
 
     const clientNav = client?.account_type === 'personal' ? personalNav : businessNav;
 
@@ -391,6 +403,11 @@ export default function Layout({ children, currentPageName }) {
                         );
                       })}
                     </>
+                  )}
+                  {isReseller && !isAdmin && (
+                    <div className="px-4 pt-4 pb-2 mt-4 border-t">
+                      <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">Reseller Admin</p>
+                    </div>
                   )}
                 </div>
           </nav>
