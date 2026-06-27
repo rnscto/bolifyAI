@@ -185,10 +185,18 @@ export default function ClientKnowledgeBase() {
       await apiClient.KnowledgeBase.delete(id);
 
       // Remove from agent's knowledge base
-      if (agent && agent.knowledge_base_ids?.includes(id)) {
-        await apiClient.Agent.update(agent.id, {
-          knowledge_base_ids: agent.knowledge_base_ids.filter(kbId => kbId !== id)
-        });
+      if (agent) {
+        let currentKbIds = agent.knowledge_base_ids;
+        if (typeof currentKbIds === 'string') {
+          try { currentKbIds = JSON.parse(currentKbIds); } catch { currentKbIds = []; }
+        }
+        if (!Array.isArray(currentKbIds)) currentKbIds = [];
+
+        if (currentKbIds.includes(id)) {
+          await apiClient.Agent.update(agent.id, {
+            knowledge_base_ids: currentKbIds.filter(kbId => kbId !== id)
+          });
+        }
       }
 
       toast.success('Document deleted and removed from agent');
