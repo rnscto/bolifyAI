@@ -127,7 +127,7 @@ export default async function generateSocialContent(c: any) {
       }
       isCron = true;
     } else {
-      const user = c.get('user');
+      const user = c.get('jwtPayload');
       if (!user) return c.json({ data: { error: 'Unauthorized' } }, 401);
 
       const body = await c.req.json().catch(() => ({}));

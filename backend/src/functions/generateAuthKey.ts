@@ -6,7 +6,7 @@ import { base44ORM as base44 } from "../db/orm.ts";
  */
 export default async function generateAuthKey(c: any) {
   try {
-    const user = c.get('user');
+    const user = c.get('jwtPayload');
     if (!user) {
       return c.json({ data: { error: 'Unauthorized' } }, 401);
     }

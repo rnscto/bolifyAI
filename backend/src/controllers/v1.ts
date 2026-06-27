@@ -75,7 +75,7 @@ const buildCrudRouter = (tableName: string) => {
     if (user.role !== 'admin' && user.role !== 'master_admin') {
       if (entity === "client") {
         if (user.role === 'reseller' || user.role === 'master_reseller') {
-          conditions.push(`("id" = $${paramIndex} OR "upline_id" = $${paramIndex})`);
+          conditions.push(`("id"::text = $${paramIndex} OR "upline_id" = $${paramIndex})`);
         } else {
           conditions.push(`"id" = $${paramIndex}`);
         }
@@ -83,7 +83,7 @@ const buildCrudRouter = (tableName: string) => {
         paramIndex++;
       } else if (validCols.has("client_id")) {
         if (user.role === 'reseller' || user.role === 'master_reseller') {
-          conditions.push(`"client_id"::text IN (SELECT id::text FROM "client" WHERE id = $${paramIndex} OR upline_id = $${paramIndex})`);
+          conditions.push(`"client_id"::text IN (SELECT id::text FROM "client" WHERE id::text = $${paramIndex} OR upline_id = $${paramIndex})`);
         } else {
           conditions.push(`"client_id"::text = $${paramIndex}`);
         }
@@ -143,14 +143,14 @@ const buildCrudRouter = (tableName: string) => {
       if (user.role !== 'admin' && user.role !== 'master_admin') {
         if (entity === "client") {
           if (user.role === 'reseller' || user.role === 'master_reseller') {
-            query += ` AND (id = $2 OR upline_id = $2)`;
+            query += ` AND (id::text = $2 OR upline_id = $2)`;
           } else {
             query += ` AND id = $2`;
           }
           args.push(user.client_id);
         } else if (validCols.has("client_id")) {
           if (user.role === 'reseller' || user.role === 'master_reseller') {
-            query += ` AND client_id::text IN (SELECT id::text FROM "client" WHERE id = $2 OR upline_id = $2)`;
+            query += ` AND client_id::text IN (SELECT id::text FROM "client" WHERE id::text = $2 OR upline_id = $2)`;
           } else {
             query += ` AND client_id::text = $2`;
           }
@@ -265,7 +265,7 @@ const buildCrudRouter = (tableName: string) => {
 
     if (validCols.has("client_id") && user.role !== 'admin' && user.role !== 'master_admin') {
       if (user.role === 'reseller' || user.role === 'master_reseller') {
-        query += ` AND client_id::text IN (SELECT id::text FROM "client" WHERE id = $${values.length + 1} OR upline_id = $${values.length + 1})`;
+        query += ` AND client_id::text IN (SELECT id::text FROM "client" WHERE id::text = $${values.length + 1} OR upline_id = $${values.length + 1})`;
       } else {
         query += ` AND client_id::text = $${values.length + 1}`;
       }
@@ -301,7 +301,7 @@ const buildCrudRouter = (tableName: string) => {
 
       if (validCols.has("client_id") && user.role !== 'admin' && user.role !== 'master_admin') {
         if (user.role === 'reseller' || user.role === 'master_reseller') {
-          query += ` AND client_id::text IN (SELECT id::text FROM "client" WHERE id = $2 OR upline_id = $2)`;
+          query += ` AND client_id::text IN (SELECT id::text FROM "client" WHERE id::text = $2 OR upline_id = $2)`;
         } else {
           query += ` AND client_id::text = $2`;
         }

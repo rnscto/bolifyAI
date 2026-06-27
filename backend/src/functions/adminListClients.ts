@@ -17,7 +17,7 @@ export default async function adminListClients(c: any) {
     if (!action || action === 'list') {
       let clients;
       if (isReseller) {
-        const res = await client.queryObject(`SELECT * FROM "client" WHERE id = $1 OR upline_id = $1 ORDER BY created_at DESC`, [user.client_id]);
+        const res = await client.queryObject(`SELECT * FROM "client" WHERE id::text = $1 OR upline_id = $1 ORDER BY created_at DESC`, [user.client_id]);
         clients = res.rows;
       } else {
         clients = await base44.entities.Client.filter({}, "-created_at");

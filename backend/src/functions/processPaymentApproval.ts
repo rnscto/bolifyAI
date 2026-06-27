@@ -4,7 +4,7 @@ const MAIN_ADMIN_EMAIL = 'yadavnand886@gmail.com';
 
 export default async function processPaymentApproval(c: any) {
   try {
-    const user = c.get('user');
+    const user = c.get('jwtPayload');
     if (!user) return c.json({ data: { error: 'Unauthorized' } }, 401);
     if (user.role !== 'admin' || (user.email || '').toLowerCase() !== MAIN_ADMIN_EMAIL) {
       return c.json({ data: { error: 'Only the main admin may approve/reject payment requests.' } }, 403);

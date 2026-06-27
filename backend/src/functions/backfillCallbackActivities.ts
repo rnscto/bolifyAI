@@ -80,7 +80,7 @@ export default async function backfillCallbackActivities(c: any) {
       return c.json({ data: { success: true, ...result } });
     }
 
-    const user = c.get('user');
+    const user = c.get('jwtPayload');
     if (!user) {
       return c.json({ data: { error: 'Unauthorized' } }, 401);
     }

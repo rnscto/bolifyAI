@@ -31,7 +31,7 @@ export default async function retentionCall(c: any) {
       }
       console.log('[retentionCall] Triggered by external cron');
     } else {
-      const user = c.get('user');
+      const user = c.get('jwtPayload');
       if (!user) return c.json({ data: { error: 'Unauthorized' } }, 401);
       
       let requestBody: any = {};
