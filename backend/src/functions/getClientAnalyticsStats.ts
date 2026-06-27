@@ -77,7 +77,7 @@ export default async function getClientAnalyticsStats(c: any) {
       args
     );
     const hourlyData = hourRes.rows.map(r => ({
-      hour: \`\${String(r.hour).padStart(2, '0')}:00\`,
+      hour: `${String(r.hour).padStart(2, '0')}:00`,
       calls: parseInt(r.count, 10)
     }));
 
