@@ -32,7 +32,20 @@ export const INDIAN_LANGUAGES = [
   { value: 'doi-IN', label: 'Dogri',                   locale: 'hi-IN', azure_voice: 'hi-IN-SwaraNeural',    realtime_voice: 'Kore', hint: 'डोगरी (uses Hindi voice fallback)' },
   { value: 'mni-IN', label: 'Manipuri (Meitei)',       locale: 'bn-IN', azure_voice: 'bn-IN-TanishaaNeural', realtime_voice: 'Kore', hint: 'ꯃꯩꯇꯩꯂꯣꯟ (uses Bengali voice fallback)' },
   { value: 'sat-IN', label: 'Santali',                 locale: 'hi-IN', azure_voice: 'hi-IN-SwaraNeural',    realtime_voice: 'Kore', hint: 'ᱥᱟᱱᱛᱟᱲᱤ (uses Hindi voice fallback)' },
-  { value: 'bho-IN', label: 'Bhojpuri',                locale: 'hi-IN', azure_voice: 'hi-IN-SwaraNeural',    realtime_voice: 'Kore', hint: 'भोजपुरी (uses Hindi voice fallback)' }
+  { value: 'bho-IN', label: 'Bhojpuri',                locale: 'hi-IN', azure_voice: 'hi-IN-SwaraNeural',    realtime_voice: 'Kore', hint: 'भोजपुरी (uses Hindi voice fallback)' },
+  // Global Languages
+  { value: 'en-US', label: 'English (US)',             locale: 'en-US', azure_voice: 'en-US-JennyNeural',    realtime_voice: 'Kore', hint: 'American English' },
+  { value: 'en-GB', label: 'English (UK)',             locale: 'en-GB', azure_voice: 'en-GB-SoniaNeural',    realtime_voice: 'Kore', hint: 'British English' },
+  { value: 'en-AU', label: 'English (Australia)',      locale: 'en-AU', azure_voice: 'en-AU-NatashaNeural',  realtime_voice: 'Kore', hint: 'Australian English' },
+  { value: 'es-ES', label: 'Spanish',                  locale: 'es-ES', azure_voice: 'es-ES-ElviraNeural',   realtime_voice: 'Kore', hint: 'Español' },
+  { value: 'fr-FR', label: 'French',                   locale: 'fr-FR', azure_voice: 'fr-FR-DeniseNeural',   realtime_voice: 'Kore', hint: 'Français' },
+  { value: 'de-DE', label: 'German',                   locale: 'de-DE', azure_voice: 'de-DE-KatjaNeural',    realtime_voice: 'Kore', hint: 'Deutsch' },
+  { value: 'it-IT', label: 'Italian',                  locale: 'it-IT', azure_voice: 'it-IT-ElsaNeural',     realtime_voice: 'Kore', hint: 'Italiano' },
+  { value: 'pt-BR', label: 'Portuguese (Brazil)',      locale: 'pt-BR', azure_voice: 'pt-BR-FranciscaNeural',realtime_voice: 'Kore', hint: 'Português' },
+  { value: 'ar-SA', label: 'Arabic',                   locale: 'ar-SA', azure_voice: 'ar-SA-ZariyahNeural',  realtime_voice: 'Kore', hint: 'العربية' },
+  { value: 'zh-CN', label: 'Chinese (Mandarin)',       locale: 'zh-CN', azure_voice: 'zh-CN-XiaoxiaoNeural', realtime_voice: 'Kore', hint: '中文' },
+  { value: 'ja-JP', label: 'Japanese',                 locale: 'ja-JP', azure_voice: 'ja-JP-NanamiNeural',   realtime_voice: 'Kore', hint: '日本語' },
+  { value: 'ko-KR', label: 'Korean',                   locale: 'ko-KR', azure_voice: 'ko-KR-SunHiNeural',    realtime_voice: 'Kore', hint: '한국어' }
 ];
 
 export const AGENT_ROLES = [
