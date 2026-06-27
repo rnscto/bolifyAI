@@ -43,9 +43,10 @@ export default function ResellerCommissionWallet() {
         if (byEmail.length > 0) setClientRecord(byEmail[0]);
       }
 
-      // Fetch the commission ledger entries
+      // Fetch the commission ledger entries — must use client_id (not user.id)
+      const resellerId = clientRes[0]?.id || byEmail[0]?.id || user.client_id;
       const entries = await apiClient.CommissionLedger.filter(
-        { to_reseller_id: user.id }, 
+        { to_reseller_id: resellerId }, 
         '-created_at', 
         100
       );

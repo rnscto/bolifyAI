@@ -1473,3 +1473,99 @@ CREATE TRIGGER update_ticketmessage_updated_at
 BEFORE UPDATE ON "ticketmessage"
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
+
+-- ==========================================
+-- PERFORMANCE INDEXES (Enterprise Grade)
+-- ==========================================
+
+-- calllog indexes (highest traffic table)
+CREATE INDEX IF NOT EXISTS idx_calllog_client_id ON "calllog" (client_id);
+CREATE INDEX IF NOT EXISTS idx_calllog_lead_id ON "calllog" (lead_id);
+CREATE INDEX IF NOT EXISTS idx_calllog_call_sid ON "calllog" (call_sid);
+CREATE INDEX IF NOT EXISTS idx_calllog_status ON "calllog" (status);
+CREATE INDEX IF NOT EXISTS idx_calllog_created_at ON "calllog" (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_calllog_agent_id ON "calllog" (agent_id);
+
+-- lead indexes
+CREATE INDEX IF NOT EXISTS idx_lead_client_id ON "lead" (client_id);
+CREATE INDEX IF NOT EXISTS idx_lead_phone ON "lead" (phone);
+CREATE INDEX IF NOT EXISTS idx_lead_status ON "lead" (status);
+CREATE INDEX IF NOT EXISTS idx_lead_assigned_to ON "lead" (assigned_to);
+
+-- campaignlead indexes (campaign engine hot path)
+CREATE INDEX IF NOT EXISTS idx_campaignlead_campaign_id ON "campaignlead" (campaign_id);
+CREATE INDEX IF NOT EXISTS idx_campaignlead_status ON "campaignlead" (campaign_id, status);
+CREATE INDEX IF NOT EXISTS idx_campaignlead_call_log_id ON "campaignlead" (call_log_id);
+
+-- campaign indexes
+CREATE INDEX IF NOT EXISTS idx_campaign_client_id ON "campaign" (client_id);
+CREATE INDEX IF NOT EXISTS idx_campaign_status ON "campaign" (status);
+
+-- commissionledger indexes (reseller finance)
+CREATE INDEX IF NOT EXISTS idx_commissionledger_to_reseller_id ON "commissionledger" (to_reseller_id);
+CREATE INDEX IF NOT EXISTS idx_commissionledger_transaction_id ON "commissionledger" (transaction_id);
+CREATE INDEX IF NOT EXISTS idx_commissionledger_from_client_id ON "commissionledger" (from_client_id);
+
+-- client indexes
+CREATE INDEX IF NOT EXISTS idx_client_upline_id ON "client" (upline_id);
+CREATE INDEX IF NOT EXISTS idx_client_account_status ON "client" (account_status);
+CREATE INDEX IF NOT EXISTS idx_client_email ON "client" (email);
+
+-- usagelog indexes (billing history)
+CREATE INDEX IF NOT EXISTS idx_usagelog_client_id ON "usagelog" (client_id);
+CREATE INDEX IF NOT EXISTS idx_usagelog_created_at ON "usagelog" (created_at DESC);
+
+-- outreachlog indexes
+CREATE INDEX IF NOT EXISTS idx_outreachlog_client_id ON "outreachlog" (client_id);
+CREATE INDEX IF NOT EXISTS idx_outreachlog_lead_id ON "outreachlog" (lead_id);
+
+-- payment indexes
+CREATE INDEX IF NOT EXISTS idx_payment_client_id ON "payment" (client_id);
+CREATE INDEX IF NOT EXISTS idx_payment_cashfree_order_id ON "payment" (cashfree_order_id);
+
+-- auditlog indexes
+CREATE INDEX IF NOT EXISTS idx_auditlog_client_id ON "auditlog" (client_id);
+CREATE INDEX IF NOT EXISTS idx_auditlog_actor_email ON "auditlog" (actor_email);
+CREATE INDEX IF NOT EXISTS idx_auditlog_created_at ON "auditlog" (created_at DESC);
+
+-- agent indexes
+CREATE INDEX IF NOT EXISTS idx_agent_client_id ON "agent" (client_id);
+
+-- domainmapping index
+CREATE INDEX IF NOT EXISTS idx_domainmapping_custom_domain ON "domainmapping" (custom_domain);
+CREATE INDEX IF NOT EXISTS idx_domainmapping_reseller_id ON "domainmapping" (reseller_id);
+
+-- sequenceenrollment indexes
+CREATE INDEX IF NOT EXISTS idx_sequenceenrollment_sequence_id ON "sequenceenrollment" (sequence_id);
+CREATE INDEX IF NOT EXISTS idx_sequenceenrollment_client_id ON "sequenceenrollment" (client_id);
+
+-- websitelead table (for AdminWebsiteLeads page)
+CREATE TABLE IF NOT EXISTS "websitelead" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "name" TEXT,
+  "email" TEXT,
+  "phone" TEXT,
+  "company" TEXT,
+  "message" TEXT,
+  "source_url" TEXT,
+  "source_page" TEXT,
+  "utm_source" TEXT,
+  "utm_medium" TEXT,
+  "utm_campaign" TEXT,
+  "status" TEXT DEFAULT 'new',
+  "assigned_to" TEXT,
+  "notes" TEXT,
+  "converted_to_lead_id" TEXT
+);
+
+DROP TRIGGER IF EXISTS update_websitelead_updated_at ON "websitelead";
+CREATE TRIGGER update_websitelead_updated_at
+BEFORE UPDATE ON "websitelead"
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+
+CREATE INDEX IF NOT EXISTS idx_websitelead_status ON "websitelead" (status);
+CREATE INDEX IF NOT EXISTS idx_websitelead_created_at ON "websitelead" (created_at DESC);
+

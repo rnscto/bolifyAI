@@ -577,7 +577,65 @@ voiceWebhookRouter.post("/", async (c) => {
     vals.push(callLog.id);
     await client.queryObject(`UPDATE "calllog" SET ${setClauses.join(', ')} WHERE id = $${idx}`, vals);
 
-    // DIRECT INVOCATION: Campaign post-call processing
+    // ===== PER-MINUTE WALLET DEDUCTION =====
+    if (effectiveStatus === 'completed' && callLog.client_id) {
+      try {
+        const callDuration = parseInt(duration) || 0;
+        if (callDuration > 0) {
+          const clientDataRes = await client.queryObject(
+            `SELECT billing_type, wallet_balance, per_minute_rate, free_minutes_remaining, total_minutes_used FROM "client" WHERE id = $1`,
+            [callLog.client_id]
+          );
+          const clientData = clientDataRes.rows[0] as any;
+
+          if (clientData && clientData.billing_type !== 'unlimited') {
+            const billableMinutes = Math.ceil(callDuration / 60);
+            const ratePerMinute = Number(clientData.per_minute_rate || 2.5);
+            const freeMinutes = Number(clientData.free_minutes_remaining || 0);
+            const walletBalance = Number(clientData.wallet_balance || 0);
+
+            let minutesFromFree = 0;
+            let minutesFromWallet = 0;
+            let walletCharge = 0;
+
+            if (freeMinutes >= billableMinutes) {
+              minutesFromFree = billableMinutes;
+            } else {
+              minutesFromFree = freeMinutes;
+              minutesFromWallet = billableMinutes - freeMinutes;
+              walletCharge = minutesFromWallet * ratePerMinute;
+            }
+
+            const newFreeMinutes = Math.max(0, freeMinutes - minutesFromFree);
+            const newWalletBalance = Math.max(0, walletBalance - walletCharge);
+            const newTotalMinutesUsed = Number(clientData.total_minutes_used || 0) + billableMinutes;
+
+            await client.queryObject(
+              `UPDATE "client" SET wallet_balance = $1, free_minutes_remaining = $2, total_minutes_used = $3 WHERE id = $4`,
+              [newWalletBalance, newFreeMinutes, newTotalMinutesUsed, callLog.client_id]
+            );
+
+            if (walletCharge > 0 || minutesFromFree > 0) {
+              await client.queryObject(
+                `INSERT INTO "usagelog" (client_id, call_log_id, type, direction, call_duration_seconds, billable_minutes, rate_per_minute, amount, balance_before, balance_after, free_minutes_before, free_minutes_after, description)
+                 VALUES ($1, $2, 'call_charge', 'debit', $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+                [
+                  callLog.client_id, callLog.id, callDuration, billableMinutes, ratePerMinute,
+                  walletCharge, walletBalance, newWalletBalance,
+                  freeMinutes, newFreeMinutes,
+                  `AI Call - ${billableMinutes} min @ ₹${ratePerMinute}/min (${minutesFromFree} free min used)`
+                ]
+              );
+            }
+            console.log(`[smartfloWebhook] 💰 Billed client ${callLog.client_id}: ${billableMinutes} min, ₹${walletCharge}, free_min_used: ${minutesFromFree}`);
+          }
+        }
+      } catch (billingErr: any) {
+        console.error('[smartfloWebhook] Wallet deduction error:', billingErr.message);
+      }
+    }
+
+
     const freshLogRes = await client.queryObject(`SELECT * FROM "calllog" WHERE id = $1`, [callLog.id]);
     const freshCallLog = freshLogRes.rows[0] as any;
 

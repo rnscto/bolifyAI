@@ -29,6 +29,8 @@ import ClientWhatsAppHistory from './pages/ClientWhatsAppHistory';
 import AdminUsers from './pages/AdminUsers';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
+import ForgotPassword from './pages/ForgotPassword';
+import ResetPassword from './pages/ResetPassword';
 import AdminLayout from './AdminLayout';
 
 const { Pages, Layout, mainPage } = pagesConfig;
@@ -55,7 +57,8 @@ const AuthenticatedApp = () => {
   const PUBLIC_ROUTES = [
     '/', '/Home', '/PartnerReferral', '/CompliancePolicy', 
     '/PrivacyPolicy', '/RefundPolicy', '/TermsOfService', 
-    '/PartnerSignup', '/APIDocs', '/ConceptNote', '/Login', '/Signup'
+    '/PartnerSignup', '/APIDocs', '/ConceptNote', '/Login', '/Signup',
+    '/forgot-password', '/reset-password'
   ];
   const isPublicRoute = PUBLIC_ROUTES.includes(location.pathname);
 
@@ -85,6 +88,8 @@ const AuthenticatedApp = () => {
       <Route path="/" element={<RootRedirect />} />
       <Route path="/Login" element={<Login />} />
       <Route path="/Signup" element={<Signup />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       {Object.entries(Pages).map(([path, Page]) => {
         const Wrapper = path.startsWith('Admin') ? AdminLayoutWrapper : LayoutWrapper;
         return (

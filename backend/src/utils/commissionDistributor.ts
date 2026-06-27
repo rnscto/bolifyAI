@@ -2,6 +2,13 @@ import { base44ORM as base44 } from '../db/orm.ts';
 
 export async function distributeCommission(paymentId: string, clientId: string, amountPaid: number, channels: number = 1, isTopup: boolean = false) {
   try {
+    // ─── IDEMPOTENCY GUARD: skip if commission already distributed for this payment ───
+    const existingLedger = await base44.entities.CommissionLedger.filter({ transaction_id: paymentId });
+    if (existingLedger && existingLedger.length > 0) {
+      console.log(`[commissionDistributor] Payment ${paymentId} already processed (${existingLedger.length} ledger entries). Skipping.`);
+      return;
+    }
+
     let currentClientId = clientId;
     let currentAmount = amountPaid;
     let currentChannels = channels;
@@ -41,6 +48,7 @@ export async function distributeCommission(paymentId: string, clientId: string, 
           status: 'credited',
           type: 'earning'
         });
+        console.log(`[commissionDistributor] ₹${commissionAmount.toFixed(2)} credited to ${uplineId} for payment ${paymentId}`);
       }
 
       // Move up the tree
@@ -49,9 +57,9 @@ export async function distributeCommission(paymentId: string, clientId: string, 
       uplineId = uplineRecord.upline_id;
     }
 
-    console.log(`Commission distribution complete for payment ${paymentId}`);
+    console.log(`[commissionDistributor] Distribution complete for payment ${paymentId}`);
 
   } catch (err) {
-    console.error("Error distributing commissions:", err);
+    console.error("[commissionDistributor] Error distributing commissions:", err);
   }
 }

@@ -6,7 +6,11 @@ import { jsPDF } from "jspdf";
 
 export const billingRouter = new Hono();
 
-const JWT_SECRET = Deno.env.get("JWT_SECRET") || "super_secret_bolifyai_key";
+const JWT_SECRET = (() => {
+  const secret = Deno.env.get("JWT_SECRET");
+  if (!secret) console.warn("[SECURITY WARNING] JWT_SECRET env var not set in billing.ts!");
+  return secret || "super_secret_bolifyai_key_CHANGE_IN_PRODUCTION";
+})();
 const CEO_EMAIL = "yadavnand886@gmail.com";
 const CASHFREE_APP_ID = Deno.env.get("CASHFREE_APP_ID");
 const CASHFREE_SECRET_KEY = Deno.env.get("CASHFREE_SECRET_KEY");
@@ -23,8 +27,9 @@ billingRouter.post("/create-payment-order", jwt({ secret: JWT_SECRET, alg: "HS25
     if (!clients.length) return c.json({ error: "Client not found" }, 404);
     const client = clients[0];
 
-    const ratePerChannel = 6500;
-    const crmRate = include_crm ? 1999 : 0;
+    // Use client's actual rate (set by reseller or admin). Default: ₹6500/channel.
+    const ratePerChannel = Number(client.monthly_rate_per_channel || 6500);
+    const crmRate = include_crm ? (Number(client.crm_monthly_rate || 1999)) : 0;
     const months = plan_type === "quarterly" ? 3 : 1;
     const totalAmount = ((channels || 1) * ratePerChannel * months) + (crmRate * months);
 

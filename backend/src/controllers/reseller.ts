@@ -1,9 +1,14 @@
 import { Context, Hono } from "hono";
 import { jwt } from "hono/jwt";
 import { base44ORM as base44 } from "../db/orm.ts";
+import { writeAuditLog } from "../utils/auditLog.ts";
 
 export const resellerRouter = new Hono();
-const JWT_SECRET = Deno.env.get("JWT_SECRET") || "super_secret_bolifyai_key";
+const JWT_SECRET = (() => {
+  const secret = Deno.env.get("JWT_SECRET");
+  if (!secret) console.warn("[SECURITY WARNING] JWT_SECRET not set in reseller.ts!");
+  return secret || "super_secret_bolifyai_key_CHANGE_IN_PRODUCTION";
+})();
 
 // Use JWT middleware for all routes
 resellerRouter.use("*", jwt({ secret: JWT_SECRET, alg: "HS256" }));
@@ -32,6 +37,16 @@ resellerRouter.post("/downlines/:id/pricing", async (c) => {
     await base44.entities.Client.update(downlineId, {
       per_minute_rate,
       monthly_rate_per_channel
+    });
+
+    await writeAuditLog({
+      client_id: downlineId,
+      action_type: 'PRICING_UPDATE',
+      entity_type: 'client',
+      entity_id: downlineId,
+      actor_email: user.email,
+      actor_role: user.role || 'reseller',
+      details: `Reseller ${user.client_id} updated pricing: ₹${per_minute_rate}/min, ₹${monthly_rate_per_channel}/ch/mo`,
     });
 
     return c.json({ success: true, message: "Pricing updated successfully" });
@@ -91,6 +106,17 @@ resellerRouter.post("/topup-downline", async (c) => {
       balance_before: downlineBal,
       balance_after: downlineBal + amount,
       description: `Wallet top-up via Reseller Commission`
+    });
+
+    await writeAuditLog({
+      client_id: downline_id,
+      action_type: 'WALLET_TOPUP',
+      entity_type: 'client',
+      entity_id: downline_id,
+      actor_email: user.email,
+      actor_role: user.role || 'reseller',
+      details: `Reseller ${user.client_id} topped up downline wallet by ₹${amount}`,
+      metadata: { amount, reseller_id: user.client_id },
     });
 
     return c.json({ success: true, new_balance: currentCommBal - amount });

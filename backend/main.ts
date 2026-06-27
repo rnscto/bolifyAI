@@ -20,11 +20,11 @@ import { functionsRouter } from "./src/controllers/functions.ts";
 import { analyticsRouter } from "./src/controllers/analytics.ts";
 import { initCampaignPoller } from "./src/cron/campaignPoller.ts";
 import { initCrmPoller } from "./src/cron/crmPoller.ts";
-import { initTrialExpiryCheck } from "./src/cron/trialExpiryCheck.ts";
 import { initBillingSweeper } from "./src/cron/billingSweeper.ts";
 import { initDailyDigest } from "./src/cron/dailyDigest.ts";
 import { initActivityDispatcher } from "./src/cron/activityDispatcher.ts";
 import { initTicketAutoResponder } from "./src/cron/ticketAutoResponder.ts";
+import { initDpdpErasure } from "./src/cron/dpdpErasure.ts";
 import { handleWebSocket } from "./src/services/realtime.ts";
 import { initStreamSession } from "./src/controllers/voice.ts";
 
@@ -63,7 +63,7 @@ app.get("/api/voice/incoming", wssUrlHandler);
 // GET /api/voice/stream → returns WSS URL info (WebSocket upgrade handled at Deno.serve level)
 app.get("/api/voice/stream", wssUrlHandler);
 
-app.use("*", async (c, next) => {
+app.use('*', async (c, next) => {
   return logger()(c, next);
 });
 
@@ -73,6 +73,43 @@ app.use("*", async (c, next) => {
     allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   })(c, next);
 });
+
+// ─── Rate Limiting ─────────────────────────────────────────────────────────────
+const rateLimitStore = new Map<string, { count: number; resetAt: number }>();
+
+function rateLimit(maxRequests: number, windowMs: number) {
+  return async (c: any, next: any) => {
+    const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ||
+                c.req.header('x-real-ip') || 'unknown';
+    const key = `${c.req.path}:${ip}`;
+    const now = Date.now();
+    const entry = rateLimitStore.get(key);
+
+    if (!entry || now > entry.resetAt) {
+      rateLimitStore.set(key, { count: 1, resetAt: now + windowMs });
+    } else {
+      entry.count++;
+      if (entry.count > maxRequests) {
+        return c.json({ success: false, error: 'Too many requests. Please wait before trying again.' }, 429);
+      }
+    }
+    return next();
+  };
+}
+
+// Auth: 10 attempts per 15 minutes
+app.use('/api/auth/login', rateLimit(10, 15 * 60 * 1000));
+app.use('/api/auth/signup', rateLimit(5, 60 * 60 * 1000));
+app.use('/api/auth/forgot-password', rateLimit(5, 60 * 60 * 1000));
+// Outbound calls: 60 per minute per IP
+app.use('/api/campaign/initiate-call', rateLimit(60, 60 * 1000));
+// Clean up old entries every hour
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of rateLimitStore) {
+    if (now > val.resetAt) rateLimitStore.delete(key);
+  }
+}, 3600 * 1000);
 
 app.use('/assets/*', serveStatic({ root: './dist' }));
 
@@ -129,11 +166,11 @@ app.onError((err, c) => {
 // Initialize background scheduled tasks
 initCampaignPoller();
 initCrmPoller();
-initTrialExpiryCheck();
-initBillingSweeper();
+initBillingSweeper(); // Handles trial expiry + subscription sweeping (trialExpiryCheck merged here)
 initDailyDigest();
 initActivityDispatcher();
 initTicketAutoResponder();
+initDpdpErasure(); // DPDP Act 2023 automated PII erasure
 
 // Start DB connection
 connectDB().catch(console.error);

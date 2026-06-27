@@ -6,9 +6,17 @@ import { broadcastEntityChange } from "../services/realtime.ts";
 
 export const v1Router = new Hono();
 
-const JWT_SECRET = Deno.env.get("JWT_SECRET") || "super_secret_bolifyai_key";
+const JWT_SECRET = (() => {
+  const secret = Deno.env.get("JWT_SECRET");
+  if (!secret) {
+    // Warn loudly in logs but use fallback to prevent startup failure in dev
+    console.warn("[SECURITY WARNING] JWT_SECRET env var is not set! Using insecure fallback. Set JWT_SECRET in production.");
+    return "super_secret_bolifyai_key_CHANGE_IN_PRODUCTION";
+  }
+  return secret;
+})();
 
-// Dynamic Branding Route for Resellers (PUBLIC)
+// Dynamic Branding Route for Resellers (PUBLIC) — includes reseller_id for signup attribution
 v1Router.get("/branding", async (c) => {
   const domain = c.req.query("domain");
   if (!domain) return c.json({ error: "domain required" }, 400);
@@ -16,14 +24,25 @@ v1Router.get("/branding", async (c) => {
   try {
     const mappings = await base44ORM.entities.DomainMapping.filter({ custom_domain: domain });
     if (mappings.length > 0) {
-      return c.json({ success: true, branding: mappings[0] });
+      const mapping = mappings[0] as any;
+      return c.json({
+        success: true,
+        branding: {
+          brand_name: mapping.brand_name,
+          logo_url: mapping.logo_url,
+          theme_colors: mapping.theme_colors,
+          reseller_id: mapping.reseller_id,   // ← critical: needed for signup attribution
+          custom_domain: mapping.custom_domain
+        }
+      });
     }
     // Return default branding
     return c.json({
       success: true, branding: {
         brand_name: "Bolify AI",
         logo_url: "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/a1247aabb_generated_image.png",
-        theme_colors: { primary: "#00bcd4" }
+        theme_colors: { primary: "#00bcd4" },
+        reseller_id: null
       }
     });
   } catch (err: any) {

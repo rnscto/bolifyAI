@@ -1,10 +1,16 @@
 import { Hono } from "hono";
 import { sign, verify } from "hono/jwt";
 import { client } from "../db/index.ts";
+import { sendEmail } from "../integrations/email.ts";
 
 export const authRouter = new Hono();
 
-const JWT_SECRET = Deno.env.get("JWT_SECRET") || "super_secret_bolifyai_key";
+const JWT_SECRET = (() => {
+  const secret = Deno.env.get("JWT_SECRET");
+  if (!secret) console.warn("[SECURITY WARNING] JWT_SECRET env var not set in auth.ts!");
+  return secret || "super_secret_bolifyai_key_CHANGE_IN_PRODUCTION";
+})();
+const RESET_SECRET = Deno.env.get("JWT_RESET_SECRET") || JWT_SECRET + "_reset";
 
 // Simple password hashing using Web Crypto API
 async function hashPassword(password: string): Promise<string> {
@@ -127,3 +133,79 @@ authRouter.put("/me", async (c) => {
     return c.json({ error: "Invalid token" }, 401);
   }
 });
+
+// POST /api/auth/forgot-password
+authRouter.post("/forgot-password", async (c) => {
+  try {
+    const { email } = await c.req.json();
+    if (!email) return c.json({ error: "Email is required" }, 400);
+
+    const userResult = await client.queryObject(
+      `SELECT id, display_name FROM "user" WHERE email = $1 LIMIT 1`, [email]
+    );
+
+    // Always return success (do not reveal if email exists — security best practice)
+    if (userResult.rows.length === 0) {
+      return c.json({ success: true, message: "If that email exists, you will receive a reset link." });
+    }
+
+    const user = userResult.rows[0] as any;
+
+    // Create a short-lived reset token (15 minutes)
+    const resetToken = await sign(
+      { id: user.id, email, purpose: 'password_reset', exp: Math.floor(Date.now() / 1000) + 15 * 60 },
+      RESET_SECRET, "HS256"
+    );
+
+    const appUrl = Deno.env.get('APP_BASE_URL') || 'https://app.bolifyai.com';
+    const resetLink = `${appUrl}/reset-password?token=${resetToken}`;
+
+    await sendEmail(
+      email,
+      "Reset Your BolifyAI Password",
+      `Hi ${user.display_name || email},\n\nYou requested a password reset. Click the link below to set a new password. This link expires in 15 minutes.\n\n${resetLink}\n\nIf you did not request this, ignore this email.\n\nBolifyAI Security Team`
+    );
+
+    return c.json({ success: true, message: "If that email exists, you will receive a reset link." });
+  } catch (err: any) {
+    console.error("[auth/forgot-password] Error:", err);
+    return c.json({ error: "Failed to process request" }, 500);
+  }
+});
+
+// POST /api/auth/reset-password
+authRouter.post("/reset-password", async (c) => {
+  try {
+    const { token, new_password } = await c.req.json();
+    if (!token || !new_password) return c.json({ error: "Token and new_password required" }, 400);
+    if (new_password.length < 8) return c.json({ error: "Password must be at least 8 characters" }, 400);
+
+    let payload: any;
+    try {
+      payload = await verify(token, RESET_SECRET, "HS256");
+    } catch {
+      return c.json({ error: "Invalid or expired reset link. Please request a new one." }, 400);
+    }
+
+    if (payload.purpose !== 'password_reset') {
+      return c.json({ error: "Invalid token type" }, 400);
+    }
+
+    const hashed = await hashPassword(new_password);
+    const result = await client.queryObject(
+      `UPDATE "user" SET password_hash = $1 WHERE id = $2 AND email = $3 RETURNING id`,
+      [hashed, payload.id, payload.email]
+    );
+
+    if (result.rows.length === 0) {
+      return c.json({ error: "User not found" }, 404);
+    }
+
+    console.log(`[auth/reset-password] Password reset for user ${payload.id}`);
+    return c.json({ success: true, message: "Password updated successfully. Please log in." });
+  } catch (err: any) {
+    console.error("[auth/reset-password] Error:", err);
+    return c.json({ error: "Failed to reset password" }, 500);
+  }
+});
+
