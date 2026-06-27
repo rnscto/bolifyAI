@@ -22,17 +22,18 @@ async function invokeUpload({ file, visibility, folder }) {
   formData.append('visibility', visibility);
   if (folder) formData.append('folder', folder);
 
-  // Read token fresh from localStorage every time (appParams is evaluated at import time
-  // and may be stale if the user just logged in).
+  // Read token fresh from localStorage every time.
+  // KEY: apiClient.js stores the JWT under 'bolifyai_token' (see getToken() in apiClient.js)
   const token =
-    localStorage.getItem('token') ||
+    localStorage.getItem('bolifyai_token') ||
     localStorage.getItem('base44_access_token') ||
+    localStorage.getItem('token') ||
     appParams.token ||
     '';
 
-  const { appBaseUrl } = appParams;
-  const baseUrl = (appBaseUrl || '').replace(/\/+$/, '');
-  const url = `${baseUrl}/api/functions/azureBlobUpload`;
+  // API_BASE_URL is already '/api' in production; do NOT prepend it again.
+  // The function route is POST /api/functions/azureBlobUpload
+  const url = `${window.location.origin}/api/functions/azureBlobUpload`;
 
   const headers = {};
   if (token) headers['Authorization'] = `Bearer ${token}`;
