@@ -270,14 +270,14 @@ export default function AdminDIDs() {
                 <div>
                   <Label htmlFor="client_id">Assign to Client (Optional)</Label>
                   <Select
-                    value={formData.client_id}
-                    onValueChange={(value) => setFormData({ ...formData, client_id: value })}
+                    value={formData.client_id || 'unassigned'}
+                    onValueChange={(value) => setFormData({ ...formData, client_id: value === 'unassigned' ? '' : value })}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select client" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={null}>Unassigned</SelectItem>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
                       {clients.map((client) => (
                         <SelectItem key={client.id} value={client.id}>
                           {client.company_name}
@@ -416,15 +416,15 @@ export default function AdminDIDs() {
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Select
-                          value={did.client_id || ''}
-                          onValueChange={(value) => handleAssign(did.id, value)}
+                          value={did.client_id || 'unassigned'}
+                          onValueChange={(value) => handleAssign(did.id, value === 'unassigned' ? null : value)}
                           disabled={did.status === 'reserved'}
                         >
                           <SelectTrigger className="w-40">
                             <SelectValue placeholder="Assign" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value={null}>Unassigned</SelectItem>
+                            <SelectItem value="unassigned">Unassigned</SelectItem>
                             {clients.map((client) => (
                               <SelectItem key={client.id} value={client.id}>
                                 {client.company_name}
