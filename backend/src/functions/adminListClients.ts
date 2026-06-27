@@ -13,10 +13,15 @@ export default async function adminListClients(c: any) {
     
     // Determine filter conditions based on role
     const isReseller = user.role === 'reseller' || user.role === 'master_reseller';
-    const filterCondition = isReseller ? { created_by: user.email } : {};
 
     if (!action || action === 'list') {
-      const clients = await base44.entities.Client.filter(filterCondition, "-created_at");
+      let clients;
+      if (isReseller) {
+        const res = await client.queryObject(`SELECT * FROM "client" WHERE id = $1 OR upline_id = $1 ORDER BY created_at DESC`, [user.client_id]);
+        clients = res.rows;
+      } else {
+        clients = await base44.entities.Client.filter({}, "-created_at");
+      }
       const users = await base44.entities.User.filter({});
       
       // Map each client to its earliest activation (paid) date
