@@ -7,7 +7,8 @@ import { apiClient } from '@/api/apiClient'
 const initBranding = async () => {
   try {
     const domain = window.location.hostname;
-    const res = await fetch(`${apiClient.baseUrl}/branding?domain=${domain}`);
+    const res = await fetch(`${apiClient.baseUrl}/v1/branding?domain=${domain}`);
+    if (!res.ok) throw new Error(`Branding API returned ${res.status}`);
     const data = await res.json();
     if (data.success && data.branding) {
       const b = data.branding;

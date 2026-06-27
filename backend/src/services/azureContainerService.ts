@@ -1,19 +1,26 @@
 import { ContainerAppsAPIClient } from "npm:@azure/arm-appcontainers";
-import { DefaultAzureCredential } from "npm:@azure/identity";
+import { ClientSecretCredential } from "npm:@azure/identity";
 
-const subscriptionId = Deno.env.get("AZURE_SUBSCRIPTION_ID") || process.env.AZURE_SUBSCRIPTION_ID || "";
-const resourceGroupName = Deno.env.get("AZURE_RESOURCE_GROUP") || process.env.AZURE_RESOURCE_GROUP || "";
-const containerAppName = Deno.env.get("AZURE_CONTAINER_APP_NAME") || process.env.AZURE_CONTAINER_APP_NAME || "";
-const environmentName = Deno.env.get("AZURE_CONTAINER_ENV_NAME") || process.env.AZURE_CONTAINER_ENV_NAME || "";
+const subscriptionId = Deno.env.get("AZURE_SUBSCRIPTION_ID") ?? "";
+const resourceGroupName = Deno.env.get("AZURE_RESOURCE_GROUP") ?? "";
+const containerAppName = Deno.env.get("AZURE_CONTAINER_APP_NAME") ?? "";
+const environmentName = Deno.env.get("AZURE_CONTAINER_ENV_NAME") ?? "";
+const clientId = Deno.env.get("AZURE_CLIENT_ID") ?? "";
+const clientSecret = Deno.env.get("AZURE_CLIENT_SECRET") ?? "";
+const tenantId = Deno.env.get("AZURE_TENANT_ID") ?? "";
 
 let client: ContainerAppsAPIClient | null = null;
 
 function getClient() {
   if (!client) {
-    if (!subscriptionId) {
-      throw new Error("Azure Subscription ID is not configured");
+    if (!subscriptionId || !clientId || !clientSecret || !tenantId) {
+      throw new Error("Azure credentials are not fully configured (need AZURE_SUBSCRIPTION_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_TENANT_ID)");
     }
-    const credential = new DefaultAzureCredential();
+    // Use ClientSecretCredential directly instead of DefaultAzureCredential.
+    // DefaultAzureCredential tries many auth providers in sequence (including Managed Identity
+    // with a ~60s IMDS probe) even when service principal vars are set, causing the load
+    // balancer to 503. ClientSecretCredential authenticates immediately and deterministically.
+    const credential = new ClientSecretCredential(tenantId, clientId, clientSecret);
     client = new ContainerAppsAPIClient(credential, subscriptionId);
   }
   return client;
@@ -25,22 +32,36 @@ function getClient() {
  * - The default FQDN of the Container App (for the CNAME record)
  */
 export async function getAzureEnvironmentDetails() {
+  // Short-circuit immediately if Azure env vars are not configured.
+  if (!subscriptionId || !resourceGroupName || !containerAppName || !environmentName || !clientId || !clientSecret || !tenantId) {
+    console.warn("[AzureContainerService] Azure env vars not configured — returning fallback.");
+    return {
+      success: false,
+      error: "Azure environment variables are not fully configured on this server.",
+      verificationId: "AZURE_NOT_CONFIGURED",
+      fqdn: "app.bolify.ai"
+    };
+  }
+
   try {
     const acaClient = getClient();
-    
-    // Add a 15-second timeout to prevent 504 Gateway Timeout from load balancers
-    const timeout = new Promise<never>((_, reject) => 
-      setTimeout(() => reject(new Error("Azure Connection Timeout. Please check your service principal credentials.")), 15000)
+
+    const makeTimeout = () => new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Azure Connection Timeout. Check service principal credentials.")), 15000)
     );
 
     // Get the Container App to find its default FQDN
-    const appPromise = acaClient.containerApps.get(resourceGroupName, containerAppName);
-    const app = await Promise.race([appPromise, timeout]) as any;
+    const app = await Promise.race([
+      acaClient.containerApps.get(resourceGroupName, containerAppName),
+      makeTimeout()
+    ]) as any;
     const defaultFqdn = app.configuration?.ingress?.fqdn || "app.bolify.ai";
 
     // Get the Managed Environment to find the Custom Domain Verification ID
-    const envPromise = acaClient.managedEnvironments.get(resourceGroupName, environmentName);
-    const env = await Promise.race([envPromise, timeout]) as any;
+    const env = await Promise.race([
+      acaClient.managedEnvironments.get(resourceGroupName, environmentName),
+      makeTimeout()
+    ]) as any;
     const verificationId = env.customDomainConfiguration?.customDomainVerificationId || "pending-verification-id";
 
     return {
@@ -53,7 +74,6 @@ export async function getAzureEnvironmentDetails() {
     return {
       success: false,
       error: `Azure Configuration Error: ${error.message || "Unknown error"}`,
-      // Fallback details to allow UI to render even if Azure is misconfigured locally
       verificationId: "AZURE_NOT_CONFIGURED",
       fqdn: "app.bolify.ai"
     };
