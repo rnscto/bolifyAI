@@ -154,10 +154,10 @@ export const apiClient = {
       setToken(res.token);
       return res.user;
     },
-    signup: async (email, password, full_name) => {
+    signup: async (email, password, full_name, upline_id) => {
       const res = await apiFetch("/auth/signup", {
         method: "POST",
-        body: JSON.stringify({ email, password, full_name }),
+        body: JSON.stringify({ email, password, full_name, upline_id }),
       });
       setToken(res.token);
       return res.user;

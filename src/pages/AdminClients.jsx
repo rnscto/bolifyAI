@@ -47,18 +47,42 @@ export default function AdminClients() {
   const [overrideClient, setOverrideClient] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [pricingLimits, setPricingLimits] = useState(null);
   const [formData, setFormData] = useState({
     company_name: '',
     email: '',
     phone: '',
     total_channels: 1,
-    user_id: ''
+    user_id: '',
+    per_minute_rate: '',
+    monthly_rate_per_channel: ''
   });
 
   useEffect(() => {
     loadClients();
-    apiClient.auth.me().then(setCurrentUser).catch(() => {});
+    apiClient.auth.me().then(user => {
+      setCurrentUser(user);
+      if (user.role === 'reseller' || user.role === 'master_reseller') {
+        fetchPricingLimits();
+      }
+    }).catch(() => {});
   }, []);
+
+  const fetchPricingLimits = async () => {
+    try {
+      const res = await apiFetch('/reseller/pricing-limits');
+      if (res.success) {
+        setPricingLimits(res);
+        setFormData(prev => ({
+          ...prev,
+          per_minute_rate: res.min_per_minute_rate,
+          monthly_rate_per_channel: res.min_monthly_rate_per_channel
+        }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch pricing limits', err);
+    }
+  };
 
   const loadClients = async () => {
     try {
@@ -83,7 +107,8 @@ export default function AdminClients() {
         ...formData,
         status: 'active',
         subscription_plan: 'quarterly',
-        monthly_rate_per_channel: 6500,
+        monthly_rate_per_channel: formData.monthly_rate_per_channel ? Number(formData.monthly_rate_per_channel) : 6500,
+        per_minute_rate: formData.per_minute_rate ? Number(formData.per_minute_rate) : undefined,
         next_billing_date: nextBillingDate.toISOString().split('T')[0]
       };
 
@@ -97,7 +122,15 @@ export default function AdminClients() {
 
       setDialogOpen(false);
       setEditingClient(null);
-      setFormData({ company_name: '', email: '', phone: '', total_channels: 1, user_id: '' });
+      setFormData({ 
+        company_name: '', 
+        email: '', 
+        phone: '', 
+        total_channels: 1, 
+        user_id: '',
+        per_minute_rate: pricingLimits?.min_per_minute_rate || '',
+        monthly_rate_per_channel: pricingLimits?.min_monthly_rate_per_channel || ''
+      });
       loadClients();
     } catch (error) {
       console.error('Error saving client:', error);
@@ -112,7 +145,9 @@ export default function AdminClients() {
       email: client.email,
       phone: client.phone || '',
       total_channels: client.total_channels,
-      user_id: client.user_id || ''
+      user_id: client.user_id || '',
+      per_minute_rate: client.per_minute_rate || pricingLimits?.min_per_minute_rate || '',
+      monthly_rate_per_channel: client.monthly_rate_per_channel || pricingLimits?.min_monthly_rate_per_channel || ''
     });
     setDialogOpen(true);
   };
@@ -308,9 +343,40 @@ export default function AdminClients() {
                   required
                 />
                 <p className="text-xs text-gray-500 mt-1">
-                  ₹{(formData.total_channels * 14999).toLocaleString()}/month
+                  Base cost: ₹{(formData.total_channels * (pricingLimits?.min_monthly_rate_per_channel || 6500)).toLocaleString()}/month
                 </p>
               </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="per_minute_rate">Per Minute Rate (Retail ₹)</Label>
+                  <Input
+                    id="per_minute_rate"
+                    type="number"
+                    step="0.1"
+                    min={pricingLimits?.min_per_minute_rate || 0}
+                    value={formData.per_minute_rate}
+                    onChange={(e) => setFormData({ ...formData, per_minute_rate: e.target.value })}
+                  />
+                  {pricingLimits && (
+                    <p className="text-xs text-gray-500 mt-1">Min: ₹{pricingLimits.min_per_minute_rate}</p>
+                  )}
+                </div>
+                <div>
+                  <Label htmlFor="monthly_rate_per_channel">Monthly Channel Rate (Retail ₹)</Label>
+                  <Input
+                    id="monthly_rate_per_channel"
+                    type="number"
+                    min={pricingLimits?.min_monthly_rate_per_channel || 0}
+                    value={formData.monthly_rate_per_channel}
+                    onChange={(e) => setFormData({ ...formData, monthly_rate_per_channel: e.target.value })}
+                  />
+                  {pricingLimits && (
+                    <p className="text-xs text-gray-500 mt-1">Min: ₹{pricingLimits.min_monthly_rate_per_channel}</p>
+                  )}
+                </div>
+              </div>
+
               <div className="flex gap-3 justify-end">
                 <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel

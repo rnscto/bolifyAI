@@ -16,7 +16,7 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 authRouter.post("/signup", async (c) => {
-  const { email, password, full_name } = await c.req.json();
+  const { email, password, full_name, upline_id } = await c.req.json();
   
   if (!email || !password) {
     return c.json({ error: "Email and password required" }, 400);
@@ -27,8 +27,8 @@ authRouter.post("/signup", async (c) => {
     
     // Create Client first
     const clientResult = await client.queryObject(
-       `INSERT INTO "client" (company_name, email) VALUES ($1, $2) RETURNING id`,
-       [full_name || email, email]
+       `INSERT INTO "client" (company_name, email, upline_id) VALUES ($1, $2, $3) RETURNING id`,
+       [full_name || email, email, upline_id || null]
     );
     const clientId = (clientResult.rows[0] as any).id;
 

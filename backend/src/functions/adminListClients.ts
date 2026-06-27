@@ -42,6 +42,9 @@ export default async function adminListClients(c: any) {
     }
 
     if (action === 'create') {
+      if (isReseller) {
+        data.upline_id = user.client_id;
+      }
       const newClient = await base44.entities.Client.create(data);
       return c.json({ data: { client: newClient } });
     }

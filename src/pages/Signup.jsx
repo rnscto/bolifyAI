@@ -5,9 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { apiClient } from '@/api/apiClient';
+import { useAuth } from '@/lib/AuthContext';
 import { createPageUrl } from '@/utils';
 
 export default function Signup() {
+  const { appPublicSettings } = useAuth();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -21,8 +23,9 @@ export default function Signup() {
     setLoading(true);
 
     try {
+      const uplineId = appPublicSettings?.brand?.reseller_id || null;
       // Assuming apiClient.auth.signup returns a user with a token automatically
-      const user = await apiClient.auth.signup(email, password, fullName);
+      const user = await apiClient.auth.signup(email, password, fullName, uplineId);
       // Role-based routing: all admin and reseller roles go to AdminDashboard
       const adminRoles = ['admin', 'master_admin', 'reseller', 'master_reseller'];
       window.location.href = createPageUrl(adminRoles.includes(user.role) ? 'AdminDashboard' : 'ClientDashboard');

@@ -118,6 +118,23 @@ resellerRouter.get("/commissions", async (c) => {
   }
 });
 
+// GET /api/reseller/pricing-limits
+resellerRouter.get("/pricing-limits", async (c) => {
+  try {
+    const user = c.get("jwtPayload") as any;
+    const client = await base44.entities.Client.get(user.client_id);
+    if (!client) return c.json({ error: "Client not found" }, 404);
+    
+    return c.json({
+      success: true,
+      min_per_minute_rate: Number(client.per_minute_rate || 2.5),
+      min_monthly_rate_per_channel: Number(client.monthly_rate_per_channel || 6500)
+    });
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
 // POST /api/reseller/admin/pay-commission
 resellerRouter.post("/admin/pay-commission", async (c) => {
   try {
