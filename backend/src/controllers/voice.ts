@@ -54,15 +54,24 @@ voiceRouter.post("/incoming", async (c) => {
     }
 
     // Return the JSON/XML response telling Smartflo to bridge to WebSocket
-    // Note: This is a placeholder payload; adapt exactly to Smartflo's WebSocket Connect API.
-    const smartfloResponse = {
-      action: "connect",
-      endpoint: {
-        type: "websocket",
-        uri: wsUrl,
-        content_type: "audio/l16;rate=16000" // Instructing Smartflo to send PCM 16-bit 16kHz
+    const accept = c.req.header("accept") || "";
+    if (accept.includes("application/xml") || accept.includes("text/xml")) {
+      c.header("Content-Type", "application/xml");
+      return c.body(`<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="${wsUrl.replace(/&/g, '&amp;')}" /></Connect></Response>`);
+    }
+
+    const smartfloResponse = [
+      {
+        action: "connect",
+        endpoint: [
+          {
+            type: "websocket",
+            uri: wsUrl,
+            content_type: "audio/l16;rate=16000"
+          }
+        ]
       }
-    };
+    ];
 
     return c.json(smartfloResponse);
   } catch (error) {

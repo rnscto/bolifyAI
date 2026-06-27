@@ -7,6 +7,13 @@ const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
 const getAppBaseUrl = () => Deno.env.get('APP_BASE_URL_INTERNAL') || `http://localhost:${Deno.env.get('PORT') || '8000'}`;
 
 // ─── Helpers ───
+async function hmacSha256(stringToSign: string, secret: string) {
+  const keyBytes = new TextEncoder().encode(secret);
+  const cryptoKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = await crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(stringToSign));
+  return btoa(String.fromCharCode(...new Uint8Array(sig)));
+}
+
 
 async function sendTelegramDirect(clientObj: any, { caller_number, caller_name, category, urgency, summary, type }: any) {
   if (!clientObj || !clientObj.telegram_connected || !clientObj.telegram_chat_id || !TELEGRAM_BOT_TOKEN) return;
@@ -294,13 +301,28 @@ async function triggerNextCampaignCall(campaignId: string) {
 
 voiceWebhookRouter.post("/", async (c) => {
   try {
-    const expectedSecret = Deno.env.get("SMARTFLO_WEBHOOK_SECRET");
-    const webhookSecret = c.req.query("secret");
-    if (expectedSecret && webhookSecret !== expectedSecret) {
-      return c.json({ error: "Forbidden" }, 403);
-    }
-
     const rawBody = await c.req.text();
+    const expectedSecret = Deno.env.get("SMARTFLO_WEBHOOK_SECRET");
+    
+    // HMAC Signature Verification
+    if (expectedSecret) {
+      const signatureHeader = c.req.header("x-smartflo-signature") || c.req.header("x-signature") || c.req.header("signature");
+      const webhookSecret = c.req.query("secret");
+      
+      if (signatureHeader) {
+        const computedSignature = await hmacSha256(rawBody, expectedSecret);
+        if (signatureHeader !== computedSignature) {
+           return c.json({ error: "Invalid HMAC signature" }, 403);
+        }
+      } else if (webhookSecret) {
+        // Fallback to query param
+        if (webhookSecret !== expectedSecret) {
+          return c.json({ error: "Forbidden" }, 403);
+        }
+      } else {
+         return c.json({ error: "Missing signature" }, 403);
+      }
+    }
     let payload: any = {};
     const contentType = c.req.header("content-type") || "";
     

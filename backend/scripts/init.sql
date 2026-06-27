@@ -195,6 +195,8 @@ BEFORE UPDATE ON "referral"
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
 
+
+
 CREATE TABLE IF NOT EXISTS "did" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
@@ -291,6 +293,7 @@ CREATE TABLE IF NOT EXISTS "partner" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" TIMESTAMP WITH TIME ZONE DEFAULT NULL,
   "name" TEXT,
   "email" TEXT,
   "phone" TEXT,
@@ -486,6 +489,7 @@ CREATE TABLE IF NOT EXISTS "agent" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" TIMESTAMP WITH TIME ZONE DEFAULT NULL,
   "name" TEXT,
   "client_id" TEXT,
   "industry" TEXT,
@@ -534,6 +538,7 @@ CREATE TABLE IF NOT EXISTS "user" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" TIMESTAMP WITH TIME ZONE DEFAULT NULL,
   "role" TEXT, -- master_admin, master_reseller, reseller, client
   "client_id" TEXT,
   "display_name" TEXT,
@@ -607,6 +612,7 @@ CREATE TABLE IF NOT EXISTS "client" (
   "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
   "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "deleted_at" TIMESTAMP WITH TIME ZONE DEFAULT NULL,
   "company_name" TEXT,
   "email" TEXT,
   "phone" TEXT,
