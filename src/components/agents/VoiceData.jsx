@@ -12,16 +12,36 @@ export const REALTIME_VOICES = [
   { name: "cedar", gender: "Male", style: "Deep, resonant" },
 ];
 
-// Azure Speech TTS voices (popular Indian English + Hindi voices)
 export const GEMINI_VOICES = [
-  { name: "Aoede", gender: "Female", style: "Neutral, calm" },
-  { name: "Charon", gender: "Male", style: "Neutral, authoritative" },
-  { name: "Fenrir", gender: "Male", style: "Neutral, deep" },
-  { name: "Kore", gender: "Female", style: "Neutral, bright" },
   { name: "Puck", gender: "Male", style: "Neutral, engaging" },
+  { name: "Charon", gender: "Male", style: "Neutral, authoritative" },
+  { name: "Kore", gender: "Female", style: "Neutral, bright" },
+  { name: "Fenrir", gender: "Male", style: "Neutral, deep" },
+  { name: "Aoede", gender: "Female", style: "Neutral, calm" },
+  { name: "Zephyr", gender: "Neutral", style: "Smooth, balanced" },
+  { name: "Enceladus", gender: "Male", style: "Deep, clear" },
   { name: "Leda", gender: "Female", style: "Versatile, natural" },
+  { name: "Sadachbia", gender: "Neutral", style: "Clear, engaging" },
+  { name: "Vindemiatrix", gender: "Female", style: "Bright, articulate" },
+  { name: "Callirrhoe", gender: "Female", style: "Soft, melodic" },
+  { name: "Umbriel", gender: "Male", style: "Deep, resonant" },
+  { name: "Gacrux", gender: "Male", style: "Strong, commanding" },
   { name: "Orus", gender: "Male", style: "Clear, confident" },
-  { name: "Zephyr", gender: "Neutral", style: "Smooth, balanced" }
+  { name: "Autonoe", gender: "Female", style: "Warm, conversational" },
+  { name: "Iapetus", gender: "Male", style: "Grounded, smooth" },
+  { name: "Algieba", gender: "Female", style: "Energetic, clear" },
+  { name: "Despina", gender: "Female", style: "Crisp, precise" },
+  { name: "Erinome", gender: "Female", style: "Friendly, casual" },
+  { name: "Algenib", gender: "Male", style: "Professional, balanced" },
+  { name: "Rasalgethi", gender: "Male", style: "Warm, engaging" },
+  { name: "Laomedeia", gender: "Female", style: "Calm, thoughtful" },
+  { name: "Achernar", gender: "Male", style: "Crisp, dynamic" },
+  { name: "Alnilam", gender: "Male", style: "Smooth, professional" },
+  { name: "Schedar", gender: "Female", style: "Authoritative, clear" },
+  { name: "Pulcherrima", gender: "Female", style: "Melodic, warm" },
+  { name: "Achird", gender: "Male", style: "Direct, engaging" },
+  { name: "Sadaltager", gender: "Neutral", style: "Balanced, clear" },
+  { name: "Sulafat", gender: "Female", style: "Expressive, bright" }
 ];
 
 export const AZURE_SPEECH_VOICES = [

@@ -589,7 +589,13 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
     const kbHeader = session._kbChunks.length > 0 ? `\n[KB] For any price/product/feature/policy/location fact: CALL search_knowledge_base FIRST. Never guess.\n` : '';
     const fullPrompt = voiceRules + '\n' + kbHeader + '\n' + session.systemPrompt;
 
-    const allowedVoices = ['Aoede', 'Charon', 'Fenrir', 'Kore', 'Puck', 'Leda', 'Orus', 'Zephyr'];
+    const allowedVoices = [
+      'Puck', 'Charon', 'Kore', 'Fenrir', 'Aoede', 'Zephyr', 'Enceladus', 'Leda',
+      'Sadachbia', 'Vindemiatrix', 'Callirrhoe', 'Umbriel', 'Gacrux', 'Orus',
+      'Autonoe', 'Iapetus', 'Algieba', 'Despina', 'Erinome', 'Algenib',
+      'Rasalgethi', 'Laomedeia', 'Achernar', 'Alnilam', 'Schedar', 'Pulcherrima',
+      'Achird', 'Sadaltager', 'Sulafat'
+    ];
     const safeVoice = allowedVoices.includes(session.voiceType) ? session.voiceType : 'Puck';
 
     const setup: any = {
