@@ -220,7 +220,8 @@ export default function ClientKnowledgeBase() {
   }
 
   return (
-    <FeatureGate client={client} featureName="Knowledge Base">
+    <>
+      <FeatureGate client={client} featureName="Knowledge Base">
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
@@ -442,5 +443,6 @@ export default function ClientKnowledgeBase() {
         </DialogContent>
       </Dialog>
     )}
+    </>
   );
 }
