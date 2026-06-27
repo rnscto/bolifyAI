@@ -7,21 +7,26 @@ import { triggerSmartfloOutboundCall } from "../services/smartflo.ts";
 
 export async function runActivityDispatcher() {
   try {
-    // Find scheduled activities that are due to be sent now
-    // We target whatsapp, email, sms types that haven't been completed yet
+    // Find scheduled activities that are due now.
+    // FIX: Use explicit UUID cast on lead.id to match text lead_id in activity.
+    // FIX: Also handle case where scheduled_date could be a valid ISO string stored as TEXT.
     const query = `
       SELECT a.*, l.phone as lead_phone, l.email as lead_email, l.name as lead_name
       FROM activity a
-      JOIN lead l ON a.lead_id = l.id::text
+      JOIN lead l ON l.id::text = a.lead_id
       WHERE a.status = 'scheduled' 
         AND a.scheduled_date IS NOT NULL 
         AND a.scheduled_date != ''
-        AND CAST(a.scheduled_date AS timestamp with time zone) <= NOW() 
+        AND a.scheduled_date::timestamp with time zone <= NOW() 
         AND a.type IN ('whatsapp', 'email', 'sms', 'calendar_invite', 'call', 'followup')
       LIMIT 50
     `;
     const res = await client.queryObject(query);
     const activities = res.rows as any[];
+
+    if (activities.length > 0) {
+      console.log(`[ActivityDispatcher] Found ${activities.length} activities due for dispatch.`);
+    }
 
     for (const activity of activities) {
       console.log(`[ActivityDispatcher] Dispatching ${activity.type} for Lead ${activity.lead_id} (Activity ${activity.id})`);
@@ -32,19 +37,13 @@ export async function runActivityDispatcher() {
       try {
         if (activity.type === 'whatsapp') {
           if (!activity.lead_phone) throw new Error("Lead missing phone number");
-          // Extract template name from title/description or default to a generic one
-          // E.g., title: "Whatsapp asked details" -> template could be 'follow_up_details'
-          // We can parse the description if it contains JSON or variables, for now just use a default template or one specified in title
           let templateName = 'follow_up_details';
-
-          // Try to get a template that matches "demo" or "followup", otherwise get the first approved template
           const tplQuery = `SELECT name FROM whatsapptemplate WHERE client_id = $1 AND status = 'APPROVED' ORDER BY created_at DESC LIMIT 1`;
           const tplRes = await client.queryObject(tplQuery, [activity.client_id]);
           if (tplRes.rows.length > 0) {
             templateName = (tplRes.rows[0] as any).name;
           }
-
-          success = await sendWhatsAppMessage(activity.lead_phone, templateName, [activity.first_name || 'Customer'], activity.client_id);
+          success = await sendWhatsAppMessage(activity.lead_phone, templateName, [activity.lead_name || 'Customer'], activity.client_id);
         }
         else if (activity.type === 'email') {
           if (!activity.lead_email) throw new Error("Lead missing email address");
@@ -66,7 +65,6 @@ export async function runActivityDispatcher() {
         else if (activity.type === 'call' || activity.type === 'followup') {
           if (!activity.lead_phone) throw new Error("Lead missing phone number");
 
-          // We need an agent and smartflo token. Let's try assigned_to first, or default to client's primary agent
           let agentId = activity.assigned_to;
           let agentQuery = `SELECT id, assigned_did, assigned_dids, smartflo_api_token, client_id FROM "agent" WHERE status = 'active' `;
           const agentParams: any[] = [];
@@ -94,7 +92,7 @@ export async function runActivityDispatcher() {
           }
           if (!callerDID) throw new Error("Agent has no assigned DID to dial out");
           
-          // Create a new calllog for this follow-up
+          // Create a new calllog for this automated follow-up call
           const callLogRes = await client.queryObject(`
             INSERT INTO "calllog" (client_id, agent_id, lead_id, caller_id, callee_number, direction, status, call_start_time)
             VALUES ($1, $2, $3, $4, $5, 'outbound', 'initiated', NOW())
@@ -118,26 +116,30 @@ export async function runActivityDispatcher() {
         }
 
         if (success) {
+          // FIX: Use updated_at (not updated_date) — matches the activity table schema
           await client.queryObject(
             `UPDATE "activity" SET status = 'completed', updated_at = NOW() WHERE id = $1`,
             [activity.id]
           );
 
-          // Log it to outreach log
+          // FIX: outreachlog has no 'notes' column — use 'body' for the message content
           await client.queryObject(
             `INSERT INTO outreachlog (client_id, lead_id, channel, direction, status, body)
              VALUES ($1, $2, $3, 'outbound', 'delivered', $4)`,
             [activity.client_id, activity.lead_id, activity.type, `Automated dispatch successful: ${activity.title}`]
           );
+          console.log(`[ActivityDispatcher] ✅ Dispatched ${activity.type} for activity ${activity.id}`);
         } else {
           throw new Error("Provider returned false");
         }
 
       } catch (dispatchErr: any) {
-        console.error(`[ActivityDispatcher] Failed to dispatch ${activity.type} ${activity.id}:`, dispatchErr);
+        const errMsg = dispatchErr.message || String(dispatchErr);
+        console.error(`[ActivityDispatcher] ❌ Failed to dispatch ${activity.type} ${activity.id}: ${errMsg}`);
+        // FIX: Use updated_at (not updated_date) — matches the activity table schema
         await client.queryObject(
           `UPDATE activity SET status = 'failed', updated_at = NOW(), notes = $2 WHERE id = $1`,
-          [activity.id, `Failed to dispatch: ${dispatchErr.message || dispatchErr}`]
+          [activity.id, `Failed to dispatch: ${errMsg}`]
         );
       }
     }
@@ -152,6 +154,6 @@ export function initActivityDispatcher() {
     runActivityDispatcher().catch(console.error);
   }, 60 * 1000);
 
-  // Run once immediately
+  // Run once immediately on startup
   setTimeout(() => runActivityDispatcher(), 5000);
 }

@@ -192,10 +192,11 @@ IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backtic
           const existingNotes = lead.notes || '';
           const dateTag = `[${todayStr}]`;
           const updatedNotes = existingNotes ? `${existingNotes}\n\n${dateTag} ${extracted.lead_notes}` : `${dateTag} ${extracted.lead_notes}`;
-          await (client as any).queryObject('UPDATE lead SET notes = $2, updated_date = NOW() WHERE id = $1', [callLog.lead_id, updatedNotes]);
+          // FIX: 'lead' table uses 'updated_at' not 'updated_date'
+          await (client as any).queryObject('UPDATE lead SET notes = $2, updated_at = NOW() WHERE id = $1', [callLog.lead_id, updatedNotes]);
           results.lead_notes_updated = true;
         }
-      } catch (e) {}
+      } catch (e) { console.warn('[ActionExtractor] Lead notes update failed:', e); }
     }
 
     if (extracted.actions && Array.isArray(extracted.actions)) {
@@ -298,16 +299,21 @@ IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backtic
           existingActivities.push({ ...newActRes.rows[0], type: activityType, created_at: now.toISOString() });
           results.activities_created++;
           results.details.push({ type: activityType, title: action.title, scheduled: scheduledDate, priority: action.priority });
-        } catch (e) {}
-      }
-    }
+          console.log(`[ActionExtractor] ✅ Created activity: ${activityType} | ${action.title} | scheduled: ${scheduledDate}`);
+        } catch (e: any) {
+          // FIX: Log errors instead of silently swallowing — critical for debugging
+          console.error(`[ActionExtractor] ❌ Failed to insert activity: ${e.message || e}`);
+        }
+      }  // end for (const action of extracted.actions)
+    }  // end if (extracted.actions)
 
     if (callLog.lead_id && results.activities_created > 0) {
       const callActivities = (extracted.actions || []).filter((a: any) => ['call', 'followup'].includes(a.type) && a.scheduled_date);
       if (callActivities.length > 0) {
         const earliest = callActivities.map((a: any) => new Date(a.scheduled_date)).sort((a: any, b: any) => a.getTime() - b.getTime())[0];
         try {
-          await (client as any).queryObject('UPDATE lead SET next_followup_date = $2, updated_date = NOW() WHERE id = $1', [callLog.lead_id, earliest.toISOString()]);
+          // FIX: 'lead' table uses 'updated_at' not 'updated_date'
+          await (client as any).queryObject('UPDATE lead SET next_followup_date = $2, updated_at = NOW() WHERE id = $1', [callLog.lead_id, earliest.toISOString()]);
         } catch (_) {}
       }
 
