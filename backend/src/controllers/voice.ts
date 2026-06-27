@@ -502,17 +502,13 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
       const elapsed = (Date.now() - session.startTime) / 1000;
       if (elapsed < 10) return { error: 'Call just started. Continue the conversation naturally.' };
       
-      const recentCustomer = session.transcript.filter((t: any) => t.speaker === 'Customer').slice(-3).map((t: any) => (t.text || '').toLowerCase()).join(' ');
-      const goodbyeRegex = /(bye|goodbye|alvida|namaste|namaskar|dhanyav[aā]d|thank\s*you|thanks|shukriya|theek\s*hai\s*bye|ok\s*bye|fir\s*milte|chalo\s*bye|बाय|अलविदा|धन्यवाद|शुक्रिया|नमस्ते|नमस्कार|फिर मिलते)/i;
-      if (!goodbyeRegex.test(recentCustomer)) return { error: 'Customer has NOT said goodbye yet. Continue the conversation.' };
-      
       const reason = args.reason || 'conversation_complete';
       session.transcript.push({ speaker: 'System', text: `[Ended: ${reason}]` });
       setTimeout(() => {
         session._callEnded = true;
         if (geminiSocket?.readyState === WebSocket.OPEN) geminiSocket.close();
         if (smartfloSocket?.readyState === WebSocket.OPEN) smartfloSocket.close();
-      }, 2000);
+      }, 500);
       return { success: true };
     }
     return { error: `Unknown: ${name}` };
@@ -524,7 +520,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
     if (session._setupSent) return;
     session._setupSent = true;
     const tools = buildGeminiTools();
-    const voiceRules = `[LANGUAGE] Speak ONLY Hindi (Devanagari/Roman) + English (Indian accent). Keep replies SHORT (1-2 sentences).\n[END-CALL GUARD] Use end_call ONLY after the CUSTOMER clearly says bye/thanks/namaste/dhanyavaad AND has spoken 2+ clear sentences.`;
+    const voiceRules = `[GREETING] Always start with a very short greeting immediately.\n[LANGUAGE] Speak ONLY Hindi (Devanagari/Roman) + English (Indian accent). Keep replies SHORT (1-2 sentences).\n[END-CALL GUARD] Use the end_call tool IMMEDIATELY if the customer says goodbye, asks to call back later, shows disinterest, or if the conversation has naturally concluded. Do not wait for further input.`;
     const kbHeader = session._kbChunks.length > 0 ? `\n[KB] For any price/product/feature/policy/location fact: CALL search_knowledge_base FIRST. Never guess.\n` : '';
     const fullPrompt = voiceRules + '\n' + kbHeader + '\n' + session.systemPrompt;
 
@@ -569,7 +565,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
           
           if (!session._greetingTriggered) {
              session._greetingTriggered = true;
-             sendToGemini({ clientContent: { turns: [{ role: "user", parts: [{ text: "Hello! Greet me briefly in English or Hindi to start the conversation." }] }], turnComplete: true } });
+             sendToGemini({ clientContent: { turns: [{ role: "user", parts: [{ text: "User connected. Greet them." }] }], turnComplete: true } });
              session._audioBuffer = [];
           } else {
              // Flush last bit of buffer for reconnects
@@ -756,16 +752,16 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
     } catch (e) { console.error(`[${reqId}] Smartflo parse err:`, e); }
   };
 
-  smartfloSocket.onclose = async () => {
+  smartfloSocket.onclose = () => {
     console.log(`[${reqId}] Smartflo Disconnected`);
     session._callEnded = true;
     if (geminiSocket && geminiSocket.readyState === WebSocket.OPEN) geminiSocket.close();
     
     const duration = Math.round((Date.now() - session.startTime) / 1000);
     if (session.callLogId) {
-      await saveCallRecord(session, reqId, duration);
+      saveCallRecord(session, reqId, duration).catch(e => console.error(`[${reqId}] Save record error:`, e));
     } else if (session._leadId) {
-      await client.queryObject(`UPDATE "lead" SET last_call_date = $1 WHERE id = $2`, [new Date().toISOString(), session._leadId]);
+      client.queryObject(`UPDATE "lead" SET last_call_date = $1 WHERE id = $2`, [new Date().toISOString(), session._leadId]).catch(e => console.error(`[${reqId}] Lead update err:`, e));
     }
   };
 
