@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, CreditCard, Calendar, Wallet, Upload, FileImage, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { Loader2, CreditCard, Calendar, Wallet, Upload, FileImage, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { uploadPrivateFile, getSignedUrl } from '@/lib/azureBlob';
 
