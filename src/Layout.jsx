@@ -367,10 +367,10 @@ export default function Layout({ children, currentPageName }) {
                         key={item.path}
                         to={createPageUrl(item.path)}
                         style={isActive ? { color: wlPrimary, backgroundColor: `${wlPrimary}1A` } : undefined}
-                        className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
+                        className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
                           isActive
-                            ? ''
-                            : 'text-gray-700 hover:bg-gray-50'
+                            ? 'shadow-sm ring-1 ring-black/5'
+                            : 'text-gray-600 hover:bg-slate-50 hover:text-gray-900'
                         }`}
                       >
                         <Icon className="w-5 h-5" />
@@ -391,8 +391,8 @@ export default function Layout({ children, currentPageName }) {
                             key={item.path}
                             to={createPageUrl(item.path)}
                             style={isActive ? { color: wlPrimary, backgroundColor: `${wlPrimary}1A` } : undefined}
-                            className={`flex items-center gap-3 px-4 py-3 rounded-lg text-sm font-medium transition-colors ${
-                              isActive ? '' : 'text-gray-700 hover:bg-gray-50'
+                            className={`flex items-center gap-3 px-4 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                              isActive ? 'shadow-sm ring-1 ring-black/5' : 'text-gray-600 hover:bg-slate-50 hover:text-gray-900'
                             }`}
                           >
                             <Icon className="w-5 h-5" />
@@ -438,11 +438,11 @@ export default function Layout({ children, currentPageName }) {
         {/* Platform-wide announcement marquee (admin-managed) */}
         <AnnouncementMarquee audience={isAdmin ? 'admins' : 'clients'} />
         {/* Top bar */}
-        <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
-          <div className="flex items-center justify-between px-4 py-4">
+        <header className="sticky top-0 z-30 flex items-center justify-between px-6 py-4 bg-white/80 backdrop-blur-md border-b border-slate-200/60 shadow-sm transition-all">
+          <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden text-gray-500 hover:text-gray-700"
+              className="lg:hidden p-2 -ml-2 text-gray-500 hover:text-gray-700 rounded-md hover:bg-slate-100 transition-colors"
             >
               <Menu className="w-6 h-6" />
             </button>
@@ -472,7 +472,7 @@ export default function Layout({ children, currentPageName }) {
         </header>
 
         {/* Page content */}
-        <main className="p-6">
+        <main className="p-6 lg:p-8 max-w-7xl mx-auto min-h-[calc(100vh-73px)]">
           {!isAdmin && client && <AccountStatusBanner client={client} />}
           {children}
         </main>

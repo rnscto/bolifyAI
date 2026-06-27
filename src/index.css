@@ -4,18 +4,18 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%; /* slate-50 background for the app */
+    --background: 210 40% 98%; /* Crisp slate-50 background */
     --foreground: 222.2 84% 4.9%;
     --card: 0 0% 100%; /* Pure white cards */
     --card-foreground: 222.2 84% 4.9%;
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
     
-    /* Enterprise Blue: #1d4ed8 / Tailwind Blue-700 */
-    --primary: 224 76% 48%; 
+    /* Enterprise Blue: #2563EB / Tailwind Blue-600 */
+    --primary: 221.2 83.2% 53.3%;
     --primary-foreground: 210 40% 98%;
     
-    /* Muted Blue: #eff6ff / Tailwind Blue-50 */
+    /* Muted Blue */
     --secondary: 214 100% 97%;
     --secondary-foreground: 222.2 47.4% 11.2%;
     
@@ -23,7 +23,7 @@
     --muted-foreground: 215.4 16.3% 46.9%;
     
     --accent: 214 100% 97%;
-    --accent-foreground: 224 76% 48%;
+    --accent-foreground: 221.2 83.2% 53.3%;
     
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
@@ -31,19 +31,19 @@
     /* Soft borders */
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 224 76% 48%;
+    --ring: 221.2 83.2% 53.3%;
     
     --radius: 0.75rem;
 
     /* Crisp White Sidebar */
     --sidebar-background: 0 0% 100%;
     --sidebar-foreground: 222.2 84% 4.9%;
-    --sidebar-primary: 224 76% 48%;
+    --sidebar-primary: 221.2 83.2% 53.3%;
     --sidebar-primary-foreground: 0 0% 100%;
     --sidebar-accent: 214 100% 97%;
-    --sidebar-accent-foreground: 224 76% 48%;
+    --sidebar-accent-foreground: 221.2 83.2% 53.3%;
     --sidebar-border: 214.3 31.8% 91.4%;
-    --sidebar-ring: 224 76% 48%;
+    --sidebar-ring: 221.2 83.2% 53.3%;
   }
 
   .dark {
