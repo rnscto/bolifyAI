@@ -261,9 +261,23 @@ const buildCrudRouter = (tableName: string) => {
 
     const filteredBody: Record<string, any> = {};
     for (const [k, v] of Object.entries(body)) {
-      if (validCols.has(k) && k !== 'id' && k !== 'created_at' && k !== 'updated_at' && k !== 'client_id') {
+      if (validCols.has(k) && k !== 'id' && k !== 'created_at' && k !== 'updated_at') {
+        // Prevent normal clients from reassigning ownership
+        if (k === 'client_id' && user.role !== 'admin' && user.role !== 'master_admin' && user.role !== 'reseller' && user.role !== 'master_reseller') {
+          continue;
+        }
         filteredBody[k] = v;
       }
+    }
+
+    if (validCols.has("client_id") && (user.role === 'reseller' || user.role === 'master_reseller') && filteredBody["client_id"]) {
+        if (filteredBody["client_id"] !== user.client_id) {
+          const check = await client.queryObject(`SELECT id FROM "client" WHERE id = $1 AND upline_id = $2`, [filteredBody["client_id"], user.client_id]);
+          if (check.rows.length === 0) {
+            // Cannot reassign to a client that isn't their downline
+            return c.json({ error: "Unauthorized client_id assignment" }, 403);
+          }
+        }
     }
 
     if (Object.keys(filteredBody).length === 0) {
