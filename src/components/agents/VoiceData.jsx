@@ -18,7 +18,10 @@ export const GEMINI_VOICES = [
   { name: "Charon", gender: "Male", style: "Neutral, authoritative" },
   { name: "Fenrir", gender: "Male", style: "Neutral, deep" },
   { name: "Kore", gender: "Female", style: "Neutral, bright" },
-  { name: "Puck", gender: "Male", style: "Neutral, engaging" }
+  { name: "Puck", gender: "Male", style: "Neutral, engaging" },
+  { name: "Leda", gender: "Female", style: "Versatile, natural" },
+  { name: "Orus", gender: "Male", style: "Clear, confident" },
+  { name: "Zephyr", gender: "Neutral", style: "Smooth, balanced" }
 ];
 
 export const AZURE_SPEECH_VOICES = [
