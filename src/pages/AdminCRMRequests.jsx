@@ -73,6 +73,11 @@ export default function AdminCRMRequests() {
       const patch = { crm_api_access_notes: notes || '' };
       if (action === 'reject') patch.crm_api_access_status = 'rejected';
       else if (action === 'revoke') patch.crm_api_access_status = 'revoked';
+      else if (action === 'approve') {
+        patch.crm_api_access_status = 'active';
+        patch.crm_api_access_activated_at = new Date().toISOString();
+        patch.crm_api_access_activated_by = me?.email || 'admin';
+      }
       await apiClient.Client.update(selected.id, patch);
       toast.success(`CRM access ${action}d for ${selected.company_name}`);
       closeDialog();
@@ -201,6 +206,12 @@ export default function AdminCRMRequests() {
                               <Upload className="w-4 h-4 mr-1" /> Raise Payment Approval
                             </Button>
                           )}
+                          {/* Direct Approve (Master Admin only) */}
+                          {status !== 'active' && me?.role === 'master_admin' && (
+                            <Button size="sm" className="bg-green-600 hover:bg-green-700 ml-1" onClick={() => openAction(c, 'approve')}>
+                              <CheckCircle2 className="w-4 h-4 mr-1" /> Approve & Activate
+                            </Button>
+                          )}
                           {/* Reject (any admin, direct) */}
                           {status === 'requested' && ['admin', 'master_admin'].includes(me?.role) && (
                             <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => openAction(c, 'reject')}>
@@ -233,6 +244,7 @@ export default function AdminCRMRequests() {
             <DialogTitle>
               {action === 'reject' && `Reject CRM Request — ${selected?.company_name}`}
               {action === 'revoke' && `Revoke CRM Access — ${selected?.company_name}`}
+              {action === 'approve' && `Directly Approve CRM Access — ${selected?.company_name}`}
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
@@ -248,12 +260,14 @@ export default function AdminCRMRequests() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={closeDialog} disabled={saving}>Cancel</Button>
-            <Button
-              onClick={handleSubmit}
+            <Button 
+              className={
+                action === 'approve' ? 'bg-green-600 hover:bg-green-700 text-white' : 'bg-red-600 hover:bg-red-700 text-white'
+              } 
+              onClick={handleSubmit} 
               disabled={saving}
-              className="bg-red-600 hover:bg-red-700"
             >
-              {saving ? 'Saving…' : action === 'reject' ? 'Confirm Rejection' : 'Confirm Revoke'}
+              {saving ? 'Saving...' : (action === 'approve' ? 'Approve & Activate' : 'Confirm')}
             </Button>
           </DialogFooter>
         </DialogContent>

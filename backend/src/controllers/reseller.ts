@@ -277,7 +277,7 @@ resellerRouter.post("/admin/promote", async (c) => {
 
     const { client_id, new_role } = await c.req.json();
     if (!client_id || !new_role) return c.json({ error: "Missing required fields" }, 400);
-    if (!["reseller", "master_reseller"].includes(new_role)) return c.json({ error: "Invalid role" }, 400);
+    if (!["reseller", "master_reseller", "admin", "user", "master_admin"].includes(new_role)) return c.json({ error: "Invalid role" }, 400);
 
     const client = await base44.entities.Client.get(client_id);
     if (!client) return c.json({ error: "Client not found" }, 404);
@@ -299,8 +299,9 @@ resellerRouter.post("/admin/promote", async (c) => {
       await base44.entities.Client.update(client.id, { account_type: "business" });
     }
 
-    // Check if Partner record exists
-    const partners = await base44.entities.Partner.filter({ user_id: user.id });
+    // Check if Partner record exists for resellers
+    if (["reseller", "master_reseller"].includes(new_role)) {
+      const partners = await base44.entities.Partner.filter({ user_id: user.id });
     if (partners.length === 0) {
       const code = 'BOLIFY-' + (user.name || 'PARTNER').split(' ')[0].toUpperCase().substring(0, 6) + Math.floor(1000 + Math.random() * 9000);
       await base44.entities.Partner.create({
@@ -314,11 +315,12 @@ resellerRouter.post("/admin/promote", async (c) => {
         referral_code: code,
         referral_link: `https://app.bolify.ai/?ref=${code}`
       });
-    } else {
-      // update commission rate if it's a promotion
-      await base44.entities.Partner.update(partners[0].id, {
-         commission_rate: new_role === "master_reseller" ? 30 : 20,
-      });
+      } else {
+        // update commission rate if it's a promotion
+        await base44.entities.Partner.update(partners[0].id, {
+           commission_rate: new_role === "master_reseller" ? 30 : 20,
+        });
+      }
     }
 
     return c.json({ success: true, message: `Successfully promoted to ${new_role.replace('_', ' ')}` });

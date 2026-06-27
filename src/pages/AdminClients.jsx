@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -47,6 +48,10 @@ export default function AdminClients() {
   const [activateClient, setActivateClient] = useState(null);
   const [overrideClient, setOverrideClient] = useState(null);
   const [resellerTopupClient, setResellerTopupClient] = useState(null);
+  const [deleteClient, setDeleteClient] = useState(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [roleClient, setRoleClient] = useState(null);
+  const [selectedRole, setSelectedRole] = useState('');
   const [currentUser, setCurrentUser] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [pricingLimits, setPricingLimits] = useState(null);
@@ -154,32 +159,32 @@ export default function AdminClients() {
     setDialogOpen(true);
   };
 
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this client?')) return;
-    
+  const confirmDelete = async () => {
+    if (deleteConfirmText !== 'DELETE') return;
     try {
-      await apiClient.functions.invoke('adminListClients', { action: 'delete', client_id: id });
+      await apiClient.functions.invoke('adminListClients', { action: 'delete', client_id: deleteClient.id });
       toast.success('Client deleted');
       loadClients();
+      setDeleteClient(null);
     } catch (error) {
       console.error('Error deleting client:', error);
       toast.error('Failed to delete client');
     }
   };
 
-  const handlePromote = async (client, newRole) => {
-    if (!confirm(`Are you sure you want to promote ${client.company_name || 'this client'} to ${newRole.replace('_', ' ')}?`)) return;
+  const saveRole = async () => {
     try {
       const res = await apiFetch('/reseller/admin/promote', {
         method: 'POST',
-        body: JSON.stringify({ client_id: client.id, new_role: newRole })
+        body: JSON.stringify({ client_id: roleClient.id, new_role: selectedRole })
       });
       if (res.error) throw new Error(res.error);
-      toast.success(res.message);
+      toast.success(res.message || 'Role updated');
       loadClients();
+      setRoleClient(null);
     } catch (err) {
       console.error(err);
-      toast.error(err.message || 'Failed to promote client');
+      toast.error(err.message || 'Failed to update role');
     }
   };
 
@@ -403,6 +408,7 @@ export default function AdminClients() {
                 <TableHead>Company</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Phone</TableHead>
+                <TableHead>Role</TableHead>
                 <TableHead>Billing</TableHead>
                 <TableHead>Balance / Minutes</TableHead>
                 <TableHead>Account</TableHead>
@@ -426,6 +432,11 @@ export default function AdminClients() {
                     <TableCell className="font-medium">{client.company_name}</TableCell>
                     <TableCell>{client.email}</TableCell>
                     <TableCell>{client.phone || '-'}</TableCell>
+                    <TableCell>
+                      <Badge className="bg-gray-100 text-gray-800">
+                        {users.find(u => u.client_id === client.id)?.role?.replace('_', ' ') || 'user'}
+                      </Badge>
+                    </TableCell>
                     <TableCell>
                       <Badge className={client.billing_type === 'unlimited' ? 'bg-purple-100 text-purple-800' : 'bg-cyan-100 text-cyan-800'}>
                         {client.billing_type === 'unlimited' ? `Unlimited ×${client.total_channels || 1}` : `₹${client.per_minute_rate || 4}/min`}
@@ -524,25 +535,23 @@ export default function AdminClients() {
                         <Button
                           size="sm"
                           variant="ghost"
-                          title="Promote to Reseller"
-                          onClick={() => handlePromote(client, 'reseller')}
+                          title="Manage Role"
+                          onClick={() => {
+                            setRoleClient(client);
+                            setSelectedRole(users.find(u => u.client_id === client.id)?.role || 'user');
+                          }}
                         >
-                          <Users className="w-4 h-4 text-purple-600" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          title="Promote to Master Reseller"
-                          onClick={() => handlePromote(client, 'master_reseller')}
-                        >
-                          <Crown className="w-4 h-4 text-yellow-600" />
+                          <Crown className="w-4 h-4 text-purple-600" />
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
                           className="text-red-600"
                           title="Delete Client"
-                          onClick={() => handleDelete(client.id)}
+                          onClick={() => {
+                            setDeleteClient(client);
+                            setDeleteConfirmText('');
+                          }}
                         >
                           <Trash2 className="w-4 h-4 text-red-600" />
                         </Button>
@@ -595,6 +604,66 @@ export default function AdminClients() {
           onSubmitted={loadClients}
         />
       )}
+      <Dialog open={!!deleteClient} onOpenChange={(open) => !open && setDeleteClient(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Client Account</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              This action is permanent and cannot be undone. All data associated with {deleteClient?.company_name} will be deleted.
+              <br/><br/>
+              To confirm, type <strong>DELETE</strong> below.
+            </p>
+            <Input
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder="DELETE"
+              className="border-red-300 focus-visible:ring-red-500"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteClient(null)}>Cancel</Button>
+            <Button 
+              className="bg-red-600 hover:bg-red-700 text-white" 
+              onClick={confirmDelete} 
+              disabled={deleteConfirmText !== 'DELETE'}
+            >
+              Confirm Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={!!roleClient} onOpenChange={(open) => !open && setRoleClient(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Manage Role: {roleClient?.company_name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-4">
+            <div>
+              <Label>Select Role</Label>
+              <Select value={selectedRole} onValueChange={setSelectedRole}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="master_admin">Master Admin</SelectItem>
+                  <SelectItem value="reseller">Reseller</SelectItem>
+                  <SelectItem value="master_reseller">Master Reseller</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRoleClient(null)}>Cancel</Button>
+            <Button className="bg-blue-600 hover:bg-blue-700" onClick={saveRole}>
+              Save Role
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

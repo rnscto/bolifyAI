@@ -60,9 +60,9 @@ export default async function adminListClients(c: any) {
     }
 
     if (action === 'promote_user' && payload.user_id && payload.role) {
-      // Only master_admin or yadavnand886@gmail.com can promote users
-      if (user.role !== 'master_admin' && user.email !== 'yadavnand886@gmail.com') {
-         return c.json({ data: { error: 'Forbidden. Only Master Admin can promote users.' } }, 403);
+      // Only master_admin can promote users
+      if (user.role !== 'master_admin') {
+         return c.json({ data: { error: 'Forbidden. Only Master Admin can change roles.' } }, 403);
       }
       const allowedRoles = ['reseller', 'master_reseller', 'admin', 'user'];
       if (!allowedRoles.includes(payload.role)) {
