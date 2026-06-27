@@ -601,18 +601,33 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
     console.log(`[${reqId}] 📤 Setup: tools=${tools.length}, voice=${session.voiceType}, prompt=${fullPrompt.length}ch`);
   }
 
+  let geminiKeepaliveTimer: ReturnType<typeof setInterval> | null = null;
+
   const connectGemini = async (isReconnect: boolean = false) => {
     if (geminiSocket && !isReconnect) return;
     if (isReconnect && geminiSocket) { try { geminiSocket.close(); } catch (_) {} geminiSocket = null; }
+    if (geminiKeepaliveTimer) { clearInterval(geminiKeepaliveTimer); geminiKeepaliveTimer = null; }
 
     const { url: WS_URL, key, tier } = geminiKeys.getWebSocketUrl();
     currentGeminiKey = key;
     geminiSocket = new WebSocket(WS_URL);
 
     geminiSocket.onopen = async () => {
-      console.log(`[${reqId}] 🔌 Gemini Connected`);
+      console.log(`[${reqId}] 🔌 Gemini Connected (attempt ${session._geminiReconnectAttempts + 1})`);
       session._setupSent = false;
       if (session._agentConfigReady) sendGeminiSetup();
+      // Keepalive: Gemini Live has a ~10min idle timeout and a ~2min session limit on free tier.
+      // Send a silent ping every 25s to prevent idle disconnects.
+      geminiKeepaliveTimer = setInterval(() => {
+        if (geminiSocket?.readyState === WebSocket.OPEN && !session._callEnded) {
+          // Empty clientContent ping to keep the connection alive
+          try {
+            geminiSocket.send(JSON.stringify({ clientContent: { turns: [], turnComplete: false } }));
+          } catch (_) {}
+        } else {
+          if (geminiKeepaliveTimer) clearInterval(geminiKeepaliveTimer);
+        }
+      }, 25000);
     };
 
     geminiSocket.onmessage = async (event) => {
@@ -626,14 +641,24 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
 
         if (msg.setupComplete !== undefined) {
           session.geminiReady = true;
-          console.log(`[${reqId}] ✅ Gemini setupComplete (buffered=${session._audioBuffer.length})`);
+          console.log(`[${reqId}] ✅ Gemini setupComplete (buffered=${session._audioBuffer.length}, reconnect=${isReconnect})`);
           
           if (!session._greetingTriggered) {
              session._greetingTriggered = true;
              sendToGemini({ clientContent: { turns: [{ role: "user", parts: [{ text: "User connected. Greet them." }] }], turnComplete: true } });
              session._audioBuffer = [];
-          } else {
-             // Flush last bit of buffer for reconnects
+          } else if (isReconnect) {
+             // On reconnect, replay the last few turns so Gemini has context
+             const recentTranscript = session.transcript.slice(-8);
+             if (recentTranscript.length > 0) {
+               const ctxText = recentTranscript
+                 .map((t: any) => `${t.speaker}: ${t.text}`)
+                 .join('\n');
+               sendToGemini({ clientContent: { turns: [
+                 { role: "user", parts: [{ text: `[Session resumed. Previous conversation:\n${ctxText}\n\nContinue naturally from where we left off.]` }] }
+               ], turnComplete: true } });
+             }
+             // Flush buffered audio
              const tail = session._audioBuffer.slice(-50);
              for (const b64 of tail) sendToGemini({ realtimeInput: { audio: { data: b64, mimeType: 'audio/pcm;rate=16000' } } });
              session._audioBuffer = [];
@@ -711,16 +736,27 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
 
     geminiSocket.onclose = (event) => {
       console.log(`[${reqId}] 🔴 Gemini Disconnected (code: ${event.code}, reason: ${event.reason})`);
+      if (geminiKeepaliveTimer) { clearInterval(geminiKeepaliveTimer); geminiKeepaliveTimer = null; }
       session.geminiReady = false;
-      if (!session._callEnded && session._geminiReconnectAttempts < 5) {
+
+      // If the close was due to rate limiting, switch key before reconnecting
+      if (geminiKeys.isRateLimitError(event.code)) {
+        geminiKeys.markRateLimited(currentGeminiKey, `ws_close_${event.code}`);
+      }
+
+      if (!session._callEnded && session._geminiReconnectAttempts < 10) {
         session._geminiReconnectAttempts++;
-        connectGemini(true);
+        const delay = session._geminiReconnectAttempts <= 2 ? 200 : 500;
+        console.log(`[${reqId}] 🔁 Reconnecting Gemini (attempt ${session._geminiReconnectAttempts}) in ${delay}ms...`);
+        setTimeout(() => connectGemini(true), delay);
       } else if (!session._callEnded) {
+        console.error(`[${reqId}] ❌ Gemini reconnect exhausted. Ending call.`);
         session._callEnded = true;
         if (smartfloSocket.readyState === WebSocket.OPEN) smartfloSocket.close();
       }
     };
   };
+
 
   smartfloSocket.onopen = () => console.log(`[${reqId}] Smartflo Connected`);
 
@@ -820,6 +856,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
   smartfloSocket.onclose = () => {
     console.log(`[${reqId}] Smartflo Disconnected`);
     session._callEnded = true;
+    if (geminiKeepaliveTimer) { clearInterval(geminiKeepaliveTimer); geminiKeepaliveTimer = null; }
     if (geminiSocket && geminiSocket.readyState === WebSocket.OPEN) geminiSocket.close();
     
     const duration = Math.round((Date.now() - session.startTime) / 1000);
@@ -829,6 +866,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
       client.queryObject(`UPDATE "lead" SET last_call_date = $1 WHERE id = $2`, [new Date().toISOString(), session._leadId]).catch(e => console.error(`[${reqId}] Lead update err:`, e));
     }
   };
+
 
   smartfloSocket.onerror = (e) => console.error(`[${reqId}] Smartflo WS Error:`, e);
   // initStreamSession is void — response was already returned to the client by Deno.serve

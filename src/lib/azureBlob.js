@@ -22,7 +22,15 @@ async function invokeUpload({ file, visibility, folder }) {
   formData.append('visibility', visibility);
   if (folder) formData.append('folder', folder);
 
-  const { appId, token, appBaseUrl } = appParams;
+  // Read token fresh from localStorage every time (appParams is evaluated at import time
+  // and may be stale if the user just logged in).
+  const token =
+    localStorage.getItem('token') ||
+    localStorage.getItem('base44_access_token') ||
+    appParams.token ||
+    '';
+
+  const { appBaseUrl } = appParams;
   const baseUrl = (appBaseUrl || '').replace(/\/+$/, '');
   const url = `${baseUrl}/api/functions/azureBlobUpload`;
 
@@ -34,7 +42,9 @@ async function invokeUpload({ file, visibility, folder }) {
   try { result = await resp.json(); } catch { result = {}; }
   const payload = result?.data || result;
   if (!resp.ok || !payload?.success) {
-    throw new Error(payload?.error || result?.error || `Azure upload failed (${resp.status})`);
+    const errMsg = payload?.error || result?.error || `Upload failed (HTTP ${resp.status})`;
+    console.error('[azureBlob] Upload error:', errMsg, result);
+    throw new Error(errMsg);
   }
   return payload;
 }
