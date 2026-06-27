@@ -103,7 +103,7 @@ export default function PersonalDashboard() {
           <TabsTrigger value="messages" className="relative">
             Messages
             {unreadMessages > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-purple-600 text-white rounded-full">
+              <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold bg-purple-600 text-gray-900 rounded-full">
                 {unreadMessages}
               </span>
             )}

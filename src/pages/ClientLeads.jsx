@@ -611,7 +611,7 @@ export default function ClientLeads() {
                     <TableCell>
                       <Link to={createPageUrl('LeadDetail') + `?id=${lead.id}`} className="hover:underline">
                         <span className="font-medium text-blue-700">{lead.name}</span>
-                        {lead.email && <p className="text-xs text-gray-400">{lead.email}</p>}
+                        {lead.email && <p className="text-xs text-gray-500">{lead.email}</p>}
                       </Link>
                     </TableCell>
                     <TableCell>{maskPhoneNumber(lead.phone)}</TableCell>
@@ -622,7 +622,7 @@ export default function ClientLeads() {
                           <Badge variant="outline" className="text-xs font-normal" style={{ borderColor: g.color, color: g.color }}>
                             {g.name}
                           </Badge>
-                        ) : <span className="text-gray-400 text-xs">—</span>;
+                        ) : <span className="text-gray-500 text-xs">—</span>;
                       })()}
                     </TableCell>
                     <TableCell>{lead.company || '-'}</TableCell>
@@ -651,7 +651,7 @@ export default function ClientLeads() {
                           onClick={() => initiateCall(lead)}
                           disabled={callingLeadId !== null}
                           title={callingLeadId === lead.id ? "Calling..." : "Call Now"}
-                          className={callingLeadId === lead.id ? "bg-green-600 hover:bg-green-700 text-white animate-pulse" : ""}
+                          className={callingLeadId === lead.id ? "bg-green-600 hover:bg-green-700 text-gray-900 animate-pulse" : ""}
                         >
                           {callingLeadId === lead.id ? (
                             <><Loader2 className="w-4 h-4 animate-spin mr-1" /> Calling</>

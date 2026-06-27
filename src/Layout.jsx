@@ -189,7 +189,7 @@ export default function Layout({ children, currentPageName }) {
   
   const wlLogoUrl = !isAdmin && activeBrand?.logo_url ? activeBrand.logo_url : 'https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/a1247aabb_generated_image.png';
   const wlAppName = !isAdmin && activeBrand?.brand_name ? activeBrand.brand_name : 'Bolify AI';
-  const wlPrimary = !isAdmin && activeBrand?.theme_colors?.primary ? activeBrand.theme_colors.primary : '#00bcd4';
+  const wlPrimary = !isAdmin && activeBrand?.theme_colors?.primary ? activeBrand.theme_colors.primary : '#1D4ED8';
   const wlFavicon = !isAdmin && activeBrand?.favicon_url ? activeBrand.favicon_url : null;
 
   // Update browser tab title + favicon to reflect white-label
@@ -292,7 +292,7 @@ export default function Layout({ children, currentPageName }) {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
@@ -300,7 +300,7 @@ export default function Layout({ children, currentPageName }) {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50 gap-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 gap-4">
         <p className="text-gray-600">Please log in to access the dashboard.</p>
         <button onClick={() => apiClient.auth.redirectToLogin()} className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
           Log In
@@ -326,7 +326,7 @@ export default function Layout({ children, currentPageName }) {
   const showStatusGate = !isAdmin && client && lockedStates.includes(client.account_status);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50">
       {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
@@ -440,7 +440,7 @@ export default function Layout({ children, currentPageName }) {
         {/* Platform-wide announcement marquee (admin-managed) */}
         <AnnouncementMarquee audience={isAdmin ? 'admins' : 'clients'} />
         {/* Top bar */}
-        <header className="bg-white border-b border-gray-200 sticky top-0 z-30">
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
           <div className="flex items-center justify-between px-4 py-4">
             <button
               onClick={() => setSidebarOpen(true)}

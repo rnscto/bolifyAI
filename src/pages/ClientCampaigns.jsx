@@ -136,7 +136,7 @@ export default function ClientCampaigns() {
         {/* Campaign list */}
         {campaigns.length === 0 ? (
           <div className="text-center py-16 bg-white rounded-xl border">
-            <Megaphone className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <Megaphone className="w-12 h-12 text-gray-600 mx-auto mb-3" />
             <p className="text-gray-500 mb-4">No campaigns yet. Create your first campaign to start calling.</p>
             <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => setCreateOpen(true)}>
               <Plus className="w-4 h-4 mr-2" /> Create Campaign

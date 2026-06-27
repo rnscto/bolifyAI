@@ -70,9 +70,9 @@ export default function ClientAgents() {
       {agents.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
-            <Bot className="w-16 h-16 text-gray-400 mb-4" />
+            <Bot className="w-16 h-16 text-gray-500 mb-4" />
             <p className="text-gray-500">No agent assigned yet</p>
-            <p className="text-sm text-gray-400 mt-2">Contact admin to get an agent assigned</p>
+            <p className="text-sm text-gray-500 mt-2">Contact admin to get an agent assigned</p>
           </CardContent>
         </Card>
       ) : (

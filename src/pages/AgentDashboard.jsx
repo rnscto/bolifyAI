@@ -62,7 +62,7 @@ export default function AgentDashboard() {
 
   if (!agent) {
     return (
-      <div className="flex flex-col items-center justify-center h-64 text-gray-400">
+      <div className="flex flex-col items-center justify-center h-64 text-gray-500">
         <Bot className="w-12 h-12 mb-3" />
         <p>No agent found. Set up your agent first.</p>
       </div>
@@ -84,7 +84,7 @@ export default function AgentDashboard() {
                 {agent.status}
               </Badge>
               <span className="text-sm text-gray-500">{agent.industry || 'General'}</span>
-              <span className="text-sm text-gray-400">•</span>
+              <span className="text-sm text-gray-500">•</span>
               <span className="text-sm text-gray-500">{client?.company_name}</span>
             </div>
           </div>
