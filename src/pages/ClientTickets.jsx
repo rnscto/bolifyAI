@@ -21,7 +21,7 @@ export default function ClientTickets() {
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   
-  const [form, setForm] = useState({ subject: '', category: 'technical_issue', priority: 'medium' });
+  const [form, setForm] = useState({ subject: '', category: 'technical_issue', priority: 'medium', description: '' });
   const [replyText, setReplyText] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -66,11 +66,12 @@ export default function ClientTickets() {
       const newTicket = await supportApi.createTicket({
         subject: form.subject,
         category: form.category,
-        priority: form.priority
+        priority: form.priority,
+        description: form.description
       });
       toast.success('Ticket created successfully');
       setDialogOpen(false);
-      setForm({ subject: '', category: 'technical_issue', priority: 'medium' });
+      setForm({ subject: '', category: 'technical_issue', priority: 'medium', description: '' });
       loadTickets();
       handleOpenTicket(newTicket);
     } catch (e) {
@@ -229,6 +230,10 @@ export default function ClientTickets() {
             <div className="space-y-1.5">
               <Label>Subject</Label>
               <Input value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} placeholder="Brief description of the issue" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Description</Label>
+              <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Please explain your issue in detail..." className="min-h-[100px]" />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">

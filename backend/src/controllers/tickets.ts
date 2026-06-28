@@ -53,12 +53,12 @@ ticketRouter.post("/tickets", async (c) => {
     const user = c.get("jwtPayload") as any;
     const body = await c.req.json();
     
-    const { subject, category, priority } = body;
+    const { subject, category, priority, description } = body;
     if (!subject) return c.json({ error: "Subject is required" }, 400);
 
     const query = `
-      INSERT INTO "ticket" ("created_by", "subject", "category", "status", "priority")
-      VALUES ($1, $2, $3, $4, $5)
+      INSERT INTO "ticket" ("created_by", "subject", "category", "status", "priority", "description")
+      VALUES ($1, $2, $3, $4, $5, $6)
       RETURNING *
     `;
     const result = await client.queryObject(query, [
@@ -66,10 +66,22 @@ ticketRouter.post("/tickets", async (c) => {
       subject,
       category || 'other',
       'open',
-      priority || 'medium'
+      priority || 'medium',
+      description || ''
     ]);
     
-    return c.json(result.rows[0]);
+    const ticket = result.rows[0];
+
+    // If description is provided, insert it as the first message
+    if (description) {
+      await client.queryObject(
+        `INSERT INTO "ticketmessage" ("ticket_id", "sender_id", "sender_role", "message")
+         VALUES ($1, $2, 'client', $3)`,
+        [ticket.id, user.id, description]
+      );
+    }
+    
+    return c.json(ticket);
   } catch (err: any) {
     return c.json({ error: err.message }, 500);
   }
