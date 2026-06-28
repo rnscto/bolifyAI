@@ -241,7 +241,7 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
     console.log(`[${reqId}] 💾 Saved basic CallLog: ${session.callLogId}. Handing off AI scoring to Dapr.`);
 
     try {
-      const daprUrl = `http://localhost:3500/v1.0/publish/bolify-dapr-bus/call-tasks`;
+      const daprUrl = `http://localhost:3500/v1.0/publish/pubsub/call-tasks`;
       const res = await fetch(daprUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

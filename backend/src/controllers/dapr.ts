@@ -21,12 +21,12 @@ daprRouter.get("/debug", async (c) => {
 daprRouter.get("/subscribe", (c) => {
   return c.json([
     {
-      pubsubname: "bolify-dapr-bus", // Name of the Dapr pubsub component
+      pubsubname: "pubsub", // Name of the Dapr pubsub component
       topic: "domain-tasks", // The topic we want to subscribe to
       route: "/api/dapr/domain-tasks", // Our webhook endpoint
     },
     {
-      pubsubname: "bolify-dapr-bus",
+      pubsubname: "pubsub",
       topic: "call-tasks",
       route: "/api/dapr/call-tasks",
     },
