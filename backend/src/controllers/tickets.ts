@@ -14,11 +14,11 @@ const getRbacCondition = (user: any, startIndex: number) => {
   }
   if (user.role === 'reseller' || user.role === 'master_reseller') {
     return { 
-      clause: `("client_id" = $${startIndex} OR "client_id" IN (SELECT "id" FROM "client" WHERE "upline_id" = $${startIndex}))`, 
+      clause: `("created_by" = $${startIndex} OR "created_by" IN (SELECT "user_id" FROM "client" WHERE "upline_id" = $${startIndex}))`, 
       args: [user.id] 
     };
   }
-  return { clause: `"client_id" = $${startIndex}`, args: [user.id] };
+  return { clause: `"created_by" = $${startIndex}`, args: [user.id] };
 };
 
 // GET /api/support/tickets
@@ -57,7 +57,7 @@ ticketRouter.post("/tickets", async (c) => {
     if (!subject) return c.json({ error: "Subject is required" }, 400);
 
     const query = `
-      INSERT INTO "ticket" ("client_id", "subject", "category", "status", "priority")
+      INSERT INTO "ticket" ("created_by", "subject", "category", "status", "priority")
       VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `;
