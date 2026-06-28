@@ -233,17 +233,16 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
         const azureDeployment = Deno.env.get("AZURE_OPENAI_DEPLOYMENT") || "gpt-5.4-pro";
         
         if (azureKey && baseUrlRaw) {
-          const azureEndpoint = `${baseUrlRaw}/openai/deployments/${azureDeployment}/chat/completions?api-version=2024-02-15-preview`;
+          const azureEndpoint = `${baseUrlRaw}/openai/v1/responses?api-version=2024-02-15-preview`;
           const sysPrompt = 'Expert sales call analyst. Score 0-100. Respond ONLY in valid JSON.';
           const userPrompt = `Analyze the following AI voice call transcript.\nTranscript:\n${transcript}\n\nReturn JSON exactly matching this format: {"summary":"2-3 sentences","summary_hindi":"Devanagari translation of summary","lead_status":"interested|not_interested|callback|no_answer|converted|contacted|do_not_call","sentiment":"very_positive|positive|neutral|negative|very_negative","lead_score":<number 0-100>,"intent_signals":["signal1", "signal2"],"score_breakdown":{"sentiment_score":0,"intent_score":0,"engagement_score":0,"keyword_score":0,"reasoning":"..."},"key_topics":["topic1", "topic2"],"objections":["obj1"],"recommended_next_action":"..."}\n\nIMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backticks.`;
           
           const requestBody = JSON.stringify({
-            messages: [
-              { role: "system", content: sysPrompt },
-              { role: "user", content: userPrompt }
-            ],
-            max_tokens: 2000,
-            response_format: { type: "json_object" }
+            model: azureDeployment,
+            instructions: sysPrompt,
+            input: userPrompt,
+            max_output_tokens: 2000,
+            text: { format: { type: 'json_object' } }
           });
           
           let r = await fetch(azureEndpoint, {
@@ -257,7 +256,15 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
           
           if (r.ok) {
             const resp = await r.json();
-            let raw = resp.choices?.[0]?.message?.content || '';
+            let raw = resp.output_text || '';
+            if (!raw && Array.isArray(resp.output)) {
+              for (const item of resp.output) {
+                const parts = item?.content || [];
+                for (const p of parts) {
+                  if ((p.type === 'output_text' || p.type === 'text') && p.text) { raw += p.text; }
+                }
+              }
+            }
             
             const aText = raw.replace(/^```(?:json)?\n?/i, '').replace(/```$/i, '').trim();
             const a = JSON.parse(aText);
