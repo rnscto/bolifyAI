@@ -58,6 +58,10 @@ export async function apiFetch(path, options = {}) {
     ...options.headers,
   };
 
+  if (options.body instanceof FormData) {
+    delete headers["Content-Type"];
+  }
+
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
@@ -272,8 +276,16 @@ export const apiClient = {
   integrations: {
     Core: {
       UploadFile: async ({ file }) => {
-        console.warn("Mocking UploadFile");
-        return { file_url: "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg" };
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await apiFetch("/functions/azureBlobUpload", {
+          method: "POST",
+          body: formData,
+        });
+        if (!res.data || !res.data.success) {
+          throw new Error(res.data?.error || "Upload failed");
+        }
+        return { file_url: res.data.file_url || res.data.file_uri };
       },
       InvokeLLM: async (args) => {
         console.warn("Mocking InvokeLLM", args);
