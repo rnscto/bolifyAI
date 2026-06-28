@@ -218,8 +218,8 @@ import { bindCustomDomain, getAzureEnvironmentDetails } from "../services/azureC
 resellerRouter.get("/custom-domain-config", async (c) => {
   try {
     const user = c.get("jwtPayload") as any;
-    if (user.role !== "reseller" && user.role !== "master_reseller") {
-      return c.json({ error: "Only resellers can manage custom domains" }, 403);
+    if (!["reseller", "master_reseller", "admin", "master_admin"].includes(user.role)) {
+      return c.json({ error: "Only resellers or admins can manage custom domains" }, 403);
     }
     const config = await getAzureEnvironmentDetails();
     return c.json(config);
@@ -232,8 +232,8 @@ resellerRouter.get("/custom-domain-config", async (c) => {
 resellerRouter.post("/custom-domain", async (c) => {
   try {
     const user = c.get("jwtPayload") as any;
-    if (user.role !== "reseller" && user.role !== "master_reseller") {
-      return c.json({ error: "Only resellers can manage custom domains" }, 403);
+    if (!["reseller", "master_reseller", "admin", "master_admin"].includes(user.role)) {
+      return c.json({ error: "Only resellers or admins can manage custom domains" }, 403);
     }
 
     const { custom_domain } = await c.req.json();
@@ -333,8 +333,8 @@ resellerRouter.post("/admin/promote", async (c) => {
 resellerRouter.get("/custom-domain", async (c) => {
   try {
     const user = c.get("jwtPayload") as any;
-    if (user.role !== "reseller" && user.role !== "master_reseller") {
-      return c.json({ error: "Only resellers can view custom domains" }, 403);
+    if (!["reseller", "master_reseller", "admin", "master_admin"].includes(user.role)) {
+      return c.json({ error: "Only resellers or admins can view custom domains" }, 403);
     }
     const mappings = await base44.entities.DomainMapping.filter({ reseller_id: user.client_id });
     return c.json(mappings.length > 0 ? mappings[0] : null);
