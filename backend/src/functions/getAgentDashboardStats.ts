@@ -34,28 +34,28 @@ export default async function getAgentDashboardStats(c: any) {
       avgScoreRes
     ] = await Promise.all([
       client.queryObject(
-        `SELECT COUNT(id), COALESCE(SUM(duration), 0) as total_duration FROM "calllog" WHERE agent_id = $1`, 
+        `SELECT COUNT(id), COALESCE(SUM(duration), 0) as total_duration FROM "calllog" WHERE agent_id = $1::text`, 
         [agent_id]
       ),
       client.queryObject(
-        `SELECT COUNT(id) FROM "calllog" WHERE agent_id = $1 AND status = 'completed'`, 
+        `SELECT COUNT(id) FROM "calllog" WHERE agent_id = $1::text AND status = 'completed'`, 
         [agent_id]
       ),
-      client.queryObject(`SELECT COUNT(id) FROM "campaign" WHERE agent_id = $1`, [agent_id]),
+      client.queryObject(`SELECT COUNT(id) FROM "campaign" WHERE agent_id = $1::text`, [agent_id]),
       client.queryObject(
-        `SELECT COUNT(id) FROM "lead" WHERE assigned_to = $1`, 
-        [agent_id]
-      ),
-      client.queryObject(
-        `SELECT COUNT(cl.id) FROM "campaignlead" cl JOIN "campaign" c ON cl.campaign_id = c.id WHERE c.agent_id = $1 AND cl.outcome = 'interested'`, 
+        `SELECT COUNT(id) FROM "lead" WHERE assigned_to = $1::text`, 
         [agent_id]
       ),
       client.queryObject(
-        `SELECT COUNT(cl.id) FROM "campaignlead" cl JOIN "campaign" c ON cl.campaign_id = c.id WHERE c.agent_id = $1 AND cl.outcome IS NOT NULL`, 
+        `SELECT COUNT(cl.id) FROM "campaignlead" cl JOIN "campaign" c ON cl.campaign_id = c.id WHERE c.agent_id = $1::text AND cl.outcome = 'interested'`, 
         [agent_id]
       ),
       client.queryObject(
-        `SELECT AVG(score) as avg_score FROM "lead" WHERE assigned_to = $1`, 
+        `SELECT COUNT(cl.id) FROM "campaignlead" cl JOIN "campaign" c ON cl.campaign_id = c.id WHERE c.agent_id = $1::text AND cl.outcome IS NOT NULL`, 
+        [agent_id]
+      ),
+      client.queryObject(
+        `SELECT AVG(score) as avg_score FROM "lead" WHERE assigned_to = $1::text`, 
         [agent_id]
       )
     ]);
