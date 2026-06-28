@@ -81,6 +81,14 @@ export default function ClientCallLogs() {
           1000
         );
         setCall(callsData);
+        
+        // Auto-fetch missing recordings in the background
+        apiClient.post('/api/voice/fetch-recording', { bulk: true }).then(res => {
+          if (res?.updated > 0) {
+            apiClient.CallLog.filter({ client_id: clientData.id }, '-created_at', 1000)
+              .then(data => setCall(data));
+          }
+        }).catch(console.error);
       }
     } catch (error) {
       console.error('Error loading calls:', error);
@@ -91,8 +99,8 @@ export default function ClientCallLogs() {
 
   const fetchRecording = async (callLogId) => {
     setFetchingRecording(callLogId);
-    const res = await apiClient.functions.invoke('fetchCallRecording', { call_log_id: callLogId });
-    if (res.data?.updated > 0) {
+    const res = await apiClient.post('/api/voice/fetch-recording', { call_log_id: callLogId });
+    if (res.updated > 0) {
       await loadData();
       if (selectedCall?.id === callLogId) {
         const updated = await apiClient.CallLog.get(callLogId);
@@ -104,7 +112,7 @@ export default function ClientCallLogs() {
 
   const fetchBulkRecordings = async () => {
     setFetchingBulk(true);
-    await apiClient.functions.invoke('fetchCallRecording', { bulk: true });
+    await apiClient.post('/api/voice/fetch-recording', { bulk: true });
     await loadData();
     setFetchingBulk(false);
   };

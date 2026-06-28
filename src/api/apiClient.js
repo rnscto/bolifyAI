@@ -149,6 +149,10 @@ class EntityClient {
 }
 
 export const apiClient = {
+  get: async (url) => await apiFetch(url),
+  post: async (url, body) => await apiFetch(url, { method: "POST", body: JSON.stringify(body) }),
+  put: async (url, body) => await apiFetch(url, { method: "PUT", body: JSON.stringify(body) }),
+  delete: async (url) => await apiFetch(url, { method: "DELETE" }),
   auth: {
     login: async (email, password) => {
       const res = await apiFetch("/auth/login", {
