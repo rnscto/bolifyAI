@@ -98,26 +98,27 @@ function encodeMulaw(s: number): number {
   return ~(sign | (exp << 4) | mant) & 0xFF;
 }
 
-function mulawToBase64PCM16_16k(mulawBytes: Uint8Array): string {
-  const pcm8k = new Int16Array(mulawBytes.length);
-  for (let i = 0; i < mulawBytes.length; i++) pcm8k[i] = decodeMulaw(mulawBytes[i]);
-  const pcm16k = new Int16Array(pcm8k.length * 2);
-  for (let i = 0; i < pcm8k.length; i++) {
-    const s1 = pcm8k[i];
+function mulawToBase64PCM16_16k(mulawBytes: Uint8Array, session: any): string {
+  const n = mulawBytes.length;
+  const pcm8k = new Int16Array(n);
+  for (let i = 0; i < n; i++) pcm8k[i] = decodeMulaw(mulawBytes[i]);
+  const pm2 = session._upPrev2 ?? (pcm8k[0] || 0);
+  const pm1 = session._upPrev1 ?? (pcm8k[0] || 0);
+  const at = (idx: number) => (idx < 0 ? (idx === -2 ? pm2 : pm1) : (idx < n ? pcm8k[idx] : pcm8k[n - 1] ?? pm1));
+  const pcm16k = new Int16Array(n * 2);
+  for (let i = 0; i < n; i++) {
+    const s0 = at(i - 1), s1 = at(i), s2 = at(i + 1), s3 = at(i + 2);
     pcm16k[i * 2] = s1;
-    pcm16k[i * 2 + 1] = Math.round((s1 + (i < pcm8k.length - 1 ? pcm8k[i + 1] : s1)) / 2);
+    const mid = (-s0 + 9 * s1 + 9 * s2 - s3) / 16;
+    pcm16k[i * 2 + 1] = Math.max(-32768, Math.min(32767, Math.round(mid)));
   }
+  session._upPrev2 = n >= 2 ? pcm8k[n - 2] : pm1;
+  session._upPrev1 = n >= 1 ? pcm8k[n - 1] : pm1;
+  if (n > 0) session._lastUpsampleValue = pcm8k[n - 1];
   const buf = new Uint8Array(pcm16k.length * 2);
   const view = new DataView(buf.buffer);
   for (let i = 0; i < pcm16k.length; i++) view.setInt16(i * 2, pcm16k[i], true);
-  
-  // Chunked btoa
-  let bin = '';
-  const CHUNK = 0x8000;
-  for (let i = 0; i < buf.length; i += CHUNK) {
-    bin += String.fromCharCode.apply(null, Array.from(buf.subarray(i, Math.min(i + CHUNK, buf.length))));
-  }
-  return btoa(bin);
+  return uint8ToBase64(buf);
 }
 
 function base64PCM16_24kToMulaw(b64: string, session: any): Uint8Array {
@@ -399,40 +400,12 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
     _setupSent: false,
     _greetingTriggered: false,
     _usingPaidKey: false,
-    _triedKeyFallback: false,
-    _outboundAudioQueue: [],
-    _isPlayingOutbound: false,
-    _nextChunkTime: 0
+    _triedKeyFallback: false
   };
 
   let geminiSocket: WebSocket | null = null;
   let currentGeminiKey = "";
   let streamId: string | null = null;
-  
-  async function processOutboundAudioQueue() {
-    if (session._isPlayingOutbound) return;
-    session._isPlayingOutbound = true;
-    session._nextChunkTime = Date.now();
-    
-    while (session._outboundAudioQueue.length > 0 && smartfloSocket.readyState === WebSocket.OPEN && streamId) {
-      const chunk = session._outboundAudioQueue.shift();
-      if (!chunk) continue;
-      
-      smartfloSocket.send(JSON.stringify({ event: "media", streamSid: streamId, media: { payload: uint8ToBase64(chunk) } }));
-      
-      const chunkDurationMs = Math.floor(chunk.length / 8);
-      session._nextChunkTime += chunkDurationMs;
-      
-      const now = Date.now();
-      const delay = session._nextChunkTime - now;
-      if (delay > 0) {
-         await new Promise(r => setTimeout(r, delay));
-      } else {
-         session._nextChunkTime = now;
-      }
-    }
-    session._isPlayingOutbound = false;
-  }
   
   async function loadAgentConfig(agentId: string) {
      if (session._agentConfigReady) return;
@@ -711,18 +684,13 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
                 session.isSpeaking = true;
                 const m = base64PCM16_24kToMulaw(p.inlineData.data, session);
                 if (m.length > 0 && smartfloSocket.readyState === WebSocket.OPEN && streamId) {
-                  const CHUNK_SIZE = 960;
-                  for (let i = 0; i < m.length; i += CHUNK_SIZE) {
-                    const end = Math.min(i + CHUNK_SIZE, m.length);
-                    let chunk = m.slice(i, end);
-                    if (chunk.length % 160 !== 0) {
-                      const padded = new Uint8Array(Math.ceil(chunk.length / 160) * 160);
-                      padded.set(chunk); padded.fill(127, chunk.length);
-                      chunk = padded;
-                    }
-                    session._outboundAudioQueue.push(chunk);
+                  let chunk = m;
+                  if (chunk.length % 160 !== 0) {
+                    const padded = new Uint8Array(Math.ceil(chunk.length / 160) * 160);
+                    padded.set(chunk); padded.fill(127, chunk.length);
+                    chunk = padded;
                   }
-                  processOutboundAudioQueue();
+                  smartfloSocket.send(JSON.stringify({ event: "media", streamSid: streamId, media: { payload: uint8ToBase64(chunk) } }));
                 }
               }
             }
@@ -752,7 +720,6 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
           }
           if (sc.interrupted) {
              session.isSpeaking = false;
-             session._outboundAudioQueue = [];
              if (session._pendingAiText) { session.transcript.push({ speaker: 'AI', text: session._pendingAiText.trim() }); session._pendingAiText = ''; }
              if (smartfloSocket.readyState === WebSocket.OPEN && streamId) smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: streamId }));
           }
