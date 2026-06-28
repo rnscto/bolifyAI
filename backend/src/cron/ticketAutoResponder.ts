@@ -1,16 +1,17 @@
-import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
 export async function processTickets() {
   try {
-    // Find open tickets with no messages or where last message was from client and not responded to by admin/AI
-    // For simplicity, find tickets in 'open' status
-    const openTickets = await base44.entities.Ticket.filter({ status: 'open' });
+    // Find open tickets with no messages
+    const openTicketsRes = await client.queryObject(`SELECT * FROM "ticket" WHERE "status" = 'open'`);
+    const openTickets: any[] = openTicketsRes.rows;
 
     for (const ticket of openTickets) {
       // Get messages for this ticket
-      const messages = await base44.entities.TicketMessage.filter({ ticket_id: ticket.id });
+      const messagesRes = await client.queryObject(`SELECT * FROM "ticketmessage" WHERE "ticket_id" = $1`, [ticket.id]);
+      const messages: any[] = messagesRes.rows;
 
       // If no messages or the last message is from the client, we might want to auto-respond
       if (messages.length === 0) {
@@ -67,15 +68,18 @@ export async function processTickets() {
         }
 
         // Add AI message
-        await base44.entities.TicketMessage.create({
-          ticket_id: ticket.id,
-          sender_id: 'AI_AGENT',
-          sender_role: 'admin',
-          message: aiResponse
-        });
+        await client.queryObject(
+          `INSERT INTO "ticketmessage" ("ticket_id", "sender_id", "sender_role", "message")
+           VALUES ($1, $2, $3, $4)`,
+          [ticket.id, 'AI_AGENT', 'admin', aiResponse]
+        );
 
         // Update ticket status to in_progress so we don't auto-respond repeatedly
-        await base44.entities.Ticket.update(ticket.id, { status: 'in_progress' });
+        await client.queryObject(
+          `UPDATE "ticket" SET "status" = 'in_progress', "updated_at" = NOW() WHERE "id" = $1`,
+          [ticket.id]
+        );
+        
         console.log(`Auto-responded to ticket ${ticket.id}`);
       }
     }
