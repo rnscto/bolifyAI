@@ -234,6 +234,8 @@ resellerRouter.get("/custom-domain-config", async (c) => {
 });
 
 // POST /api/reseller/custom-domain
+// IMPORTANT: Azure ARM calls (beginUpdateAndWait) take 2-5 minutes and MUST NOT block the event loop.
+// We save the domain to DB immediately and run the Azure binding in the background.
 resellerRouter.post("/custom-domain", async (c) => {
   try {
     const user = c.get("jwtPayload") as any;
@@ -248,33 +250,42 @@ resellerRouter.post("/custom-domain", async (c) => {
 
     const { custom_domain } = await c.req.json();
     if (!custom_domain) return c.json({ error: "Missing custom_domain" }, 400);
+    if (!custom_domain.includes('.')) return c.json({ error: "Invalid domain format" }, 400);
 
-    // Call the Azure Container SDK to provision and bind the domain dynamically
-    const result = await bindCustomDomain(custom_domain);
-
-    // Once successfully bound in Azure, save it to our DomainMapping database
+    // Step 1: Save domain to DB immediately — this is instant.
     const existingMappings = await base44.entities.DomainMapping.filter({ reseller_id: user.client_id });
     if (existingMappings.length > 0) {
-      await base44.entities.DomainMapping.update(existingMappings[0].id, { custom_domain });
+      await base44.entities.DomainMapping.update(existingMappings[0].id, { custom_domain, ssl_status: 'provisioning' });
     } else {
       await base44.entities.DomainMapping.create({
         reseller_id: user.client_id,
         custom_domain,
+        ssl_status: 'provisioning',
         brand_name: "My Reseller Platform",
         theme_colors: {},
       });
     }
 
-    return c.json(result);
+    // Step 2: Run Azure ARM binding in the background — DO NOT await.
+    // beginUpdateAndWait blocks for 2-5 minutes and would 503 every other request.
+    bindCustomDomain(custom_domain).then((result) => {
+      console.log(`[CustomDomain] Background binding completed for ${custom_domain}:`, result);
+    }).catch((err: any) => {
+      console.error(`[CustomDomain] Background binding failed for ${custom_domain}:`, err.message || err);
+    });
+
+    // Respond immediately — domain is saved, Azure is provisioning in the background.
+    return c.json({
+      success: true,
+      message: `Domain ${custom_domain} saved. DNS verification and SSL provisioning are running in the background (may take 5-15 minutes). The domain will be active once Azure confirms the DNS records.`,
+      status: 'provisioning'
+    });
   } catch (err: any) {
     console.error("[Custom Domain Binding Error]", err);
     let errorMsg = err.message || "Failed to bind custom domain";
-    
-    // Check if it's an Azure DNS validation error
-    if (errorMsg.includes("CustomDomainVerificationFailed")) {
-      errorMsg = "Domain verification failed. Please ensure you have added the required TXT and CNAME records and wait a few minutes for DNS to propagate.";
+    if (errorMsg.includes("CustomDomainVerificationFailed") || errorMsg.includes("DNS")) {
+      errorMsg = "Domain DNS verification failed. Please ensure your TXT and CNAME records are correctly added and DNS has propagated (wait 5-15 minutes after adding records).";
     }
-    
     return c.json({ error: errorMsg }, 500);
   }
 });// POST /api/reseller/admin/promote
