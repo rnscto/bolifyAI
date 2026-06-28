@@ -1,7 +1,7 @@
 import { Pool } from "https://deno.land/x/postgres@v0.19.3/mod.ts";
 import { load } from "https://deno.land/std@0.224.0/dotenv/mod.ts";
 
-await load({ export: true, allowEmptyValues: true });
+await load({ export: true, allowEmptyValues: true, envPath: new URL("../../.env", import.meta.url).pathname });
 
 const databaseUrl = Deno.env.get("DATABASE_URL") || "postgresql://postgres:postgres@localhost:5432/bolifyai";
 
