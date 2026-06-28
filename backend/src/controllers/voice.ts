@@ -399,12 +399,40 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
     _setupSent: false,
     _greetingTriggered: false,
     _usingPaidKey: false,
-    _triedKeyFallback: false
+    _triedKeyFallback: false,
+    _outboundAudioQueue: [],
+    _isPlayingOutbound: false,
+    _nextChunkTime: 0
   };
 
   let geminiSocket: WebSocket | null = null;
   let currentGeminiKey = "";
   let streamId: string | null = null;
+  
+  async function processOutboundAudioQueue() {
+    if (session._isPlayingOutbound) return;
+    session._isPlayingOutbound = true;
+    session._nextChunkTime = Date.now();
+    
+    while (session._outboundAudioQueue.length > 0 && smartfloSocket.readyState === WebSocket.OPEN && streamId) {
+      const chunk = session._outboundAudioQueue.shift();
+      if (!chunk) continue;
+      
+      smartfloSocket.send(JSON.stringify({ event: "media", streamSid: streamId, media: { payload: uint8ToBase64(chunk) } }));
+      
+      const chunkDurationMs = Math.floor(chunk.length / 8);
+      session._nextChunkTime += chunkDurationMs;
+      
+      const now = Date.now();
+      const delay = session._nextChunkTime - now;
+      if (delay > 0) {
+         await new Promise(r => setTimeout(r, delay));
+      } else {
+         session._nextChunkTime = now;
+      }
+    }
+    session._isPlayingOutbound = false;
+  }
   
   async function loadAgentConfig(agentId: string) {
      if (session._agentConfigReady) return;
@@ -692,8 +720,9 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
                       padded.set(chunk); padded.fill(127, chunk.length);
                       chunk = padded;
                     }
-                    smartfloSocket.send(JSON.stringify({ event: "media", streamSid: streamId, media: { payload: uint8ToBase64(chunk) } }));
+                    session._outboundAudioQueue.push(chunk);
                   }
+                  processOutboundAudioQueue();
                 }
               }
             }
@@ -723,6 +752,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
           }
           if (sc.interrupted) {
              session.isSpeaking = false;
+             session._outboundAudioQueue = [];
              if (session._pendingAiText) { session.transcript.push({ speaker: 'AI', text: session._pendingAiText.trim() }); session._pendingAiText = ''; }
              if (smartfloSocket.readyState === WebSocket.OPEN && streamId) smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: streamId }));
           }
