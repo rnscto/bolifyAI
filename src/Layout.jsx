@@ -28,7 +28,12 @@ import {
   PhoneForwarded,
   Image,
   ShieldCheck,
-  MessageSquare
+  MessageSquare,
+  ShieldAlert,
+  FileBadge,
+  MessageSquareShare,
+  CalendarDays,
+  LifeBuoy
 } from 'lucide-react';
 import AgreementGate from './components/client/AgreementGate';
 import AnnouncementMarquee from './components/AnnouncementMarquee';
@@ -239,6 +244,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'AI Assistant', path: 'PersonalAIAssistant', icon: Cpu },
     { name: 'Call Logs', path: 'ClientCallLogs', icon: PhoneCall },
     { name: 'Settings', path: 'ClientSettings', icon: UserCog },
+    { name: 'Support', path: 'ClientTickets', icon: LifeBuoy },
     ];
 
     const baseBusinessNav = [

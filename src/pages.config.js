@@ -58,6 +58,8 @@ import AdminPartners from './pages/AdminPartners';
 import AdminPayments from './pages/AdminPayments';
 import AdminRetention from './pages/AdminRetention';
 import AdminSubscriptions from './pages/AdminSubscriptions';
+import AdminTickets from "./pages/AdminTickets";
+import ClientTickets from "./pages/ClientTickets";
 import AdminTopups from './pages/AdminTopups';
 import AdminTrustedClients from './pages/AdminTrustedClients';
 import AdminWebsiteLeads from './pages/AdminWebsiteLeads';
@@ -108,6 +110,8 @@ export const PAGES = {
     "AdminPayments": AdminPayments,
     "AdminRetention": AdminRetention,
     "AdminSubscriptions": AdminSubscriptions,
+    "AdminTickets": AdminTickets,
+    "ClientTickets": ClientTickets,
     "AdminTopups": AdminTopups,
     "AdminTrustedClients": AdminTrustedClients,
     "AdminWebsiteLeads": AdminWebsiteLeads,

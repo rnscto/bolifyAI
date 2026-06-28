@@ -23,6 +23,7 @@ import {
   Handshake,
   ShieldCheck,
   MessageSquare,
+  LifeBuoy,
   ChevronRight
 } from 'lucide-react';
 import AnnouncementMarquee from './components/AnnouncementMarquee';
@@ -98,8 +99,9 @@ export default function AdminLayout({ children, currentPageName }) {
         { name: 'Users', path: 'AdminUsers', icon: UserCog },
         { name: 'Client Lifecycle', path: 'AdminClientLifecycle', icon: ShieldCheck },
         { name: 'Payment Approvals', path: 'AdminPaymentApprovals', icon: ShieldCheck },
-        { name: 'Platform Messaging', path: 'AdminPlatformMessaging', icon: MessageSquare },
+        { name: 'Messaging Configs', path: 'AdminPlatformMessaging', icon: MessageSquare },
         { name: 'Announcements', path: 'AdminAnnouncements', icon: Megaphone },
+        { name: 'Support Tickets', path: 'AdminTickets', icon: LifeBuoy },
       ],
     },
     {

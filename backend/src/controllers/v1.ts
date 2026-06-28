@@ -374,6 +374,8 @@ v1Router.route("/email-sequences", buildCrudRouter("emailsequence"));
 v1Router.route("/sequence-enrollments", buildCrudRouter("sequenceenrollment"));
 v1Router.route("/client-integrations", buildCrudRouter("clientintegration"));
 v1Router.route("/platform-announcements", buildCrudRouter("platformannouncement"));
+v1Router.route("/tickets", buildCrudRouter("ticket"));
+v1Router.route("/ticket-messages", buildCrudRouter("ticketmessage"));
 const ALL_ENTITIES = [
   "Client",
   "Campaign",
