@@ -43,7 +43,7 @@ export default async function getAgentDashboardStats(c: any) {
       ),
       client.queryObject(`SELECT COUNT(id) FROM "campaign" WHERE agent_id = $1`, [agent_id]),
       client.queryObject(
-        `SELECT COUNT(id) FROM "campaignlead" WHERE agent_id = $1`, 
+        `SELECT COUNT(id) FROM "lead" WHERE agent_id = $1`, 
         [agent_id]
       ),
       client.queryObject(

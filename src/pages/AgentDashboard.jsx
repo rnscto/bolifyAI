@@ -41,9 +41,9 @@ export default function AgentDashboard() {
 
     const [calls, cLeads, allLeads, acts, statsRes] = await Promise.all([
       apiClient.CallLog.filter({ client_id: clientData.id, agent_id: agentData.id }, '-created_at', 50),
-      apiClient.CampaignLead.filter({ client_id: clientData.id }, '-created_at', 100),
-      apiClient.Lead.filter({ client_id: clientData.id }, '-created_at', 100),
-      apiClient.Activity.filter({ client_id: clientData.id }, '-created_at', 50),
+      apiClient.CampaignLead.filter({ client_id: clientData.id, agent_id: agentData.id }, '-created_at', 100),
+      apiClient.Lead.filter({ client_id: clientData.id, agent_id: agentData.id }, '-created_at', 100),
+      apiClient.Activity.filter({ client_id: clientData.id, agent_id: agentData.id }, '-created_at', 50),
       apiClient.functions.invoke('getAgentDashboardStats', { client_id: clientData.id, agent_id: agentData.id })
     ]);
 

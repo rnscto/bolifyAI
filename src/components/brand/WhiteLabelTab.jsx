@@ -3,6 +3,7 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Sparkles, Upload, X, Image as ImageIcon } from 'lucide-react';
+import AdminResellerBranding from '../../pages/AdminResellerBranding';
 
 export default function WhiteLabelTab({ form, setForm }) {
   const handleUpload = async (field, e) => {
@@ -98,6 +99,10 @@ export default function WhiteLabelTab({ form, setForm }) {
           </div>
         </CardContent>
       </Card>
+      
+      <div className="mt-8">
+        <AdminResellerBranding />
+      </div>
     </div>
   );
 }

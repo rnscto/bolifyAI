@@ -133,9 +133,9 @@ export default function AdminResellerBranding() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
           <Globe className="w-6 h-6 text-blue-700" />
-          Custom Domain
+          Custom Domain Settings
         </h1>
-        <p className="text-gray-500 mt-1">Configure your white-labeled reseller platform domain.</p>
+        <p className="text-gray-500 text-sm mt-1">Host your platform on your own domain (e.g., portal.myagency.com)</p>
       </div>
 
       {/* Current domain status */}
