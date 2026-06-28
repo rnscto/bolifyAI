@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { LifeBuoy, Plus, Send, ArrowLeft, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
@@ -221,7 +221,10 @@ export default function ClientTickets() {
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
-          <DialogHeader><DialogTitle>Open New Ticket</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle>Open New Ticket</DialogTitle>
+            <DialogDescription>Please provide details about your issue below.</DialogDescription>
+          </DialogHeader>
           <form onSubmit={createTicket} className="space-y-4 mt-2">
             <div className="space-y-1.5">
               <Label>Subject</Label>
