@@ -27,6 +27,7 @@ import { initTicketAutoResponder } from "./src/cron/ticketAutoResponder.ts";
 import { initDpdpErasure } from "./src/cron/dpdpErasure.ts";
 import { handleWebSocket } from "./src/services/realtime.ts";
 import { initStreamSession } from "./src/controllers/voice.ts";
+import { daprRouter } from "./src/controllers/dapr.ts";
 
 const app = new Hono();
 
@@ -137,6 +138,7 @@ app.route("/api/telegram", telegramRouter);
 app.route("/api/billing", billingRouter);
 app.route("/api/agents", agentsRouter);
 app.route("/api/functions", functionsRouter);
+app.route("/api/dapr", daprRouter);
 
 app.get('*', async (c, next) => {
   if (c.req.path.startsWith('/api/')) {

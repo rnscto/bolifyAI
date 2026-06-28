@@ -274,21 +274,35 @@ resellerRouter.post("/custom-domain", async (c) => {
       mappingId = (created as any).id;
     }
 
-    // Step 2: Run Azure ARM binding in background — DO NOT await.
-    // beginUpdateAndWait blocks for 2-5 minutes and would 503 every other request.
-    bindCustomDomain(custom_domain).then(async (result) => {
-      console.log(`[CustomDomain] Background binding completed for ${custom_domain}`);
-      // Mark as active in DB so UI can reflect success
-      await base44.entities.DomainMapping.update(mappingId, { ssl_status: 'active', ssl_error: null }).catch(() => {});
-    }).catch(async (err: any) => {
-      const errMsg = err.message || String(err);
-      console.error(`[CustomDomain] Background binding failed for ${custom_domain}:`, errMsg);
-      // Write the error to DB so the UI can surface it
-      const friendly = errMsg.includes("CustomDomainVerificationFailed") || errMsg.includes("DNS")
-        ? "DNS verification failed. Ensure TXT and CNAME records are correct and DNS has propagated."
-        : errMsg;
-      await base44.entities.DomainMapping.update(mappingId, { ssl_status: 'error', ssl_error: friendly }).catch(() => {});
-    });
+    // Step 2: Publish task to Dapr Pub/Sub.
+    // If Dapr sidecar is not available (e.g. local dev or not yet configured), 
+    // it will throw a network error and we fallback to native background execution.
+    try {
+      const daprUrl = `http://localhost:3500/v1.0/publish/pubsub/domain-tasks`;
+      const res = await fetch(daprUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "bind", domain: custom_domain })
+      });
+      if (!res.ok) throw new Error(`Dapr responded with status ${res.status}`);
+      console.log(`[CustomDomain] Published bind task for ${custom_domain} to Dapr queue`);
+    } catch (daprErr: any) {
+      console.warn(`[CustomDomain] Dapr publish failed (${daprErr.message}). Falling back to native background execution.`);
+      // beginUpdateAndWait blocks for 2-5 minutes and would 503 every other request.
+      bindCustomDomain(custom_domain).then(async () => {
+        console.log(`[CustomDomain] Background binding completed for ${custom_domain}`);
+        // Mark as active in DB so UI can reflect success
+        await base44.entities.DomainMapping.update(mappingId, { ssl_status: 'active', ssl_error: null }).catch(() => {});
+      }).catch(async (err: any) => {
+        const errMsg = err.message || String(err);
+        console.error(`[CustomDomain] Background binding failed for ${custom_domain}:`, errMsg);
+        // Write the error to DB so the UI can surface it
+        const friendly = errMsg.includes("CustomDomainVerificationFailed") || errMsg.includes("DNS")
+          ? "DNS verification failed. Ensure TXT and CNAME records are correct and DNS has propagated."
+          : errMsg;
+        await base44.entities.DomainMapping.update(mappingId, { ssl_status: 'error', ssl_error: friendly }).catch(() => {});
+      });
+    }
 
     // Respond immediately — domain is saved, Azure is provisioning in the background.
     return c.json({
@@ -321,9 +335,20 @@ resellerRouter.delete("/custom-domain", async (c) => {
     }
 
     const domain = mappings[0].custom_domain;
-    
-    // Remove from Azure in background
-    unbindCustomDomain(domain).catch(console.error);
+    // Remove from Azure in background via Dapr (with native fallback)
+    try {
+      const daprUrl = `http://localhost:3500/v1.0/publish/pubsub/domain-tasks`;
+      const res = await fetch(daprUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "unbind", domain })
+      });
+      if (!res.ok) throw new Error(`Dapr responded with status ${res.status}`);
+      console.log(`[CustomDomain] Published unbind task for ${domain} to Dapr queue`);
+    } catch (daprErr: any) {
+      console.warn(`[CustomDomain] Dapr publish failed (${daprErr.message}). Falling back to native background execution.`);
+      unbindCustomDomain(domain).catch(console.error);
+    }
 
     // Delete from DB immediately
     await base44.entities.DomainMapping.delete(mappings[0].id);
