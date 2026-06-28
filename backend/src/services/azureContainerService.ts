@@ -46,22 +46,16 @@ export async function getAzureEnvironmentDetails() {
   try {
     const acaClient = getClient();
 
-    const makeTimeout = () => new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("Azure Connection Timeout. Check service principal credentials.")), 15000)
-    );
-
     // Get the Container App to find its default FQDN
-    const app = await Promise.race([
-      acaClient.containerApps.get(resourceGroupName, containerAppName),
-      makeTimeout()
-    ]) as any;
+    const app = await acaClient.containerApps.get(resourceGroupName, containerAppName, { 
+      abortSignal: AbortSignal.timeout(15000) 
+    }) as any;
     const defaultFqdn = app.configuration?.ingress?.fqdn || "app.bolify.ai";
 
     // Get the Managed Environment to find the Custom Domain Verification ID
-    const env = await Promise.race([
-      acaClient.managedEnvironments.get(resourceGroupName, environmentName),
-      makeTimeout()
-    ]) as any;
+    const env = await acaClient.managedEnvironments.get(resourceGroupName, environmentName, { 
+      abortSignal: AbortSignal.timeout(15000) 
+    }) as any;
     const verificationId = env.customDomainConfiguration?.customDomainVerificationId || "pending-verification-id";
 
     return {
