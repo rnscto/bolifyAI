@@ -139,6 +139,7 @@ app.route("/api/billing", billingRouter);
 app.route("/api/agents", agentsRouter);
 app.route("/api/functions", functionsRouter);
 app.route("/api/dapr", daprRouter);
+app.route("/dapr", daprRouter); // Dapr sidecar natively calls GET /dapr/subscribe
 
 app.get('*', async (c, next) => {
   if (c.req.path.startsWith('/api/')) {
