@@ -267,18 +267,18 @@ export default function AdminResellerBranding() {
                   </div>
                 </div>
 
-                {/* CNAME / ALIAS Routing Record */}
+                {/* CNAME or A Record */}
                 <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
                   <div className="bg-white px-4 py-2.5 border-b border-slate-100 flex items-center justify-between">
                     <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">
-                      Record 2 — Traffic Routing ({isRootDomain ? 'ALIAS / Forwarding' : 'CNAME'})
+                      Record 2 — Traffic Routing ({isRootDomain ? 'A Record' : 'CNAME'})
                     </span>
                     <Badge className="bg-blue-50 text-blue-700 text-[10px]">Required for Traffic</Badge>
                   </div>
                   <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                       <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Type</p>
-                      <p className="text-sm font-mono font-bold text-gray-900">{isRootDomain ? 'ALIAS / ANAME' : 'CNAME'}</p>
+                      <p className="text-sm font-mono font-bold text-gray-900">{isRootDomain ? 'A' : 'CNAME'}</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Name / Host</p>
@@ -288,19 +288,14 @@ export default function AdminResellerBranding() {
                           <Copy className="w-3.5 h-3.5" />
                         </button>
                       </div>
-                      {isRootDomain && (
-                        <p className="text-[10px] text-amber-600 mt-1 font-semibold">
-                          ⚠ GoDaddy: use Forwarding → Domain Forwarding, not CNAME
-                        </p>
-                      )}
                     </div>
                     <div>
                       <p className="text-[10px] text-gray-400 uppercase font-semibold mb-1">Value / Target</p>
                       <div className="flex items-center gap-2">
-                        <p className="text-xs font-mono text-emerald-600 truncate max-w-[200px]" title={dnsConfig?.fqdn}>
-                          {dnsConfig?.fqdn}
+                        <p className="text-xs font-mono text-emerald-600 truncate max-w-[200px]" title={isRootDomain ? '52.140.84.241' : dnsConfig?.fqdn}>
+                          {isRootDomain ? '52.140.84.241' : dnsConfig?.fqdn}
                         </p>
-                        <button onClick={() => copyToClipboard(dnsConfig?.fqdn, 'Target')} className="text-gray-400 hover:text-green-600 transition-colors shrink-0">
+                        <button onClick={() => copyToClipboard(isRootDomain ? '52.140.84.241' : dnsConfig?.fqdn, 'Target')} className="text-gray-400 hover:text-green-600 transition-colors shrink-0">
                           <Copy className="w-3.5 h-3.5" />
                         </button>
                       </div>
@@ -320,9 +315,9 @@ export default function AdminResellerBranding() {
                         host = <code className="bg-blue-100 px-1 py-0.5 rounded font-mono">asuid</code>, value = the verification ID above.
                       </li>
                       <li>
-                        For routing, GoDaddy doesn't support CNAME at <code className="bg-blue-100 px-1 rounded font-mono">@</code>.
-                        Go to <strong>GoDaddy → My Products → {domain} → Forwarding</strong> and set
-                        "Forward to" = <code className="bg-blue-100 px-1 rounded font-mono break-all">{dnsConfig?.fqdn}</code>.
+                        Add an <strong>A Record</strong> (not CNAME):
+                        host = <code className="bg-blue-100 px-1 rounded font-mono">@</code>, 
+                        value = <code className="bg-blue-100 px-1 rounded font-mono break-all">52.140.84.241</code>.
                       </li>
                       <li>
                         Or{' '}

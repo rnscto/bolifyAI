@@ -189,6 +189,8 @@ async function provisionSslInBackground(
     const certName = `cert-${domain.replace(/\./g, "-")}`;
     console.log(`[AzureContainerService] [Background] Provisioning Certificate: ${certName}`);
 
+    const isRootDomain = domain.split('.').length === 2;
+    
     const certResult = await acaClient.managedCertificates.beginCreateOrUpdateAndWait(
       rg,
       envName,
@@ -197,7 +199,7 @@ async function provisionSslInBackground(
         managedCertificateEnvelope: {
           location,
           properties: {
-            domainControlValidation: "CNAME",
+            domainControlValidation: isRootDomain ? "TXT" : "CNAME",
             subjectName: domain,
           },
         },
