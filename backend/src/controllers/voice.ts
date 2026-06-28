@@ -233,7 +233,7 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
         const azureDeployment = Deno.env.get("AZURE_OPENAI_DEPLOYMENT") || "gpt-5.4-pro";
         
         if (azureKey && baseUrlRaw) {
-          const azureEndpoint = `${baseUrlRaw}/openai/v1/responses?api-version=2024-02-15-preview`;
+          const azureEndpoint = `${baseUrlRaw}/openai/v1/responses`;
           const sysPrompt = 'Expert sales call analyst. Score 0-100. Respond ONLY in valid JSON.';
           const userPrompt = `Analyze the following AI voice call transcript.\nTranscript:\n${transcript}\n\nReturn JSON exactly matching this format: {"summary":"2-3 sentences","summary_hindi":"Devanagari translation of summary","lead_status":"interested|not_interested|callback|no_answer|converted|contacted|do_not_call","sentiment":"very_positive|positive|neutral|negative|very_negative","lead_score":<number 0-100>,"intent_signals":["signal1", "signal2"],"score_breakdown":{"sentiment_score":0,"intent_score":0,"engagement_score":0,"keyword_score":0,"reasoning":"..."},"key_topics":["topic1", "topic2"],"objections":["obj1"],"recommended_next_action":"..."}\n\nIMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backticks.`;
           
