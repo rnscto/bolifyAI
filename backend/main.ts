@@ -159,7 +159,13 @@ app.get('*', async (c, next) => {
 });
 
 app.onError((err, c) => {
-  console.error(`${err}`);
+  // Hono's jwt() middleware throws HTTPException with the correct status code (e.g. 401).
+  // We must pass that through instead of always returning 500.
+  const status = (err as any).status;
+  if (status && status >= 400 && status < 600) {
+    return c.json({ error: err.message }, status);
+  }
+  console.error(`[Server Error] ${err}`);
   return c.json({ error: err.message }, 500);
 });
 
