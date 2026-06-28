@@ -278,7 +278,7 @@ resellerRouter.post("/custom-domain", async (c) => {
     // If Dapr sidecar is not available (e.g. local dev or not yet configured), 
     // it will throw a network error and we fallback to native background execution.
     try {
-      const daprUrl = `http://localhost:3500/v1.0/publish/pubsub/domain-tasks`;
+      const daprUrl = `http://localhost:3500/v1.0/publish/bolify-servicebus/domain-tasks`;
       const res = await fetch(daprUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -337,7 +337,7 @@ resellerRouter.delete("/custom-domain", async (c) => {
     const domain = mappings[0].custom_domain;
     // Remove from Azure in background via Dapr (with native fallback)
     try {
-      const daprUrl = `http://localhost:3500/v1.0/publish/pubsub/domain-tasks`;
+      const daprUrl = `http://localhost:3500/v1.0/publish/bolify-servicebus/domain-tasks`;
       const res = await fetch(daprUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

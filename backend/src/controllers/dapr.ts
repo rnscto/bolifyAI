@@ -8,7 +8,7 @@ export const daprRouter = new Hono();
 daprRouter.get("/subscribe", (c) => {
   return c.json([
     {
-      pubsubname: "pubsub", // Name of the Dapr pubsub component
+      pubsubname: "bolify-servicebus", // Name of the Dapr pubsub component
       topic: "domain-tasks", // The topic we want to subscribe to
       route: "/api/dapr/domain-tasks", // Our webhook endpoint
     },
