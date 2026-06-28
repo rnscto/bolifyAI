@@ -117,7 +117,7 @@ HUMAN ATTENTION & CALENDAR:
 
 IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backticks.`;
 
-    const userPrompt = `Call transcript:\n\n${callLog.transcript}\n\n${callLog.conversation_summary ? `AI Summary: ${callLog.conversation_summary.substring(0, 500)}` : ''}`;
+    const userPrompt = `Call transcript:\n\n${callLog.transcript}\n\n${callLog.conversation_summary ? `AI Summary: ${callLog.conversation_summary.substring(0, 500)}` : ''}\n\nReturn JSON.`;
 
     const extractionResponse = await fetch(
       responsesUrl,
@@ -135,7 +135,9 @@ IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backtic
     );
 
     if (!extractionResponse.ok) {
-      return { success: false, error: 'AI extraction failed', status: extractionResponse.status };
+      const errText = await extractionResponse.text();
+      console.error(`[postCallActionExtractor] Azure OpenAI extraction failed (${extractionResponse.status}):`, errText);
+      return { success: false, error: 'AI extraction failed', status: extractionResponse.status, detail: errText };
     }
 
     const extractionData = await extractionResponse.json();
@@ -242,7 +244,7 @@ IMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backtic
                     description = $3,
                     reminder_sent = false,
                     notes = $4,
-                    updated_date = NOW()
+                    updated_at = NOW()
                 WHERE id = $1
               `, [
                 recentSameType.id,

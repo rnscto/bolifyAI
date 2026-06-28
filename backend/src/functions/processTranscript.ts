@@ -3,68 +3,80 @@ import { postCallActionExtractorCore } from "./postCallActionExtractor.ts";
 
 export async function processTranscriptCore(call_log_id: string, recording_url: string) {
   try {
-    if (!call_log_id || !recording_url) {
-      return { success: false, error: 'Missing required fields' };
-    }
-
-    try {
-      new URL(recording_url);
-    } catch (_) {
-      return { success: false, error: 'Invalid recording URL' };
-    }
-
     const callLogRes = await (client as any).queryObject('SELECT * FROM calllog WHERE id = $1', [call_log_id]);
     const callLog = callLogRes.rows[0];
     if (!callLog) {
       return { success: false, error: 'Call log not found' };
     }
 
-    const audioResponse = await fetch(recording_url);
-    if (!audioResponse.ok) {
-      console.error('Recording download failed:', audioResponse.status);
-      return { success: false, error: 'Failed to download recording' };
-    }
-    const audioBuffer = await audioResponse.arrayBuffer();
-    console.log(`[processTranscript] Downloaded recording: ${audioBuffer.byteLength} bytes`);
-
-    const contentType = audioResponse.headers.get('content-type') || '';
-    let fileName = 'recording.mp3';
-    let mimeType = 'audio/mpeg';
-    if (contentType.includes('wav')) { fileName = 'recording.wav'; mimeType = 'audio/wav'; }
-    else if (contentType.includes('ogg')) { fileName = 'recording.ogg'; mimeType = 'audio/ogg'; }
-    else if (contentType.includes('mp4') || contentType.includes('m4a')) { fileName = 'recording.m4a'; mimeType = 'audio/mp4'; }
-    else if (contentType.includes('webm')) { fileName = 'recording.webm'; mimeType = 'audio/webm'; }
-
-    const azureSttEndpoint = 'https://ai-yadavnand8860531ai976911404567.cognitiveservices.azure.com';
-    const sttDeployment = 'gpt-4o-transcribe';
-    const sttApiVersion = '2025-01-01-preview';
-    const sttUrl = `${azureSttEndpoint}/openai/deployments/${sttDeployment}/audio/transcriptions?api-version=${sttApiVersion}`;
-
-    const formData = new FormData();
-    formData.append('file', new Blob([audioBuffer], { type: mimeType }), fileName);
-    formData.append('language', 'hi');
-    formData.append('response_format', 'text');
-
-    const sttResponse = await fetch(sttUrl, {
-      method: 'POST',
-      headers: {
-        'api-key': Deno.env.get('AZURE_OPENAI_KEY') || ''
-      },
-      body: formData
-    });
-
-    if (!sttResponse.ok) {
-      const errText = await sttResponse.text();
-      console.error(`Azure gpt-4o-transcribe failed (${sttResponse.status}):`, errText);
-      return { success: false, error: 'Speech to text failed', detail: errText };
+    let transcript = callLog.transcript || '';
+    
+    if (!transcript && !recording_url) {
+      return { success: false, error: 'Missing recording_url and no existing transcript' };
     }
 
-    const transcript = await sttResponse.text();
-    console.log(`[processTranscript] Transcript (${transcript.length} chars): ${transcript.substring(0, 200)}`);
+    if (!transcript && recording_url) {
+      try {
+        new URL(recording_url);
+      } catch (_) {
+        return { success: false, error: 'Invalid recording URL' };
+      }
+    }
 
-    const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
+    if (!transcript) {
+      const audioResponse = await fetch(recording_url);
+      if (!audioResponse.ok) {
+        console.error('Recording download failed:', audioResponse.status);
+        return { success: false, error: 'Failed to download recording' };
+      }
+      const audioBuffer = await audioResponse.arrayBuffer();
+      console.log(`[processTranscript] Downloaded recording: ${audioBuffer.byteLength} bytes`);
+
+      const contentType = audioResponse.headers.get('content-type') || '';
+      let fileName = 'recording.mp3';
+      let mimeType = 'audio/mpeg';
+      if (contentType.includes('wav')) { fileName = 'recording.wav'; mimeType = 'audio/wav'; }
+      else if (contentType.includes('ogg')) { fileName = 'recording.ogg'; mimeType = 'audio/ogg'; }
+      else if (contentType.includes('mp4') || contentType.includes('m4a')) { fileName = 'recording.m4a'; mimeType = 'audio/mp4'; }
+      else if (contentType.includes('webm')) { fileName = 'recording.webm'; mimeType = 'audio/webm'; }
+
+      const azureSttEndpoint = 'https://ai-yadavnand8860531ai976911404567.cognitiveservices.azure.com';
+      const sttDeployment = 'gpt-4o-transcribe';
+      const sttApiVersion = '2025-01-01-preview';
+      const sttUrl = `${azureSttEndpoint}/openai/deployments/${sttDeployment}/audio/transcriptions?api-version=${sttApiVersion}`;
+
+      const formData = new FormData();
+      formData.append('file', new Blob([audioBuffer], { type: mimeType }), fileName);
+      formData.append('language', 'hi');
+      formData.append('response_format', 'text');
+
+      const sttResponse = await fetch(sttUrl, {
+        method: 'POST',
+        headers: {
+          'api-key': Deno.env.get('AZURE_OPENAI_KEY') || ''
+        },
+        body: formData
+      });
+
+      if (!sttResponse.ok) {
+        const errText = await sttResponse.text();
+        console.error(`Azure gpt-4o-transcribe failed (${sttResponse.status}):`, errText);
+        return { success: false, error: 'Speech to text failed', detail: errText };
+      }
+
+      transcript = await sttResponse.text();
+      console.log(`[processTranscript] Transcript (${transcript.length} chars): ${transcript.substring(0, 200)}`);
+    } else {
+      console.log(`[processTranscript] Found existing transcript (${transcript.length} chars). Skipping STT.`);
+    }
+
+    let baseUrlRaw = Deno.env.get('AZURE_OPENAI_ENDPOINT') || '';
+    baseUrlRaw = baseUrlRaw.replace(/\/+$/, '');
+    const _oi = baseUrlRaw.indexOf('/openai/');
+    if (_oi > 0) baseUrlRaw = baseUrlRaw.substring(0, _oi);
+
     const analysisResponse = await fetch(
-      `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`,
+      `${baseUrlRaw}/openai/v1/responses`,
       {
         method: 'POST',
         headers: {
@@ -72,12 +84,10 @@ export async function processTranscriptCore(call_log_id: string, recording_url: 
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          messages: [
-            {
-              role: 'system',
-              content: `You are an expert sales call analyst AI. Analyze call transcripts to extract:
-1. A brief summary of the conversation
-2. Lead status classification
+          model: Deno.env.get('AZURE_OPENAI_DEPLOYMENT'),
+          instructions: `You are an expert sales call analyst AI. Analyze call transcripts to extract:
+1. A concise summary of the conversation
+2. The current lead status
 3. Sentiment analysis
 4. Intent signals (buying signals, objections, questions)
 5. A lead score from 0-100 based on conversion likelihood
@@ -88,32 +98,38 @@ SCORING CRITERIA (total 100):
 - Engagement (0-25): short_answers_only=5, asked_questions=15, extended_conversation=20, highly_engaged=25
 - Keywords (0-20): positive keywords like "interested","sign up","let's go","sounds good","when can we start"=+5 each (cap 20); negative keywords like "not interested","too expensive","no need","don't call"=-5 each (min 0)
 
-Respond ONLY in valid JSON with this exact structure.`
-            },
-            {
-              role: 'user',
-              content: `Analyze this sales call transcript:\n\n${transcript}\n\nReturn JSON with: summary (string), lead_status (one of: interested, not_interested, callback, converted, contacted), sentiment (one of: very_positive, positive, neutral, negative, very_negative), intent_signals (array of strings like: pricing_inquiry, demo_request, competitor_mention, budget_confirmed, timeline_mentioned, decision_maker, referral, objection_price, objection_timing, objection_need, follow_up_requested), lead_score (number 0-100), score_breakdown (object with: sentiment_score number, intent_score number, engagement_score number, keyword_score number, reasoning string), key_keywords (array of important words/phrases from the conversation)`
-            }
-          ],
-          max_completion_tokens: 800,
-          response_format: { type: "json_object" }
+Respond ONLY in valid JSON with this exact structure.`,
+          input: `Analyze this sales call transcript:\n\n${transcript}\n\nReturn JSON with: summary (string), lead_status (one of: interested, not_interested, callback, converted, contacted), sentiment (one of: very_positive, positive, neutral, negative, very_negative), intent_signals (array of strings like: pricing_inquiry, demo_request, competitor_mention, budget_confirmed, timeline_mentioned, decision_maker, referral, objection_price, objection_timing, objection_need, follow_up_requested), lead_score (number 0-100), score_breakdown (object with: sentiment_score number, intent_score number, engagement_score number, keyword_score number, reasoning string), key_keywords (array of important words/phrases from the conversation)`,
+          max_output_tokens: 800,
+          text: { format: { type: 'json_object' } }
         })
       }
     );
 
     let analysisData: any = {};
+    let rawContent = '{}';
     if (!analysisResponse.ok) {
-      analysisData = { choices: [{ message: { content: '{}' } }] };
+      const errTxt = await analysisResponse.text();
+      console.error("[processTranscript] Azure OpenAI analysis failed:", analysisResponse.status, errTxt);
     } else {
       analysisData = await analysisResponse.json();
+      rawContent = analysisData.output_text || '';
+      if (!rawContent && Array.isArray(analysisData.output)) {
+        for (const item of analysisData.output) {
+          const parts = item?.content || [];
+          for (const p of parts) {
+            if (p.text) rawContent += p.text;
+          }
+        }
+      }
     }
-    const rawContent = analysisData.choices?.[0]?.message?.content || '{}';
     
+    const cleanContent = rawContent.replace(/^```(?:json)?\n?/i, '').replace(/```$/i, '').trim();
     let analysis;
     try {
-      analysis = JSON.parse(rawContent);
+      analysis = JSON.parse(cleanContent);
     } catch (_) {
-      analysis = { summary: rawContent, lead_status: 'contacted', sentiment: 'neutral', lead_score: 0, intent_signals: [], score_breakdown: {}, key_keywords: [] };
+      analysis = { summary: cleanContent, lead_status: 'contacted', sentiment: 'neutral', lead_score: 0, intent_signals: [], score_breakdown: {}, key_keywords: [] };
     }
 
     const summary = analysis.summary || 'Analysis not available';
@@ -130,7 +146,7 @@ Respond ONLY in valid JSON with this exact structure.`
           transcript = $2, 
           conversation_summary = $3, 
           lead_status_updated = $4,
-          updated_date = NOW()
+          updated_at = NOW()
       WHERE id = $1
     `, [call_log_id, transcript, `${summary}\n\n---\nScore: ${leadScore}/100 | Sentiment: ${sentiment} | Signals: ${intentSignals.join(', ')}`, leadStatus]);
 
@@ -192,7 +208,7 @@ Respond ONLY in valid JSON with this exact structure.`
               last_engagement_date = $3, 
               engagement_count = $4, 
               tags = $5,
-              updated_date = NOW()
+              updated_at = NOW()
           WHERE id = $1
         `, [callLog.lead_id, new Date().toISOString(), new Date().toISOString(), updatedEngagement, JSON.stringify(mergedTags)]);
       } else {
@@ -236,7 +252,7 @@ Respond ONLY in valid JSON with this exact structure.`
               last_engagement_date = $11, 
               engagement_count = $12, 
               notes = $13,
-              updated_date = NOW()
+              updated_at = NOW()
           WHERE id = $1
         `, [
           callLog.lead_id, finalStatus, finalScore, finalSentiment, JSON.stringify(finalIntents), JSON.stringify(finalBreakdown), finalTier, finalReason, JSON.stringify(mergedTags), new Date().toISOString(), new Date().toISOString(), updatedEngagement, `[Score: ${finalScore}/100 | ${finalSentiment} | ${finalTier}] ${summary.substring(0, 300)}`
@@ -317,7 +333,7 @@ Respond ONLY in valid JSON with this exact structure.`
         await (client as any).queryObject(`
           UPDATE lead 
           SET next_followup_date = $2,
-              updated_date = NOW()
+              updated_at = NOW()
           WHERE id = $1
         `, [callLog.lead_id, nextFollowup.toISOString()]);
       }

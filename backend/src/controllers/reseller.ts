@@ -218,7 +218,12 @@ import { bindCustomDomain, getAzureEnvironmentDetails } from "../services/azureC
 resellerRouter.get("/custom-domain-config", async (c) => {
   try {
     const user = c.get("jwtPayload") as any;
-    if (!["reseller", "master_reseller", "admin", "master_admin"].includes(user.role)) {
+    const clientRecordRes = await base44.entities.Client.filter({ id: user.client_id });
+    const clientRecord = clientRecordRes.length > 0 ? (clientRecordRes[0] as any) : null;
+    const isReseller = ["reseller", "master_reseller", "admin", "master_admin"].includes(user.role) || 
+                       (clientRecord && ["reseller", "master_reseller"].includes(clientRecord.account_type));
+                       
+    if (!isReseller) {
       return c.json({ error: "Only resellers or admins can manage custom domains" }, 403);
     }
     const config = await getAzureEnvironmentDetails();
@@ -232,7 +237,12 @@ resellerRouter.get("/custom-domain-config", async (c) => {
 resellerRouter.post("/custom-domain", async (c) => {
   try {
     const user = c.get("jwtPayload") as any;
-    if (!["reseller", "master_reseller", "admin", "master_admin"].includes(user.role)) {
+    const clientRecordRes = await base44.entities.Client.filter({ id: user.client_id });
+    const clientRecord = clientRecordRes.length > 0 ? (clientRecordRes[0] as any) : null;
+    const isReseller = ["reseller", "master_reseller", "admin", "master_admin"].includes(user.role) || 
+                       (clientRecord && ["reseller", "master_reseller"].includes(clientRecord.account_type));
+
+    if (!isReseller) {
       return c.json({ error: "Only resellers or admins can manage custom domains" }, 403);
     }
 
@@ -333,8 +343,13 @@ resellerRouter.post("/admin/promote", async (c) => {
 resellerRouter.get("/custom-domain", async (c) => {
   try {
     const user = c.get("jwtPayload") as any;
-    if (!["reseller", "master_reseller", "admin", "master_admin"].includes(user.role)) {
-      return c.json({ error: "Only resellers or admins can view custom domains" }, 403);
+    const clientRecordRes = await base44.entities.Client.filter({ id: user.client_id });
+    const clientRecord = clientRecordRes.length > 0 ? (clientRecordRes[0] as any) : null;
+    const isReseller = ["reseller", "master_reseller", "admin", "master_admin"].includes(user.role) || 
+                       (clientRecord && ["reseller", "master_reseller"].includes(clientRecord.account_type));
+
+    if (!isReseller) {
+      return c.json({ error: "Only resellers can view custom domains" }, 403);
     }
     const mappings = await base44.entities.DomainMapping.filter({ reseller_id: user.client_id });
     return c.json(mappings.length > 0 ? mappings[0] : null);
