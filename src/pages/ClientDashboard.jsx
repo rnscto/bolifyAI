@@ -5,7 +5,6 @@ import { Bot, Users, PhoneCall, Calendar, TrendingUp } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { Button } from '@/components/ui/button';
-import TrialBanner from '../components/TrialBanner';
 
 export default function ClientDashboard() {
   const [user, setUser] = useState(null);

@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '@/api/apiClient';
 import { useRealtime } from '@/hooks/useRealtime';
-import TrialBanner from '../components/TrialBanner';
 import CallSummaryCards from '../components/personal/CallSummaryCards';
 import RecentCallList from '../components/personal/RecentCallList';
 import QuickActionsPanel from '../components/personal/QuickActionsPanel';
