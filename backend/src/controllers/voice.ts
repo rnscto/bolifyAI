@@ -647,7 +647,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
         if (geminiSocket?.readyState === WebSocket.OPEN && !session._callEnded) {
           // Send silent audio chunk to keep connection alive safely
           try {
-            geminiSocket.send(JSON.stringify({ realtimeInput: { audio: { mimeType: "audio/pcm;rate=16000", data: "AAAA" } } }));
+            geminiSocket.send(JSON.stringify({ realtimeInput: { audio: { mimeType: "audio/pcm;rate=16000", data: "AAAAAA==" } } }));
           } catch (_) {}
         } else {
           if (geminiKeepaliveTimer) clearInterval(geminiKeepaliveTimer);
