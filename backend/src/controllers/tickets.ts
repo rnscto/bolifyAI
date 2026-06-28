@@ -70,7 +70,7 @@ ticketRouter.post("/tickets", async (c) => {
       description || ''
     ]);
     
-    const ticket = result.rows[0];
+    const ticket = result.rows[0] as any;
 
     // If description or attachment is provided, insert it as the first message
     if (description || attachment_data) {

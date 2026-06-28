@@ -181,14 +181,14 @@ integrationRouter.post("/smartflo/fetch-dids", async (c) => {
 
     let response = await fetch("https://api-smartflo.tatateleservices.com/v1/my_number", {
       method: "GET",
-      headers: { Authorization: token, "Content-Type": "application/json", Accept: "application/json" },
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
     });
 
     if (response.status === 401 || response.status === 403) {
       token = await getSmartfloToken(true);
       response = await fetch("https://api-smartflo.tatateleservices.com/v1/my_number", {
         method: "GET",
-        headers: { Authorization: token, "Content-Type": "application/json", Accept: "application/json" },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
       });
     }
 

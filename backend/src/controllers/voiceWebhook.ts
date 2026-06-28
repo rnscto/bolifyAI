@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { client } from "../db/index.ts";
+import { getSmartfloToken } from "../services/smartflo.ts";
 
 export const voiceWebhookRouter = new Hono();
 
@@ -598,6 +599,28 @@ voiceWebhookRouter.post("/", async (c) => {
 
     vals.push(callLog.id);
     await client.queryObject(`UPDATE "calllog" SET ${setClauses.join(', ')} WHERE id = $${idx}`, vals);
+
+    // ===== FETCH RECORDING IMMEDIATELY IF COMPLETED =====
+    if (effectiveStatus === 'completed' && !recording_url) {
+      try {
+        const token = await getSmartfloToken();
+        const cdrResp = await fetch(
+          `https://api-smartflo.tatateleservices.com/v1/call/records?call_id=${encodeURIComponent(call_id)}&limit=1`,
+          { headers: { 'Authorization': `Bearer ${token}`, 'Accept': 'application/json' } }
+        );
+        if (cdrResp.ok) {
+          const cdrData = await cdrResp.json();
+          const logs = Array.isArray(cdrData) ? cdrData : (cdrData.data || []);
+          const record = logs.find((l: any) => l.call_id === call_id);
+          if (record && record.recording_url) {
+            await client.queryObject(`UPDATE "calllog" SET recording_url = $1 WHERE id = $2`, [record.recording_url, callLog.id]);
+            console.log(`[smartfloWebhook] Extracted recording for ${call_id}: ${record.recording_url}`);
+          }
+        }
+      } catch (e: any) {
+        console.error(`[smartfloWebhook] Failed to fetch recording immediately for ${call_id}:`, e.message);
+      }
+    }
 
     // ===== PER-MINUTE WALLET DEDUCTION =====
     if (effectiveStatus === 'completed' && callLog.client_id) {

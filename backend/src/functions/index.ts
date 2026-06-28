@@ -2,7 +2,6 @@ import fetchSmartfloDIDs from "./fetchSmartfloDIDs.ts";
 import initiateCall from "./initiateCall.ts";
 import executeCampaign from "./executeCampaign.ts";
 import adminListClients from "./adminListClients.ts";
-import fetchCallRecording from "./fetchCallRecording.ts";
 import rescoreLeadFromHistory from "./rescoreLeadFromHistory.ts";
 import azureBlobSignedUrl from "./azureBlobSignedUrl.ts";
 import azureBlobUpload from "./azureBlobUpload.ts";
@@ -69,7 +68,6 @@ export const functionRegistry: Record<string, Function> = {
   executeCampaign,
   adminListClients,
   adminManageAgent,
-  fetchCallRecording,
   rescoreLeadFromHistory,
   azureBlobSignedUrl,
   azureBlobUpload,
