@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { apiClient } from '@/api/apiClient';
+import { supportApi } from '@/api/supportApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -24,7 +24,7 @@ export default function AdminTickets() {
   const loadTickets = async () => {
     setLoading(true);
     try {
-      const list = await apiClient.Ticket.list('-created_at', 100);
+      const list = await supportApi.getTickets();
       setTickets(list || []);
     } catch (e) {
       toast.error('Failed to load tickets');
@@ -38,7 +38,7 @@ export default function AdminTickets() {
   const loadMessages = async (ticketId) => {
     setLoadingMessages(true);
     try {
-      const list = await apiClient.TicketMessage.filter({ ticket_id: ticketId }, 'created_at', 100);
+      const list = await supportApi.getMessages(ticketId);
       setMessages(list || []);
     } catch (e) {
       toast.error('Failed to load messages');
@@ -57,15 +57,10 @@ export default function AdminTickets() {
     if (!replyText.trim() || !activeTicket) return;
     setSubmitting(true);
     try {
-      await apiClient.TicketMessage.create({
-        ticket_id: activeTicket.id,
-        sender_id: user.id,
-        sender_role: 'admin',
-        message: replyText
-      });
+      await supportApi.sendMessage(activeTicket.id, replyText);
       // Optionally update status to in_progress
       if (activeTicket.status === 'open') {
-        await apiClient.Ticket.update(activeTicket.id, { status: 'in_progress' });
+        await supportApi.updateTicketStatus(activeTicket.id, 'in_progress');
         loadTickets();
         setActiveTicket(prev => ({ ...prev, status: 'in_progress' }));
       }
@@ -81,7 +76,7 @@ export default function AdminTickets() {
   const updateStatus = async (newStatus) => {
     if (!activeTicket) return;
     try {
-      await apiClient.Ticket.update(activeTicket.id, { status: newStatus });
+      await supportApi.updateTicketStatus(activeTicket.id, newStatus);
       toast.success('Status updated');
       setActiveTicket(prev => ({ ...prev, status: newStatus }));
       loadTickets();

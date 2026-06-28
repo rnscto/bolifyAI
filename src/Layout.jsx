@@ -263,6 +263,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'WhatsApp Templates', path: 'ClientWhatsAppTemplates', icon: MessageSquare },
     { name: 'WhatsApp History', path: 'ClientWhatsAppHistory', icon: MessageSquare },
     { name: 'Settings', path: 'ClientSettings', icon: UserCog },
+    { name: 'Support', path: 'ClientTickets', icon: LifeBuoy },
     { name: 'Partner Dashboard', path: 'PartnerDashboard', icon: Handshake },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
     ];
@@ -273,6 +274,7 @@ export default function Layout({ children, currentPageName }) {
       { name: 'Custom Domain', path: 'AdminResellerBranding', icon: Globe },
       { name: 'Subscriptions', path: 'AdminSubscriptions', icon: CreditCard },
       { name: 'Payments', path: 'AdminPayments', icon: IndianRupee },
+      { name: 'Manage Support Tickets', path: 'AdminTickets', icon: LifeBuoy },
     ] : [];
 
     const businessNav = [...baseBusinessNav, ...resellerSection];

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { apiClient } from '@/api/apiClient';
+import { supportApi } from '@/api/supportApi';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -28,7 +28,7 @@ export default function ClientTickets() {
   const loadTickets = async () => {
     setLoading(true);
     try {
-      const list = await apiClient.Ticket.filter({ client_id: user.id }, '-created_at', 50);
+      const list = await supportApi.getTickets();
       setTickets(list || []);
     } catch (e) {
       toast.error('Failed to load tickets');
@@ -44,7 +44,7 @@ export default function ClientTickets() {
   const loadMessages = async (ticketId) => {
     setLoadingMessages(true);
     try {
-      const list = await apiClient.TicketMessage.filter({ ticket_id: ticketId }, 'created_at', 100);
+      const list = await supportApi.getMessages(ticketId);
       setMessages(list || []);
     } catch (e) {
       toast.error('Failed to load messages');
@@ -63,12 +63,10 @@ export default function ClientTickets() {
     if (!form.subject.trim()) { toast.error('Subject is required'); return; }
     setSubmitting(true);
     try {
-      const newTicket = await apiClient.Ticket.create({
-        client_id: user.id,
+      const newTicket = await supportApi.createTicket({
         subject: form.subject,
         category: form.category,
-        priority: form.priority,
-        status: 'open'
+        priority: form.priority
       });
       toast.success('Ticket created successfully');
       setDialogOpen(false);
@@ -87,15 +85,10 @@ export default function ClientTickets() {
     if (!replyText.trim() || !activeTicket) return;
     setSubmitting(true);
     try {
-      await apiClient.TicketMessage.create({
-        ticket_id: activeTicket.id,
-        sender_id: user.id,
-        sender_role: 'client',
-        message: replyText
-      });
+      await supportApi.sendMessage(activeTicket.id, replyText);
       // Optionally update status to open if it was resolved
       if (activeTicket.status === 'resolved' || activeTicket.status === 'closed') {
-        await apiClient.Ticket.update(activeTicket.id, { status: 'open' });
+        await supportApi.updateTicketStatus(activeTicket.id, 'open');
         loadTickets();
       }
       setReplyText('');

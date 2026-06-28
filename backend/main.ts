@@ -18,6 +18,7 @@ import { billingRouter } from "./src/controllers/billing.ts";
 import { agentsRouter } from "./src/controllers/agents.ts";
 import { functionsRouter } from "./src/controllers/functions.ts";
 import { analyticsRouter } from "./src/controllers/analytics.ts";
+import { ticketRouter } from "./src/controllers/tickets.ts";
 import { initCampaignPoller } from "./src/cron/campaignPoller.ts";
 import { initCrmPoller } from "./src/cron/crmPoller.ts";
 import { initBillingSweeper } from "./src/cron/billingSweeper.ts";
@@ -138,6 +139,7 @@ app.route("/api/telegram", telegramRouter);
 app.route("/api/billing", billingRouter);
 app.route("/api/agents", agentsRouter);
 app.route("/api/functions", functionsRouter);
+app.route("/api/support", ticketRouter);
 app.route("/api/dapr", daprRouter);
 app.route("/dapr", daprRouter); // Dapr sidecar natively calls GET /dapr/subscribe
 
