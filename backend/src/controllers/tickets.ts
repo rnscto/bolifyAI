@@ -53,7 +53,7 @@ ticketRouter.post("/tickets", async (c) => {
     const user = c.get("jwtPayload") as any;
     const body = await c.req.json();
     
-    const { subject, category, priority, description } = body;
+    const { subject, category, priority, description, attachment_data, attachment_type } = body;
     if (!subject) return c.json({ error: "Subject is required" }, 400);
 
     const query = `
@@ -72,12 +72,12 @@ ticketRouter.post("/tickets", async (c) => {
     
     const ticket = result.rows[0];
 
-    // If description is provided, insert it as the first message
-    if (description) {
+    // If description or attachment is provided, insert it as the first message
+    if (description || attachment_data) {
       await client.queryObject(
-        `INSERT INTO "ticketmessage" ("ticket_id", "sender_id", "sender_role", "message")
-         VALUES ($1, $2, 'client', $3)`,
-        [ticket.id, user.id, description]
+        `INSERT INTO "ticketmessage" ("ticket_id", "sender_id", "sender_role", "message", "attachment_data", "attachment_type")
+         VALUES ($1, $2, 'client', $3, $4, $5)`,
+        [ticket.id, user.id, description || '', attachment_data || null, attachment_type || null]
       );
     }
     
@@ -143,8 +143,8 @@ ticketRouter.post("/tickets/:id/messages", async (c) => {
     const id = c.req.param("id");
     const body = await c.req.json();
     
-    const { message } = body;
-    if (!message) return c.json({ error: "Message is required" }, 400);
+    const { message, attachment_data, attachment_type } = body;
+    if (!message && !attachment_data) return c.json({ error: "Message or attachment is required" }, 400);
 
     const { clause, args } = getRbacCondition(user, 2);
     
@@ -155,13 +155,44 @@ ticketRouter.post("/tickets/:id/messages", async (c) => {
     const senderRole = user.role.includes('admin') ? 'admin' : (user.role.includes('reseller') ? 'reseller' : 'client');
     
     const result = await client.queryObject(
-      `INSERT INTO "ticketmessage" ("ticket_id", "sender_id", "sender_role", "message")
-       VALUES ($1, $2, $3, $4) RETURNING *`,
-      [id, user.id, senderRole, message]
+      `INSERT INTO "ticketmessage" ("ticket_id", "sender_id", "sender_role", "message", "attachment_data", "attachment_type")
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [id, user.id, senderRole, message || '', attachment_data || null, attachment_type || null]
     );
     
     // Update ticket timestamp
     await client.queryObject(`UPDATE "ticket" SET "updated_at" = NOW() WHERE "id" = $1`, [id]);
+    
+    return c.json(result.rows[0]);
+  } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// POST /api/support/tickets/:id/reopen
+ticketRouter.post("/tickets/:id/reopen", async (c) => {
+  try {
+    const user = c.get("jwtPayload") as any;
+    const id = c.req.param("id");
+    
+    const { clause, args } = getRbacCondition(user, 2);
+    
+    // Verify ticket ownership
+    const check = await client.queryObject(`SELECT id FROM "ticket" WHERE "id" = $1 AND ${clause}`, [id, ...args]);
+    if (check.rows.length === 0) return c.json({ error: "Not found or forbidden" }, 404);
+    
+    // Set status back to 'open' and escalate it so humans deal with it
+    const result = await client.queryObject(
+      `UPDATE "ticket" SET "status" = 'open', "escalated_to_admin" = true, "updated_at" = NOW() WHERE "id" = $1 RETURNING *`,
+      [id]
+    );
+    
+    // Add an automated system message indicating it was reopened
+    await client.queryObject(
+      `INSERT INTO "ticketmessage" ("ticket_id", "sender_id", "sender_role", "message")
+       VALUES ($1, $2, 'client', 'System: Ticket re-opened and escalated to admin by user.')`,
+      [id, user.id]
+    );
     
     return c.json(result.rows[0]);
   } catch (err: any) {

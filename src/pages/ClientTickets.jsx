@@ -21,8 +21,9 @@ export default function ClientTickets() {
   const [messages, setMessages] = useState([]);
   const [loadingMessages, setLoadingMessages] = useState(false);
   
-  const [form, setForm] = useState({ subject: '', category: 'technical_issue', priority: 'medium', description: '' });
+  const [form, setForm] = useState({ subject: '', category: 'technical_issue', priority: 'medium', description: '', file: null });
   const [replyText, setReplyText] = useState('');
+  const [replyFile, setReplyFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   const loadTickets = async () => {
@@ -67,11 +68,12 @@ export default function ClientTickets() {
         subject: form.subject,
         category: form.category,
         priority: form.priority,
-        description: form.description
+        description: form.description,
+        file: form.file
       });
       toast.success('Ticket created successfully');
       setDialogOpen(false);
-      setForm({ subject: '', category: 'technical_issue', priority: 'medium', description: '' });
+      setForm({ subject: '', category: 'technical_issue', priority: 'medium', description: '', file: null });
       loadTickets();
       handleOpenTicket(newTicket);
     } catch (e) {
@@ -83,19 +85,30 @@ export default function ClientTickets() {
 
   const sendReply = async (e) => {
     e.preventDefault();
-    if (!replyText.trim() || !activeTicket) return;
+    if ((!replyText.trim() && !replyFile) || !activeTicket) return;
     setSubmitting(true);
     try {
-      await supportApi.sendMessage(activeTicket.id, replyText);
-      // Optionally update status to open if it was resolved
-      if (activeTicket.status === 'resolved' || activeTicket.status === 'closed') {
-        await supportApi.updateTicketStatus(activeTicket.id, 'open');
-        loadTickets();
-      }
+      await supportApi.sendMessage(activeTicket.id, replyText, replyFile);
       setReplyText('');
+      setReplyFile(null);
       loadMessages(activeTicket.id);
     } catch (e) {
       toast.error('Failed to send message');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleReopen = async () => {
+    setSubmitting(true);
+    try {
+      await supportApi.reopenTicket(activeTicket.id);
+      toast.success('Ticket re-opened and escalated.');
+      setActiveTicket({ ...activeTicket, status: 'open' });
+      loadTickets();
+      loadMessages(activeTicket.id);
+    } catch (e) {
+      toast.error('Failed to re-open ticket');
     } finally {
       setSubmitting(false);
     }
@@ -145,6 +158,17 @@ export default function ClientTickets() {
                     </div>
                     <div className={`px-4 py-2 rounded-2xl max-w-[85%] text-sm ${isMe ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-white border rounded-tl-sm text-gray-800 shadow-sm'}`}>
                       {msg.message}
+                      {msg.attachment_data && msg.attachment_type && (
+                        <div className="mt-2">
+                          {msg.attachment_type.startsWith('image/') ? (
+                            <img src={msg.attachment_data} alt="Attachment" className="max-w-full rounded-md max-h-64 object-contain" />
+                          ) : (
+                            <a href={msg.attachment_data} download={`attachment_${msg.id}.pdf`} className={`inline-block px-3 py-1.5 rounded-md text-xs font-medium ${isMe ? 'bg-blue-700 hover:bg-blue-800 text-white' : 'bg-gray-100 hover:bg-gray-200 text-gray-700'}`}>
+                              Download PDF Attachment
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -152,18 +176,38 @@ export default function ClientTickets() {
             )}
           </CardContent>
           <div className="p-4 bg-white border-t shrink-0">
-            <form onSubmit={sendReply} className="flex gap-2">
-              <Textarea 
-                value={replyText}
-                onChange={e => setReplyText(e.target.value)}
-                placeholder="Type your message..." 
-                className="resize-none min-h-[44px] h-[44px]"
-                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(e); } }}
-              />
-              <Button type="submit" disabled={submitting || !replyText.trim()} className="bg-blue-600 hover:bg-blue-700 h-[44px]">
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              </Button>
-            </form>
+            {activeTicket.status === 'resolved' || activeTicket.status === 'closed' ? (
+              <div className="flex flex-col items-center justify-center p-4 bg-gray-50 rounded-lg border border-dashed">
+                <p className="text-sm text-gray-500 mb-3">This ticket has been marked as resolved.</p>
+                <Button onClick={handleReopen} disabled={submitting} variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50">
+                  {submitting ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : null} Re-Open & Escalate Ticket
+                </Button>
+              </div>
+            ) : (
+              <form onSubmit={sendReply} className="flex flex-col gap-2">
+                <div className="flex gap-2">
+                  <Textarea 
+                    value={replyText}
+                    onChange={e => setReplyText(e.target.value)}
+                    placeholder="Type your message..." 
+                    className="resize-none min-h-[44px] h-[44px]"
+                    onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendReply(e); } }}
+                  />
+                  <Button type="submit" disabled={submitting || (!replyText.trim() && !replyFile)} className="bg-blue-600 hover:bg-blue-700 h-[44px]">
+                    {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </Button>
+                </div>
+                <div className="flex items-center gap-2 px-1">
+                  <Input 
+                    type="file" 
+                    accept="image/*,.pdf" 
+                    onChange={e => setReplyFile(e.target.files[0])}
+                    className="text-xs h-8 file:bg-gray-100 file:border-0 file:rounded-md file:px-2 file:py-1 file:text-xs file:font-medium file:cursor-pointer hover:file:bg-gray-200"
+                  />
+                  {replyFile && <span className="text-xs text-gray-500 truncate max-w-[200px]">{replyFile.name}</span>}
+                </div>
+              </form>
+            )}
           </div>
         </Card>
       </div>
@@ -234,6 +278,10 @@ export default function ClientTickets() {
             <div className="space-y-1.5">
               <Label>Description</Label>
               <Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} placeholder="Please explain your issue in detail..." className="min-h-[100px]" />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Attachment (Screenshot or PDF)</Label>
+              <Input type="file" accept="image/*,.pdf" onChange={e => setForm({ ...form, file: e.target.files[0] })} />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">

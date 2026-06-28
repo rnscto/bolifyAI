@@ -1,9 +1,11 @@
 import { client } from "../db/index.ts";
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
-const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-
 export async function processTickets() {
+  // Read env vars dynamically to ensure they aren't cached as undefined at boot time
+  const baseUrlRaw = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
+  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
+  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
+
   try {
     // Find open and in_progress tickets that are NOT escalated
     const activeTicketsRes = await client.queryObject(`
@@ -25,6 +27,8 @@ export async function processTickets() {
       // If the last message is from a client, the AI needs to respond
       if (messages.length > 0 && messages[messages.length - 1].sender_role === 'client') {
         
+        console.log(`[TicketAutoResponder] Processing Ticket ${ticket.id}`);
+
         // Fetch KnowledgeBase articles for context
         const kbRes = await client.queryObject(`SELECT title, content FROM "knowledgebase"`);
         const kbArticles: any[] = kbRes.rows;
@@ -40,7 +44,10 @@ export async function processTickets() {
         // Compile chat history
         let chatHistory = "";
         messages.forEach(m => {
-          chatHistory += `\n${m.sender_role === 'client' ? 'User' : 'Agent'}: ${m.message}`;
+          // If there's attachment data, indicate it in history
+          let msgText = m.message;
+          if (m.attachment_data) msgText += ` [User attached a ${m.attachment_type} file]`;
+          chatHistory += `\n${m.sender_role === 'client' ? 'User' : 'Agent'}: ${msgText}`;
         });
 
         const systemInstruction = `You are a helpful and technical L1 support agent for an AI voice calling platform.
@@ -54,38 +61,20 @@ ${kbContext}`;
 
         let aiResponse = "";
 
-        if (GEMINI_API_KEY) {
+        if (apiKey && deployment && baseUrlRaw) {
           try {
-            const geminiRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${GEMINI_API_KEY}`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                system_instruction: {
-                  parts: [{ text: systemInstruction }]
-                },
-                contents: [{
-                  parts: [{ text: promptText }]
-                }],
-                generationConfig: { maxOutputTokens: 500, temperature: 0.3 }
-              })
-            });
-            const data = await geminiRes.json();
-            if (data.candidates && data.candidates[0]?.content?.parts?.[0]?.text) {
-              aiResponse = data.candidates[0].content.parts[0].text.trim();
-            }
-          } catch (e) {
-            console.error("Gemini error:", e);
-          }
-        } else if (OPENAI_API_KEY) {
-          try {
-            const aiRes = await fetch("https://api.openai.com/v1/chat/completions", {
+            const baseUrl = baseUrlRaw.endsWith('/responses') ? baseUrlRaw.replace('/responses', '') : baseUrlRaw;
+            const finalUrl = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-02-15-preview`;
+
+            console.log(`[TicketAutoResponder] Calling Azure OpenAI for ticket ${ticket.id}...`);
+
+            const aiRes = await fetch(finalUrl, {
               method: "POST",
               headers: {
-                "Authorization": `Bearer ${OPENAI_API_KEY}`,
+                "api-key": apiKey,
                 "Content-Type": "application/json"
               },
               body: JSON.stringify({
-                model: "gpt-4o",
                 messages: [
                   { role: "system", content: systemInstruction },
                   { role: "user", content: promptText }
@@ -94,13 +83,21 @@ ${kbContext}`;
                 temperature: 0.3
               })
             });
-            const data = await aiRes.json();
-            if (data.choices && data.choices[0]) {
-              aiResponse = data.choices[0].message.content.trim();
+
+            if (!aiRes.ok) {
+               console.error(`[TicketAutoResponder] Azure OpenAI Error HTTP ${aiRes.status}:`, await aiRes.text());
+            } else {
+               const data = await aiRes.json();
+               if (data.choices && data.choices[0]) {
+                 aiResponse = data.choices[0].message.content.trim();
+                 console.log(`[TicketAutoResponder] AI Response successfully generated.`);
+               }
             }
           } catch (e) {
-            console.error("OpenAI error:", e);
+            console.error("[TicketAutoResponder] Azure OpenAI fetch error:", e);
           }
+        } else {
+           console.warn("[TicketAutoResponder] Azure OpenAI keys are not configured properly. Cannot respond.");
         }
 
         if (aiResponse) {
@@ -123,7 +120,7 @@ ${kbContext}`;
               `UPDATE "ticket" SET "escalated_to_admin" = true, "status" = 'open', "updated_at" = NOW() WHERE "id" = $1`,
               [ticket.id]
             );
-            console.log(`Ticket ${ticket.id} escalated by AI.`);
+            console.log(`[TicketAutoResponder] Ticket ${ticket.id} escalated by AI.`);
           } else {
             await client.queryObject(
               `UPDATE "ticket" SET "status" = 'in_progress', "updated_at" = NOW() WHERE "id" = $1`,
