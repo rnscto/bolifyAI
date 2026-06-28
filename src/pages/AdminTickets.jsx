@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { apiClient } from '@/api/apiClient';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { LifeBuoy, MessageSquare, Send, ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
+import { LifeBuoy, Send, ArrowLeft, Loader2, CheckCircle2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/AuthContext';
 

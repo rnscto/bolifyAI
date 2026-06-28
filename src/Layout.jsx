@@ -29,10 +29,6 @@ import {
   Image,
   ShieldCheck,
   MessageSquare,
-  ShieldAlert,
-  FileBadge,
-  MessageSquareShare,
-  CalendarDays,
   LifeBuoy
 } from 'lucide-react';
 import AgreementGate from './components/client/AgreementGate';
