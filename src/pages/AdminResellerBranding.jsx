@@ -90,6 +90,22 @@ export default function AdminResellerBranding() {
     }
   };
 
+  const handleRemove = async () => {
+    if (!confirm('Are you sure you want to remove this domain? The platform will no longer load at this URL.')) return;
+    try {
+      const res = await apiFetch('/reseller/custom-domain', {
+        method: 'DELETE'
+      });
+      if (res.error) throw new Error(res.error);
+      setCurrentDomain('');
+      setDomain('');
+      setProvisioning(false);
+      toast.success('Domain removed successfully');
+    } catch (e) {
+      toast.error(e.message || 'Failed to remove domain');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -145,9 +161,17 @@ export default function AdminResellerBranding() {
               </a>
             </div>
           </div>
-          <Badge className={provisioning ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}>
-            {provisioning ? 'Provisioning' : 'Verified'}
-          </Badge>
+          <div className="flex items-center gap-3">
+            <Badge className={provisioning ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'}>
+              {provisioning ? 'Provisioning' : 'Verified'}
+            </Badge>
+            <button
+              onClick={handleRemove}
+              className="px-3 py-1.5 text-sm font-semibold text-red-600 bg-red-50 hover:bg-red-100 rounded-lg transition-colors border border-red-200"
+            >
+              Remove
+            </button>
+          </div>
         </div>
       )}
 

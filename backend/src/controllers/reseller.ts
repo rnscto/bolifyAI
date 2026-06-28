@@ -212,7 +212,7 @@ resellerRouter.post("/admin/pay-commission", async (c) => {
   }
 });
 
-import { bindCustomDomain, getAzureEnvironmentDetails } from "../services/azureContainerService.ts";
+import { bindCustomDomain, getAzureEnvironmentDetails, unbindCustomDomain } from "../services/azureContainerService.ts";
 
 // GET /api/reseller/custom-domain-config
 resellerRouter.get("/custom-domain-config", async (c) => {
@@ -299,6 +299,39 @@ resellerRouter.post("/custom-domain", async (c) => {
   } catch (err: any) {
     console.error("[Custom Domain POST Error]", err);
     return c.json({ error: err.message || "Failed to save custom domain" }, 500);
+  }
+});
+
+// DELETE /api/reseller/custom-domain
+resellerRouter.delete("/custom-domain", async (c) => {
+  try {
+    const user = c.get("jwtPayload") as any;
+    const clientRecordRes = await base44.entities.Client.filter({ id: user.client_id });
+    const clientRecord = clientRecordRes.length > 0 ? (clientRecordRes[0] as any) : null;
+    const isReseller = ["reseller", "master_reseller", "admin", "master_admin"].includes(user.role) || 
+                       (clientRecord && ["reseller", "master_reseller"].includes(clientRecord.account_type));
+
+    if (!isReseller) {
+      return c.json({ error: "Only resellers or admins can manage custom domains" }, 403);
+    }
+
+    const mappings = await base44.entities.DomainMapping.filter({ reseller_id: user.client_id });
+    if (mappings.length === 0) {
+      return c.json({ error: "No custom domain found to unbind" }, 404);
+    }
+
+    const domain = mappings[0].custom_domain;
+    
+    // Remove from Azure in background
+    unbindCustomDomain(domain).catch(console.error);
+
+    // Delete from DB immediately
+    await base44.entities.DomainMapping.delete(mappings[0].id);
+
+    return c.json({ success: true, message: "Domain unbound successfully" });
+  } catch (err: any) {
+    console.error("[Custom Domain DELETE Error]", err);
+    return c.json({ error: err.message || "Failed to unbind custom domain" }, 500);
   }
 });
 

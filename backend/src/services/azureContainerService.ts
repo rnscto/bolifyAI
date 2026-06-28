@@ -233,3 +233,35 @@ async function provisionSslInBackground(
     );
   }
 }
+
+export async function unbindCustomDomain(domain: string) {
+  const acaClient = getArmClient();
+  console.log(`[AzureContainerService] Starting domain unbind for: ${domain}`);
+
+  const app = await acaClient.containerApps.get(resourceGroupName, containerAppName);
+  if (!app?.configuration?.ingress?.customDomains) {
+    return { success: true, message: "No custom domains found" };
+  }
+
+  if (app.configuration.secrets) {
+    delete app.configuration.secrets;
+  }
+
+  const initialCount = app.configuration.ingress.customDomains.length;
+  app.configuration.ingress.customDomains = app.configuration.ingress.customDomains.filter(
+    (d: any) => d.name !== domain
+  );
+
+  if (app.configuration.ingress.customDomains.length === initialCount) {
+    return { success: true, message: "Domain not bound to Azure" };
+  }
+
+  console.log(`[AzureContainerService] Updating Container App to remove domain ${domain}...`);
+  // Note: For unbinding we can await it as it's typically faster (30-60s) or we can background it.
+  // For safety against 504s, we'll run it in background just like binding.
+  acaClient.containerApps.beginUpdateAndWait(resourceGroupName, containerAppName, app)
+    .then(() => console.log(`[AzureContainerService] Domain ${domain} removed successfully`))
+    .catch((err: any) => console.error(`[AzureContainerService] Failed to remove domain ${domain}:`, err.message));
+
+  return { success: true, message: `Unbinding ${domain} in background` };
+}
