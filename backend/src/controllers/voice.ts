@@ -12,7 +12,17 @@ export const voiceRouter = new Hono();
 // Webhook for Smartflo (Tata Tele) when a call is received
 voiceRouter.post("/incoming", async (c) => {
   try {
-    const body = await c.req.json().catch(() => ({}));
+    const contentType = c.req.header("content-type") || "";
+    let body: any = {};
+    try {
+      if (contentType.includes("application/json")) {
+        body = await c.req.json();
+      } else if (contentType.includes("application/x-www-form-urlencoded")) {
+        body = await c.req.parseBody();
+      }
+    } catch (e) {
+      console.warn("[Smartflo] Failed to parse incoming webhook body");
+    }
     
     // Extract Smartflo identifiers (adjust fields based on actual Smartflo documentation)
     const to = body.to || body.destination_number || "";
@@ -128,9 +138,9 @@ function base64PCM16_24kToMulaw(b64: string, session: any): Uint8Array {
   const num = Math.floor(bytes.length / 2);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
-  const rem = session._lastDownsampleRemainder || [];
+  const rem = session._lastDownsampleRemainder || new Int16Array(0);
   const all = new Int16Array(rem.length + num);
-  for (let i = 0; i < rem.length; i++) all[i] = rem[i];
+  all.set(rem, 0);
   for (let i = 0; i < num; i++) all[rem.length + i] = view.getInt16(i * 2, true);
 
   const total = all.length;
@@ -144,10 +154,12 @@ function base64PCM16_24kToMulaw(b64: string, session: any): Uint8Array {
   }
 
   const consumed = dl * 3;
-  session._lastDownsampleRemainder = [];
-  for (let i = consumed; i < total; i++) {
-    session._lastDownsampleRemainder.push(all[i]);
+  const remCount = total - consumed;
+  const nextRem = new Int16Array(remCount);
+  for (let i = 0; i < remCount; i++) {
+    nextRem[i] = all[consumed + i];
   }
+  session._lastDownsampleRemainder = nextRem;
 
   return mulaw;
 }
@@ -221,16 +233,17 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
         const azureDeployment = Deno.env.get("AZURE_OPENAI_DEPLOYMENT") || "gpt-5.4-pro";
         
         if (azureKey && baseUrlRaw) {
-          const azureEndpoint = `${baseUrlRaw}/openai/v1/responses`;
+          const azureEndpoint = `${baseUrlRaw}/openai/deployments/${azureDeployment}/chat/completions?api-version=2024-02-15-preview`;
           const sysPrompt = 'Expert sales call analyst. Score 0-100. Respond ONLY in valid JSON.';
           const userPrompt = `Analyze the following AI voice call transcript.\nTranscript:\n${transcript}\n\nReturn JSON exactly matching this format: {"summary":"2-3 sentences","summary_hindi":"Devanagari translation of summary","lead_status":"interested|not_interested|callback|no_answer|converted|contacted|do_not_call","sentiment":"very_positive|positive|neutral|negative|very_negative","lead_score":<number 0-100>,"intent_signals":["signal1", "signal2"],"score_breakdown":{"sentiment_score":0,"intent_score":0,"engagement_score":0,"keyword_score":0,"reasoning":"..."},"key_topics":["topic1", "topic2"],"objections":["obj1"],"recommended_next_action":"..."}\n\nIMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backticks.`;
           
           const requestBody = JSON.stringify({
-            model: azureDeployment,
-            instructions: sysPrompt,
-            input: userPrompt,
-            max_output_tokens: 2000,
-            text: { format: { type: 'json_object' } }
+            messages: [
+              { role: "system", content: sysPrompt },
+              { role: "user", content: userPrompt }
+            ],
+            max_tokens: 2000,
+            response_format: { type: "json_object" }
           });
           
           let r = await fetch(azureEndpoint, {
@@ -244,15 +257,7 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
           
           if (r.ok) {
             const resp = await r.json();
-            let raw = resp.output_text || '';
-            if (!raw && Array.isArray(resp.output)) {
-              for (const item of resp.output) {
-                const parts = item?.content || [];
-                for (const p of parts) {
-                  if ((p.type === 'output_text' || p.type === 'text') && p.text) { raw += p.text; }
-                }
-              }
-            }
+            let raw = resp.choices?.[0]?.message?.content || '';
             
             const aText = raw.replace(/^```(?:json)?\n?/i, '').replace(/```$/i, '').trim();
             const a = JSON.parse(aText);
@@ -334,7 +339,6 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
     // ─── Post-Call Orchestrator Trigger ───
     // Fire and forget post-call automation (Campaign follow-ups, Action Extractions, Auto Enroll)
     if (session.callLogId) {
-      setTimeout(async () => {
         try {
           console.log(`[${reqId}] 🚀 Triggering Post-Call Orchestrator for ${session.callLogId}`);
           const clRes = await client.queryObject(`SELECT id, campaign_id FROM "campaignlead" WHERE call_log_id = $1 LIMIT 1`, [session.callLogId]);
@@ -347,7 +351,6 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
         } catch (postErr: any) {
           console.error(`[${reqId}] ❌ Post-Call Orchestrator error: ${postErr.message}`);
         }
-      }, 100);
     }
     
   } catch (err: any) { console.error(`[${reqId}] ❌ Save: ${err.message}`); }
@@ -550,7 +553,18 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
              const qs = new URLSearchParams(args).toString();
              if (qs) fetchUrl += (fetchUrl.includes('?') ? '&' : '?') + qs;
           }
-          const resp = await fetch(fetchUrl, fetchOpts);
+          // SSRF Protection
+          try {
+             const u = new URL(fetchUrl);
+             if (u.hostname === 'localhost' || u.hostname === '127.0.0.1' || u.hostname.startsWith('10.') || u.hostname.startsWith('169.254') || u.hostname.startsWith('192.168.')) {
+                return { error: "Security Exception: Internal network access blocked." };
+             }
+          } catch(e) {}
+
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s timeout
+          const resp = await fetch(fetchUrl, { ...fetchOpts, signal: controller.signal });
+          clearTimeout(timeoutId);
           const data = await resp.text();
           try {
              return JSON.parse(data);
@@ -558,6 +572,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
              return { result: data };
           }
         } catch(e: any) {
+          if (e.name === 'AbortError') return { error: "API timeout. Advise the user the system is slow." };
           return { error: `Failed to execute API call: ${e.message}` };
         }
       }
@@ -630,9 +645,9 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
       // Send a silent ping every 25s to prevent idle disconnects.
       geminiKeepaliveTimer = setInterval(() => {
         if (geminiSocket?.readyState === WebSocket.OPEN && !session._callEnded) {
-          // Empty clientContent ping to keep the connection alive
+          // Send silent audio chunk to keep connection alive safely
           try {
-            geminiSocket.send(JSON.stringify({ clientContent: { turns: [], turnComplete: false } }));
+            geminiSocket.send(JSON.stringify({ realtimeInput: { audio: { mimeType: "audio/pcm;rate=16000", data: "AAAA" } } }));
           } catch (_) {}
         } else {
           if (geminiKeepaliveTimer) clearInterval(geminiKeepaliveTimer);
@@ -669,7 +684,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
                ], turnComplete: true } });
              }
              // Flush buffered audio
-             const tail = session._audioBuffer.slice(-50);
+             const tail = session._audioBuffer.slice(-150);
              for (const b64 of tail) sendToGemini({ realtimeInput: { audio: { data: b64, mimeType: 'audio/pcm;rate=16000' } } });
              session._audioBuffer = [];
           }
@@ -992,6 +1007,10 @@ voiceRouter.post("/fetch-recording", async (c) => {
             `https://api-smartflo.tatateleservices.com/v1/call/records?call_id=${encodeURIComponent(callSid)}&limit=1`,
             { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } }
           );
+          if (cdrResp.status === 401 || cdrResp.status === 403) {
+            console.error("[fetch-recording] Auth failed even after token refresh. Breaking batch.");
+            break;
+          }
         }
 
         if (cdrResp.ok) {
