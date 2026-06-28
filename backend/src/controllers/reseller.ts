@@ -241,7 +241,7 @@ resellerRouter.post("/custom-domain", async (c) => {
     const user = c.get("jwtPayload") as any;
     const clientRecordRes = await base44.entities.Client.filter({ id: user.client_id });
     const clientRecord = clientRecordRes.length > 0 ? (clientRecordRes[0] as any) : null;
-    const isReseller = ["reseller", "master_reseller", "admin", "master_admin"].includes(user.role) || 
+    const isReseller = ["reseller", "master_reseller", "admin", "master_admin"].includes(user.role) ||
                        (clientRecord && ["reseller", "master_reseller"].includes(clientRecord.account_type));
 
     if (!isReseller) {
@@ -254,41 +254,55 @@ resellerRouter.post("/custom-domain", async (c) => {
 
     // Step 1: Save domain to DB immediately — this is instant.
     const existingMappings = await base44.entities.DomainMapping.filter({ reseller_id: user.client_id });
+    let mappingId: string;
     if (existingMappings.length > 0) {
-      await base44.entities.DomainMapping.update(existingMappings[0].id, { custom_domain, ssl_status: 'provisioning' });
+      const updated = await base44.entities.DomainMapping.update(existingMappings[0].id, {
+        custom_domain,
+        ssl_status: 'provisioning',
+        ssl_error: null,
+      });
+      mappingId = (updated as any).id;
     } else {
-      await base44.entities.DomainMapping.create({
+      const created = await base44.entities.DomainMapping.create({
         reseller_id: user.client_id,
         custom_domain,
         ssl_status: 'provisioning',
+        ssl_error: null,
         brand_name: "My Reseller Platform",
         theme_colors: {},
       });
+      mappingId = (created as any).id;
     }
 
-    // Step 2: Run Azure ARM binding in the background — DO NOT await.
+    // Step 2: Run Azure ARM binding in background — DO NOT await.
     // beginUpdateAndWait blocks for 2-5 minutes and would 503 every other request.
-    bindCustomDomain(custom_domain).then((result) => {
-      console.log(`[CustomDomain] Background binding completed for ${custom_domain}:`, result);
-    }).catch((err: any) => {
-      console.error(`[CustomDomain] Background binding failed for ${custom_domain}:`, err.message || err);
+    bindCustomDomain(custom_domain).then(async (result) => {
+      console.log(`[CustomDomain] Background binding completed for ${custom_domain}`);
+      // Mark as active in DB so UI can reflect success
+      await base44.entities.DomainMapping.update(mappingId, { ssl_status: 'active', ssl_error: null }).catch(() => {});
+    }).catch(async (err: any) => {
+      const errMsg = err.message || String(err);
+      console.error(`[CustomDomain] Background binding failed for ${custom_domain}:`, errMsg);
+      // Write the error to DB so the UI can surface it
+      const friendly = errMsg.includes("CustomDomainVerificationFailed") || errMsg.includes("DNS")
+        ? "DNS verification failed. Ensure TXT and CNAME records are correct and DNS has propagated."
+        : errMsg;
+      await base44.entities.DomainMapping.update(mappingId, { ssl_status: 'error', ssl_error: friendly }).catch(() => {});
     });
 
     // Respond immediately — domain is saved, Azure is provisioning in the background.
     return c.json({
       success: true,
-      message: `Domain ${custom_domain} saved. DNS verification and SSL provisioning are running in the background (may take 5-15 minutes). The domain will be active once Azure confirms the DNS records.`,
+      message: `Domain ${custom_domain} saved. SSL provisioning is running in the background (5–15 min).`,
       status: 'provisioning'
     });
   } catch (err: any) {
-    console.error("[Custom Domain Binding Error]", err);
-    let errorMsg = err.message || "Failed to bind custom domain";
-    if (errorMsg.includes("CustomDomainVerificationFailed") || errorMsg.includes("DNS")) {
-      errorMsg = "Domain DNS verification failed. Please ensure your TXT and CNAME records are correctly added and DNS has propagated (wait 5-15 minutes after adding records).";
-    }
-    return c.json({ error: errorMsg }, 500);
+    console.error("[Custom Domain POST Error]", err);
+    return c.json({ error: err.message || "Failed to save custom domain" }, 500);
   }
-});// POST /api/reseller/admin/promote
+});
+
+// POST /api/reseller/admin/promote
 resellerRouter.post("/admin/promote", async (c) => {
   try {
     const admin = c.get("jwtPayload") as any;
