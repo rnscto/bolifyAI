@@ -221,145 +221,44 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
     if (session._pendingAiText) { session.transcript.push({ speaker: 'AI', text: session._pendingAiText.trim() }); session._pendingAiText = ''; }
     const transcript = session.transcript.map((t: any) => `${t.speaker}: ${t.text}`).join('\n');
     
-    let summary = '', leadStatus = 'contacted', sentiment = 'neutral', leadScore = 0, intentSignals: string[] = [], scoreBreakdown: any = {}, keyTopics: string[] = [], summaryHindi = '';
-
-    if (transcript.trim().length > 30) {
-      try {
-        const azureKey = Deno.env.get("AZURE_OPENAI_KEY");
-        let baseUrlRaw = (Deno.env.get("AZURE_OPENAI_ENDPOINT") || "").replace(/\/+$/, '');
-        const _oi = baseUrlRaw.indexOf('/openai/'); 
-        if (_oi > 0) baseUrlRaw = baseUrlRaw.substring(0, _oi);
-        
-        const azureDeployment = Deno.env.get("AZURE_OPENAI_DEPLOYMENT") || "gpt-5.4-pro";
-        
-        if (azureKey && baseUrlRaw) {
-          const azureEndpoint = `${baseUrlRaw}/openai/v1/responses`;
-          const sysPrompt = 'Expert sales call analyst. Score 0-100. Respond ONLY in valid JSON.';
-          const userPrompt = `Analyze the following AI voice call transcript.\nTranscript:\n${transcript}\n\nReturn JSON exactly matching this format: {"summary":"2-3 sentences","summary_hindi":"Devanagari translation of summary","lead_status":"interested|not_interested|callback|no_answer|converted|contacted|do_not_call","sentiment":"very_positive|positive|neutral|negative|very_negative","lead_score":<number 0-100>,"intent_signals":["signal1", "signal2"],"score_breakdown":{"sentiment_score":0,"intent_score":0,"engagement_score":0,"keyword_score":0,"reasoning":"..."},"key_topics":["topic1", "topic2"],"objections":["obj1"],"recommended_next_action":"..."}\n\nIMPORTANT: Output ONLY valid JSON. Do not include markdown formatting or backticks.`;
-          
-          const requestBody = JSON.stringify({
-            model: azureDeployment,
-            instructions: sysPrompt,
-            input: userPrompt,
-            max_output_tokens: 2000,
-            text: { format: { type: 'json_object' } }
-          });
-          
-          let r = await fetch(azureEndpoint, {
-            method: 'POST', 
-            headers: { 
-              'Content-Type': 'application/json',
-              'api-key': azureKey
-            }, 
-            body: requestBody
-          });
-          
-          if (r.ok) {
-            const resp = await r.json();
-            let raw = resp.output_text || '';
-            if (!raw && Array.isArray(resp.output)) {
-              for (const item of resp.output) {
-                const parts = item?.content || [];
-                for (const p of parts) {
-                  if ((p.type === 'output_text' || p.type === 'text') && p.text) { raw += p.text; }
-                }
-              }
-            }
-            
-            const aText = raw.replace(/^```(?:json)?\n?/i, '').replace(/```$/i, '').trim();
-            const a = JSON.parse(aText);
-            summary = a.summary || ''; summaryHindi = a.summary_hindi || '';
-            leadStatus = a.lead_status || 'contacted'; sentiment = a.sentiment || 'neutral';
-            leadScore = Math.min(100, Math.max(0, a.lead_score || 0));
-            intentSignals = a.intent_signals || [];
-            scoreBreakdown = { ...(a.score_breakdown || {}), objections: a.objections || [], recommended_next_action: a.recommended_next_action || '', key_topics: a.key_topics || [], summary_hindi: summaryHindi };
-            keyTopics = a.key_topics || [];
-            console.log(`[${reqId}] 🧠 Score=${leadScore}, status=${leadStatus}`);
-          } else {
-            console.error(`[${reqId}] Azure OpenAI error:`, await r.text());
-          }
-        }
-      } catch (e: any) { console.error(`[${reqId}] AI err: ${e.message}`); }
-    } else { summary = 'Call ended with minimal conversation.'; }
-
-    const custLines = session.transcript.filter((t: any) => t.speaker === 'Customer');
-    const custWords = custLines.reduce((a: number, t: any) => a + t.text.split(/\s+/).length, 0);
-    if (custWords <= 5 && duration < 30 && (leadStatus === 'do_not_call' || leadStatus === 'not_interested')) {
-      leadStatus = 'contacted'; sentiment = 'neutral'; leadScore = Math.max(leadScore, 10);
-    }
-
-    let qTier = 'cold', qReason = '';
-    if (leadScore >= 75 && ['very_positive', 'positive'].includes(sentiment)) { qTier = 'hot'; qReason = `${leadScore}/100, ${sentiment}`; }
-    else if (leadScore >= 50) { qTier = 'warm'; qReason = `${leadScore}/100`; }
-    else if (leadScore >= 25) { qTier = 'nurture'; qReason = `${leadScore}/100`; }
-    else if (['negative', 'very_negative'].includes(sentiment)) qTier = 'disqualified';
-    if (leadStatus === 'converted') qTier = 'hot';
-    if (leadStatus === 'do_not_call') qTier = 'disqualified';
-
-    const enriched = summary ? `${summary}${summaryHindi ? '\n\n🇮🇳 ' + summaryHindi : ''}\n\n---\nScore: ${leadScore}/100 | ${sentiment} | ${qTier} | ${intentSignals.join(', ')}` : '';
-
+    let summary = 'Analyzing...';
     const callLogQuery = await client.queryObject(`SELECT * FROM "calllog" WHERE id = $1 LIMIT 1`, [session.callLogId]);
     const currentLog = callLogQuery.rows[0] as any;
     
     const wasTerminal = currentLog && ['completed', 'failed', 'no_answer'].includes(currentLog.status);
     await client.queryObject(`
       UPDATE "calllog" 
-      SET status = $1, call_end_time = $2, transcript = $3, duration = $4, lead_status_updated = $5, conversation_summary = $6
-      WHERE id = $7
+      SET status = $1, call_end_time = $2, transcript = $3, duration = $4, conversation_summary = $5
+      WHERE id = $6
     `, [
        wasTerminal ? currentLog.status : 'completed',
        wasTerminal ? currentLog.call_end_time : new Date().toISOString(),
        transcript || '',
        duration,
-       leadStatus,
-       enriched || null,
+       summary,
        session.callLogId
     ]);
-    console.log(`[${reqId}] 💾 Saved CallLog: ${session.callLogId}, score=${leadScore}`);
+    console.log(`[${reqId}] 💾 Saved basic CallLog: ${session.callLogId}. Handing off AI scoring to Dapr.`);
 
-    const leadId = currentLog?.lead_id || session._leadId;
-    if (leadId) {
-      try {
-        const exQuery = await client.queryObject(`SELECT * FROM "lead" WHERE id = $1 LIMIT 1`, [leadId]);
-        const ex = exQuery.rows[0] as any;
-        if (ex) {
-           const merged = [...new Set([...(ex.tags || []), ...keyTopics.slice(0, 10)])];
-           await client.queryObject(`
-             UPDATE "lead"
-             SET status = $1, score = $2, sentiment = $3, intent_signals = $4, score_breakdown = $5,
-                 qualification_tier = $6, qualification_reason = $7, tags = $8,
-                 last_call_date = $9, last_engagement_date = $10,
-                 engagement_count = $11, notes = $12
-             WHERE id = $13
-           `, [
-             leadStatus, leadScore, sentiment, JSON.stringify(intentSignals), JSON.stringify(scoreBreakdown),
-             qTier, qReason, JSON.stringify(merged),
-             new Date().toISOString(), new Date().toISOString(),
-             (ex.engagement_count || 0) + 1,
-             `[Score: ${leadScore}/100 | ${sentiment} | ${qTier}] ${summary.substring(0, 300)}`,
-             leadId
-           ]);
-        }
-      } catch (e: any) { console.error(`[${reqId}] Lead err: ${e.message}`); }
+    try {
+      const daprUrl = `http://localhost:3500/v1.0/publish/bolify-dapr-bus/call-tasks`;
+      const res = await fetch(daprUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+           action: "process_post_call", 
+           callLogId: session.callLogId, 
+           transcript: transcript,
+           duration: duration,
+           leadId: currentLog?.lead_id || session._leadId,
+           reqId: reqId
+        })
+      });
+      if (!res.ok) throw new Error(`Dapr responded with status ${res.status}`);
+      console.log(`[${reqId}] 🚀 Published Post-Call Orchestrator task to Dapr`);
+    } catch (daprErr: any) {
+      console.warn(`[${reqId}] ⚠️ Dapr publish failed (${daprErr.message}). AI scoring will not process.`);
     }
-
-    // ─── Post-Call Orchestrator Trigger ───
-    // Fire and forget post-call automation (Campaign follow-ups, Action Extractions, Auto Enroll)
-    if (session.callLogId) {
-        try {
-          console.log(`[${reqId}] 🚀 Triggering Post-Call Orchestrator for ${session.callLogId}`);
-          const clRes = await client.queryObject(`SELECT id, campaign_id FROM "campaignlead" WHERE call_log_id = $1 LIMIT 1`, [session.callLogId]);
-          if (clRes.rows.length > 0) {
-            const cl = clRes.rows[0] as any;
-            await campaignPostCallCore(session.callLogId, cl.campaign_id);
-          } else {
-            await postCallActionExtractorCore(session.callLogId);
-          }
-        } catch (postErr: any) {
-          console.error(`[${reqId}] ❌ Post-Call Orchestrator error: ${postErr.message}`);
-        }
-    }
-    
   } catch (err: any) { console.error(`[${reqId}] ❌ Save: ${err.message}`); }
 }
 
