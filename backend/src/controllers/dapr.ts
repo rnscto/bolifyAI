@@ -6,6 +6,17 @@ import { campaignPostCallCore } from "../functions/campaignPostCall.ts";
 import { postCallActionExtractorCore } from "../functions/postCallActionExtractor.ts";
 export const daprRouter = new Hono();
 
+daprRouter.get("/debug", async (c) => {
+  try {
+    const res = await fetch("http://localhost:3500/v1.0/metadata");
+    const data = await res.json();
+    console.log("[Dapr Debug] Metadata:", JSON.stringify(data, null, 2));
+    return c.json(data);
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
 // Dapr calls this endpoint on startup to know which topics we are listening to
 daprRouter.get("/subscribe", (c) => {
   return c.json([
