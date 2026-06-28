@@ -309,7 +309,8 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
     _setupSent: false,
     _greetingTriggered: false,
     _usingPaidKey: false,
-    _triedKeyFallback: false
+    _triedKeyFallback: false,
+    _sendBuffer: new Uint8Array(0)
   };
 
   let geminiSocket: WebSocket | null = null;
@@ -604,14 +605,20 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
               if (p.inlineData?.mimeType?.includes('audio') && p.inlineData.data) {
                 session.isSpeaking = true;
                 const m = base64PCM16_24kToMulaw(p.inlineData.data, session);
-                if (m.length > 0 && smartfloSocket.readyState === WebSocket.OPEN && streamId) {
-                  let chunk = m;
-                  if (chunk.length % 160 !== 0) {
-                    const padded = new Uint8Array(Math.ceil(chunk.length / 160) * 160);
-                    padded.set(chunk); padded.fill(127, chunk.length);
-                    chunk = padded;
+                if (m.length > 0) {
+                  // Append to buffer
+                  const newBuffer = new Uint8Array(session._sendBuffer.length + m.length);
+                  newBuffer.set(session._sendBuffer, 0);
+                  newBuffer.set(m, session._sendBuffer.length);
+                  session._sendBuffer = newBuffer;
+
+                  // Extract 160-byte chunks
+                  const chunkCount = Math.floor(session._sendBuffer.length / 160);
+                  if (chunkCount > 0 && smartfloSocket.readyState === WebSocket.OPEN && streamId) {
+                    const toSend = session._sendBuffer.slice(0, chunkCount * 160);
+                    session._sendBuffer = session._sendBuffer.slice(chunkCount * 160);
+                    smartfloSocket.send(JSON.stringify({ event: "media", streamSid: streamId, media: { payload: uint8ToBase64(toSend) } }));
                   }
-                  smartfloSocket.send(JSON.stringify({ event: "media", streamSid: streamId, media: { payload: uint8ToBase64(chunk) } }));
                 }
               }
             }
@@ -626,6 +633,18 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
           }
           if (sc.turnComplete) {
             session.isSpeaking = false;
+            
+            // Flush and pad any remaining audio buffer with silence (255)
+            if (session._sendBuffer.length > 0 && smartfloSocket.readyState === WebSocket.OPEN && streamId) {
+              const remaining = session._sendBuffer;
+              const paddedLength = Math.ceil(remaining.length / 160) * 160;
+              const padded = new Uint8Array(paddedLength);
+              padded.set(remaining);
+              padded.fill(255, remaining.length); // 255 (0xFF) is G.711 µ-law silence
+              smartfloSocket.send(JSON.stringify({ event: "media", streamSid: streamId, media: { payload: uint8ToBase64(padded) } }));
+              session._sendBuffer = new Uint8Array(0);
+            }
+
             if (session._pendingCustomerText) {
               const t = session._pendingCustomerText.trim();
               console.log(`[${reqId}] 🗣️ "${t.substring(0, 200)}"`);
@@ -641,6 +660,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
           }
           if (sc.interrupted) {
              session.isSpeaking = false;
+             session._sendBuffer = new Uint8Array(0); // Discard unplayed audio on interrupt
              if (session._pendingAiText) { session.transcript.push({ speaker: 'AI', text: session._pendingAiText.trim() }); session._pendingAiText = ''; }
              if (smartfloSocket.readyState === WebSocket.OPEN && streamId) smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: streamId }));
           }
