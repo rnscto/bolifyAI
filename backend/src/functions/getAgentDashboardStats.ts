@@ -43,19 +43,19 @@ export default async function getAgentDashboardStats(c: any) {
       ),
       client.queryObject(`SELECT COUNT(id) FROM "campaign" WHERE agent_id = $1`, [agent_id]),
       client.queryObject(
-        `SELECT COUNT(id) FROM "lead" WHERE agent_id = $1`, 
+        `SELECT COUNT(id) FROM "lead" WHERE assigned_to = $1`, 
         [agent_id]
       ),
       client.queryObject(
-        `SELECT COUNT(id) FROM "campaignlead" WHERE agent_id = $1 AND outcome = 'interested'`, 
+        `SELECT COUNT(cl.id) FROM "campaignlead" cl JOIN "campaign" c ON cl.campaign_id = c.id WHERE c.agent_id = $1 AND cl.outcome = 'interested'`, 
         [agent_id]
       ),
       client.queryObject(
-        `SELECT COUNT(id) FROM "campaignlead" WHERE agent_id = $1 AND outcome IS NOT NULL`, 
+        `SELECT COUNT(cl.id) FROM "campaignlead" cl JOIN "campaign" c ON cl.campaign_id = c.id WHERE c.agent_id = $1 AND cl.outcome IS NOT NULL`, 
         [agent_id]
       ),
       client.queryObject(
-        `SELECT AVG(score) as avg_score FROM "lead" WHERE agent_id = $1`, 
+        `SELECT AVG(score) as avg_score FROM "lead" WHERE assigned_to = $1`, 
         [agent_id]
       )
     ]);
