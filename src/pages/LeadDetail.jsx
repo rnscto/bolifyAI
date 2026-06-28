@@ -89,7 +89,7 @@ export default function LeadDetail() {
     setLoading(false);
 
     // Auto-fetch missing recordings in the background
-    apiClient.post('/api/voice/fetch-recording', { bulk: true }).then(res => {
+    apiClient.post('/voice/fetch-recording', { bulk: true }).then(res => {
       if (res?.updated > 0) {
         apiClient.CallLog.filter({ lead_id: leadId }, '-created_at', 50)
           .then(data => setCallLogs(data));

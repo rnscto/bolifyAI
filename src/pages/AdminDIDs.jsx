@@ -140,7 +140,7 @@ export default function AdminDIDs() {
   const handleSyncSmartflo = async () => {
     setSyncing(true);
     try {
-      const response = await apiClient.post('/api/integrations/smartflo/fetch-dids', {});
+      const response = await apiClient.post('/integrations/smartflo/fetch-dids', {});
       if (response.success) {
         toast.success(response.message || `Successfully synced DIDs. Added: ${response.new_dids_added}`);
         loadData();
