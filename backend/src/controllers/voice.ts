@@ -846,7 +846,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
         if (payload.event === "media" || payload.type === "audio") {
           const rawBase64 = payload.media?.payload || payload.data;
           const rawBytes = Uint8Array.from(atob(rawBase64), c => c.charCodeAt(0));
-          const pcm16kBase64 = mulawToBase64PCM16_16k(rawBytes);
+          const pcm16kBase64 = mulawToBase64PCM16_16k(rawBytes, session);
 
           if (geminiSocket && session.geminiReady) {
             sendToGemini({ realtimeInput: { audio: { mimeType: "audio/pcm;rate=16000", data: pcm16kBase64 } } });
