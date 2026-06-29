@@ -74,6 +74,11 @@ export class DBEntityWrapper {
     const keys = Object.keys(data);
     if (keys.length === 0) return await this.get(id);
 
+    let previousRecord = null;
+    if (this.tableName === "client" && data.account_status) {
+      previousRecord = await this.get(id);
+    }
+
     const setClauses = keys.map((k, i) => `"${k}" = $${i + 2}`).join(", ");
     const vals = [id, ...Object.values(data).map(v => 
       (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v
@@ -81,6 +86,23 @@ export class DBEntityWrapper {
     const query = `UPDATE "${this.tableName}" SET ${setClauses} WHERE id = $1 RETURNING *`;
     const res = await client.queryObject(query, vals);
     const record = res.rows[0] || null;
+
+    if (record && this.tableName === "client" && data.account_status && previousRecord && previousRecord.account_status !== data.account_status) {
+      const eventType = data.account_status === "active" ? "activated" : (data.account_status === "expired" ? "trial_expired" : data.account_status);
+      try {
+        await base44ORM.entities.ClientLifecycleEvent.create({
+          client_id: id,
+          client_name: record.company_name,
+          event_type: eventType,
+          from_value: previousRecord.account_status,
+          to_value: data.account_status,
+          effective_date: new Date().toISOString()
+        });
+      } catch (e) {
+        console.error("Failed to create ClientLifecycleEvent in ORM:", e);
+      }
+    }
+
     if (record) broadcastEntityChange(this.tableName, "updated", record);
     return record;
   }

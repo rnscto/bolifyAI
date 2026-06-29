@@ -289,6 +289,14 @@ const buildCrudRouter = (tableName: string) => {
       }
     }
 
+    let previousClient = null;
+    if (entity === "client" && filteredBody["account_status"]) {
+       try {
+           const oldClientRes = await client.queryObject(`SELECT account_status, company_name FROM "client" WHERE id = $1`, [id]);
+           previousClient = oldClientRes.rows[0];
+       } catch (e) {}
+    }
+
     const setClauses = Object.keys(filteredBody).map((k, i) => `"${k}" = $${i + 2}`).join(", ");
     const values = [id, ...Object.values(filteredBody).map(v =>
       (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v
@@ -313,6 +321,25 @@ const buildCrudRouter = (tableName: string) => {
         return c.json({ error: "Not found" }, 404);
       }
       const updatedRecord = result.rows[0];
+
+      if (entity === "client" && previousClient && previousClient.account_status !== updatedRecord.account_status) {
+         try {
+            const eventType = updatedRecord.account_status === 'active' ? 'activated' 
+                            : updatedRecord.account_status === 'expired' ? 'trial_expired' 
+                            : updatedRecord.account_status;
+            await base44ORM.entities.ClientLifecycleEvent.create({
+               client_id: updatedRecord.id,
+               client_name: updatedRecord.company_name,
+               event_type: eventType,
+               from_value: previousClient.account_status,
+               to_value: updatedRecord.account_status,
+               effective_date: new Date().toISOString(),
+            });
+         } catch(e) {
+            console.error("Lifecycle event creation failed in v1.ts", e);
+         }
+      }
+
       broadcastEntityChange(entity, 'updated', updatedRecord);
       return c.json(updatedRecord);
     } catch (error: any) {

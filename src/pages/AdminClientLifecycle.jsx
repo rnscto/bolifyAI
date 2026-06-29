@@ -85,7 +85,7 @@ export default function AdminClientLifecycle() {
             event_type: 'activated',
             to_value: c.account_status,
             amount: c.billing_type === 'unlimited' ? (c.monthly_rate_per_channel || 0) * (c.total_channels || 1) : null,
-            effective_date: c.created_at,
+            effective_date: c.updated_at || c.created_at,
             expiry_date: c.next_billing_date || null,
             billing_type: c.billing_type,
             subscription_plan: c.subscription_plan,
