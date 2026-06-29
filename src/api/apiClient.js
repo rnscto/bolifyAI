@@ -206,6 +206,27 @@ export const apiClient = {
     },
     redirectToLogin: () => {
       window.location.href = "/Login";
+    },
+    impersonate: async (targetUserId) => {
+      const res = await apiFetch("/auth/impersonate", {
+        method: "POST",
+        body: JSON.stringify({ target_user_id: targetUserId }),
+      });
+      // backup original token
+      const currentToken = getToken();
+      if (currentToken) {
+        localStorage.setItem("bolifyai_original_token", currentToken);
+      }
+      setToken(res.token);
+      return res.user;
+    },
+    stopImpersonating: () => {
+      const orig = localStorage.getItem("bolifyai_original_token");
+      if (orig) {
+        setToken(orig);
+        localStorage.removeItem("bolifyai_original_token");
+      }
+      window.location.href = "/";
     }
   },
   branding: {

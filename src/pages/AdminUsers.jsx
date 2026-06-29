@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/table';
 import {
   Search, ShieldCheck, UserCog, Ban, CheckCircle2,
-  Loader2, RefreshCw, AlertTriangle, Crown
+  Loader2, RefreshCw, AlertTriangle, Crown, VenetianMask
 } from 'lucide-react';
 import { toast } from 'sonner';
 import moment from 'moment';
@@ -49,6 +49,7 @@ export default function AdminUsers() {
   const [editRole, setEditRole] = useState('');
   const [saving, setSaving] = useState(false);
   const [currentUserEmail, setCurrentUserEmail] = useState('');
+  const [currentUserRole, setCurrentUserRole] = useState('');
 
   useEffect(() => {
     init();
@@ -57,6 +58,7 @@ export default function AdminUsers() {
   const init = async () => {
     const me = await apiClient.auth.me();
     setCurrentUserEmail(me.email);
+    setCurrentUserRole(me.role);
     await loadUsers();
   };
 
@@ -111,6 +113,25 @@ export default function AdminUsers() {
       await loadUsers();
     } catch (e) {
       toast.error('Failed to update status');
+    }
+  };
+
+  const handleImpersonate = async (u) => {
+    if (u.id === (await apiClient.auth.me()).id) {
+      toast.error('Cannot impersonate yourself');
+      return;
+    }
+    if (u.role === 'master_admin') {
+      toast.error('Cannot impersonate another Master Admin');
+      return;
+    }
+    try {
+      toast.loading('Starting impersonation session...');
+      await apiClient.auth.impersonate(u.id);
+      // Hard refresh will happen via apiClient.auth.impersonate
+    } catch (e) {
+      toast.dismiss();
+      toast.error('Impersonation failed: ' + (e.message || e));
     }
   };
 
@@ -299,6 +320,17 @@ export default function AdminUsers() {
                         >
                           <UserCog className="w-4 h-4" />
                         </Button>
+                        {currentUserRole === 'master_admin' && u.email !== currentUserEmail && u.role !== 'master_admin' && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleImpersonate(u)}
+                            className="text-amber-600 hover:text-amber-800 hover:bg-amber-100 h-8 w-8 p-0"
+                            title="Impersonate User"
+                          >
+                            <VenetianMask className="w-4 h-4" />
+                          </Button>
+                        )}
                         <Button
                           size="sm"
                           variant="ghost"

@@ -8,6 +8,7 @@ import PageNotFound from './lib/PageNotFound';
 import { AuthProvider, useAuth } from '@/lib/AuthContext';
 import UserNotRegisteredError from '@/components/UserNotRegisteredError';
 import RootRedirect from '@/components/RootRedirect';
+import ImpersonationBanner from './components/ImpersonationBanner';
 import PartnerReferral from './pages/PartnerReferral';
 import CompliancePolicy from './pages/CompliancePolicy';
 import AdminComplaints from './pages/AdminComplaints';
@@ -83,9 +84,11 @@ const AuthenticatedApp = () => {
 
   // Render the main app
   return (
-    <Routes>
-      {/* Root path auto-redirects: unauthenticated → login, authenticated → role-based dashboard */}
-      <Route path="/" element={<RootRedirect />} />
+    <>
+      <ImpersonationBanner />
+      <Routes>
+        {/* Root path auto-redirects: unauthenticated → login, authenticated → role-based dashboard */}
+        <Route path="/" element={<RootRedirect />} />
       <Route path="/Login" element={<Login />} />
       <Route path="/Signup" element={<Signup />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
@@ -201,6 +204,7 @@ const AuthenticatedApp = () => {
       } />
       <Route path="*" element={<PageNotFound />} />
     </Routes>
+    </>
   );
 };
 
