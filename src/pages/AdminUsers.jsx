@@ -278,8 +278,8 @@ export default function AdminUsers() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge className={`text-xs ${STATUS_STYLES[u.status] || STATUS_STYLES.inactive}`}>
-                        {u.status || 'inactive'}
+                      <Badge className={`text-xs ${STATUS_STYLES[u.status] || STATUS_STYLES.active}`}>
+                        {u.status || 'active'}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-xs text-gray-500">
