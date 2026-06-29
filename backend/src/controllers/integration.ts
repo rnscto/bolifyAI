@@ -170,7 +170,7 @@ import { base44ORM as base44 } from "../db/orm.ts";
 integrationRouter.post("/smartflo/fetch-dids", async (c) => {
   try {
     const user = c.get("jwtPayload") as any;
-    if (user.role !== "admin") return c.json({ error: "Admin access required" }, 403);
+    if (user.role !== "admin" && user.role !== "master_admin") return c.json({ error: "Admin access required" }, 403);
 
     let token;
     try {
