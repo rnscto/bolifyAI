@@ -134,6 +134,7 @@ export default function AdminLayout({ children, currentPageName }) {
       items: [
         { name: 'Subscriptions', path: 'AdminSubscriptions', icon: CreditCard },
         { name: 'Payments', path: 'AdminPayments', icon: IndianRupee },
+        { name: 'Invoices', path: 'AdminInvoices', icon: IndianRupee },
         { name: 'Wallet Top-Ups', path: 'AdminTopups', icon: Wallet },
       ],
     },

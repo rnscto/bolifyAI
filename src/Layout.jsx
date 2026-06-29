@@ -223,6 +223,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Retention', path: 'AdminRetention', icon: PhoneCall },
     { name: 'Subscriptions', path: 'AdminSubscriptions', icon: CreditCard },
     { name: 'Payments', path: 'AdminPayments', icon: IndianRupee },
+    { name: 'Invoices', path: 'AdminInvoices', icon: IndianRupee },
     { name: 'Wallet Top-Ups', path: 'AdminTopups', icon: Wallet },
     { name: 'Outreach', path: 'AdminOutreach', icon: Activity },
     { name: 'API Docs', path: 'APIDocs', icon: FileText },
@@ -274,6 +275,7 @@ export default function Layout({ children, currentPageName }) {
       { name: 'Custom Domain', path: 'AdminResellerBranding', icon: Globe },
       { name: 'Subscriptions', path: 'AdminSubscriptions', icon: CreditCard },
       { name: 'Payments', path: 'AdminPayments', icon: IndianRupee },
+      { name: 'Invoices', path: 'AdminInvoices', icon: IndianRupee },
       { name: 'Manage Support Tickets', path: 'AdminTickets', icon: LifeBuoy },
     ] : [];
 

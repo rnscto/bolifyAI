@@ -12,6 +12,7 @@ import { useAuth } from '@/lib/AuthContext';
 import ClientComplianceTab from '../components/compliance/ClientComplianceTab';
 import ClientAgreementViewer from '../components/client/ClientAgreementViewer';
 import KYCUpload from '../components/client/KYCUpload';
+import { CreditCard } from 'lucide-react';
 
 export default function ClientSettings() {
   const { checkAppState } = useAuth();
@@ -25,6 +26,12 @@ export default function ClientSettings() {
     email: '',
     phone: '',
     registered_address: '',
+    billing_name: '',
+    billing_address: '',
+    billing_state: '',
+    billing_state_code: '',
+    gstin: '',
+    pan_number: '',
   });
 
   useEffect(() => { loadData(); }, []);
@@ -44,6 +51,12 @@ export default function ClientSettings() {
         email: c.email || '',
         phone: c.phone || '',
         registered_address: c.registered_address || '',
+        billing_name: c.billing_name || '',
+        billing_address: c.billing_address || '',
+        billing_state: c.billing_state || '',
+        billing_state_code: c.billing_state_code || '',
+        gstin: c.gstin || '',
+        pan_number: c.pan_number || '',
       });
     }
     setLoading(false);
@@ -58,6 +71,12 @@ export default function ClientSettings() {
           company_name: formData.company_name,
           phone: formData.phone,
           registered_address: formData.registered_address,
+          billing_name: formData.billing_name,
+          billing_address: formData.billing_address,
+          billing_state: formData.billing_state,
+          billing_state_code: formData.billing_state_code,
+          gstin: formData.gstin,
+          pan_number: formData.pan_number,
         });
       }
       toast.success('Settings saved');
@@ -94,6 +113,7 @@ export default function ClientSettings() {
       <Tabs defaultValue="profile">
         <TabsList className="mb-4">
           <TabsTrigger value="profile">Profile & Account</TabsTrigger>
+          <TabsTrigger value="billing"><CreditCard className="w-4 h-4 mr-1" /> Billing & GST</TabsTrigger>
           <TabsTrigger value="kyc"><Shield className="w-4 h-4 mr-1" /> KYC</TabsTrigger>
           <TabsTrigger value="agreement"><FileText className="w-4 h-4 mr-1" /> Agreement</TabsTrigger>
           <TabsTrigger value="compliance"><Shield className="w-4 h-4 mr-1" /> Compliance</TabsTrigger>
@@ -178,6 +198,52 @@ export default function ClientSettings() {
         Save Changes
       </Button>
       </div>
+        </TabsContent>
+
+        <TabsContent value="billing">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><CreditCard className="w-5 h-5" /> Billing & GST Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="billing_name">Billing Name</Label>
+                  <Input id="billing_name" value={formData.billing_name} onChange={(e) => setFormData({ ...formData, billing_name: e.target.value })} placeholder="Company Name for Invoice" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="gstin">GSTIN (Optional)</Label>
+                  <Input id="gstin" value={formData.gstin} onChange={(e) => setFormData({ ...formData, gstin: e.target.value })} placeholder="27ABCDE1234F1Z5" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="pan_number">PAN Number (Optional)</Label>
+                  <Input id="pan_number" value={formData.pan_number} onChange={(e) => setFormData({ ...formData, pan_number: e.target.value })} placeholder="ABCDE1234F" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="billing_state">State</Label>
+                  <Input id="billing_state" value={formData.billing_state} onChange={(e) => setFormData({ ...formData, billing_state: e.target.value })} placeholder="Maharashtra" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="billing_state_code">State Code</Label>
+                  <Input id="billing_state_code" value={formData.billing_state_code} onChange={(e) => setFormData({ ...formData, billing_state_code: e.target.value })} placeholder="27" />
+                </div>
+              </div>
+              <div className="space-y-2 pt-2">
+                <Label htmlFor="billing_address">Billing Address</Label>
+                <textarea
+                  id="billing_address"
+                  value={formData.billing_address}
+                  onChange={(e) => setFormData({ ...formData, billing_address: e.target.value })}
+                  placeholder="Full billing address..."
+                  className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring min-h-[70px]"
+                />
+              </div>
+              <Button onClick={handleSave} disabled={saving} className="w-full bg-blue-600 hover:bg-blue-700 h-11 mt-4">
+                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+                Save Billing Settings
+              </Button>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="kyc">

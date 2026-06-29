@@ -43,7 +43,7 @@ export default function AdminUsers() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterStatus, setFilterStatus] = useState('active');
   const [selectedUser, setSelectedUser] = useState(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editRole, setEditRole] = useState('');

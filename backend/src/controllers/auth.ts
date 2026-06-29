@@ -261,3 +261,72 @@ authRouter.post("/reset-password", async (c) => {
   }
 });
 
+// POST /api/auth/impersonate
+authRouter.post("/impersonate", async (c) => {
+  const authHeader = c.req.header("Authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+
+  const token = authHeader.split(" ")[1];
+  try {
+    const payload = await verify(token, JWT_SECRET, "HS256");
+    
+    // Security Check: Only Master Admin can impersonate
+    if (payload.role !== "master_admin") {
+      return c.json({ error: "Only Master Admin can impersonate users" }, 403);
+    }
+
+    const { target_user_id } = await c.req.json();
+    if (!target_user_id) {
+      return c.json({ error: "target_user_id is required" }, 400);
+    }
+
+    if (payload.id === target_user_id) {
+      return c.json({ error: "Cannot impersonate yourself" }, 400);
+    }
+
+    // Fetch target user details
+    const targetResult = await client.queryObject(`
+      SELECT id, display_name, role, client_id, email
+      FROM "user"
+      WHERE id = $1
+      LIMIT 1
+    `, [target_user_id]);
+
+    if (targetResult.rows.length === 0) {
+      return c.json({ error: "Target user not found" }, 404);
+    }
+
+    const targetUser = targetResult.rows[0] as any;
+
+    if (targetUser.role === "master_admin") {
+      return c.json({ error: "Cannot impersonate another Master Admin" }, 403);
+    }
+
+    // Generate new token with target identity but keep impersonator_id for audit logs
+    const newToken = await sign({ 
+      id: targetUser.id, 
+      email: targetUser.email, 
+      client_id: targetUser.client_id, 
+      role: targetUser.role, 
+      impersonator_id: payload.id, // Audit trail
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 2 // 2-hour impersonation session
+    }, JWT_SECRET, "HS256");
+
+    return c.json({ 
+      token: newToken, 
+      user: { 
+        id: targetUser.id, 
+        email: targetUser.email, 
+        client_id: targetUser.client_id, 
+        role: targetUser.role,
+        is_impersonating: true
+      } 
+    });
+
+  } catch (e: any) {
+    console.error("[auth/impersonate] Error:", e);
+    return c.json({ error: "Invalid token or server error" }, 401);
+  }
+});

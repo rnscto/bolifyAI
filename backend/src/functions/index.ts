@@ -30,6 +30,8 @@ import processPaymentApproval from "./processPaymentApproval.ts";
 import createPaymentOrder from "./createPaymentOrder.ts";
 import verifyPayment from "./verifyPayment.ts";
 import generateInvoice from "./generateInvoice.ts";
+import createCustomInvoice from "./createCustomInvoice.ts";
+import downloadInvoice from "./downloadInvoice.ts";
 
 // Communication & Email
 import sendClientEmail from "./sendClientEmail.ts";
@@ -100,6 +102,8 @@ export const functionRegistry: Record<string, Function> = {
   createPaymentOrder,
   verifyPayment,
   generateInvoice,
+  createCustomInvoice,
+  downloadInvoice,
   
   // Communication
   sendClientEmail,

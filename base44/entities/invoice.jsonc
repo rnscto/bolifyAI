@@ -1,0 +1,85 @@
+{
+  "name": "Invoice",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Recipient Client ID"
+    },
+    "biller_client_id": {
+      "type": "string",
+      "description": "Sender Client ID"
+    },
+    "invoice_number": {
+      "type": "string"
+    },
+    "issue_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "due_date": {
+      "type": "string",
+      "format": "date"
+    },
+    "subtotal": {
+      "type": "number"
+    },
+    "gst_amount": {
+      "type": "number"
+    },
+    "total_amount": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["draft", "sent", "paid", "overdue", "cancelled"],
+      "default": "draft"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "description": { "type": "string" },
+          "qty": { "type": "number" },
+          "unit_price": { "type": "number" },
+          "total": { "type": "number" }
+        }
+      }
+    },
+    "notes": {
+      "type": "string"
+    }
+  },
+  "required": ["client_id", "biller_client_id", "invoice_number", "total_amount"],
+  "rls": {
+    "read": {
+      "$or": [
+        { "data.client_id": "{{user.client_id}}" },
+        { "data.biller_client_id": "{{user.client_id}}" },
+        { "user_condition": { "role": "admin" } },
+        { "user_condition": { "role": "master_admin" } }
+      ]
+    },
+    "insert": {
+      "$or": [
+        { "data.biller_client_id": "{{user.client_id}}" },
+        { "user_condition": { "role": "admin" } },
+        { "user_condition": { "role": "master_admin" } }
+      ]
+    },
+    "update": {
+      "$or": [
+        { "data.biller_client_id": "{{user.client_id}}" },
+        { "user_condition": { "role": "admin" } },
+        { "user_condition": { "role": "master_admin" } }
+      ]
+    },
+    "delete": {
+      "$or": [
+        { "user_condition": { "role": "admin" } },
+        { "user_condition": { "role": "master_admin" } }
+      ]
+    }
+  }
+}

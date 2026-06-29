@@ -1,6 +1,6 @@
 import { client } from "../db/index.ts";
 
-export async function sendEmail(to: string, subject: string, bodyText: string, bodyHtml?: string, clientId?: string): Promise<boolean> {
+export async function sendEmail(to: string, subject: string, bodyText: string, bodyHtml?: string, clientId?: string, attachments?: { filename: string, content: string }[]): Promise<boolean> {
   let provider = "resend";
   let apiKey = Deno.env.get("EMAIL_API_KEY") || "";
   let fromAddress = Deno.env.get("EMAIL_FROM") || "no-reply@bolifyai.com";
@@ -40,7 +40,8 @@ export async function sendEmail(to: string, subject: string, bodyText: string, b
           to: [to],
           subject: subject,
           text: bodyText,
-          html: bodyHtml || bodyText
+          html: bodyHtml || bodyText,
+          attachments: attachments ? attachments.map(a => ({ filename: a.filename, content: a.content })) : undefined
         })
       });
       const errData = await response.json().catch(() => ({}));
@@ -59,7 +60,13 @@ export async function sendEmail(to: string, subject: string, bodyText: string, b
           content: [
             { type: "text/plain", value: bodyText },
             { type: "text/html", value: bodyHtml || bodyText }
-          ]
+          ],
+          attachments: attachments ? attachments.map(a => ({
+            content: a.content,
+            filename: a.filename,
+            type: "application/pdf",
+            disposition: "attachment"
+          })) : undefined
         })
       });
       if (!response.ok) {

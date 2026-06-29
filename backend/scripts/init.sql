@@ -1597,3 +1597,33 @@ EXECUTE FUNCTION update_updated_at_column();
 CREATE INDEX IF NOT EXISTS idx_websitelead_status ON "websitelead" (status);
 CREATE INDEX IF NOT EXISTS idx_websitelead_created_at ON "websitelead" (created_at DESC);
 
+
+ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "billing_name" TEXT;
+ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "billing_address" TEXT;
+ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "billing_state" TEXT;
+ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "billing_state_code" TEXT;
+ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "gstin" TEXT;
+ALTER TABLE "client" ADD COLUMN IF NOT EXISTS "pan_number" TEXT;
+
+CREATE TABLE IF NOT EXISTS "invoice" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "client_id" TEXT,
+  "biller_client_id" TEXT,
+  "invoice_number" TEXT,
+  "issue_date" TEXT,
+  "due_date" TEXT,
+  "subtotal" NUMERIC,
+  "gst_amount" NUMERIC,
+  "total_amount" NUMERIC,
+  "status" TEXT,
+  "items" JSONB,
+  "notes" TEXT
+);
+
+DROP TRIGGER IF EXISTS update_invoice_updated_at ON "invoice";
+CREATE TRIGGER update_invoice_updated_at
+BEFORE UPDATE ON "invoice"
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
