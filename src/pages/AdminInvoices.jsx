@@ -149,7 +149,7 @@ export default function AdminInvoices() {
     try {
       toast.info('Downloading PDF...');
       const token = localStorage.getItem('bolifyai_token');
-      const response = await fetch(`/api/functions/execute/downloadInvoice?id=${invoiceId}`, {
+      const response = await fetch(`${apiClient.baseUrl}/functions/downloadInvoice?id=${invoiceId}`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
