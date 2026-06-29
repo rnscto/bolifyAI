@@ -1,9 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Box, Typography, Grid, Card, CardContent, CardActions, 
-  Button, Dialog, DialogTitle, DialogContent, DialogActions, 
-  FormControl, InputLabel, Select, MenuItem, Alert, Chip, Divider
-} from '@mui/material';
 import { apiClient } from '../api/apiClient';
 
 export default function ClientMarketplace() {
@@ -60,99 +55,123 @@ export default function ClientMarketplace() {
     return service[`pricing_${cycle}`] || 0;
   };
 
-  if (loading) return <Box p={3}><Typography>Loading Marketplace...</Typography></Box>;
+  if (loading) {
+    return <div className="p-6"><p>Loading Marketplace...</p></div>;
+  }
 
   return (
-    <Box p={3}>
-      <Typography variant="h4" mb={1}>Add-on Marketplace</Typography>
-      <Typography variant="body1" color="textSecondary" mb={4}>
+    <div className="p-6 max-w-7xl mx-auto">
+      <h1 className="text-3xl font-bold text-gray-900 mb-2">Add-on Marketplace</h1>
+      <p className="text-gray-600 mb-8">
         Enhance your AI calling experience with modular add-ons and industry suites.
-      </Typography>
+      </p>
 
-      {error && <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>{error}</Alert>}
-      {success && <Alert severity="success" sx={{ mb: 3 }} onClose={() => setSuccess(null)}>{success}</Alert>}
+      {error && (
+        <div className="mb-6 p-4 bg-red-50 text-red-700 rounded-md border border-red-200">
+          {error}
+          <button onClick={() => setError(null)} className="float-right font-bold">&times;</button>
+        </div>
+      )}
+      
+      {success && (
+        <div className="mb-6 p-4 bg-green-50 text-green-700 rounded-md border border-green-200">
+          {success}
+          <button onClick={() => setSuccess(null)} className="float-right font-bold">&times;</button>
+        </div>
+      )}
 
-      <Grid container spacing={3}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {services.map(service => (
-          <Grid item xs={12} sm={6} md={4} key={service.id}>
-            <Card sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
-              <CardContent sx={{ flexGrow: 1 }}>
-                <Box display="flex" justifyContent="space-between" alignItems="flex-start" mb={2}>
-                  <Typography variant="h6">{service.name}</Typography>
-                  <Chip 
-                    label={service.category.replace('_', ' ').toUpperCase()} 
-                    size="small" 
-                    color={service.category === 'industry_suite' ? 'secondary' : 'primary'} 
-                    variant="outlined" 
-                  />
-                </Box>
-                <Typography variant="body2" color="textSecondary" mb={2}>
-                  {service.description}
-                </Typography>
-                
-                <Divider sx={{ my: 2 }} />
-                
-                <Typography variant="subtitle2" color="textSecondary">Starting from</Typography>
-                <Typography variant="h5" color="primary">
-                  ₹{service.pricing_monthly.toLocaleString()} <Typography component="span" variant="caption">/mo</Typography>
-                </Typography>
-              </CardContent>
-              <CardActions>
-                <Button size="large" fullWidth variant="contained" onClick={() => handleOpen(service)}>
-                  Request Add-on
-                </Button>
-              </CardActions>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth>
-        {selectedService && (
-          <>
-            <DialogTitle>Request {selectedService.name}</DialogTitle>
-            <DialogContent>
-              <Typography variant="body2" mb={3}>{selectedService.description}</Typography>
+          <div key={service.id} className="bg-white rounded-lg shadow-md border border-gray-100 flex flex-col hover:shadow-lg transition-shadow">
+            <div className="p-6 flex-grow">
+              <div className="flex justify-between items-start mb-4">
+                <h2 className="text-xl font-semibold text-gray-900">{service.name}</h2>
+                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
+                  service.category === 'industry_suite' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'
+                }`}>
+                  {service.category.replace('_', ' ').toUpperCase()}
+                </span>
+              </div>
               
-              <FormControl fullWidth margin="normal">
-                <InputLabel>Billing Cycle</InputLabel>
-                <Select
+              <p className="text-gray-600 text-sm mb-6 h-10 overflow-hidden text-ellipsis line-clamp-2">
+                {service.description}
+              </p>
+              
+              <div className="border-t pt-4">
+                <p className="text-xs text-gray-500 uppercase font-semibold">Starting from</p>
+                <p className="text-2xl font-bold text-gray-900">
+                  ₹{service.pricing_monthly.toLocaleString()} <span className="text-sm font-normal text-gray-500">/mo</span>
+                </p>
+              </div>
+            </div>
+            
+            <div className="p-6 pt-0 mt-auto">
+              <button 
+                onClick={() => handleOpen(service)}
+                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors"
+              >
+                Request Add-on
+              </button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {open && selectedService && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div className="px-6 py-4 border-b flex justify-between items-center">
+              <h2 className="text-xl font-bold">Request {selectedService.name}</h2>
+              <button onClick={handleClose} className="text-gray-500 hover:text-gray-700 text-2xl">&times;</button>
+            </div>
+            
+            <div className="p-6">
+              <p className="text-sm text-gray-600 mb-6">{selectedService.description}</p>
+              
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Billing Cycle</label>
+                <select
+                  className="w-full border border-gray-300 rounded-md shadow-sm p-2.5 bg-white focus:ring-blue-500 focus:border-blue-500"
                   value={billingCycle}
-                  label="Billing Cycle"
                   onChange={(e) => setBillingCycle(e.target.value)}
                 >
-                  {selectedService.pricing_monthly > 0 && <MenuItem value="monthly">Monthly - ₹{selectedService.pricing_monthly}</MenuItem>}
-                  {selectedService.pricing_quarterly > 0 && <MenuItem value="quarterly">Quarterly - ₹{selectedService.pricing_quarterly}</MenuItem>}
-                  {selectedService.pricing_semi_annual > 0 && <MenuItem value="semi_annual">Semi-Annual - ₹{selectedService.pricing_semi_annual}</MenuItem>}
-                  {selectedService.pricing_yearly > 0 && <MenuItem value="yearly">Yearly - ₹{selectedService.pricing_yearly}</MenuItem>}
-                  {selectedService.pricing_one_time > 0 && <MenuItem value="one_time">One-Time - ₹{selectedService.pricing_one_time}</MenuItem>}
-                </Select>
-              </FormControl>
+                  {selectedService.pricing_monthly > 0 && <option value="monthly">Monthly - ₹{selectedService.pricing_monthly}</option>}
+                  {selectedService.pricing_quarterly > 0 && <option value="quarterly">Quarterly - ₹{selectedService.pricing_quarterly}</option>}
+                  {selectedService.pricing_semi_annual > 0 && <option value="semi_annual">Semi-Annual - ₹{selectedService.pricing_semi_annual}</option>}
+                  {selectedService.pricing_yearly > 0 && <option value="yearly">Yearly - ₹{selectedService.pricing_yearly}</option>}
+                  {selectedService.pricing_one_time > 0 && <option value="one_time">One-Time - ₹{selectedService.pricing_one_time}</option>}
+                </select>
+              </div>
 
-              <Box mt={2} p={2} bgcolor="#f5f5f5" borderRadius={1}>
-                <Typography variant="subtitle2">Summary:</Typography>
-                <Typography variant="body1">
+              <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
+                <h3 className="text-sm font-semibold text-gray-900 mb-1">Summary</h3>
+                <p className="text-sm text-gray-700">
                   You are requesting <strong>{selectedService.name}</strong> on a <strong>{billingCycle.replace('_', ' ')}</strong> cycle for <strong>₹{getPrice(selectedService, billingCycle)}</strong>.
-                </Typography>
-                <Typography variant="caption" color="textSecondary" display="block" mt={1}>
+                </p>
+                <p className="text-xs text-gray-500 mt-2">
                   Note: Upon approval by your administrator, the amount will be automatically deducted from your prepaid wallet balance.
-                </Typography>
-              </Box>
-            </DialogContent>
-            <DialogActions>
-              <Button onClick={handleClose}>Cancel</Button>
-              <Button 
-                onClick={handleRequest} 
-                variant="contained" 
-                color="primary"
-                disabled={requestLoading || getPrice(selectedService, billingCycle) <= 0}
+                </p>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t bg-gray-50 flex justify-end gap-3 rounded-b-lg">
+              <button 
+                onClick={handleClose}
+                className="bg-white py-2 px-4 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none"
               >
-                Submit Request
-              </Button>
-            </DialogActions>
-          </>
-        )}
-      </Dialog>
-    </Box>
+                Cancel
+              </button>
+              <button 
+                onClick={handleRequest}
+                disabled={requestLoading || getPrice(selectedService, billingCycle) <= 0}
+                className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {requestLoading ? 'Submitting...' : 'Submit Request'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

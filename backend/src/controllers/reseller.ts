@@ -1,6 +1,7 @@
 import { Context, Hono } from "hono";
 import { jwt } from "hono/jwt";
 import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 import { writeAuditLog } from "../utils/auditLog.ts";
 
 export const resellerRouter = new Hono();

@@ -205,7 +205,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
   if (!client) return null;
   if (!me) return null;
 
-  if (!isAdmin) {
+  if (!isAdmin && !isReseller) {
     return (
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent>
@@ -213,7 +213,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
             <DialogTitle>Restricted</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-gray-700">
-            Only admins may manage client billing.
+            You do not have permission to manage client billing.
           </p>
           <div className="flex justify-end">
             <Button onClick={() => onOpenChange(false)}>Close</Button>
