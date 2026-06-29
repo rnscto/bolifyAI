@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter
 } from '@/components/ui/dialog';
 import {
   Select,
@@ -27,21 +28,39 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Phone, RefreshCw, Lock, Unlock, Share2 } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Plus, Phone, RefreshCw, Lock, Unlock, Share2, Wallet, Users } from 'lucide-react';
 import { toast } from 'sonner';
 
 export default function AdminDIDs() {
   const [dids, setDids] = useState([]);
   const [clients, setClients] = useState([]);
+  const [agents, setAgents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
+  
   const [formData, setFormData] = useState({
     number: '',
     country_code: '+91',
     client_id: '',
-    monthly_cost: 6500
+    monthly_cost: 6500,
+    is_free: false
   });
+
+  const [assignDialog, setAssignDialog] = useState({ 
+    open: false, 
+    didId: null, 
+    mode: 'partner', 
+    partnerId: 'unassigned', 
+    clientId: '', 
+    agentId: '', 
+    isFree: false 
+  });
+  
+  const [activeTab, setActiveTab] = useState('all');
+
   const [me, setMe] = useState(null);
   const [resellerWallet, setResellerWallet] = useState(0);
 
@@ -54,6 +73,16 @@ export default function AdminDIDs() {
     }).catch(() => {});
     loadData();
   }, []);
+
+  useEffect(() => {
+    if (assignDialog.mode === 'agent' && assignDialog.clientId) {
+      apiClient.Agent.filter({ client_id: assignDialog.clientId })
+        .then(data => setAgents(data))
+        .catch(() => setAgents([]));
+    } else {
+      setAgents([]);
+    }
+  }, [assignDialog.mode, assignDialog.clientId]);
 
   const loadData = async () => {
     try {
@@ -79,13 +108,14 @@ export default function AdminDIDs() {
         country_code: formData.country_code,
         status: formData.client_id ? 'assigned' : 'available',
         client_id: formData.client_id || null,
-        monthly_cost: formData.monthly_cost
+        monthly_cost: formData.monthly_cost,
+        is_free: formData.is_free
       };
 
       await apiClient.DID.create(didData);
       toast.success('DID added successfully');
       setDialogOpen(false);
-      setFormData({ number: '', country_code: '+91', client_id: '', monthly_cost: 6500 });
+      setFormData({ number: '', country_code: '+91', client_id: '', monthly_cost: 6500, is_free: false });
       loadData();
     } catch (error) {
       console.error('Error creating DID:', error);
@@ -93,62 +123,68 @@ export default function AdminDIDs() {
     }
   };
 
-  const handleAssign = async (didId, clientId) => {
+  const submitAssign = async (e) => {
+    e.preventDefault();
     try {
+      const { didId, mode, partnerId, clientId, agentId, isFree } = assignDialog;
       const did = dids.find(d => d.id === didId);
-      const oldClientId = did?.client_id;
-      const isReseller = ['reseller', 'master_reseller'].includes(me?.role);
+      if (!did) return;
 
-      // If reseller unassigns, it goes back to them. Master admin unassigns to global pool (null).
-      let newClientId = clientId || null;
-      if (!clientId && isReseller) {
-        newClientId = me.client_id;
+      let newClientId = null;
+      let newAgentId = null;
+
+      if (mode === 'partner') {
+        newClientId = partnerId === 'unassigned' ? null : partnerId;
+      } else {
+        if (!clientId) throw new Error('Please select a client');
+        if (!agentId) throw new Error('Please select an agent');
+        newClientId = clientId;
+        newAgentId = agentId;
       }
 
-      // Update DID entity
       await apiClient.DID.update(didId, {
         client_id: newClientId,
-        agent_id: clientId ? did?.agent_id : null,
-        status: newClientId ? 'assigned' : 'available'
+        agent_id: newAgentId,
+        status: newClientId ? 'assigned' : 'available',
+        is_free: isFree
       });
 
-      // If unassigning from old client, remove DID from that client's agents
-      if (oldClientId && oldClientId !== clientId && did?.number) {
-        const oldAgents = await apiClient.Agent.filter({ client_id: oldClientId });
-        for (const agent of oldAgents) {
-          const agentDIDs = agent.assigned_dids || (agent.assigned_did ? [agent.assigned_did] : []);
-          if (agentDIDs.includes(did.number)) {
-            const newDIDs = agentDIDs.filter(d => d !== did.number);
-            await apiClient.Agent.update(agent.id, {
+      // Assign DID to the new Agent if applicable
+      if (newAgentId && did.number) {
+        const agent = await apiClient.Agent.get(newAgentId);
+        const agentDIDs = agent.assigned_dids || (agent.assigned_did ? [agent.assigned_did] : []);
+        if (!agentDIDs.includes(did.number)) {
+          const updatedDIDs = [...agentDIDs, did.number];
+          await apiClient.Agent.update(newAgentId, {
+            assigned_dids: updatedDIDs,
+            assigned_did: updatedDIDs[0]
+          });
+        }
+      }
+
+      // Cleanup old Agent if DID was moved away from them
+      if (did.agent_id && did.agent_id !== newAgentId && did.number) {
+        try {
+          const oldAgent = await apiClient.Agent.get(did.agent_id);
+          const oldDIDs = oldAgent.assigned_dids || (oldAgent.assigned_did ? [oldAgent.assigned_did] : []);
+          if (oldDIDs.includes(did.number)) {
+            const newDIDs = oldDIDs.filter(d => d !== did.number);
+            await apiClient.Agent.update(oldAgent.id, {
               assigned_dids: newDIDs,
               assigned_did: newDIDs[0] || ''
             });
           }
+        } catch (err) {
+          console.error('Failed to cleanup old agent DID', err);
         }
       }
 
-      // If assigning to a new client, auto-assign to their first agent if they have one
-      if (clientId && did?.number) {
-        const newAgents = await apiClient.Agent.filter({ client_id: clientId });
-        if (newAgents.length > 0) {
-          const agent = newAgents[0];
-          const agentDIDs = agent.assigned_dids || (agent.assigned_did ? [agent.assigned_did] : []);
-          if (!agentDIDs.includes(did.number)) {
-            const updatedDIDs = [...agentDIDs, did.number];
-            await apiClient.Agent.update(agent.id, {
-              assigned_dids: updatedDIDs,
-              assigned_did: updatedDIDs[0]
-            });
-          }
-          await apiClient.DID.update(didId, { agent_id: agent.id });
-        }
-      }
-
-      toast.success('DID assignment updated');
+      toast.success('DID assignment updated successfully');
+      setAssignDialog({ ...assignDialog, open: false });
       loadData();
     } catch (error) {
-      console.error('Error updating DID:', error);
-      toast.error('Failed to update DID');
+      console.error('Error assigning DID:', error);
+      toast.error(error.message || 'Failed to assign DID');
     }
   };
 
@@ -244,6 +280,18 @@ export default function AdminDIDs() {
     return client?.company_name || '-';
   };
 
+  const openAssignDialog = (did) => {
+    setAssignDialog({
+      open: true,
+      didId: did.id,
+      mode: 'partner',
+      partnerId: did.client_id || 'unassigned',
+      clientId: '',
+      agentId: did.agent_id || '',
+      isFree: did.is_free || false
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -252,12 +300,18 @@ export default function AdminDIDs() {
     );
   }
 
+  const displayedDids = dids.filter(did => {
+    if (activeTab === 'free') return did.is_free === true;
+    if (activeTab === 'paid') return did.is_free !== true;
+    return true;
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">DID Management</h1>
-          <p className="text-gray-600 mt-1">Manage phone numbers and assignments</p>
+          <h1 className="text-3xl font-bold text-gray-900">DID Bank & Manager</h1>
+          <p className="text-gray-600 mt-1">Manage your DID pool, allocate to partners, or assign to agents</p>
         </div>
         <div className="flex gap-3">
           {me?.role === 'admin' || me?.role === 'master_admin' ? (
@@ -342,6 +396,14 @@ export default function AdminDIDs() {
                     required
                   />
                 </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox 
+                    id="is_free" 
+                    checked={formData.is_free} 
+                    onCheckedChange={(checked) => setFormData({ ...formData, is_free: checked })}
+                  />
+                  <Label htmlFor="is_free">Mark as Free DID</Label>
+                </div>
                 <div className="flex gap-3 justify-end">
                   <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
                     Cancel
@@ -353,6 +415,7 @@ export default function AdminDIDs() {
               </form>
             </DialogContent>
           </Dialog>
+          )}
         </div>
       </div>
 
@@ -387,17 +450,17 @@ export default function AdminDIDs() {
             </div>
           </CardContent>
         </Card>
-        <Card className="border-amber-200 bg-amber-50/30">
+        <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-amber-50 rounded-lg">
-                <Share2 className="w-6 h-6 text-amber-600" />
+              <div className="p-3 bg-emerald-50 rounded-lg">
+                <Users className="w-6 h-6 text-emerald-600" />
               </div>
               <div>
                 <p className="text-2xl font-bold">
-                  {dids.filter(d => d.is_demo).length}
+                  {dids.filter(d => d.is_free).length}
                 </p>
-                <p className="text-sm text-gray-600">Demo Pool DIDs</p>
+                <p className="text-sm text-gray-600">Free Pool DIDs</p>
               </div>
             </div>
           </CardContent>
@@ -419,32 +482,39 @@ export default function AdminDIDs() {
 
       <Card>
         <CardHeader>
-          <CardTitle>All DIDs</CardTitle>
+          <CardTitle>DID Bank</CardTitle>
         </CardHeader>
         <CardContent>
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-4">
+            <TabsList>
+              <TabsTrigger value="all">All DIDs</TabsTrigger>
+              <TabsTrigger value="free">Free DID Pool</TabsTrigger>
+              <TabsTrigger value="paid">Paid DID Pool</TabsTrigger>
+            </TabsList>
+          </Tabs>
+
           <Table>
             <TableHeader>
               <TableRow>
                 <TableHead>Number</TableHead>
-                <TableHead>Country Code</TableHead>
                 <TableHead>Status</TableHead>
-                <TableHead>Assigned To</TableHead>
-                <TableHead>Monthly Cost</TableHead>
+                <TableHead>Pool Type</TableHead>
+                <TableHead>Assigned Partner/Client</TableHead>
+                <TableHead>Assigned Agent</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {dids.length === 0 ? (
+              {displayedDids.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center text-gray-500">
-                    No DIDs found. Add your first DID to get started.
+                    No DIDs found in this pool.
                   </TableCell>
                 </TableRow>
               ) : (
-                dids.map((did) => (
+                displayedDids.map((did) => (
                   <TableRow key={did.id}>
                     <TableCell className="font-medium">{did.number}</TableCell>
-                    <TableCell>{did.country_code}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-1">
                         <Badge className={statusColors[did.status]}>
@@ -457,27 +527,28 @@ export default function AdminDIDs() {
                         )}
                       </div>
                     </TableCell>
+                    <TableCell>
+                      {did.is_free ? (
+                        <Badge variant="outline" className="text-emerald-600 border-emerald-600 bg-emerald-50">Free Pool</Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-indigo-600 border-indigo-600 bg-indigo-50">Paid Pool (₹{did.monthly_cost})</Badge>
+                      )}
+                    </TableCell>
                     <TableCell>{getClientName(did.client_id)}</TableCell>
-                    <TableCell>₹{did.monthly_cost?.toLocaleString()}</TableCell>
+                    <TableCell>
+                      {did.agent_id ? <span className="text-blue-600 font-medium">Assigned</span> : <span className="text-gray-400">Not assigned</span>}
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <Select
-                          value={did.client_id || 'unassigned'}
-                          onValueChange={(value) => handleAssign(did.id, value === 'unassigned' ? null : value)}
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => openAssignDialog(did)}
                           disabled={did.status === 'reserved'}
                         >
-                          <SelectTrigger className="w-40">
-                            <SelectValue placeholder="Assign" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="unassigned">Unassigned</SelectItem>
-                            {clients.map((client) => (
-                              <SelectItem key={client.id} value={client.id}>
-                                {client.company_name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                          Manage Assignment
+                        </Button>
+                        
                         {did.status === 'reserved' ? (
                           <Button
                             size="sm"
@@ -518,6 +589,107 @@ export default function AdminDIDs() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Assignment Dialog */}
+      <Dialog open={assignDialog.open} onOpenChange={(open) => setAssignDialog({...assignDialog, open})}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Manage DID Assignment</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={submitAssign} className="space-y-4 pt-4">
+            
+            <div className="space-y-2">
+              <Label>Assignment Mode</Label>
+              <Select 
+                value={assignDialog.mode} 
+                onValueChange={(val) => setAssignDialog({...assignDialog, mode: val})}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="partner">Transfer to Partner/Reseller Pool</SelectItem>
+                  <SelectItem value="agent">Assign directly to Client's Agent</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {assignDialog.mode === 'partner' ? (
+              <>
+                <div className="space-y-2">
+                  <Label>Select Partner / Pool</Label>
+                  <Select 
+                    value={assignDialog.partnerId} 
+                    onValueChange={(val) => setAssignDialog({...assignDialog, partnerId: val})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select partner" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="unassigned">Unassigned (Global Pool)</SelectItem>
+                      {clients.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="flex items-center space-x-2 pt-2">
+                  <Checkbox 
+                    id="assign_is_free" 
+                    checked={assignDialog.isFree} 
+                    onCheckedChange={(checked) => setAssignDialog({...assignDialog, isFree: checked})}
+                  />
+                  <Label htmlFor="assign_is_free" className="font-normal cursor-pointer">
+                    Transfer as <b>Free DID</b> (Does not consume paid quotas)
+                  </Label>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label>1. Select Client</Label>
+                  <Select 
+                    value={assignDialog.clientId} 
+                    onValueChange={(val) => setAssignDialog({...assignDialog, clientId: val, agentId: ''})}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select client" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map(c => (
+                        <SelectItem key={c.id} value={c.id}>{c.company_name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label>2. Select Agent</Label>
+                  <Select 
+                    value={assignDialog.agentId} 
+                    onValueChange={(val) => setAssignDialog({...assignDialog, agentId: val})}
+                    disabled={!assignDialog.clientId || agents.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder={agents.length === 0 ? (assignDialog.clientId ? "No agents found" : "Select client first") : "Select agent"} />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {agents.map(a => (
+                        <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            )}
+
+            <DialogFooter className="mt-6">
+              <Button type="button" variant="outline" onClick={() => setAssignDialog({...assignDialog, open: false})}>Cancel</Button>
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700">Save Assignment</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
