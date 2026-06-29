@@ -15,7 +15,7 @@ export default function InvoiceButton({ paymentId, size = 'sm' }) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${localStorage.getItem('bolifyai_token')}`
         },
         body: JSON.stringify({ payment_id: paymentId })
       });

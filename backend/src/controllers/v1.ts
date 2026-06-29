@@ -489,6 +489,8 @@ v1Router.route("/industry-templates", buildCrudRouter("industrytemplate"));
 v1Router.route("/knowledge-bases", buildCrudRouter("knowledgebase"));
 v1Router.route("/kyc-documents", buildCrudRouter("kycdocument"));
 v1Router.route("/marketplace-integrations", buildCrudRouter("marketplaceintegration"));
+v1Router.route("/marketplace-services", buildCrudRouter("marketplaceservice"));
+v1Router.route("/client-addon-subscriptions", buildCrudRouter("clientaddonsubscription"));
 v1Router.route("/owner-statuses", buildCrudRouter("ownerstatus"));
 v1Router.route("/partners", buildCrudRouter("partner"));
 v1Router.route("/partner-payouts", buildCrudRouter("partnerpayout"));
