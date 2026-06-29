@@ -272,8 +272,14 @@ authRouter.post("/impersonate", async (c) => {
   try {
     const payload = await verify(token, JWT_SECRET, "HS256");
     
+    let impersonatorRole = payload.role;
+    if (!impersonatorRole) {
+      const dbUser = await client.queryObject(`SELECT role FROM "user" WHERE id = $1`, [payload.id]);
+      if (dbUser.rows.length > 0) impersonatorRole = (dbUser.rows[0] as any).role;
+    }
+
     // Security Check: Only Master Admin can impersonate
-    if (payload.role !== "master_admin") {
+    if (impersonatorRole !== "master_admin") {
       return c.json({ error: "Only Master Admin can impersonate users" }, 403);
     }
 

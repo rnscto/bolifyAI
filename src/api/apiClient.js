@@ -291,6 +291,7 @@ export const apiClient = {
   TrustedContact: new EntityClient('/v1/trusted-contacts', 'trustedcontact'),
   UsageLog: new EntityClient('/v1/usage-logs', 'usagelog'),
   User: new EntityClient('/v1/users', 'user'),
+  Invoice: new EntityClient('/v1/invoices', 'invoice'),
   functions: {
     invoke: async (functionName, args) => {
       try {
