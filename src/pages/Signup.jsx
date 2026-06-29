@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { apiClient } from '@/api/apiClient';
 import { useAuth } from '@/lib/AuthContext';
 import { createPageUrl } from '@/utils';
+import { apiFetch } from '@/api/apiClient';
+import { toast } from 'sonner';
 
 export default function Signup() {
   const { appPublicSettings } = useAuth();
@@ -16,6 +18,27 @@ export default function Signup() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const inviteToken = searchParams.get('invite');
+  const [invitePayload, setInvitePayload] = useState(null);
+
+  React.useEffect(() => {
+    if (inviteToken) {
+      apiFetch('/auth/validate-invite', {
+        method: 'POST',
+        body: JSON.stringify({ token: inviteToken })
+      }).then(res => {
+        if (res.success && res.payload) {
+          setInvitePayload(res.payload);
+          setEmail(res.payload.email);
+        } else {
+          toast.error('Invalid or expired invite link. You can still sign up normally.');
+        }
+      }).catch(() => {
+        toast.error('Failed to validate invite link.');
+      });
+    }
+  }, [inviteToken]);
 
   const handleSignup = async (e) => {
     e.preventDefault();
@@ -23,7 +46,7 @@ export default function Signup() {
     setLoading(true);
 
     try {
-      const uplineId = appPublicSettings?.brand?.reseller_id || null;
+      const uplineId = invitePayload ? invitePayload.upline_id : (appPublicSettings?.brand?.reseller_id || null);
       // Assuming apiClient.auth.signup returns a user with a token automatically
       const user = await apiClient.auth.signup(email, password, fullName, uplineId);
       // Role-based routing: all admin and reseller roles go to AdminDashboard
@@ -76,6 +99,7 @@ export default function Signup() {
                 required 
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={!!invitePayload}
               />
             </div>
             <div className="space-y-2">

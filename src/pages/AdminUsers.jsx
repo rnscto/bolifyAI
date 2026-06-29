@@ -57,10 +57,6 @@ export default function AdminUsers() {
   const init = async () => {
     const me = await apiClient.auth.me();
     setCurrentUserEmail(me.email);
-    if (me.email !== MASTER_ADMIN_EMAIL) {
-      toast.error('Access denied. Master Admin only.');
-      return;
-    }
     await loadUsers();
   };
 
@@ -143,14 +139,17 @@ export default function AdminUsers() {
   });
 
   // ── Guard ──────────────────────────────────────────────────────────────────
-  if (currentUserEmail && currentUserEmail !== MASTER_ADMIN_EMAIL) {
-    return (
-      <div className="flex flex-col items-center justify-center h-64 gap-4">
-        <AlertTriangle className="w-12 h-12 text-red-700" />
-        <p className="text-gray-500 font-medium">Access Denied — Master Admin only</p>
-      </div>
-    );
-  }
+  const isMasterAdmin = currentUserEmail === MASTER_ADMIN_EMAIL;
+  
+  const canEditRole = (u) => {
+    if (u.email === MASTER_ADMIN_EMAIL) return false;
+    if (isMasterAdmin) return true;
+    // Resellers cannot edit admin/master_admin roles
+    if (['admin', 'master_admin'].includes(u.role)) return false;
+    // Cannot edit themselves to avoid locking out
+    if (u.email === currentUserEmail) return false;
+    return true;
+  };
 
   return (
     <div className="space-y-6">
@@ -294,7 +293,7 @@ export default function AdminUsers() {
                           size="sm"
                           variant="ghost"
                           onClick={() => openEdit(u)}
-                          disabled={u.email === MASTER_ADMIN_EMAIL}
+                          disabled={!canEditRole(u)}
                           className="text-gray-500 hover:text-gray-900 hover:bg-slate-50 h-8 w-8 p-0"
                           title="Edit Role"
                         >
@@ -304,7 +303,7 @@ export default function AdminUsers() {
                           size="sm"
                           variant="ghost"
                           onClick={() => handleToggleSuspend(u)}
-                          disabled={u.email === MASTER_ADMIN_EMAIL}
+                          disabled={!canEditRole(u)}
                           className={`h-8 w-8 p-0 ${u.status === 'suspended'
                             ? 'text-green-700 hover:bg-emerald-400/10'
                             : 'text-red-700 hover:bg-red-400/10'
@@ -350,8 +349,8 @@ export default function AdminUsers() {
                   <SelectContent className="bg-white border-slate-200 text-gray-900">
                     <SelectItem value="client">Client</SelectItem>
                     <SelectItem value="reseller">Reseller</SelectItem>
-                    <SelectItem value="master_reseller">Master Reseller</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
+                    {isMasterAdmin && <SelectItem value="master_reseller">Master Reseller</SelectItem>}
+                    {isMasterAdmin && <SelectItem value="admin">Admin</SelectItem>}
                   </SelectContent>
                 </Select>
               </div>

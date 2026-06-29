@@ -96,7 +96,6 @@ export default function AdminLayout({ children, currentPageName }) {
       label: 'MASTER CONTROL',
       show: isMasterAdmin,
       items: [
-        { name: 'Users', path: 'AdminUsers', icon: UserCog },
         { name: 'Client Lifecycle', path: 'AdminClientLifecycle', icon: ShieldCheck },
         { name: 'Payment Approvals', path: 'AdminPaymentApprovals', icon: ShieldCheck },
         { name: 'Messaging Configs', path: 'AdminPlatformMessaging', icon: MessageSquare },
@@ -108,6 +107,7 @@ export default function AdminLayout({ children, currentPageName }) {
       label: 'CLIENTS',
       items: [
         { name: 'Clients', path: 'AdminClients', icon: Users },
+        { name: 'Users', path: 'AdminUsers', icon: UserCog },
         { name: 'CRM Access Requests', path: 'AdminCRMRequests', icon: Database },
         { name: 'Retention', path: 'AdminRetention', icon: PhoneCall },
       ],
@@ -116,7 +116,7 @@ export default function AdminLayout({ children, currentPageName }) {
       label: 'RESELLERS',
       items: [
         { name: 'Partners', path: 'AdminPartners', icon: Handshake },
-        ...(isReseller ? [{ name: 'Custom Domain', path: 'AdminResellerBranding', icon: Globe }] : []),
+        ...(isReseller ? [{ name: 'Partner Settings', path: 'AdminResellerBranding', icon: Globe }] : []),
       ],
     },
     {

@@ -49,10 +49,22 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
   const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
   const [screenshotUrl, setScreenshotUrl] = useState('');
   const [notes, setNotes] = useState('');
+  
+  // Reseller wallet payment
+  const [useWallet, setUseWallet] = useState(false);
+  const [resellerClient, setResellerClient] = useState(null);
 
-  useEffect(() => { apiClient.auth.me().then(setMe).catch(() => {}); }, []);
+  useEffect(() => { 
+    apiClient.auth.me().then(user => {
+      setMe(user);
+      if (['reseller', 'master_reseller'].includes(user.role)) {
+        apiClient.Client.get(user.client_id).then(setResellerClient).catch(() => {});
+      }
+    }).catch(() => {}); 
+  }, []);
 
   const isAdmin = ['admin', 'master_admin'].includes(me?.role);
+  const isReseller = ['reseller', 'master_reseller'].includes(me?.role);
 
   const handleUpload = async (file) => {
     if (!file) return;
@@ -115,6 +127,42 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
       onUpdated && onUpdated();
     } catch (e) {
       toast.error(e.message || 'Failed to submit');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Reseller: direct save using wallet deduction ──
+  const handleResellerSave = async () => {
+    if (!payAmount || Number(payAmount) <= 0) return toast.error('Enter the activation cost to deduct');
+    const cost = Number(payAmount);
+    if ((Number(resellerClient?.wallet_balance) || 0) < cost) {
+      return toast.error('Insufficient wallet balance to activate this client');
+    }
+
+    setSaving(true);
+    try {
+      const payload = {
+        client_id: client.id,
+        amount: cost,
+        account_status: form.account_status,
+        subscription_plan: form.subscription_plan,
+        total_channels: parseInt(form.total_channels) || 1,
+        monthly_rate_per_channel: parseFloat(form.monthly_rate_per_channel) || 6500,
+        per_minute_rate: parseFloat(form.per_minute_rate) || 4,
+      };
+
+      const res = await apiFetch('/reseller/activate-client', {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+      if (res.error) throw new Error(res.error);
+      
+      toast.success(`Client "${client.company_name}" activated successfully`);
+      onOpenChange(false);
+      onUpdated && onUpdated();
+    } catch (e) {
+      toast.error(e.message || 'Failed to activate client via wallet');
     } finally {
       setSaving(false);
     }
@@ -407,10 +455,43 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
               </div>
             </div>
           )}
+          
+          {isReseller && !isAdmin && (
+            <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100 space-y-4 mt-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-semibold text-blue-900 flex items-center gap-2">
+                  <Wallet className="w-5 h-5 text-blue-600" />
+                  Activate via Wallet
+                </h4>
+                <div className="text-sm font-medium text-blue-700">
+                  Balance: <span className="text-xl font-bold">₹{Number(resellerClient?.wallet_balance || 0).toLocaleString()}</span>
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2 border border-blue-200 bg-white rounded-lg p-3">
+                <input type="checkbox" id="useWallet" checked={useWallet} onChange={(e) => setUseWallet(e.target.checked)} className="w-4 h-4 text-blue-600 rounded" />
+                <Label htmlFor="useWallet" className="cursor-pointer font-medium text-blue-900">Deduct from my wallet balance</Label>
+              </div>
+
+              {useWallet && (
+                <div>
+                  <Label>Amount to deduct (₹)</Label>
+                  <Input 
+                    type="number"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    placeholder="e.g. 6500"
+                    className="bg-white"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">This amount will be deducted from your wallet for activation.</p>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex gap-3 justify-end pt-2">
             <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            {isAdmin && (
+            {isAdmin ? (
               <>
                 <Button onClick={handleSubmitForApproval} disabled={saving || uploading} className="bg-indigo-600 hover:bg-indigo-700">
                   {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Submitting…</> : <><Upload className="w-4 h-4 mr-2" /> Submit for Approval</>}
@@ -419,6 +500,15 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
                   {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Saving…</> : 'Direct Save Changes'}
                 </Button>
               </>
+            ) : isReseller && useWallet ? (
+              <Button onClick={handleResellerSave} disabled={saving || uploading} className="bg-blue-600 hover:bg-blue-700 text-white shadow-md">
+                {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wallet className="w-4 h-4 mr-2" />}
+                Pay ₹{payAmount || '0'} & Activate
+              </Button>
+            ) : (
+              <Button onClick={handleSubmitForApproval} disabled={saving || uploading} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md">
+                {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Submitting…</> : <><Upload className="w-4 h-4 mr-2" /> Submit for Approval</>}
+              </Button>
             )}
           </div>
         </div>

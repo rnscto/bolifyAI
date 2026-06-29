@@ -65,6 +65,10 @@ export default function AdminClients() {
     per_minute_rate: '',
     monthly_rate_per_channel: ''
   });
+  
+  const [inviteDialogOpen, setInviteDialogOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviting, setInviting] = useState(false);
 
   useEffect(() => {
     loadClients();
@@ -145,6 +149,25 @@ export default function AdminClients() {
     } catch (error) {
       console.error('Error saving client:', error);
       toast.error('Failed to save client');
+    }
+  };
+
+  const handleInviteClient = async (e) => {
+    e.preventDefault();
+    setInviting(true);
+    try {
+      const res = await apiFetch('/auth/invite', {
+        method: 'POST',
+        body: JSON.stringify({ email: inviteEmail })
+      });
+      if (res.error) throw new Error(res.error);
+      toast.success('Invitation sent successfully!');
+      setInviteDialogOpen(false);
+      setInviteEmail('');
+    } catch (err) {
+      toast.error(err.message || 'Failed to send invitation');
+    } finally {
+      setInviting(false);
     }
   };
 
@@ -288,13 +311,52 @@ export default function AdminClients() {
             Export CSV
           </Button>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Plus className="w-4 h-4 mr-2" />
-              Add Client
-            </Button>
-          </DialogTrigger>
+        
+        <div className="flex gap-2">
+          {currentUser && ['reseller', 'master_reseller'].includes(currentUser.role) && (
+            <Dialog open={inviteDialogOpen} onOpenChange={setInviteDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" className="text-blue-600 border-blue-600 hover:bg-blue-50">
+                  <ArrowRightLeft className="w-4 h-4 mr-2" />
+                  Invite Client
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Invite a new Client</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleInviteClient} className="space-y-4 pt-4">
+                  <div>
+                    <Label htmlFor="inviteEmail">Client's Email Address</Label>
+                    <Input
+                      id="inviteEmail"
+                      type="email"
+                      placeholder="e.g. client@example.com"
+                      value={inviteEmail}
+                      onChange={(e) => setInviteEmail(e.target.value)}
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-2">
+                      An invitation link will be sent to this email. When they sign up, they will automatically be added as your downline client.
+                    </p>
+                  </div>
+                  <DialogFooter>
+                    <Button type="submit" className="bg-blue-600 hover:bg-blue-700" disabled={inviting}>
+                      {inviting ? 'Sending...' : 'Send Invitation'}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          )}
+
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-blue-600 hover:bg-blue-700">
+                <Plus className="w-4 h-4 mr-2" />
+                Add Client
+              </Button>
+            </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>

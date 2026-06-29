@@ -16,13 +16,22 @@ export default async function adminListClients(c: any) {
 
     if (!action || action === 'list') {
       let clients;
+      let users;
       if (isReseller) {
         const res = await client.queryObject(`SELECT * FROM "client" WHERE id::text = $1 OR upline_id = $1 ORDER BY created_at DESC`, [user.client_id]);
         clients = res.rows;
+        const clientIds = clients.map((c: any) => c.id);
+        if (clientIds.length > 0) {
+          const placeholders = clientIds.map((_, i) => `$${i + 1}`).join(',');
+          const usersRes = await client.queryObject(`SELECT * FROM "user" WHERE client_id::text IN (${placeholders}) ORDER BY created_at DESC`, clientIds);
+          users = usersRes.rows;
+        } else {
+          users = [];
+        }
       } else {
         clients = await base44.entities.Client.filter({}, "-created_at", 1000);
+        users = await base44.entities.User.filter({}, "-created_at", 2000);
       }
-      const users = await base44.entities.User.filter({}, "-created_at", 2000);
       
       // Map each client to its earliest activation (paid) date
       const activationsRes = await client.queryObject(`

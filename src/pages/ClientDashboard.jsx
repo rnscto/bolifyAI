@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { apiClient } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Bot, Users, PhoneCall, Calendar, TrendingUp } from 'lucide-react';
+import { Bot, Users, PhoneCall, Calendar, TrendingUp, ShieldCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,8 @@ export default function ClientDashboard() {
     totalLeads: 0,
     totalCalls: 0,
     callsToday: 0,
-    upcomingActivities: 0
+    upcomingActivities: 0,
+    dpo: null
   });
   const [loading, setLoading] = useState(true);
 
@@ -141,7 +142,7 @@ export default function ClientDashboard() {
         })}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
@@ -237,6 +238,42 @@ export default function ClientDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {stats?.dpo && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-gray-600" />
+                Data Protection Officer
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-sm text-gray-500">
+                  Your designated point of contact for data privacy and compliance inquiries.
+                </p>
+                <div className="space-y-2">
+                  <div className="flex flex-col">
+                    <span className="text-xs text-gray-500">Name</span>
+                    <span className="text-sm font-medium">{stats.dpo.name}</span>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs text-gray-500">Email</span>
+                    <a href={`mailto:${stats.dpo.email}`} className="text-sm font-medium text-blue-600 hover:underline">
+                      {stats.dpo.email}
+                    </a>
+                  </div>
+                  <div className="flex flex-col">
+                    <span className="text-xs text-gray-500">Contact</span>
+                    <a href={`tel:${stats.dpo.contact}`} className="text-sm font-medium text-blue-600 hover:underline">
+                      {stats.dpo.contact}
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

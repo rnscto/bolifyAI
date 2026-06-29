@@ -20,6 +20,15 @@ export default function AdminResellerBranding() {
   const [provisioning, setProvisioning] = useState(false);
   const [dnsConfig, setDnsConfig] = useState(null);
   const [dnsConfirmed, setDnsConfirmed] = useState(false);
+  
+  // DPO State
+  const [clientId, setClientId] = useState(null);
+  const [dpoSaving, setDpoSaving] = useState(false);
+  const [dpoData, setDpoData] = useState({
+    dpo_name: '',
+    dpo_email: '',
+    dpo_contact: ''
+  });
 
   useEffect(() => {
     loadData();
@@ -28,6 +37,16 @@ export default function AdminResellerBranding() {
   const loadData = async () => {
     try {
       try {
+        const me = await apiClient.auth.me();
+        setClientId(me.client_id);
+        const myClient = await apiClient.Client.get(me.client_id);
+        if (myClient) {
+          setDpoData({
+            dpo_name: myClient.dpo_name || '',
+            dpo_email: myClient.dpo_email || '',
+            dpo_contact: myClient.dpo_contact || ''
+          });
+        }
         const res = await apiFetch('/reseller/custom-domain');
         if (res && res.custom_domain) {
           setDomain(res.custom_domain);
@@ -106,6 +125,23 @@ export default function AdminResellerBranding() {
     }
   };
 
+  const handleSaveDpo = async () => {
+    if (!clientId) return;
+    setDpoSaving(true);
+    try {
+      await apiClient.Client.update(clientId, {
+        dpo_name: dpoData.dpo_name,
+        dpo_email: dpoData.dpo_email,
+        dpo_contact: dpoData.dpo_contact
+      });
+      toast.success('DPO settings saved successfully');
+    } catch (error) {
+      toast.error('Failed to save DPO settings');
+    } finally {
+      setDpoSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -132,13 +168,23 @@ export default function AdminResellerBranding() {
     <div className="space-y-6 max-w-4xl">
       <div>
         <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <Globe className="w-6 h-6 text-blue-700" />
-          Custom Domain Settings
+          <ShieldCheck className="w-6 h-6 text-blue-700" />
+          Partner Settings
         </h1>
-        <p className="text-gray-500 text-sm mt-1">Host your platform on your own domain (e.g., portal.myagency.com)</p>
+        <p className="text-gray-500 text-sm mt-1">Manage your custom domain, branding, and compliance.</p>
       </div>
 
-      {/* Current domain status */}
+      <Card className="border border-slate-200 bg-white shadow-xl">
+        <CardHeader className="border-b border-slate-100 pb-4">
+          <CardTitle className="text-lg text-gray-800 font-bold flex items-center gap-2">
+             <Globe className="w-5 h-5 text-gray-600" /> Custom Domain
+          </CardTitle>
+          <CardDescription className="text-gray-500">
+            Securely map your domain to our cloud infrastructure. We automatically provision a free SSL certificate.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6 pt-6">
+          {/* Current domain status */}
       {currentDomain && (
         <div className={`flex items-center justify-between px-5 py-4 rounded-xl border shadow-lg ${
           provisioning ? 'bg-amber-50 border-amber-100' : 'bg-green-50 border-green-100'
@@ -175,17 +221,10 @@ export default function AdminResellerBranding() {
         </div>
       )}
 
-      <Card className="border border-slate-200 bg-white shadow-xl">
-        <CardHeader className="border-b border-slate-100 pb-4">
-          <CardTitle className="text-lg text-gray-800 font-bold">Connect a custom domain</CardTitle>
-          <CardDescription className="text-gray-500">
-            Securely map your domain to our cloud infrastructure. We automatically provision a free SSL certificate.
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="space-y-8 pt-6">
+          )}
+          
           {/* Step 1: Enter domain */}
-          <div className="space-y-3">
+          <div className="space-y-3 pt-4 border-t">
             <div className="flex items-center gap-2">
               <span className="flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold border border-cyan-500/30">1</span>
               <Label className="text-gray-900 font-semibold text-base">Enter the domain you want to use</Label>
@@ -397,6 +436,52 @@ export default function AdminResellerBranding() {
               </div>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="border border-slate-200 bg-white shadow-xl">
+        <CardHeader className="border-b border-slate-100 pb-4">
+          <CardTitle className="text-lg text-gray-800 font-bold flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5 text-gray-600" /> Data Protection Officer (DPO)
+          </CardTitle>
+          <CardDescription className="text-gray-500">
+            Appoint a Data Protection Officer. These details will be visible to your clients on their dashboard for compliance.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4 pt-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>DPO Name</Label>
+              <Input
+                placeholder="e.g. John Doe"
+                value={dpoData.dpo_name}
+                onChange={(e) => setDpoData({...dpoData, dpo_name: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>DPO Email</Label>
+              <Input
+                type="email"
+                placeholder="e.g. dpo@youragency.com"
+                value={dpoData.dpo_email}
+                onChange={(e) => setDpoData({...dpoData, dpo_email: e.target.value})}
+              />
+            </div>
+            <div className="space-y-2 md:col-span-2">
+              <Label>DPO Contact Number</Label>
+              <Input
+                placeholder="e.g. +91 9876543210"
+                value={dpoData.dpo_contact}
+                onChange={(e) => setDpoData({...dpoData, dpo_contact: e.target.value})}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end mt-4">
+            <Button onClick={handleSaveDpo} disabled={dpoSaving} className="bg-cyan-600 hover:bg-cyan-700">
+              {dpoSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ShieldCheck className="w-4 h-4 mr-2" />}
+              Save DPO Settings
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

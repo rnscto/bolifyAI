@@ -304,13 +304,22 @@ const buildCrudRouter = (tableName: string) => {
 
     let query = `UPDATE "${entity}" SET ${setClauses} WHERE id = $1`;
 
-    if (validCols.has("client_id") && user.role !== 'admin' && user.role !== 'master_admin') {
-      if (user.role === 'reseller' || user.role === 'master_reseller') {
-        query += ` AND client_id::text IN (SELECT id::text FROM "client" WHERE id::text = $${values.length + 1} OR upline_id = $${values.length + 1})`;
-      } else {
-        query += ` AND client_id::text = $${values.length + 1}`;
+    if (user.role !== 'admin' && user.role !== 'master_admin') {
+      if (entity === "client") {
+        if (user.role === 'reseller' || user.role === 'master_reseller') {
+          query += ` AND (id::text = $${values.length + 1} OR upline_id = $${values.length + 1})`;
+        } else {
+          query += ` AND id = $${values.length + 1}`;
+        }
+        values.push(user.client_id);
+      } else if (validCols.has("client_id")) {
+        if (user.role === 'reseller' || user.role === 'master_reseller') {
+          query += ` AND client_id::text IN (SELECT id::text FROM "client" WHERE id::text = $${values.length + 1} OR upline_id = $${values.length + 1})`;
+        } else {
+          query += ` AND client_id::text = $${values.length + 1}`;
+        }
+        values.push(user.client_id);
       }
-      values.push(user.client_id);
     }
 
     query += ` RETURNING *`;
@@ -359,13 +368,22 @@ const buildCrudRouter = (tableName: string) => {
       let query = `DELETE FROM "${entity}" WHERE id = $1`;
       const args: any[] = [id];
 
-      if (validCols.has("client_id") && user.role !== 'admin' && user.role !== 'master_admin') {
-        if (user.role === 'reseller' || user.role === 'master_reseller') {
-          query += ` AND client_id::text IN (SELECT id::text FROM "client" WHERE id::text = $2 OR upline_id = $2)`;
-        } else {
-          query += ` AND client_id::text = $2`;
+      if (user.role !== 'admin' && user.role !== 'master_admin') {
+        if (entity === "client") {
+          if (user.role === 'reseller' || user.role === 'master_reseller') {
+            query += ` AND (id::text = $2 OR upline_id = $2)`;
+          } else {
+            query += ` AND id = $2`;
+          }
+          args.push(user.client_id);
+        } else if (validCols.has("client_id")) {
+          if (user.role === 'reseller' || user.role === 'master_reseller') {
+            query += ` AND client_id::text IN (SELECT id::text FROM "client" WHERE id::text = $2 OR upline_id = $2)`;
+          } else {
+            query += ` AND client_id::text = $2`;
+          }
+          args.push(user.client_id);
         }
-        args.push(user.client_id);
       }
 
       query += ` RETURNING id`;

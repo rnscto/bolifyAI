@@ -26,7 +26,8 @@ export default async function getClientDashboardStats(c: any) {
       activitiesRes,
       upcomingRes,
       didsRes,
-      campaignsRes
+      campaignsRes,
+      dpoRes
     ] = await Promise.all([
       client.queryObject(`SELECT COUNT(id) FROM "lead" WHERE client_id = $1`, [client_id]),
       client.queryObject(
@@ -44,7 +45,13 @@ export default async function getClientDashboardStats(c: any) {
         [client_id]
       ),
       client.queryObject(`SELECT COUNT(id) FROM "did" WHERE client_id = $1`, [client_id]),
-      client.queryObject(`SELECT COUNT(id) FROM "campaign" WHERE client_id = $1`, [client_id])
+      client.queryObject(`SELECT COUNT(id) FROM "campaign" WHERE client_id = $1`, [client_id]),
+      client.queryObject(`
+        SELECT u.dpo_name, u.dpo_email, u.dpo_contact 
+        FROM "client" c 
+        LEFT JOIN "client" u ON c.upline_id = u.id 
+        WHERE c.id = $1
+      `, [client_id])
     ]);
 
     return c.json({
@@ -61,6 +68,15 @@ export default async function getClientDashboardStats(c: any) {
           upcomingActivities: parseInt((upcomingRes.rows[0] as any)?.count || '0', 10),
           totalDids: parseInt((didsRes.rows[0] as any)?.count || '0', 10),
           totalCampaigns: parseInt((campaignsRes.rows[0] as any)?.count || '0', 10),
+        },
+        dpo: dpoRes && dpoRes.rows.length > 0 ? {
+          name: (dpoRes.rows[0] as any)?.dpo_name || 'Bolify Data Protection Officer',
+          email: (dpoRes.rows[0] as any)?.dpo_email || 'dpo@bolify.ai',
+          contact: (dpoRes.rows[0] as any)?.dpo_contact || '+1 800 555 0199'
+        } : {
+          name: 'Bolify Data Protection Officer',
+          email: 'dpo@bolify.ai',
+          contact: '+1 800 555 0199'
         }
       }
     });

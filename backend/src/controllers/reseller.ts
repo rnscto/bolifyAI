@@ -364,16 +364,28 @@ resellerRouter.delete("/custom-domain", async (c) => {
 resellerRouter.post("/admin/promote", async (c) => {
   try {
     const admin = c.get("jwtPayload") as any;
-    if (admin.role !== "admin" && admin.role !== "master_admin") {
+    const isReseller = ["reseller", "master_reseller", "admin", "master_admin"].includes(admin.role);
+    if (!isReseller) {
       return c.json({ error: "Unauthorized" }, 403);
     }
 
     const { client_id, new_role } = await c.req.json();
     if (!client_id || !new_role) return c.json({ error: "Missing required fields" }, 400);
-    if (!["reseller", "master_reseller", "admin", "user", "master_admin"].includes(new_role)) return c.json({ error: "Invalid role" }, 400);
+
+    const allowedRoles = admin.role === 'master_admin' || admin.role === 'admin' 
+      ? ["reseller", "master_reseller", "admin", "user", "master_admin"] 
+      : ["reseller", "user"];
+
+    if (!allowedRoles.includes(new_role)) return c.json({ error: "Invalid or unauthorized role" }, 400);
 
     const client = await base44.entities.Client.get(client_id);
     if (!client) return c.json({ error: "Client not found" }, 404);
+
+    if (admin.role !== 'admin' && admin.role !== 'master_admin') {
+      if (client.upline_id !== admin.client_id) {
+        return c.json({ error: "Unauthorized to promote this client" }, 403);
+      }
+    }
 
     let user = null;
     if (client.user_id) {
@@ -418,6 +430,137 @@ resellerRouter.post("/admin/promote", async (c) => {
 
     return c.json({ success: true, message: `Successfully promoted to ${new_role.replace('_', ' ')}` });
   } catch (err: any) {
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// POST /api/reseller/activate-client
+resellerRouter.post("/activate-client", async (c) => {
+  try {
+    const user = c.get("jwtPayload") as any;
+    const isReseller = ["reseller", "master_reseller", "admin", "master_admin"].includes(user.role);
+    if (!isReseller) return c.json({ error: "Unauthorized" }, 403);
+
+    const { client_id, amount, account_status, subscription_plan, total_channels, monthly_rate_per_channel, per_minute_rate } = await c.req.json();
+    if (!client_id || !amount) return c.json({ error: "Missing required fields" }, 400);
+
+    const clientData = await base44.entities.Client.get(client_id);
+    if (!clientData) return c.json({ error: "Client not found" }, 404);
+
+    if (user.role !== 'admin' && user.role !== 'master_admin') {
+      if (clientData.upline_id !== user.client_id) {
+        return c.json({ error: "Unauthorized to activate this client" }, 403);
+      }
+    }
+
+    const resellerClient = await base44.entities.Client.get(user.client_id);
+    if (!resellerClient) return c.json({ error: "Reseller client not found" }, 404);
+
+    const currentBalance = Number(resellerClient.wallet_balance || 0);
+    if (currentBalance < amount) {
+      return c.json({ error: "Insufficient wallet balance. Please top-up." }, 400);
+    }
+
+    // Deduct from Reseller
+    await base44.entities.Client.update(user.client_id, {
+      wallet_balance: currentBalance - amount
+    });
+
+    // Credit to Downline (or just activate)
+    const downlineBal = Number(clientData.wallet_balance || 0);
+    await base44.entities.Client.update(client_id, {
+      wallet_balance: downlineBal + amount,
+      account_status: account_status || 'active',
+      status: 'active',
+      subscription_plan: subscription_plan || clientData.subscription_plan,
+      total_channels: total_channels || clientData.total_channels,
+      monthly_rate_per_channel: monthly_rate_per_channel || clientData.monthly_rate_per_channel,
+      per_minute_rate: per_minute_rate || clientData.per_minute_rate
+    });
+
+    // Record transactions
+    await base44.entities.WalletTransaction.create({
+      client_id: user.client_id,
+      amount: -amount,
+      balance_before: currentBalance,
+      balance_after: currentBalance - amount,
+      description: `Activated downline client ${clientData.company_name}`,
+      action_type: 'ACTIVATION_DEDUCTION',
+      metadata: { downline_client_id: client_id }
+    });
+
+    await base44.entities.WalletTransaction.create({
+      client_id: client_id,
+      amount: amount,
+      balance_before: downlineBal,
+      balance_after: downlineBal + amount,
+      description: `Wallet top-up for activation by Reseller`,
+      action_type: 'WALLET_TOPUP',
+      metadata: { reseller_id: user.client_id }
+    });
+
+    return c.json({ success: true, message: "Client activated successfully via Reseller wallet" });
+  } catch (err: any) {
+    console.error('Error activating client via reseller:', err);
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// POST /api/reseller/purchase-did
+resellerRouter.post("/purchase-did", async (c) => {
+  try {
+    const user = c.get("jwtPayload") as any;
+    const isReseller = ["reseller", "master_reseller"].includes(user.role);
+    if (!isReseller) return c.json({ error: "Only resellers can purchase DIDs directly" }, 403);
+
+    const DID_COST = 300;
+
+    const resellerClient = await base44.entities.Client.get(user.client_id);
+    if (!resellerClient) return c.json({ error: "Reseller client not found" }, 404);
+
+    const currentBalance = Number(resellerClient.wallet_balance || 0);
+    if (currentBalance < DID_COST) {
+      return c.json({ error: `Insufficient wallet balance. DID costs ₹${DID_COST}.` }, 400);
+    }
+
+    // Find an available DID from the global pool (status = 'available' and client_id is null)
+    const availableRes = await client.queryObject(`
+      SELECT id, number FROM "did" 
+      WHERE status = 'available' AND client_id IS NULL 
+      LIMIT 1
+    `);
+    
+    if (availableRes.rows.length === 0) {
+      return c.json({ error: "No DIDs are currently available in the global pool. Please contact support." }, 400);
+    }
+
+    const availableDid = availableRes.rows[0] as any;
+
+    // Deduct amount
+    await base44.entities.Client.update(user.client_id, {
+      wallet_balance: currentBalance - DID_COST
+    });
+
+    // Assign DID to reseller
+    await base44.entities.DID.update(availableDid.id, {
+      client_id: user.client_id,
+      status: 'assigned' // Note: it's assigned to the reseller now, they can re-assign to downlines
+    });
+
+    // Record transaction
+    await base44.entities.WalletTransaction.create({
+      client_id: user.client_id,
+      amount: -DID_COST,
+      balance_before: currentBalance,
+      balance_after: currentBalance - DID_COST,
+      description: `Purchased DID ${availableDid.number} for ₹${DID_COST}`,
+      action_type: 'DID_PURCHASE',
+      metadata: { did_id: availableDid.id, did_number: availableDid.number }
+    });
+
+    return c.json({ success: true, message: `DID ${availableDid.number} purchased successfully`, did: availableDid });
+  } catch (err: any) {
+    console.error('Error purchasing DID:', err);
     return c.json({ error: err.message }, 500);
   }
 });

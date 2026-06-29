@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { apiClient } from '@/api/apiClient';
+import { apiClient, apiFetch } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,8 +42,16 @@ export default function AdminDIDs() {
     client_id: '',
     monthly_cost: 6500
   });
+  const [me, setMe] = useState(null);
+  const [resellerWallet, setResellerWallet] = useState(0);
 
   useEffect(() => {
+    apiClient.auth.me().then(user => {
+      setMe(user);
+      if (['reseller', 'master_reseller'].includes(user.role)) {
+        apiClient.Client.get(user.client_id).then(c => setResellerWallet(Number(c.wallet_balance || 0))).catch(() => {});
+      }
+    }).catch(() => {});
     loadData();
   }, []);
 
@@ -89,12 +97,19 @@ export default function AdminDIDs() {
     try {
       const did = dids.find(d => d.id === didId);
       const oldClientId = did?.client_id;
+      const isReseller = ['reseller', 'master_reseller'].includes(me?.role);
+
+      // If reseller unassigns, it goes back to them. Master admin unassigns to global pool (null).
+      let newClientId = clientId || null;
+      if (!clientId && isReseller) {
+        newClientId = me.client_id;
+      }
 
       // Update DID entity
       await apiClient.DID.update(didId, {
-        client_id: clientId || null,
+        client_id: newClientId,
         agent_id: clientId ? did?.agent_id : null,
-        status: clientId ? 'assigned' : 'available'
+        status: newClientId ? 'assigned' : 'available'
       });
 
       // If unassigning from old client, remove DID from that client's agents
@@ -134,6 +149,24 @@ export default function AdminDIDs() {
     } catch (error) {
       console.error('Error updating DID:', error);
       toast.error('Failed to update DID');
+    }
+  };
+
+  const handlePurchaseDID = async () => {
+    if (!confirm('Are you sure you want to purchase a new DID for ₹300? This will be deducted from your wallet.')) return;
+    try {
+      setLoading(true);
+      const res = await apiFetch('/reseller/purchase-did', {
+        method: 'POST'
+      });
+      if (res.error) throw new Error(res.error);
+      
+      toast.success('DID purchased successfully! It has been added to your pool.');
+      loadData();
+    } catch (error) {
+      console.error('Error purchasing DID:', error);
+      toast.error(error.message || 'Failed to purchase DID');
+      setLoading(false);
     }
   };
 
@@ -227,27 +260,40 @@ export default function AdminDIDs() {
           <p className="text-gray-600 mt-1">Manage phone numbers and assignments</p>
         </div>
         <div className="flex gap-3">
-          <Button 
-            onClick={handleSyncSmartflo} 
-            disabled={syncing}
-            variant="outline"
-            className="border-blue-600 text-blue-600 hover:bg-blue-50"
-          >
-            <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
-            {syncing ? 'Syncing...' : 'Sync from Smartflo'}
-          </Button>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button className="bg-blue-600 hover:bg-blue-700">
-                <Plus className="w-4 h-4 mr-2" />
-                Add DID
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New DID</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
+          {me?.role === 'admin' || me?.role === 'master_admin' ? (
+            <Button 
+              onClick={handleSyncSmartflo} 
+              disabled={syncing}
+              variant="outline"
+              className="border-blue-600 text-blue-600 hover:bg-blue-50"
+            >
+              <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+              {syncing ? 'Syncing...' : 'Sync from Smartflo'}
+            </Button>
+          ) : (
+            <Button 
+              onClick={() => handlePurchaseDID()} 
+              variant="outline"
+              className="border-indigo-600 text-indigo-700 hover:bg-indigo-50"
+            >
+              <Wallet className="w-4 h-4 mr-2" />
+              Buy DID (₹300)
+            </Button>
+          )}
+          
+          {(me?.role === 'admin' || me?.role === 'master_admin') && (
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button className="bg-blue-600 hover:bg-blue-700">
+                  <Plus className="w-4 h-4 mr-2" />
+                  Add DID
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Add New DID</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label htmlFor="number">Phone Number</Label>
                   <Input

@@ -134,6 +134,58 @@ authRouter.put("/me", async (c) => {
   }
 });
 
+// POST /api/auth/invite
+authRouter.post("/invite", async (c) => {
+  try {
+    const { email } = await c.req.json();
+    const user = c.get("jwtPayload") as any;
+
+    if (!email) return c.json({ error: "Email is required" }, 400);
+
+    const isReseller = ["reseller", "master_reseller"].includes(user.role);
+    if (!isReseller) {
+      return c.json({ error: "Only resellers can invite users" }, 403);
+    }
+
+    const inviteToken = await sign({ 
+      email, 
+      upline_id: user.client_id, 
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7 // 7 days valid
+    }, JWT_SECRET, "HS256");
+
+    // In a real scenario, this would generate a link for the frontend
+    const inviteLink = `https://${c.req.header("host") || "bolify.ai"}/register?invite=${inviteToken}`;
+    
+    // In dev mode, we'll log it
+    console.log(`[INVITE LINK] ${inviteLink}`);
+
+    await sendEmail({
+      to: email,
+      subject: "You have been invited to Bolify.ai",
+      text: `You have been invited to join Bolify.ai. Please register using this link: ${inviteLink}`,
+      html: `<p>You have been invited to join Bolify.ai.</p><p><a href="${inviteLink}">Click here to register</a></p>`
+    });
+
+    return c.json({ success: true, message: "Invite sent successfully" });
+  } catch (err: any) {
+    console.error("Invite error:", err);
+    return c.json({ error: err.message }, 500);
+  }
+});
+
+// POST /api/auth/validate-invite
+authRouter.post("/validate-invite", async (c) => {
+  try {
+    const { token } = await c.req.json();
+    if (!token) return c.json({ error: "Token is required" }, 400);
+
+    const payload = await verify(token, JWT_SECRET, "HS256");
+    return c.json({ success: true, payload });
+  } catch (e) {
+    return c.json({ error: "Invalid or expired invite token" }, 400);
+  }
+});
+
 // POST /api/auth/forgot-password
 authRouter.post("/forgot-password", async (c) => {
   try {
