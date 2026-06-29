@@ -141,7 +141,7 @@ export default function AdminLayout({ children, currentPageName }) {
     {
       label: 'SETTINGS',
       items: [
-        { name: 'Account & Billing', path: 'ClientSettings', icon: UserCog },
+        { name: 'Account & Billing', path: 'AdminSettings', icon: UserCog },
       ],
     },
     {

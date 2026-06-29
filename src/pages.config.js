@@ -60,6 +60,7 @@ import AdminInvoices from './pages/AdminInvoices';
 import AdminRetention from './pages/AdminRetention';
 import AdminSubscriptions from './pages/AdminSubscriptions';
 import AdminTickets from "./pages/AdminTickets";
+import AdminSettings from "./pages/ClientSettings";
 import ClientTickets from "./pages/ClientTickets";
 import AdminTopups from './pages/AdminTopups';
 import AdminTrustedClients from './pages/AdminTrustedClients';
@@ -112,6 +113,7 @@ export const PAGES = {
     "AdminInvoices": AdminInvoices,
     "AdminRetention": AdminRetention,
     "AdminSubscriptions": AdminSubscriptions,
+    "AdminSettings": AdminSettings,
     "AdminTickets": AdminTickets,
     "ClientTickets": ClientTickets,
     "AdminTopups": AdminTopups,
