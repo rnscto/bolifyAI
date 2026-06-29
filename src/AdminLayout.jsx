@@ -139,6 +139,12 @@ export default function AdminLayout({ children, currentPageName }) {
       ],
     },
     {
+      label: 'SETTINGS',
+      items: [
+        { name: 'Account & Billing', path: 'ClientSettings', icon: UserCog },
+      ],
+    },
+    {
       label: 'DOCS & SUPPORT',
       items: [
         { name: 'Complaints', path: 'AdminComplaints', icon: Megaphone },
