@@ -17,6 +17,11 @@
     "display_name": {
       "type": "string",
       "description": "User's chosen display name shown across the dashboard (overrides full_name which auto-derives from email)"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["active", "inactive", "suspended"],
+      "default": "active"
     }
   },
   "required": [

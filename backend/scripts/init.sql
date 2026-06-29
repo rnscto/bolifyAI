@@ -565,7 +565,8 @@ CREATE TABLE IF NOT EXISTS "user" (
   "client_id" TEXT,
   "display_name" TEXT,
   "email" TEXT UNIQUE,
-  "password_hash" TEXT
+  "password_hash" TEXT,
+  "status" TEXT DEFAULT 'active'
 );
 
 
