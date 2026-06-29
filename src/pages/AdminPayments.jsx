@@ -39,8 +39,8 @@ export default function AdminPayments() {
     refunded: 'bg-gray-100 text-gray-800',
   };
 
-  const totalPaid = payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + (p.amount || 0), 0);
-  const totalPending = payments.filter(p => p.status === 'pending').reduce((sum, p) => sum + (p.amount || 0), 0);
+  const totalPaid = payments.filter(p => p.status === 'paid').reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const totalPending = payments.filter(p => p.status === 'pending').reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
 
   const filtered = payments.filter(p => {
     if (!search) return true;
