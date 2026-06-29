@@ -293,6 +293,7 @@ export const apiClient = {
   UsageLog: new EntityClient('/v1/usage-logs', 'usagelog'),
   User: new EntityClient('/v1/users', 'user'),
   Invoice: new EntityClient('/v1/invoices', 'invoice'),
+  WhatsAppTemplate: new EntityClient('/v1/whatsapp-templates', 'whatsapptemplate'),
   functions: {
     invoke: async (functionName, args) => {
       try {
