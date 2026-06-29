@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { apiClient, apiFetch } from '@/api/apiClient';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -61,6 +61,7 @@ export default function AdminClients() {
     phone: '',
     total_channels: 1,
     user_id: '',
+    upline_id: '',
     per_minute_rate: '',
     monthly_rate_per_channel: ''
   });
@@ -116,6 +117,7 @@ export default function AdminClients() {
         subscription_plan: 'quarterly',
         monthly_rate_per_channel: formData.monthly_rate_per_channel ? Number(formData.monthly_rate_per_channel) : 6500,
         per_minute_rate: formData.per_minute_rate ? Number(formData.per_minute_rate) : undefined,
+        upline_id: formData.upline_id || null,
         next_billing_date: nextBillingDate.toISOString().split('T')[0]
       };
 
@@ -135,6 +137,7 @@ export default function AdminClients() {
         phone: '', 
         total_channels: 1, 
         user_id: '',
+        upline_id: '',
         per_minute_rate: pricingLimits?.min_per_minute_rate || '',
         monthly_rate_per_channel: pricingLimits?.min_monthly_rate_per_channel || ''
       });
@@ -153,6 +156,7 @@ export default function AdminClients() {
       phone: client.phone || '',
       total_channels: client.total_channels,
       user_id: client.user_id || '',
+      upline_id: client.upline_id || '',
       per_minute_rate: client.per_minute_rate || pricingLimits?.min_per_minute_rate || '',
       monthly_rate_per_channel: client.monthly_rate_per_channel || pricingLimits?.min_monthly_rate_per_channel || ''
     });
@@ -197,6 +201,13 @@ export default function AdminClients() {
   const filteredClients = statusFilter === 'all'
     ? clients
     : clients.filter((c) => c.account_status === statusFilter);
+
+  const resellerClients = useMemo(() => {
+    const resellerUserClientIds = users
+      .filter(u => ['reseller', 'master_reseller'].includes(u.role))
+      .map(u => u.client_id);
+    return clients.filter(c => resellerUserClientIds.includes(c.id));
+  }, [users, clients]);
 
   const handleExportCSV = () => {
     if (filteredClients.length === 0) {
@@ -339,6 +350,32 @@ export default function AdminClients() {
                   Link this client to a user account for portal access
                 </p>
               </div>
+              
+              {['admin', 'master_admin'].includes(currentUser?.role) && (
+                <div>
+                  <Label htmlFor="upline_id">Assign to Reseller (Upline)</Label>
+                  <Select 
+                    value={formData.upline_id || 'direct'}
+                    onValueChange={(value) => setFormData({ ...formData, upline_id: value === 'direct' ? '' : value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Direct Client (No Reseller)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="direct">Direct Client (No Reseller)</SelectItem>
+                      {resellerClients.map((rc) => (
+                        <SelectItem key={rc.id} value={rc.id}>
+                          {rc.company_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Set this client as a downline under a reseller
+                  </p>
+                </div>
+              )}
+              
               <div>
                 <Label htmlFor="total_channels">Number of Channels</Label>
                 <Input
