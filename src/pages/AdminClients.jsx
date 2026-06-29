@@ -495,6 +495,7 @@ export default function AdminClients() {
           </DialogContent>
         </Dialog>
       </div>
+      </div>
 
       <Card>
         <CardHeader>

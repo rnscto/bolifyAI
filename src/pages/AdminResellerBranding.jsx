@@ -220,8 +220,6 @@ export default function AdminResellerBranding() {
           </div>
         </div>
       )}
-
-          )}
           
           {/* Step 1: Enter domain */}
           <div className="space-y-3 pt-4 border-t">
