@@ -17,6 +17,7 @@ import { telegramRouter } from "./src/controllers/telegram.ts";
 import { billingRouter } from "./src/controllers/billing.ts";
 import { agentsRouter } from "./src/controllers/agents.ts";
 import { functionsRouter } from "./src/controllers/functions.ts";
+import { marketplaceRouter } from "./src/controllers/marketplace.ts";
 import { analyticsRouter } from "./src/controllers/analytics.ts";
 import { ticketRouter } from "./src/controllers/tickets.ts";
 import { initCampaignPoller } from "./src/cron/campaignPoller.ts";
@@ -26,6 +27,7 @@ import { initDailyDigest } from "./src/cron/dailyDigest.ts";
 import { initActivityDispatcher } from "./src/cron/activityDispatcher.ts";
 import { initTicketAutoResponder } from "./src/cron/ticketAutoResponder.ts";
 import { initDpdpErasure } from "./src/cron/dpdpErasure.ts";
+import { initSubscriptionRenewals } from "./src/cron/subscriptionRenewals.ts";
 import { handleWebSocket } from "./src/services/realtime.ts";
 import { initStreamSession } from "./src/controllers/voice.ts";
 import { daprRouter } from "./src/controllers/dapr.ts";
@@ -138,6 +140,7 @@ app.route("/api/whatsapp", whatsappRouter);
 app.route("/api/telegram", telegramRouter);
 app.route("/api/billing", billingRouter);
 app.route("/api/agents", agentsRouter);
+app.route("/api/marketplace", marketplaceRouter);
 app.route("/api/functions", functionsRouter);
 app.route("/api/support", ticketRouter);
 app.route("/api/dapr", daprRouter);
@@ -182,6 +185,7 @@ initDailyDigest();
 initActivityDispatcher();
 initTicketAutoResponder();
 initDpdpErasure(); // DPDP Act 2023 automated PII erasure
+initSubscriptionRenewals();
 
 // Start DB connection
 connectDB().catch(console.error);

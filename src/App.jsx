@@ -28,6 +28,9 @@ import AdminClientLifecycle from './pages/AdminClientLifecycle';
 import AdminPaymentApprovals from './pages/AdminPaymentApprovals';
 import ClientWhatsAppHistory from './pages/ClientWhatsAppHistory';
 import AdminUsers from './pages/AdminUsers';
+import ClientMarketplace from './pages/ClientMarketplace';
+import AdminMarketplaceConfig from './pages/AdminMarketplaceConfig';
+import AdminMarketplaceApprovals from './pages/AdminMarketplaceApprovals';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
 import ForgotPassword from './pages/ForgotPassword';
@@ -201,6 +204,21 @@ const AuthenticatedApp = () => {
         <LayoutWrapper currentPageName="ClientWhatsAppHistory">
           <ClientWhatsAppHistory />
         </LayoutWrapper>
+      } />
+      <Route path="/ClientMarketplace" element={
+        <LayoutWrapper currentPageName="ClientMarketplace">
+          <ClientMarketplace />
+        </LayoutWrapper>
+      } />
+      <Route path="/AdminMarketplaceConfig" element={
+        <AdminLayoutWrapper currentPageName="AdminMarketplaceConfig">
+          <AdminMarketplaceConfig />
+        </AdminLayoutWrapper>
+      } />
+      <Route path="/AdminMarketplaceApprovals" element={
+        <AdminLayoutWrapper currentPageName="AdminMarketplaceApprovals">
+          <AdminMarketplaceApprovals />
+        </AdminLayoutWrapper>
       } />
       <Route path="*" element={<PageNotFound />} />
     </Routes>

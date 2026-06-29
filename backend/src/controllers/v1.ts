@@ -432,6 +432,8 @@ const ALL_ENTITIES = [
   "Payment",
   "Subscription",
   "Invoice",
+  "MarketplaceService",
+  "ClientAddonSubscription",
   "UsageLog",
   "Notification",
   "Template",

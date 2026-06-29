@@ -294,6 +294,22 @@ export const apiClient = {
   User: new EntityClient('/v1/users', 'user'),
   Invoice: new EntityClient('/v1/invoices', 'invoice'),
   WhatsAppTemplate: new EntityClient('/v1/whatsapp-templates', 'whatsapptemplate'),
+  MarketplaceService: new EntityClient('/v1/marketplace-services', 'marketplaceservice'),
+  ClientAddonSubscription: new EntityClient('/v1/client-addon-subscriptions', 'clientaddonsubscription'),
+  marketplace: {
+    request: async (serviceId, billingCycle) => {
+      return await apiFetch("/marketplace/request", {
+        method: "POST",
+        body: JSON.stringify({ service_id: serviceId, billing_cycle: billingCycle })
+      });
+    },
+    approve: async (subscriptionId) => {
+      return await apiFetch("/marketplace/approve", {
+        method: "POST",
+        body: JSON.stringify({ subscription_id: subscriptionId })
+      });
+    }
+  },
   functions: {
     invoke: async (functionName, args) => {
       try {

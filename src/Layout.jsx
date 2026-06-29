@@ -29,7 +29,9 @@ import {
   Image,
   ShieldCheck,
   MessageSquare,
-  LifeBuoy
+  LifeBuoy,
+  ShoppingCart,
+  Store
 } from 'lucide-react';
 import AgreementGate from './components/client/AgreementGate';
 import AnnouncementMarquee from './components/AnnouncementMarquee';
@@ -233,6 +235,8 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Announcements', path: 'AdminAnnouncements', icon: Megaphone },
     { name: 'Platform Messaging', path: 'AdminPlatformMessaging', icon: MessageSquare },
     { name: 'Partners', path: 'AdminPartners', icon: Handshake },
+    { name: 'Marketplace Setup', path: 'AdminMarketplaceConfig', icon: Store },
+    { name: 'Marketplace Requests', path: 'AdminMarketplaceApprovals', icon: ShoppingCart },
     ...(user?.role === 'reseller' || user?.role === 'master_reseller' ? [{ name: 'Custom Domain', path: 'AdminResellerBranding', icon: Globe }] : []),
     ];
 
@@ -261,6 +265,7 @@ export default function Layout({ children, currentPageName }) {
     { name: 'Brand Settings', path: 'ClientBrandSettings', icon: Settings },
     { name: 'CRM Integration', path: 'ClientCRM', icon: Database },
     { name: 'Integrations', path: 'ClientIntegrations', icon: Activity },
+    { name: 'Add-on Marketplace', path: 'ClientMarketplace', icon: ShoppingCart },
     { name: 'WhatsApp Templates', path: 'ClientWhatsAppTemplates', icon: MessageSquare },
     { name: 'WhatsApp History', path: 'ClientWhatsAppHistory', icon: MessageSquare },
     { name: 'Settings', path: 'ClientSettings', icon: UserCog },

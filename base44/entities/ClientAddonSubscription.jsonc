@@ -1,0 +1,46 @@
+{
+  "name": "ClientAddonSubscription",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Client ID who requested it"
+    },
+    "service_id": {
+      "type": "string",
+      "description": "Link to MarketplaceService"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pending_approval", "active", "suspended", "cancelled"],
+      "default": "pending_approval"
+    },
+    "billing_cycle": {
+      "type": "string",
+      "enum": ["monthly", "quarterly", "semi_annual", "yearly", "one_time"],
+      "default": "monthly"
+    },
+    "amount": {
+      "type": "number",
+      "description": "The agreed price for this cycle"
+    },
+    "start_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "next_billing_date": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "approved_by": {
+      "type": "string",
+      "description": "User ID of the upline admin who approved it"
+    }
+  },
+  "required": [
+    "client_id",
+    "service_id",
+    "billing_cycle",
+    "amount"
+  ]
+}

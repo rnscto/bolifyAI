@@ -1,0 +1,51 @@
+{
+  "name": "MarketplaceService",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Name of the service (e.g. WhatsApp AI Bot)"
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of the service"
+    },
+    "module_identifier": {
+      "type": "string",
+      "description": "Unique identifier used by frontend to unlock modules (e.g., whatsapp_bot)"
+    },
+    "category": {
+      "type": "string",
+      "enum": ["add_on", "integration", "industry_suite"],
+      "default": "add_on"
+    },
+    "pricing_monthly": {
+      "type": "number",
+      "default": 0
+    },
+    "pricing_quarterly": {
+      "type": "number",
+      "default": 0
+    },
+    "pricing_semi_annual": {
+      "type": "number",
+      "default": 0
+    },
+    "pricing_yearly": {
+      "type": "number",
+      "default": 0
+    },
+    "pricing_one_time": {
+      "type": "number",
+      "default": 0
+    },
+    "is_active": {
+      "type": "boolean",
+      "default": true
+    }
+  },
+  "required": [
+    "name",
+    "module_identifier"
+  ]
+}
