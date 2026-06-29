@@ -116,6 +116,14 @@ class EntityClient {
     });
   }
 
+  async bulkCreate(dataArray) {
+    const results = [];
+    for (const item of dataArray) {
+      results.push(await this.create(item));
+    }
+    return results;
+  }
+
   async update(id, data) {
     return apiFetch(`${this.endpoint}/${id}`, {
       method: "PUT",
