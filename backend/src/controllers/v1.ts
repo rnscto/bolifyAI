@@ -466,6 +466,7 @@ const ALL_ENTITIES = [
 ];
 v1Router.route("/client-lifecycle-events", buildCrudRouter("clientlifecycleevent"));
 v1Router.route("/subscriptions", buildCrudRouter("subscription"));
+v1Router.route("/invoices", buildCrudRouter("invoice"));
 v1Router.route("/voicemail-messages", buildCrudRouter("voicemailmessage"));
 v1Router.route("/outreach-logs", buildCrudRouter("outreachlog"));
 v1Router.route("/client-agreements", buildCrudRouter("clientagreement"));

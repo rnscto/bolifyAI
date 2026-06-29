@@ -157,6 +157,7 @@ class EntityClient {
 }
 
 export const apiClient = {
+  baseUrl: API_BASE_URL,
   get: async (url) => await apiFetch(url),
   post: async (url, body) => await apiFetch(url, { method: "POST", body: JSON.stringify(body) }),
   put: async (url, body) => await apiFetch(url, { method: "PUT", body: JSON.stringify(body) }),
