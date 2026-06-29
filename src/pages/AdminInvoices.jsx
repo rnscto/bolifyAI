@@ -11,6 +11,21 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
 
+const PREDEFINED_PRODUCTS = [
+  { name: 'AI Voice Calling Bot - Starter Subscription', price: 4999 },
+  { name: 'AI Voice Calling Bot - Pro Subscription', price: 9999 },
+  { name: 'AI Voice Calling Bot - Enterprise Subscription', price: 19999 },
+  { name: 'Custom Voice Clone Setup (One-time)', price: 14999 },
+  { name: 'Additional Voice Minutes Top-up', price: 999 },
+  { name: 'Software Services (SAC: 998314)', price: 0 },
+  { name: 'Addition DID', price: 300 },
+  { name: 'AI Agent to Human Agent Transfer Service (monthly)', price: 2000 },
+  { name: 'Mobile DID (monthly)', price: 1500 },
+  { name: 'Addition Agent Persona with Same Agent (monthly)', price: 1500 },
+  { name: 'WhatsApp AI Chat bot Integrated with Voice Calling Agent (monthly)', price: 5000 },
+  { name: 'Custom CRM Integrations API Expose Charges (One time)', price: 2000 }
+];
+
 export default function AdminInvoices() {
   const { user } = useAuth();
   const [invoices, setInvoices] = useState([]);
@@ -78,7 +93,7 @@ export default function AdminInvoices() {
 
     setCreating(true);
     try {
-      const res = await apiClient.functions.execute('createCustomInvoice', {
+      const res = await apiClient.functions.invoke('createCustomInvoice', {
         client_id: selectedClientId,
         subtotal,
         gst_amount: gstAmount,
@@ -114,6 +129,15 @@ export default function AdminInvoices() {
   const updateItem = (index, field, value) => {
     const newItems = [...items];
     newItems[index][field] = field === 'description' ? value : Number(value);
+    
+    // Auto-fill price if a predefined product is selected
+    if (field === 'description') {
+      const preset = PREDEFINED_PRODUCTS.find(p => p.name === value);
+      if (preset) {
+        newItems[index].unit_price = preset.price;
+      }
+    }
+    
     setItems(newItems);
   };
   
@@ -261,6 +285,7 @@ export default function AdminInvoices() {
                   <div key={index} className="flex gap-2 items-center">
                     <Input 
                       placeholder="Description" 
+                      list="product-presets"
                       value={item.description}
                       onChange={(e) => updateItem(index, 'description', e.target.value)}
                       className="flex-1"
@@ -286,6 +311,12 @@ export default function AdminInvoices() {
                   </div>
                 ))}
                 <Button variant="outline" size="sm" onClick={addItem}><Plus className="w-4 h-4 mr-2" /> Add Item</Button>
+                
+                <datalist id="product-presets">
+                  {PREDEFINED_PRODUCTS.map((prod, i) => (
+                    <option key={i} value={prod.name} />
+                  ))}
+                </datalist>
               </div>
             </div>
             

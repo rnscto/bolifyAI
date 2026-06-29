@@ -136,6 +136,16 @@ export default async function createCustomInvoice(c: any) {
     page.drawText('Total:', { x: 595 - 200, y, size: 11, font: boldFont, color: colorBlack });
     page.drawText(`Rs ${Number(invoice.total_amount || 0).toLocaleString()}`, { x: 595 - 80, y, size: 11, font: boldFont, color: colorBlack });
 
+    y -= 40;
+    const jurisdiction = (receiver?.city && receiver?.state) 
+      ? `${receiver.city}, ${receiver.state}`
+      : `Ahmedabad, Gujarat`;
+      
+    page.drawText('Terms & Conditions:', { x: 20, y, size: 9, font: boldFont, color: colorBlack });
+    page.drawText('1. Payment is due within 7 days of invoice date.', { x: 20, y: y - 12, size: 8, font, color: colorBlack });
+    page.drawText(`2. All disputes are subject to the jurisdiction of ${jurisdiction}.`, { x: 20, y: y - 24, size: 8, font, color: colorBlack });
+    page.drawText('3. Refund Policy: All voice minutes, DID purchases, and AI setup services are non-refundable.', { x: 20, y: y - 36, size: 8, font, color: colorBlack });
+
     const pdfBytes = await doc.save();
     
     if (send_email && receiver?.email) {
