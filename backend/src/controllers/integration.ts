@@ -201,7 +201,7 @@ integrationRouter.post("/smartflo/fetch-dids", async (c) => {
     const didsArray = Array.isArray(smartfloData) ? smartfloData : (smartfloData.data || []);
     if (!Array.isArray(didsArray)) return c.json({ error: "Unexpected format", response: smartfloData }, 500);
 
-    const existingDids = await base44.entities.DID.filter({});
+    const existingDids = await base44.entities.DID.filter({}, "", 10000);
     const existingSet = new Set();
     for (const d of existingDids) {
       if (!d.number) continue;
