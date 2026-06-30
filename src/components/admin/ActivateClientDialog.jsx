@@ -89,6 +89,10 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
     }
   };
 
+  const calculatedAmount = form.billing_type === 'unlimited'
+    ? (parseInt(form.total_channels) || 1) * (parseFloat(form.monthly_rate_per_channel) || 6500) * (form.subscription_plan === 'yearly' ? 12 : form.subscription_plan === 'quarterly' ? 3 : 1)
+    : parseFloat(form.wallet_credit) || 0;
+
   // ── CEO: submit a payment approval request to main admin ──
   const handleSubmitForApproval = async () => {
     if (!payAmount || Number(payAmount) <= 0) return toast.error('Enter the amount paid (₹)');
@@ -134,8 +138,8 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
 
   // ── Reseller: direct save using wallet deduction ──
   const handleResellerSave = async () => {
-    if (!payAmount || Number(payAmount) <= 0) return toast.error('Enter the activation cost to deduct');
-    const cost = Number(payAmount);
+    const cost = calculatedAmount;
+    if (cost <= 0) return toast.error('Activation cost must be greater than 0');
     if ((Number(resellerClient?.wallet_balance) || 0) < cost) {
       return toast.error('Insufficient wallet balance to activate this client');
     }
@@ -474,10 +478,9 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
                   <Label>Amount to deduct (₹)</Label>
                   <Input 
                     type="number"
-                    value={payAmount}
-                    onChange={(e) => setPayAmount(e.target.value)}
-                    placeholder="e.g. 6500"
-                    className="bg-white"
+                    value={calculatedAmount}
+                    readOnly
+                    className="bg-gray-100 font-bold cursor-not-allowed"
                   />
                   <p className="text-xs text-slate-500 mt-1">This amount will be deducted from your wallet for activation.</p>
                 </div>
@@ -497,9 +500,9 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
                 </Button>
               </>
             ) : isReseller ? (
-              <Button onClick={handleResellerSave} disabled={saving || uploading || Number(resellerClient?.wallet_balance || 0) <= 0} className="bg-blue-600 hover:bg-blue-700 text-white shadow-md">
+              <Button onClick={handleResellerSave} disabled={saving || uploading || Number(resellerClient?.wallet_balance || 0) <= 0 || calculatedAmount <= 0} className="bg-blue-600 hover:bg-blue-700 text-white shadow-md">
                 {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wallet className="w-4 h-4 mr-2" />}
-                Pay ₹{payAmount || '0'} & Activate
+                Pay ₹{calculatedAmount.toLocaleString()} & Activate
               </Button>
             ) : (
               <Button onClick={handleSubmitForApproval} disabled={saving || uploading} className="bg-indigo-600 hover:bg-indigo-700 text-white shadow-md">
