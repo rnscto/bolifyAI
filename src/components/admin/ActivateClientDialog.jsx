@@ -152,10 +152,7 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
         per_minute_rate: parseFloat(form.per_minute_rate) || 4,
       };
 
-      const res = await apiFetch('/reseller/activate-client', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
+      const res = await apiClient.post('/reseller/activate-client', payload);
       if (res.error) throw new Error(res.error);
       
       toast.success(`Client "${client.company_name}" activated successfully`);
@@ -468,12 +465,11 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
                 </div>
               </div>
               
-              <div className="flex items-center space-x-2 border border-blue-200 bg-white rounded-lg p-3">
-                <input type="checkbox" id="useWallet" checked={useWallet} onChange={(e) => setUseWallet(e.target.checked)} className="w-4 h-4 text-blue-600 rounded" />
-                <Label htmlFor="useWallet" className="cursor-pointer font-medium text-blue-900">Deduct from my wallet balance</Label>
-              </div>
-
-              {useWallet && (
+              {Number(resellerClient?.wallet_balance || 0) <= 0 ? (
+                <div className="text-red-600 text-sm font-medium bg-red-50 p-3 rounded-lg border border-red-200">
+                  Please contact your Admin to Fund Your Wallet.
+                </div>
+              ) : (
                 <div>
                   <Label>Amount to deduct (₹)</Label>
                   <Input 
@@ -500,8 +496,8 @@ export default function ActivateClientDialog({ client, open, onOpenChange, onUpd
                   {saving ? <><Loader2 className="w-4 h-4 animate-spin mr-2" /> Saving…</> : 'Direct Save Changes'}
                 </Button>
               </>
-            ) : isReseller && useWallet ? (
-              <Button onClick={handleResellerSave} disabled={saving || uploading} className="bg-blue-600 hover:bg-blue-700 text-white shadow-md">
+            ) : isReseller ? (
+              <Button onClick={handleResellerSave} disabled={saving || uploading || Number(resellerClient?.wallet_balance || 0) <= 0} className="bg-blue-600 hover:bg-blue-700 text-white shadow-md">
                 {saving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Wallet className="w-4 h-4 mr-2" />}
                 Pay ₹{payAmount || '0'} & Activate
               </Button>
