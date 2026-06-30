@@ -30,12 +30,12 @@ export default function ClientIntegrations() {
       const clients = await apiClient.Client.filter({ user_id: user.id });
       if (clients.length > 0) {
         setClient(clients[0]);
-        const res = await apiClient.get('/api/integrations/messaging-config');
+        const res = await apiClient.get('/integrations/messaging-config');
         if (res.success && res.config) {
           setConfig(res.config);
         } else {
           // If no config exists yet, create an empty one via POST
-          const initRes = await apiClient.post('/api/integrations/messaging-config', {});
+          const initRes = await apiClient.post('/integrations/messaging-config', {});
           if (initRes.success && initRes.config) {
             setConfig(initRes.config);
           }
@@ -50,7 +50,7 @@ export default function ClientIntegrations() {
 
   const handleSave = async (updates) => {
     try {
-      const res = await apiClient.post('/api/integrations/messaging-config', updates);
+      const res = await apiClient.post('/integrations/messaging-config', updates);
       if (res.success && res.config) {
         setConfig(res.config);
         toast.success('Integration saved');

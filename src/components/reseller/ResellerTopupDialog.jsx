@@ -30,7 +30,7 @@ export default function ResellerTopupDialog({
     setSubmitting(true);
     try {
       // Direct call to reseller API
-      await apiClient.post('/api/reseller/topup-downline', {
+      await apiClient.post('/reseller/topup-downline', {
         downline_id: client.id,
         amount: Number(amount),
         source_wallet: sourceWallet
