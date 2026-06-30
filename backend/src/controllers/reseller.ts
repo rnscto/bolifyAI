@@ -3,6 +3,7 @@ import { jwt } from "hono/jwt";
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
 import { writeAuditLog } from "../utils/auditLog.ts";
+import { distributeCommission } from "../utils/commissionDistributor.ts";
 
 export const resellerRouter = new Hono();
 const JWT_SECRET = (() => {
@@ -134,6 +135,16 @@ resellerRouter.post("/topup-downline", async (c) => {
       details: `Reseller ${user.client_id} topped up downline wallet by ₹${amount} from ${source_wallet}`,
       metadata: { amount, source_wallet, reseller_id: user.client_id },
     });
+
+    // Distribute commission upstream (to Reseller and Master Reseller)
+    // The commission will be generated for the Reseller and up the tree based on the downline_id.
+    await distributeCommission(
+      `TOPUP-${downline_id}-${Date.now()}`,
+      downline_id,
+      Number(amount),
+      1,
+      true // true = per_minute / topup commission logic
+    );
 
     return c.json({ success: true, new_balance: currentBalance - amount });
   } catch (err: any) {
@@ -499,6 +510,17 @@ resellerRouter.post("/activate-client", async (c) => {
       balance_after: downlineBal + amount,
       description: `Wallet top-up for activation by Reseller`
     });
+
+    // Distribute commission upstream (to Master Reseller, if applicable)
+    // using the reseller's client_id as the starting node, since the reseller
+    // just paid the wholesale amount.
+    await distributeCommission(
+      `ACT-${client_id}-${Date.now()}`,
+      user.client_id,
+      Number(amount),
+      Number(total_channels || 1),
+      false // false = subscription commission logic
+    );
 
     return c.json({ success: true, message: "Client activated successfully via Reseller wallet" });
   } catch (err: any) {
