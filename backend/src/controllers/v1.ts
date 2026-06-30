@@ -505,4 +505,4 @@ v1Router.route("/trusted-clients", buildCrudRouter("trustedclient"));
 v1Router.route("/trusted-contacts", buildCrudRouter("trustedcontact"));
 v1Router.route("/usage-logs", buildCrudRouter("usagelog"));
 v1Router.route("/users", buildCrudRouter("user"));
-
+v1Router.route("/commission-ledgers", buildCrudRouter("commissionledger"));
