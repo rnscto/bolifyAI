@@ -46,7 +46,7 @@ export default async function pgDashboardCounts(c: any) {
           COUNT(*)::int AS total_calls,
           COUNT(*) FILTER (WHERE created_date >= ${todayIso}::timestamptz)::int AS calls_today
         FROM call_logs
-        WHERE client_id::text = ${client_id}
+        WHERE client_id = ${client_id}::uuid
       `;
       const r = res.rows[0] || {};
       return c.json({ data: {
