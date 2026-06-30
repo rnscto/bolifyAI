@@ -5,14 +5,17 @@ EXPOSE 8000
 
 WORKDIR /app
 
-# Copy source with correct ownership
+# Copy source files
 COPY --chown=deno:deno . .
+
+# Fix ownership of /app directory itself (WORKDIR creates it as root)
+RUN chown -R deno:deno /app
 
 # Prefer not to run as root.
 USER deno
 
-# Cache dependencies (deno.lock is excluded via .dockerignore so Deno creates it fresh)
-RUN deno cache main.ts
+# Cache dependencies — use --no-lock to avoid permission issues writing deno.lock
+RUN deno cache --no-lock main.ts
 
 # Run the app.
 CMD ["task", "start"]
