@@ -29,28 +29,28 @@ export default async function getClientDashboardStats(c: any) {
       campaignsRes,
       dpoRes
     ] = await Promise.all([
-      client.queryObject(`SELECT COUNT(id) FROM "lead" WHERE client_id = $1`, [client_id]),
+      client.queryObject(`SELECT COUNT(id) FROM "lead" WHERE client_id::text = $1`, [client_id]),
       client.queryObject(
-        `SELECT COUNT(id), COALESCE(SUM(duration), 0) as total_duration FROM "calllog" WHERE client_id = $1`, 
+        `SELECT COUNT(id), COALESCE(SUM(duration), 0) as total_duration FROM "calllog" WHERE client_id::text = $1`, 
         [client_id]
       ),
       client.queryObject(
-        `SELECT COUNT(id) FROM "calllog" WHERE client_id = $1 AND created_at >= CURRENT_DATE`, 
+        `SELECT COUNT(id) FROM "calllog" WHERE client_id::text = $1 AND created_at >= CURRENT_DATE`, 
         [client_id]
       ),
-      client.queryObject(`SELECT COUNT(id) FROM "agent" WHERE client_id = $1`, [client_id]),
-      client.queryObject(`SELECT COUNT(id) FROM "activity" WHERE client_id = $1`, [client_id]),
+      client.queryObject(`SELECT COUNT(id) FROM "agent" WHERE client_id::text = $1`, [client_id]),
+      client.queryObject(`SELECT COUNT(id) FROM "activity" WHERE client_id::text = $1`, [client_id]),
       client.queryObject(
-        `SELECT COUNT(id) FROM "activity" WHERE client_id = $1 AND status = 'scheduled' AND scheduled_date > NOW()::text`, 
+        `SELECT COUNT(id) FROM "activity" WHERE client_id::text = $1 AND status = 'scheduled' AND scheduled_date > NOW()::text`, 
         [client_id]
       ),
-      client.queryObject(`SELECT COUNT(id) FROM "did" WHERE client_id = $1`, [client_id]),
-      client.queryObject(`SELECT COUNT(id) FROM "campaign" WHERE client_id = $1`, [client_id]),
+      client.queryObject(`SELECT COUNT(id) FROM "did" WHERE client_id::text = $1`, [client_id]),
+      client.queryObject(`SELECT COUNT(id) FROM "campaign" WHERE client_id::text = $1`, [client_id]),
       client.queryObject(`
         SELECT u.dpo_name, u.dpo_email, u.dpo_contact 
         FROM "client" c 
-        LEFT JOIN "client" u ON c.upline_id = u.id 
-        WHERE c.id = $1
+        LEFT JOIN "client" u ON c.upline_id::text = u.id::text 
+        WHERE c.id::text = $1
       `, [client_id])
     ]);
 
