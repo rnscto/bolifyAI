@@ -126,25 +126,34 @@ app.get('/api/realtime', (c) => {
   return c.text("WebSocket upgrade required", 400);
 });
 
-app.route("/api/auth", authRouter);
-app.route("/api/v1", v1Router);
-app.route("/api/reseller", resellerRouter);
-app.route("/api/voice", voiceRouter);
-app.route("/api/webhook", voiceWebhookRouter);
-app.route("/api/campaign", campaignRouter);
-app.route("/api/crm", crmRouter);
-app.route("/api/v1/integrations", integrationRouter);
-app.route("/api/v1/calendar", calendarRouter);
-app.route("/api/v1/analytics", analyticsRouter);
-app.route("/api/whatsapp", whatsappRouter);
-app.route("/api/telegram", telegramRouter);
-app.route("/api/billing", billingRouter);
-app.route("/api/agents", agentsRouter);
-app.route("/api/marketplace", marketplaceRouter);
-app.route("/api/functions", functionsRouter);
-app.route("/api/support", ticketRouter);
+const mode = Deno.env.get("SERVICE_MODE") || "ALL"; // 'API', 'STREAMING', or 'ALL'
+
+if (mode === "API" || mode === "ALL") {
+  app.route("/api/auth", authRouter);
+  app.route("/api/v1", v1Router);
+  app.route("/api/reseller", resellerRouter);
+  app.route("/api/campaign", campaignRouter);
+  app.route("/api/crm", crmRouter);
+  app.route("/api/v1/integrations", integrationRouter);
+  app.route("/api/v1/calendar", calendarRouter);
+  app.route("/api/v1/analytics", analyticsRouter);
+  app.route("/api/whatsapp", whatsappRouter);
+  app.route("/api/telegram", telegramRouter);
+  app.route("/api/billing", billingRouter);
+  app.route("/api/agents", agentsRouter);
+  app.route("/api/marketplace", marketplaceRouter);
+  app.route("/api/functions", functionsRouter);
+  app.route("/api/support", ticketRouter);
+}
+
+if (mode === "STREAMING" || mode === "ALL") {
+  app.route("/api/voice", voiceRouter);
+  app.route("/api/webhook", voiceWebhookRouter);
+}
+
+// Dapr endpoints run on both so the sidecar can subscribe
 app.route("/api/dapr", daprRouter);
-app.route("/dapr", daprRouter); // Dapr sidecar natively calls GET /dapr/subscribe
+app.route("/dapr", daprRouter);
 
 app.get('*', async (c, next) => {
   if (c.req.path.startsWith('/api/')) {
@@ -177,15 +186,17 @@ app.onError((err, c) => {
   return c.json({ error: err.message }, 500);
 });
 
-// Initialize background scheduled tasks
-initCampaignPoller();
-initCrmPoller();
-initBillingSweeper(); // Handles trial expiry + subscription sweeping (trialExpiryCheck merged here)
-initDailyDigest();
-initActivityDispatcher();
-initTicketAutoResponder();
-initDpdpErasure(); // DPDP Act 2023 automated PII erasure
-initSubscriptionRenewals();
+// Initialize background scheduled tasks (only on API container to avoid duplicate execution)
+if (mode === "API" || mode === "ALL") {
+  initCampaignPoller();
+  initCrmPoller();
+  initBillingSweeper(); // Handles trial expiry + subscription sweeping (trialExpiryCheck merged here)
+  initDailyDigest();
+  initActivityDispatcher();
+  initTicketAutoResponder();
+  initDpdpErasure(); // DPDP Act 2023 automated PII erasure
+  initSubscriptionRenewals();
+}
 
 // Start DB connection
 connectDB().catch(console.error);
@@ -199,27 +210,29 @@ Deno.serve({ port, hostname: "0.0.0.0" }, async (req: Request) => {
   const url = new URL(req.url);
   const upgradeHeader = req.headers.get("upgrade") || "";
 
-  // Handle /api/voice/stream WebSocket upgrade
-  // CRITICAL: Deno.upgradeWebSocket MUST be called synchronously — no await before it.
-  // Wrapping in an async function (even without await) defers execution to a microtask,
-  // causing Deno to reject the upgrade with 503.
-  if (url.pathname === "/api/voice/stream" && upgradeHeader.toLowerCase() === "websocket") {
-    console.log(`[WS] Upgrade: /api/voice/stream from ${req.headers.get("x-forwarded-for") || "unknown"}`);
-    const { socket, response } = Deno.upgradeWebSocket(req);
-    // initStreamSession is async — runs AFTER the response is returned to the client
-    initStreamSession(socket, url).catch(e => console.error("[WS] Session init error:", e));
-    return response;
-  }
-
-  // Handle /api/realtime WebSocket upgrade
-  if (url.pathname === "/api/realtime" && upgradeHeader.toLowerCase() === "websocket") {
-    try {
+  if (mode === "STREAMING" || mode === "ALL") {
+    // Handle /api/voice/stream WebSocket upgrade
+    // CRITICAL: Deno.upgradeWebSocket MUST be called synchronously — no await before it.
+    // Wrapping in an async function (even without await) defers execution to a microtask,
+    // causing Deno to reject the upgrade with 503.
+    if (url.pathname === "/api/voice/stream" && upgradeHeader.toLowerCase() === "websocket") {
+      console.log(`[WS] Upgrade: /api/voice/stream from ${req.headers.get("x-forwarded-for") || "unknown"}`);
       const { socket, response } = Deno.upgradeWebSocket(req);
-      handleWebSocket(socket as any);
+      // initStreamSession is async — runs AFTER the response is returned to the client
+      initStreamSession(socket, url).catch(e => console.error("[WS] Session init error:", e));
       return response;
-    } catch (e: any) {
-      console.error("[WS] Realtime upgrade error:", e.message);
-      return new Response("WebSocket upgrade failed", { status: 500 });
+    }
+
+    // Handle /api/realtime WebSocket upgrade
+    if (url.pathname === "/api/realtime" && upgradeHeader.toLowerCase() === "websocket") {
+      try {
+        const { socket, response } = Deno.upgradeWebSocket(req);
+        handleWebSocket(socket as any);
+        return response;
+      } catch (e: any) {
+        console.error("[WS] Realtime upgrade error:", e.message);
+        return new Response("WebSocket upgrade failed", { status: 500 });
+      }
     }
   }
 
