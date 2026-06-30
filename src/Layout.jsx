@@ -278,6 +278,7 @@ export default function Layout({ children, currentPageName }) {
       { name: 'My Clients', path: 'AdminClients', icon: Users },
       { name: 'Commission Wallet', path: 'ResellerCommissionWallet', icon: Wallet },
       { name: 'Custom Domain', path: 'AdminResellerBranding', icon: Globe },
+      { name: 'DIDs', path: 'AdminDIDs', icon: Phone },
       { name: 'Subscriptions', path: 'AdminSubscriptions', icon: CreditCard },
       { name: 'Payments', path: 'AdminPayments', icon: IndianRupee },
       { name: 'Invoices', path: 'AdminInvoices', icon: IndianRupee },
