@@ -7,3 +7,4 @@ coverage/
 *.log
 .vscode/
 test_*.ts
+deno.lock
