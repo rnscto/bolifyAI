@@ -23,7 +23,7 @@ export class DBEntityWrapper {
       if (value === null) {
         conditions.push(`"${key}" IS NULL`);
       } else {
-        conditions.push(`"${key}" = $${paramIndex}`);
+        conditions.push(`"${key}"::text = $${paramIndex}::text`);
         args.push(value);
         paramIndex++;
       }
@@ -117,6 +117,8 @@ export class DBEntityWrapper {
 
 // Global base44 proxy for backwards compatibility during migration
 export const base44ORM = {
+  get asServiceRole() { return this; },
+  auth: { me: async () => null },
   entities: new Proxy({} as any, {
     get: (target, prop: string) => {
       if (!target[prop]) {
