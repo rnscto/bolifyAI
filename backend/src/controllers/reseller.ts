@@ -480,24 +480,24 @@ resellerRouter.post("/activate-client", async (c) => {
     });
 
     // Record transactions
-    await base44.entities.WalletTransaction.create({
+    await base44.entities.UsageLog.create({
       client_id: user.client_id,
-      amount: -amount,
+      type: 'activation_deduction',
+      direction: 'debit',
+      amount: amount,
       balance_before: currentBalance,
       balance_after: currentBalance - amount,
-      description: `Activated downline client ${clientData.company_name}`,
-      action_type: 'ACTIVATION_DEDUCTION',
-      metadata: { downline_client_id: client_id }
+      description: `Activated downline client ${clientData.company_name}`
     });
 
-    await base44.entities.WalletTransaction.create({
+    await base44.entities.UsageLog.create({
       client_id: client_id,
+      type: 'topup',
+      direction: 'credit',
       amount: amount,
       balance_before: downlineBal,
       balance_after: downlineBal + amount,
-      description: `Wallet top-up for activation by Reseller`,
-      action_type: 'WALLET_TOPUP',
-      metadata: { reseller_id: user.client_id }
+      description: `Wallet top-up for activation by Reseller`
     });
 
     return c.json({ success: true, message: "Client activated successfully via Reseller wallet" });
@@ -549,14 +549,14 @@ resellerRouter.post("/purchase-did", async (c) => {
     });
 
     // Record transaction
-    await base44.entities.WalletTransaction.create({
+    await base44.entities.UsageLog.create({
       client_id: user.client_id,
-      amount: -DID_COST,
+      type: 'did_purchase',
+      direction: 'debit',
+      amount: DID_COST,
       balance_before: currentBalance,
       balance_after: currentBalance - DID_COST,
-      description: `Purchased DID ${availableDid.number} for ₹${DID_COST}`,
-      action_type: 'DID_PURCHASE',
-      metadata: { did_id: availableDid.id, did_number: availableDid.number }
+      description: `Purchased DID ${availableDid.number} for ₹${DID_COST}`
     });
 
     return c.json({ success: true, message: `DID ${availableDid.number} purchased successfully`, did: availableDid });
