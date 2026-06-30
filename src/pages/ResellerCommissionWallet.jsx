@@ -23,6 +23,7 @@ export default function ResellerCommissionWallet() {
   const { user } = useAuth();
   const [clientRecord, setClientRecord] = useState(null);
   const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [usageLogs, setUsageLogs] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -51,6 +52,14 @@ export default function ResellerCommissionWallet() {
         100
       );
       setLedgerEntries(entries);
+
+      // Fetch Wholesale Wallet usage logs
+      const uLogs = await apiClient.UsageLog.filter(
+        { client_id: resellerId },
+        '-created_at',
+        100
+      );
+      setUsageLogs(uLogs);
     } catch (error) {
       console.error('Error fetching commission data:', error);
     } finally {
@@ -169,6 +178,66 @@ export default function ResellerCommissionWallet() {
                       </TableCell>
                       <TableCell className={`text-right font-semibold ${entry.type === 'payout' ? 'text-red-600' : 'text-green-600'}`}>
                         {entry.type === 'payout' ? '-' : '+'}₹{(entry.amount || 0).toLocaleString()}
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Wholesale Wallet Usage Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Wholesale Wallet History</CardTitle>
+          <CardDescription>Recent deductions and top-ups for your main wallet.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="rounded-md border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-right">Balance After</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {usageLogs.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center py-8 text-gray-500">
+                      No wallet history found.
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  usageLogs.map((log) => (
+                    <TableRow key={log.id}>
+                      <TableCell className="font-medium">
+                        {new Date(log.created_at).toLocaleDateString(undefined, { 
+                          year: 'numeric', month: 'short', day: 'numeric', 
+                          hour: '2-digit', minute: '2-digit'
+                        })}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center">
+                          {log.direction === 'debit' ? (
+                            <ArrowDownCircle className="w-4 h-4 mr-2 text-red-500" />
+                          ) : (
+                            <ArrowUpCircle className="w-4 h-4 mr-2 text-green-500" />
+                          )}
+                          <span className="capitalize">{log.type ? log.type.replace('_', ' ') : 'Transaction'}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-gray-500">{log.description || '—'}</TableCell>
+                      <TableCell className={`text-right font-semibold ${log.direction === 'debit' ? 'text-red-600' : 'text-green-600'}`}>
+                        {log.direction === 'debit' ? '-' : '+'}₹{(log.amount || 0).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-right text-gray-500">
+                        ₹{(log.balance_after || 0).toLocaleString()}
                       </TableCell>
                     </TableRow>
                   ))
