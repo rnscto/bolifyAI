@@ -7,6 +7,23 @@ try {
   console.log("Skipping dotenv load (expected in prod):", e.message);
 }
 
+// Auto-populate AZURE_PG_* env vars from DATABASE_URL if they are not explicitly set
+if (!Deno.env.get("AZURE_PG_HOST")) {
+  const dbUrl = Deno.env.get("DATABASE_URL") || "postgresql://postgres:postgres@localhost:5432/bolifyai";
+  try {
+    const u = new URL(dbUrl);
+    if (u.hostname) {
+      Deno.env.set("AZURE_PG_HOST", u.hostname);
+      Deno.env.set("AZURE_PG_PORT", u.port || "5432");
+      Deno.env.set("AZURE_PG_DATABASE", u.pathname.replace(/^\//, ''));
+      Deno.env.set("AZURE_PG_USER", decodeURIComponent(u.username || 'postgres'));
+      Deno.env.set("AZURE_PG_PASSWORD", decodeURIComponent(u.password || ''));
+    }
+  } catch (e: any) {
+    console.warn("Could not parse DATABASE_URL to set AZURE_PG_*:", e.message);
+  }
+}
+
 const databaseUrl = Deno.env.get("DATABASE_URL") || "postgresql://postgres:postgres@localhost:5432/bolifyai";
 
 // Initialize PostgreSQL connection pool wrapper
