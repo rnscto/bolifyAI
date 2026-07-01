@@ -159,6 +159,11 @@ app.get('*', async (c, next) => {
   if (c.req.path.startsWith('/api/')) {
     return await next();
   }
+  // Block probing for sensitive files — return 404 regardless of filesystem presence
+  const p = c.req.path.toLowerCase();
+  const isSensitive = /(\.(env|git|htaccess|htpasswd|DS_Store|npmrc|yarnrc)|\/\.(git|svn|hg)|backup|\.bak$|\.old$|\.save$|\.prod$|\.staging$|\.local$|config\/\.env|app\/\.env)/.test(p);
+  if (isSensitive) return c.notFound();
+
   try {
     if (c.req.path !== '/' && c.req.path !== '') {
       try {
@@ -174,6 +179,7 @@ app.get('*', async (c, next) => {
     return c.text("BolifyAI API is running. Frontend dist/ not found.");
   }
 });
+
 
 app.onError((err, c) => {
   // Hono's jwt() middleware throws HTTPException with the correct status code (e.g. 401).

@@ -78,7 +78,10 @@ export function markRateLimited(key: string, reason: string = "unknown"): void {
 export function getWebSocketUrl(): { url: string; key: string; tier: "free" | "paid" } {
   const { key, tier } = getKey();
   const HOST = "generativelanguage.googleapis.com";
-  const url = `wss://${HOST}/ws/google.ai.generativelanguage.v1alpha.GenerativeService.BidiGenerateContent?key=${key}`;
+  // v1beta is required for gemini-3.1-flash-live-preview and newer Live API models.
+  // v1alpha was the old endpoint and does NOT recognise the 3.1 model family,
+  // causing a 1007 "Request contains an invalid argument." disconnect at setup.
+  const url = `wss://${HOST}/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent?key=${key}`;
   return { url, key, tier };
 }
 

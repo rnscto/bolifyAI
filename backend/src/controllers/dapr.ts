@@ -3,7 +3,7 @@ import { bindCustomDomain, unbindCustomDomain } from "../services/azureContainer
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
 import { campaignPostCallCore } from "../functions/campaignPostCall.ts";
-import { postCallActionExtractorCore } from "../functions/postCallActionExtractor.ts";
+import { postCallOrchestratorCore } from "../functions/postCallOrchestrator.ts";
 export const daprRouter = new Hono();
 
 daprRouter.get("/debug", async (c) => {
@@ -173,13 +173,18 @@ daprRouter.post("/call-tasks", async (c) => {
 
     const enriched = summary ? `${summary}${summaryHindi ? '\n\n🇮🇳 ' + summaryHindi : ''}\n\n---\nScore: ${leadScore}/100 | ${sentiment} | ${qTier} | ${intentSignals.join(', ')}` : '';
 
-    // Update CallLog
+    // Update CallLog with AI scoring results
     await client.queryObject(`
-      UPDATE "calllog" 
-      SET lead_status_updated = $1, conversation_summary = $2
-      WHERE id = $3
-    `, [leadStatus, enriched || null, callLogId]);
+      UPDATE "call_logs" 
+      SET lead_status_updated = $1, conversation_summary = $2,
+          lead_score = $3, sentiment = $4, intent_signals = $5,
+          score_breakdown = $6, key_topics = $7, post_processed = true
+      WHERE id = $8
+    `, [leadStatus, enriched || null, leadScore, sentiment,
+        JSON.stringify(intentSignals), JSON.stringify(scoreBreakdown),
+        JSON.stringify(keyTopics), callLogId]);
     console.log(`[Dapr][${reqId}] 💾 AI Summary Saved to CallLog: ${callLogId}, score=${leadScore}`);
+
 
     // Update Lead
     if (leadId) {
@@ -216,7 +221,7 @@ daprRouter.post("/call-tasks", async (c) => {
             const cl = clRes.rows[0] as any;
             await campaignPostCallCore(callLogId, cl.campaign_id);
           } else {
-            await postCallActionExtractorCore(callLogId);
+            await postCallOrchestratorCore(callLogId);
           }
         } catch (postErr: any) {
           console.error(`[Dapr][${reqId}] ❌ Post-Call Orchestrator error: ${postErr.message}`);

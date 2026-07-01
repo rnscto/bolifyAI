@@ -63,7 +63,9 @@ ${kbContext}`;
 
         if (apiKey && deployment && baseUrlRaw) {
           try {
-            const baseUrl = baseUrlRaw.endsWith('/responses') ? baseUrlRaw.replace('/responses', '') : baseUrlRaw;
+            let baseUrl = baseUrlRaw;
+            const _oi = baseUrl.indexOf('/openai/'); if (_oi > 0) baseUrl = baseUrl.substring(0, _oi);
+            const _pi = baseUrl.indexOf('/api/projects'); if (_pi > 0) baseUrl = baseUrl.substring(0, _pi);
             const finalUrl = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
 
             console.log(`[TicketAutoResponder] Calling Azure OpenAI for ticket ${ticket.id}...`);

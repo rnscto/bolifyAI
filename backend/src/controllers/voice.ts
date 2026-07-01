@@ -39,7 +39,7 @@ voiceRouter.post("/incoming", async (c) => {
     const customIdentifier = body.custom_identifier || body.custom_data || "";
     if (!agentId && customIdentifier) {
        try {
-          const callLogRes = await client.queryObject(`SELECT agent_id, lead_id FROM "calllog" WHERE id = $1 LIMIT 1`, [customIdentifier]);
+          const callLogRes = await client.queryObject(`SELECT agent_id, lead_id FROM call_logs WHERE id = $1 LIMIT 1`, [customIdentifier]);
           if (callLogRes.rows.length > 0) {
              const callLog = callLogRes.rows[0] as any;
              agentId = callLog.agent_id || "";
@@ -138,28 +138,31 @@ function base64PCM16_24kToMulaw(b64: string, session: any): Uint8Array {
   const num = Math.floor(bytes.length / 2);
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
 
+  // Accumulate samples including any leftover from prior frame
   const rem = session._lastDownsampleRemainder || new Int16Array(0);
   const all = new Int16Array(rem.length + num);
   all.set(rem, 0);
   for (let i = 0; i < num; i++) all[rem.length + i] = view.getInt16(i * 2, true);
 
+  // Downsample 24kHz → 8kHz (factor 3) with a 5-tap low-pass anti-aliasing FIR.
+  // Cutoff ≈ 3.8kHz (well below 4kHz Nyquist of 8kHz output).
+  // Coefficients (symmetric, sum = 1): [0.05, 0.25, 0.40, 0.25, 0.05]
+  // Applied at each 3rd sample before decimation to prevent aliasing.
   const total = all.length;
-  const dl = Math.floor(total / 3);
-  const mulaw = new Uint8Array(dl);
-  for (let i = 0; i < dl; i++) {
-    const idx = i * 3;
-    const a = all[idx], b = all[idx + 1], c = all[idx + 2];
-    const f = Math.round(a * 0.25 + b * 0.5 + c * 0.25);
-    mulaw[i] = encodeMulaw(Math.max(-32768, Math.min(32767, f)));
+  // We need at least 2 samples before and 2 after each output sample.
+  // Start from index 2, step by 3, stop when i+2 < total.
+  const maxOut = Math.floor((total - 4) / 3);
+  const mulaw = new Uint8Array(Math.max(0, maxOut));
+  for (let i = 0; i < maxOut; i++) {
+    const c = 2 + i * 3; // center sample for this output
+    const s = all[c - 2] * 0.05 + all[c - 1] * 0.25 + all[c] * 0.40 + all[c + 1] * 0.25 + all[c + 2] * 0.05;
+    mulaw[i] = encodeMulaw(Math.max(-32768, Math.min(32767, Math.round(s))));
   }
 
-  const consumed = dl * 3;
-  const remCount = total - consumed;
-  const nextRem = new Int16Array(remCount);
-  for (let i = 0; i < remCount; i++) {
-    nextRem[i] = all[consumed + i];
-  }
-  session._lastDownsampleRemainder = nextRem;
+  // Save leftover samples that weren't consumed
+  const consumed = maxOut > 0 ? (2 + (maxOut - 1) * 3 + 2 + 1) : 0; // last center + 2 right
+  const remStart = Math.max(0, total - Math.min(4, total - consumed));
+  session._lastDownsampleRemainder = all.slice(remStart);
 
   return mulaw;
 }
@@ -222,12 +225,12 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
     const transcript = session.transcript.map((t: any) => `${t.speaker}: ${t.text}`).join('\n');
     
     let summary = 'Analyzing...';
-    const callLogQuery = await client.queryObject(`SELECT * FROM "calllog" WHERE id = $1 LIMIT 1`, [session.callLogId]);
+    const callLogQuery = await client.queryObject(`SELECT * FROM call_logs WHERE id = $1 LIMIT 1`, [session.callLogId]);
     const currentLog = callLogQuery.rows[0] as any;
     
     const wasTerminal = currentLog && ['completed', 'failed', 'no_answer'].includes(currentLog.status);
     await client.queryObject(`
-      UPDATE "calllog" 
+      UPDATE call_logs
       SET status = $1, call_end_time = $2, transcript = $3, duration = $4, conversation_summary = $5
       WHERE id = $6
     `, [
@@ -240,25 +243,56 @@ async function saveCallRecord(session: any, reqId: string, duration: number) {
     ]);
     console.log(`[${reqId}] 💾 Saved basic CallLog: ${session.callLogId}. Handing off AI scoring to Dapr.`);
 
+    // Post-call: publish via Dapr sidecar (localhost:3500). Falls back to
+    // direct HTTPS to the bolify API container if the sidecar isn't available.
+    const postCallPayload = {
+      action: 'process_post_call',
+      callLogId: session.callLogId,
+      transcript,
+      duration,
+      leadId: currentLog?.lead_id || session._leadId,
+      reqId
+    };
+    let published = false;
     try {
-      const daprUrl = `http://localhost:3500/v1.0/publish/pubsub/call-tasks`;
-      const res = await fetch(daprUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-           action: "process_post_call", 
-           callLogId: session.callLogId, 
-           transcript: transcript,
-           duration: duration,
-           leadId: currentLog?.lead_id || session._leadId,
-           reqId: reqId
-        })
+      const daprRes = await fetch('http://localhost:3500/v1.0/publish/pubsub/call-tasks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(postCallPayload),
+        signal: AbortSignal.timeout(3000)
       });
-      if (!res.ok) throw new Error(`Dapr responded with status ${res.status}`);
-      console.log(`[${reqId}] 🚀 Published Post-Call Orchestrator task to Dapr`);
-    } catch (daprErr: any) {
-      console.warn(`[${reqId}] ⚠️ Dapr publish failed (${daprErr.message}). AI scoring will not process.`);
+      if (daprRes.ok) {
+        published = true;
+        console.log(`[${reqId}] 📨 Post-call queued via Dapr`);
+      }
+    } catch (_) { /* sidecar not available, use fallback */ }
+
+    if (!published) {
+      // Fallback: POST directly to the bolify API container
+      try {
+        const apiBase = Deno.env.get('API_BASE_URL') || 'https://bolify.yellowsky-fc3ec3d5.centralindia.azurecontainerapps.io';
+        const cloudEvent = {
+          specversion: '1.0', type: 'com.bolify.call-tasks', source: 'bolify-streaming',
+          id: session.callLogId || reqId, datacontenttype: 'application/json',
+          data: postCallPayload
+        };
+        const fbRes = await fetch(`${apiBase}/api/dapr/call-tasks`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/cloudevents+json' },
+          body: JSON.stringify(cloudEvent),
+          signal: AbortSignal.timeout(15000)
+        });
+        if (fbRes.ok) {
+          console.log(`[${reqId}] ✅ Post-call triggered via direct HTTP fallback`);
+        } else {
+          console.error(`[${reqId}] ⚠️ Post-call fallback HTTP ${fbRes.status}`);
+        }
+      } catch (fbErr: any) {
+        console.error(`[${reqId}] ⚠️ Post-call failed entirely: ${fbErr.message}`);
+      }
     }
+
+
   } catch (err: any) { console.error(`[${reqId}] ❌ Save: ${err.message}`); }
 }
 
@@ -321,10 +355,14 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
      if (session._agentConfigReady) return;
      try {
        if (session.callLogId) {
-          const logRes = await client.queryObject(`SELECT agent_config_cache FROM "calllog" WHERE id = $1 LIMIT 1`, [session.callLogId]);
+          // NOTE: initiateCall writes to call_logs (snake_case), NOT the legacy "calllog" table.
+          // Querying the wrong table always returns 0 rows → _agentConfigReady stays false →
+          // keepalive fires before setup → Gemini 1007. Always query call_logs here.
+          const logRes = await client.queryObject(`SELECT agent_config_cache FROM call_logs WHERE id = $1 LIMIT 1`, [session.callLogId]);
           if (logRes.rows.length > 0 && (logRes.rows[0] as any).agent_config_cache) {
              const cache = (logRes.rows[0] as any).agent_config_cache;
              if (cache.system_prompt) session.systemPrompt = cache.system_prompt;
+             if (cache.core_prompt) session.systemPrompt = cache.core_prompt; // slim-cache key
              if (cache.greeting_message) session.greetingMessage = cache.greeting_message;
              if (cache.persona) {
                if (cache.persona.voice_type) session.voiceType = cache.persona.voice_type;
@@ -336,7 +374,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
                 console.log(`[${reqId}] 📚 KB loaded from cache: ${session._kbChunks.length} chunks`);
              }
              session._agentConfigReady = true;
-             console.log(`[${reqId}] Agent config loaded from calllog cache`);
+             console.log(`[${reqId}] ✅ Agent config loaded from call_logs cache`);
           }
        }
        
@@ -524,16 +562,53 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
     const setup: any = {
       setup: {
         model: 'models/gemini-3.1-flash-live-preview',
-        generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: safeVoice } } } },
+        generationConfig: {
+          responseModalities: ['AUDIO'],
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: safeVoice } } }
+        },
         systemInstruction: { parts: [{ text: fullPrompt }] },
+        realtimeInputConfig: {
+          automaticActivityDetection: {
+            disabled: false,
+            prefixPaddingMs: 200,
+            silenceDurationMs: 800,
+          },
+        },
+        // Enable transcription for both legs so conversation is logged
+        inputAudioTranscription: {},
+        outputAudioTranscription: {},
       }
     };
     if (tools.length) setup.setup.tools = [{ functionDeclarations: tools }];
     sendToGemini(setup);
-    console.log(`[${reqId}] 📤 Setup: tools=${tools.length}, voice=${session.voiceType}, prompt=${fullPrompt.length}ch`);
+    console.log(`[${reqId}] 📤 Setup: tools=${tools.length}, voice=${safeVoice}, prompt=${fullPrompt.length}ch`);
   }
 
   let geminiKeepaliveTimer: ReturnType<typeof setInterval> | null = null;
+  let audioDrainerTimer: ReturnType<typeof setInterval> | null = null;
+
+  // Non-blocking audio drainer: sends 1 frame (160 bytes = 20ms) per tick.
+  // This keeps the Deno event loop free to process incoming Smartflo audio
+  // between sends — critical to avoid freezing when Gemini sends large responses.
+  function startAudioDrainer() {
+    if (audioDrainerTimer) return; // already running
+    audioDrainerTimer = setInterval(() => {
+      if (session._callEnded || smartfloSocket.readyState !== WebSocket.OPEN || !streamId) {
+        clearInterval(audioDrainerTimer!); audioDrainerTimer = null; return;
+      }
+      if (session._sendBuffer.length >= 160) {
+        const frame = session._sendBuffer.slice(0, 160);
+        session._sendBuffer = session._sendBuffer.slice(160);
+        session._outChunk = (session._outChunk || 0) + 1;
+        try {
+          smartfloSocket.send(JSON.stringify({
+            event: 'media', streamSid: streamId,
+            media: { payload: uint8ToBase64(frame), chunk: session._outChunk }
+          }));
+        } catch (_) {}
+      }
+    }, 20);
+  }
 
   const connectGemini = async (isReconnect: boolean = false) => {
     if (geminiSocket && !isReconnect) return;
@@ -548,13 +623,17 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
       console.log(`[${reqId}] 🔌 Gemini Connected (attempt ${session._geminiReconnectAttempts + 1})`);
       session._setupSent = false;
       if (session._agentConfigReady) sendGeminiSetup();
-      // Keepalive: Gemini Live has a ~10min idle timeout and a ~2min session limit on free tier.
-      // Send a silent ping every 25s to prevent idle disconnects.
+      // Keepalive: only fire AFTER setupComplete (session.geminiReady = true).
+      // Sending any message before setup causes a 1007 "invalid argument" rejection.
+      // We use a clientContent ping (not raw audio) so the keepalive is valid even
+      // during silent periods. Audio keepalives before setup = the root 1007 cause.
       geminiKeepaliveTimer = setInterval(() => {
+        if (!session.geminiReady) return; // wait until setup is acknowledged
         if (geminiSocket?.readyState === WebSocket.OPEN && !session._callEnded) {
-          // Send silent audio chunk to keep connection alive safely
           try {
-            geminiSocket.send(JSON.stringify({ realtimeInput: { audio: { mimeType: "audio/pcm;rate=16000", data: "AAAAAA==" } } }));
+            // Send a valid no-op: empty turn. This keeps the socket alive without
+            // confusing the model or triggering a response.
+            geminiSocket.send(JSON.stringify({ clientContent: { turns: [], turnComplete: false } }));
           } catch (_) {}
         } else {
           if (geminiKeepaliveTimer) clearInterval(geminiKeepaliveTimer);
@@ -606,19 +685,15 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
                 session.isSpeaking = true;
                 const m = base64PCM16_24kToMulaw(p.inlineData.data, session);
                 if (m.length > 0) {
-                  // Append to buffer
+                  // Append to the outgoing mulaw buffer and ensure drainer is running.
+                  // Do NOT send synchronously here — that blocks the event loop and
+                  // prevents Smartflo customer audio from being forwarded to Gemini,
+                  // causing the agent to freeze and ignore the customer.
                   const newBuffer = new Uint8Array(session._sendBuffer.length + m.length);
                   newBuffer.set(session._sendBuffer, 0);
                   newBuffer.set(m, session._sendBuffer.length);
                   session._sendBuffer = newBuffer;
-
-                  // Extract 160-byte chunks
-                  const chunkCount = Math.floor(session._sendBuffer.length / 160);
-                  if (chunkCount > 0 && smartfloSocket.readyState === WebSocket.OPEN && streamId) {
-                    const toSend = session._sendBuffer.slice(0, chunkCount * 160);
-                    session._sendBuffer = session._sendBuffer.slice(chunkCount * 160);
-                    smartfloSocket.send(JSON.stringify({ event: "media", streamSid: streamId, media: { payload: uint8ToBase64(toSend) } }));
-                  }
+                  startAudioDrainer(); // no-op if already running
                 }
               }
             }
@@ -633,16 +708,14 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
           }
           if (sc.turnComplete) {
             session.isSpeaking = false;
-            
-            // Flush and pad any remaining audio buffer with silence (255)
-            if (session._sendBuffer.length > 0 && smartfloSocket.readyState === WebSocket.OPEN && streamId) {
-              const remaining = session._sendBuffer;
-              const paddedLength = Math.ceil(remaining.length / 160) * 160;
-              const padded = new Uint8Array(paddedLength);
-              padded.set(remaining);
-              padded.fill(255, remaining.length); // 255 (0xFF) is G.711 µ-law silence
-              smartfloSocket.send(JSON.stringify({ event: "media", streamSid: streamId, media: { payload: uint8ToBase64(padded) } }));
-              session._sendBuffer = new Uint8Array(0);
+            // Pad any partial remaining frame with µ-law silence and queue it.
+            // The drainer will flush it at the natural 20ms cadence.
+            if (session._sendBuffer.length > 0 && session._sendBuffer.length < 160) {
+              const padded = new Uint8Array(160);
+              padded.set(session._sendBuffer);
+              padded.fill(255, session._sendBuffer.length); // 0xFF = G.711 µ-law silence
+              session._sendBuffer = padded;
+              startAudioDrainer();
             }
 
             if (session._pendingCustomerText) {
@@ -660,7 +733,8 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
           }
           if (sc.interrupted) {
              session.isSpeaking = false;
-             session._sendBuffer = new Uint8Array(0); // Discard unplayed audio on interrupt
+             session._sendBuffer = new Uint8Array(0); // Discard unplayed audio
+             if (audioDrainerTimer) { clearInterval(audioDrainerTimer); audioDrainerTimer = null; }
              if (session._pendingAiText) { session.transcript.push({ speaker: 'AI', text: session._pendingAiText.trim() }); session._pendingAiText = ''; }
              if (smartfloSocket.readyState === WebSocket.OPEN && streamId) smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: streamId }));
           }
@@ -722,18 +796,18 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
            if (!resolvedAgentId) {
              if (customIdentifier) {
                try {
-                 const callLogRes = await client.queryObject(`SELECT agent_id, lead_id, id FROM "calllog" WHERE id = $1 LIMIT 1`, [customIdentifier.trim()]);
+                 const callLogRes = await client.queryObject(`SELECT agent_id, lead_id, id FROM call_logs WHERE id = $1 LIMIT 1`, [customIdentifier.trim()]);
                  if (callLogRes.rows.length > 0) {
                    const callLog = callLogRes.rows[0] as any;
                    resolvedAgentId = callLog.agent_id;
                    session.callLogId = callLog.id;
                    if (!session._leadId && callLog.lead_id) session._leadId = callLog.lead_id;
                  }
-               } catch(e) { console.error(`[${reqId}] Error fetching calllog by customIdentifier:`, e); }
+               } catch(e) { console.error(`[${reqId}] Error fetching call_logs by customIdentifier:`, e); }
              }
              if (!resolvedAgentId && wsCallId) {
                try {
-                 const callLogRes = await client.queryObject(`SELECT agent_id, lead_id, id FROM "calllog" WHERE call_sid = $1 LIMIT 1`, [wsCallId]);
+                 const callLogRes = await client.queryObject(`SELECT agent_id, lead_id, id FROM call_logs WHERE call_sid = $1 LIMIT 1`, [wsCallId]);
                  if (callLogRes.rows.length > 0) {
                    const callLog = callLogRes.rows[0] as any;
                    resolvedAgentId = callLog.agent_id;
@@ -767,7 +841,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
            if (resolvedAgentId && !session.callLogId) {
                try {
                    const recentCallRes = await client.queryObject(
-                       `SELECT id, lead_id FROM "calllog" WHERE agent_id = $1 AND status IN ('initiated', 'ringing', 'answered') ORDER BY created_at DESC LIMIT 1`, 
+                       `SELECT id, lead_id FROM call_logs WHERE agent_id = $1 AND status IN ('initiated', 'ringing', 'answered') ORDER BY created_date DESC LIMIT 1`, 
                        [resolvedAgentId]
                    );
                    if (recentCallRes.rows.length > 0) {
@@ -804,6 +878,7 @@ export async function initStreamSession(smartfloSocket: WebSocket, url: URL): Pr
     console.log(`[${reqId}] Smartflo Disconnected`);
     session._callEnded = true;
     if (geminiKeepaliveTimer) { clearInterval(geminiKeepaliveTimer); geminiKeepaliveTimer = null; }
+    if (audioDrainerTimer) { clearInterval(audioDrainerTimer); audioDrainerTimer = null; }
     if (geminiSocket && geminiSocket.readyState === WebSocket.OPEN) geminiSocket.close();
     
     const duration = Math.round((Date.now() - session.startTime) / 1000);
@@ -902,10 +977,10 @@ voiceRouter.post("/fetch-recording", async (c) => {
 
     let logs: any[] = [];
     if (call_log_id) {
-      const res = await client.queryObject(`SELECT * FROM "calllog" WHERE id = $1`, [call_log_id]);
+      const res = await client.queryObject(`SELECT * FROM call_logs WHERE id = $1`, [call_log_id]);
       if (res.rows.length > 0) logs.push(res.rows[0]);
     } else if (bulk) {
-      const res = await client.queryObject(`SELECT * FROM "calllog" WHERE status = 'completed' AND recording_url IS NULL ORDER BY created_at DESC LIMIT 50`);
+      const res = await client.queryObject(`SELECT * FROM call_logs WHERE status = 'completed' AND recording_url IS NULL ORDER BY created_date DESC LIMIT 50`);
       logs = res.rows;
     }
     
@@ -948,7 +1023,7 @@ voiceRouter.post("/fetch-recording", async (c) => {
         }
 
         if (recordingUrl) {
-          await client.queryObject(`UPDATE "calllog" SET recording_url = $1 WHERE id = $2`, [recordingUrl, (log as any).id]);
+          await client.queryObject(`UPDATE call_logs SET recording_url = $1 WHERE id = $2`, [recordingUrl, (log as any).id]);
           updatedCount++;
           results.push({ id: (log as any).id, call_sid: callSid, recording_url: recordingUrl });
         } else {

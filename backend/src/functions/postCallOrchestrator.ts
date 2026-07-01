@@ -423,5 +423,15 @@ export default async function postCallOrchestrator(c: any) {
     console.error('[postCallOrchestrator] Fatal:', error.message);
     return c.json({ data: { error: error.message } }, 500);
   }
+}
 
-};
+export async function postCallOrchestratorCore(callLogId: string, force: boolean = false) {
+  const c = { 
+    req: { 
+      raw: { headers: new Headers() },
+      json: async () => ({ call_log_id: callLogId, force }) 
+    }, 
+    json: (data: any) => data 
+  };
+  return await postCallOrchestrator(c);
+}
