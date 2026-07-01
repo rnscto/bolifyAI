@@ -3,8 +3,16 @@ import { client } from "../db/index.ts";
 
 import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
 
-const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
-const emailClient = new EmailClient(connStr);
+let _emailClient: any;
+function getEmailClient() {
+  if (!_emailClient) {
+    const ep = Deno.env.get('AZURE_COMM_ENDPOINT');
+    const key = Deno.env.get('AZURE_COMM_KEY');
+    if (!ep || !key) throw new Error("Missing AZURE_COMM_ENDPOINT or AZURE_COMM_KEY");
+    _emailClient = new EmailClient(`endpoint=${ep};accesskey=${key}`);
+  }
+  return _emailClient;
+}
 
 // ─── Send lead email via Azure Communication Services ───
 async function sendLeadEmail({ to, fromName, subject, html }) {
@@ -14,7 +22,7 @@ async function sendLeadEmail({ to, fromName, subject, html }) {
     content: { subject, html },
     recipients: { to: [{ address: to }] }
   };
-  const poller = await emailClient.beginSend(message);
+  const poller = await getEmailClient().beginSend(message);
   const result = await poller.pollUntilDone();
   if (result.status !== 'Succeeded') throw new Error(`ACS Email error: ${result.error?.message || result.status}`);
   return result;
