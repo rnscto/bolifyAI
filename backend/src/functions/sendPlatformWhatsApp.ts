@@ -1,97 +1,132 @@
-import { Context } from "hono";
-import { base44ORM } from "../db/orm.ts";
+import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 
-export async function sendPlatformWhatsAppLogic({ template_id, to, variables, lead_id, client_id, outreach_type }: any) {
-  if (!template_id || !to) {
-    throw new Error('template_id and to are required');
-  }
+const RCS_BASE = 'https://rcsdigital.in';
+const VERSION = 'v23.0';
 
-  const cfgs = await base44ORM.entities.PlatformMessagingConfig.list('-created_at', 1);
-  if (cfgs.length === 0) throw new Error('Platform messaging not configured');
-  const cfg = cfgs[0];
+export async function sendPlatformWhatsAppLogic(payload: any) {
+  try {
+    const { template_id, to, variables = [], recipient_client_id = null, broadcast_id = null } = payload;
 
-  if (cfg.whatsapp_status !== 'connected') {
-    throw new Error(`Platform WhatsApp not connected (status: ${cfg.whatsapp_status})`);
-  }
-  if (!cfg.whatsapp_api_key || !cfg.whatsapp_phone_number_id) {
-    throw new Error('Platform WhatsApp credentials missing');
-  }
+    if (!template_id || !to) return { success: false, error: 'template_id and to are required' };
 
-  const template = await base44ORM.entities.WhatsAppTemplate.get(template_id);
-  if (!template) throw new Error('Template not found');
-  if (template.status !== 'APPROVED') {
-    throw new Error(`Template is ${template.status}, not APPROVED`);
-  }
+    // Load platform config (singleton)
+    const configs = await base44.entities.PlatformMessagingConfig.list();
+    const config = configs[0];
+    if (!config || config.whatsapp_status !== 'connected' || !config.whatsapp_api_key || !config.whatsapp_phone_number_id) {
+      return { success: false, error: 'Platform WhatsApp not connected' };
+    }
 
-  let cleanTo = String(to).replace(/[^0-9]/g, '');
-  if (cleanTo.length === 10) cleanTo = '91' + cleanTo;
-  else if (cleanTo.length === 11 && cleanTo.startsWith('0')) cleanTo = '91' + cleanTo.slice(1);
+    const template = await base44.entities.MessageTemplate.get(template_id).catch(() => null);
+    if (!template) return { success: false, error: 'Template not found' };
+    if (template.approval_status !== 'approved') {
+      return { success: false, error: `Template is "${template.approval_status}" — must be approved` };
+    }
 
-  const components: any[] = [];
-  const vars = variables || [];
-  if (vars.length > 0) {
-    components.push({
-      type: 'body',
-      parameters: vars.map((v: string) => ({ type: 'text', text: String(v) }))
+    let recipientName = '';
+    let recipientCompany = '';
+    if (recipient_client_id && recipient_client_id !== 'platform') {
+      const c = await base44.entities.Client.get(recipient_client_id).catch(() => null);
+      if (c) {
+        recipientName = c.company_name || '';
+        recipientCompany = c.company_name || '';
+      }
+    }
+    const resolvedVariables = (variables || []).map((v: any) => {
+      const s = String(v ?? '');
+      return s
+        .replace(/\{\{\s*name\s*\}\}/gi, recipientName)
+        .replace(/\{\{\s*company\s*\}\}/gi, recipientCompany);
     });
-  }
 
-  const baseHost = cfg.whatsapp_provider === 'rcs_digital'
-    ? `https://rcsdigital.in/v23.0`
-    : `https://graph.facebook.com/v20.0`;
-  const url = `${baseHost}/${cfg.whatsapp_phone_number_id}/messages`;
+    let normalizedTo = String(to).replace(/[^0-9]/g, '');
+    if (normalizedTo.length === 10) normalizedTo = '91' + normalizedTo;
+    else if (normalizedTo.length === 11 && normalizedTo.startsWith('0')) normalizedTo = '91' + normalizedTo.substring(1);
 
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${cfg.whatsapp_api_key}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
+    const expectedVarCount = (() => {
+      const matches = (template.body || '').match(/\{\{\s*(\d+)\s*\}\}/g) || [];
+      const nums = matches.map((m: any) => parseInt(m.replace(/[^0-9]/g, ''), 10)).filter((n: any) => !isNaN(n));
+      return nums.length ? Math.max(...nums) : 0;
+    })();
+    if (resolvedVariables.length !== expectedVarCount) {
+      const errMsg = `Template "${template.name}" needs ${expectedVarCount} variable(s) but got ${resolvedVariables.length}`;
+      await base44.entities.OutreachLog.create({
+        client_id: recipient_client_id || 'platform',
+        channel: 'whatsapp', recipient_phone: normalizedTo,
+        subject: template.name, body: template.body || '',
+        outreach_type: broadcast_id ? 'platform_broadcast' : 'lead_followup',
+        status: 'failed', error_message: errMsg
+      }).catch(() => {});
+      return { success: false, error: errMsg };
+    }
+
+    const components = [];
+    if (resolvedVariables.length > 0) {
+      components.push({ type: 'body', parameters: resolvedVariables.map((v: any) => ({ type: 'text', text: String(v) })) });
+    }
+
+    const requestPayload = {
       messaging_product: 'whatsapp',
       recipient_type: 'individual',
-      to: cleanTo,
+      to: normalizedTo,
       type: 'template',
       template: {
         name: template.name,
         language: { code: template.language || 'en' },
-        ...(components.length > 0 ? { components } : {})
+        ...(components.length > 0 && { components })
       }
-    })
-  });
-  const data = await res.json();
-  const messageId = data.messages?.[0]?.id;
+    };
 
-  try {
-    await base44ORM.entities.OutreachLog.create({
-      client_id: client_id || 'PLATFORM',
-      lead_id: lead_id || null,
-      channel: 'whatsapp',
-      direction: 'outbound',
-      vendor: cfg.whatsapp_provider,
-      vendor_message_id: messageId || null,
-      template_id,
-      template_name: template.name,
-      recipient_phone: cleanTo,
-      body: template.body_text || '',
-      outreach_type: outreach_type || 'broadcast',
-      status: res.ok ? 'sent' : 'failed',
-      error_message: res.ok ? '' : (data.error?.error_user_msg || data.error?.message || JSON.stringify(data))
+    const res = await fetch(`${RCS_BASE}/${VERSION}/${config.whatsapp_phone_number_id}/messages`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${config.whatsapp_api_key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(requestPayload)
     });
-  } catch (_) {}
+    const data = await res.json().catch(() => ({}));
 
-  if (!res.ok) {
-    throw new Error(data.error?.error_user_msg || data.error?.message || 'Send failed');
+    if (!res.ok) {
+      const errMsg = data?.error?.message || `HTTP ${res.status}`;
+      console.error('[sendPlatformWhatsApp] error:', errMsg, data);
+      await base44.entities.OutreachLog.create({
+        client_id: recipient_client_id || 'platform',
+        channel: 'whatsapp', recipient_phone: normalizedTo,
+        subject: template.name, body: template.body || '',
+        outreach_type: broadcast_id ? 'platform_broadcast' : 'lead_followup',
+        status: 'failed', error_message: errMsg
+      }).catch(() => {});
+      return { success: false, error: errMsg, details: data };
+    }
+
+    await base44.entities.OutreachLog.create({
+      client_id: recipient_client_id || 'platform',
+      channel: 'whatsapp', recipient_phone: normalizedTo,
+      subject: template.name, body: template.body || '',
+      outreach_type: broadcast_id ? 'platform_broadcast' : 'lead_followup',
+      status: 'sent'
+    }).catch(() => {});
+
+    await base44.entities.MessageTemplate.update(template_id, {
+      usage_count: (template.usage_count || 0) + 1
+    }).catch(() => {});
+
+    return { success: true, message_id: data?.messages?.[0]?.id || null };
+  } catch (e: any) {
+    console.error('[sendPlatformWhatsApp] exception:', e);
+    return { success: false, error: e.message };
   }
-
-  await base44ORM.entities.WhatsAppTemplate.update(template_id, { send_count: (template.send_count || 0) + 1 });
-  return { success: true, message_id: messageId };
 }
 
-export default async function (c: Context) {
+export default async function sendPlatformWhatsApp(c: any) {
   try {
     const payload = await c.req.json();
     const result = await sendPlatformWhatsAppLogic(payload);
+    
+    if (!result.success) {
+      return c.json({ data: result }, 400);
+    }
+    
     return c.json({ data: result });
-  } catch (error: any) {
-    console.error('[sendPlatformWhatsApp]', error);
-    return c.json({ data: { success: false, error: error.message } });
+  } catch (e: any) {
+    return c.json({ data: { success: false, error: e.message } }, 500);
   }
 }
