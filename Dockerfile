@@ -16,7 +16,7 @@ RUN npm run build
 # ==========================================
 # STAGE 2: Run the Deno Backend API + Frontend
 # ==========================================
-FROM denoland/deno:alpine
+FROM denoland/deno:alpine-2.5.0
 
 WORKDIR /app
 
@@ -24,17 +24,20 @@ WORKDIR /app
 EXPOSE 8000
 
 # Copy the frontend build from the previous stage
-COPY --from=frontend-builder /app/dist /app/dist
+COPY --chown=deno:deno --from=frontend-builder /app/dist /app/dist
 
-# Copy backend files
-COPY backend /app/backend
+# Copy backend files into /app
+COPY --chown=deno:deno backend /app
 
-# Cache the Deno dependencies
-RUN cd /app/backend && deno cache main.ts
+# Fix ownership of /app directory itself
+RUN chown -R deno:deno /app
 
-# Set environment variables for Deno to safely run
-ENV DENO_DIR=/app/.deno
+# Prefer not to run as root
+USER deno
 
-# Set permissions for Deno runtime
-# We grant network access and read/write to the app directory
-CMD ["deno", "run", "--config", "backend/deno.json", "--unstable-cron", "--allow-net", "--allow-read", "--allow-write", "--allow-env", "--allow-sys", "backend/main.ts"]
+# Cache the Deno dependencies — use --no-lock to avoid lockfile permission issues
+RUN deno cache --no-lock main.ts
+
+# Run the unified application
+CMD ["task", "start"]
+
