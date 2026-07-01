@@ -33,9 +33,9 @@ jobs:
         run: npm run lint
 
       - name: Setup Deno (Backend)
-        uses: denoland/setup-deno@v2
-        with:
-          deno-version: v1.x
+        run: |
+          curl -fsSL https://deno.land/install.sh | sh
+          echo "$HOME/.deno/bin" >> $GITHUB_PATH
 
       - name: Run Deno Lint (Backend)
         run: cd backend && deno lint || true
