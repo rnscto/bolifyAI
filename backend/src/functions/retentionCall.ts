@@ -505,7 +505,7 @@ async function sendFollowupEmail(client, config) {
     recipients: { to: [{ address: client.email }] }
   };
 
-  const poller = await emailClient.beginSend(message);
+  const poller = await getEmailClient().beginSend(message);
   const result = await poller.pollUntilDone();
   if (result.status !== 'Succeeded') {
     throw new Error(`ACS Email error: ${result.error?.message || result.status}`);
