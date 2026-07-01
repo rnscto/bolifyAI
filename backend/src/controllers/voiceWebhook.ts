@@ -11,7 +11,7 @@ async function getInternalToken() {
 }
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
-const getAppBaseUrl = () => Deno.env.get('APP_BASE_URL_INTERNAL') || `http://localhost:${Deno.env.get('PORT') || '8000'}`;
+const getAppBaseUrl = () => Deno.env.get('APP_BASE_URL_INTERNAL') || `http://127.0.0.1:${Deno.env.get('PORT') || '8000'}`;
 
 // ─── Helpers ───
 async function hmacSha256(stringToSign: string, secret: string) {
