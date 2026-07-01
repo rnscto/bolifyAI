@@ -1628,3 +1628,24 @@ CREATE TRIGGER update_invoice_updated_at
 BEFORE UPDATE ON "invoice"
 FOR EACH ROW
 EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TABLE IF NOT EXISTS "clientstats" (
+  "id" UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  "created_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+  "client_id" TEXT,
+  "leads_total" NUMERIC DEFAULT 0,
+  "leads_by_status" JSONB DEFAULT '{}'::jsonb,
+  "leads_by_tier" JSONB DEFAULT '{}'::jsonb,
+  "leads_by_source" JSONB DEFAULT '{}'::jsonb,
+  "leads_by_group" JSONB DEFAULT '{}'::jsonb,
+  "leads_ungrouped" NUMERIC DEFAULT 0,
+  "last_reconciled_at" TEXT
+);
+
+DROP TRIGGER IF EXISTS update_clientstats_updated_at ON "clientstats";
+CREATE TRIGGER update_clientstats_updated_at
+BEFORE UPDATE ON "clientstats"
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at_column();
+

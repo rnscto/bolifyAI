@@ -202,6 +202,28 @@ export default async function pgInitSchema(c: any) {
         ON campaign_leads (campaign_id, status, followup_call_date)
       `);
       applied.push('idx_campaign_leads_campaign_status_followup');
+
+      await client.queryArray(`
+        CREATE TABLE IF NOT EXISTS clientstats (
+          id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          client_id          TEXT NOT NULL,
+          leads_total        NUMERIC DEFAULT 0,
+          leads_by_status    JSONB DEFAULT '{}'::jsonb,
+          leads_by_tier      JSONB DEFAULT '{}'::jsonb,
+          leads_by_source    JSONB DEFAULT '{}'::jsonb,
+          leads_by_group     JSONB DEFAULT '{}'::jsonb,
+          leads_ungrouped    NUMERIC DEFAULT 0,
+          last_reconciled_at TEXT,
+          created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+      `);
+      applied.push('clientstats table');
+
+      await client.queryArray(`
+        CREATE INDEX IF NOT EXISTS idx_clientstats_client ON clientstats (client_id)
+      `);
+      applied.push('idx_clientstats_client');
     } finally {
       try { ; /* client.end() not needed */ } catch (_) {}
     }

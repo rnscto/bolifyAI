@@ -1,0 +1,41 @@
+{
+  "name": "ClientStats",
+  "type": "object",
+  "properties": {
+    "client_id": {
+      "type": "string",
+      "description": "Owner client ID"
+    },
+    "leads_total": {
+      "type": "number",
+      "description": "Total number of leads for this client"
+    },
+    "leads_by_status": {
+      "type": "object",
+      "description": "Count of leads grouped by status"
+    },
+    "leads_by_tier": {
+      "type": "object",
+      "description": "Count of leads grouped by tier"
+    },
+    "leads_by_source": {
+      "type": "object",
+      "description": "Count of leads grouped by source"
+    },
+    "leads_by_group": {
+      "type": "object",
+      "description": "Count of leads grouped by lead group ID"
+    },
+    "leads_ungrouped": {
+      "type": "number",
+      "description": "Count of leads not in any group"
+    },
+    "last_reconciled_at": {
+      "type": "string",
+      "description": "ISO timestamp when stats were last reconciled"
+    }
+  },
+  "required": [
+    "client_id"
+  ]
+}
