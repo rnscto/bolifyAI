@@ -1,5 +1,52 @@
 import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
+import { createClient, createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { BlobServiceClient } from 'npm:@azure/storage-blob@12.17.0';
 
+// ─── Direct Azure Image generation (replaces Core.GenerateImage) ───
+// Mirrors the pattern used in generateOgImage to keep the app credit-independent.
+async function generatePosterDirect(prompt, clientId) {
+  const endpoint = Deno.env.get('AZURE_IMAGE_ENDPOINT');
+  const key = Deno.env.get('AZURE_IMAGE_KEY');
+  const deployment = Deno.env.get('AZURE_IMAGE_DEPLOYMENT');
+  const apiVersion = Deno.env.get('AZURE_IMAGE_API_VERSION');
+  const conn = Deno.env.get('AZURE_STORAGE_CONNECTION_STRING');
+  const containerName = Deno.env.get('AZURE_STORAGE_CONTAINER_PUBLIC');
+  if (!endpoint || !key || !deployment || !apiVersion || !conn || !containerName) {
+    throw new Error('Azure Image/Blob secrets not configured');
+  }
+
+  const url = `${endpoint.replace(/\/$/, '')}/openai/deployments/${deployment}/images/generations?api-version=${apiVersion}`;
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'api-key': key },
+    body: JSON.stringify({ prompt, size: '1024x1024', n: 1, quality: 'high', output_format: 'png' })
+  });
+  if (!r.ok) throw new Error(`Azure image ${r.status}: ${(await r.text()).substring(0, 200)}`);
+  const data = await r.json();
+  const item = data?.data?.[0];
+  if (!item) throw new Error('No image returned from Azure');
+
+  let bytes;
+  if (item.b64_json) {
+    const bin = atob(item.b64_json);
+    bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  } else if (item.url) {
+    bytes = new Uint8Array(await (await fetch(item.url)).arrayBuffer());
+  } else {
+    throw new Error('Image response missing b64_json and url');
+  }
+
+  const blobService = BlobServiceClient.fromConnectionString(conn);
+  const container = blobService.getContainerClient(containerName);
+  const blobName = `social-posters/${clientId}/${Date.now()}.png`;
+  const blob = container.getBlockBlobClient(blobName);
+  await blob.uploadData(bytes, { blobHTTPHeaders: { blobContentType: 'image/png' } });
+  return blob.url;
+}
+
+// Marketing calendar occasions (subset for matching)
 const OCCASIONS = [
   { id: 'new_year', name: 'New Year', date: '01-01' },
   { id: 'lohri', name: 'Lohri', date: '01-13' },
@@ -50,26 +97,20 @@ const OCCASIONS = [
   { id: 'new_year_eve', name: "New Year's Eve", date: '12-31' },
 ];
 
-async function azureLLM(prompt: string, systemPrompt: string, jsonSchema: any) {
-  let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
+async function azureLLM(prompt, systemPrompt, jsonSchema) {
+  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
   const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
   const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  
-  const oIdx = baseUrl.indexOf('/openai/');
-  if (oIdx > 0) baseUrl = baseUrl.substring(0, oIdx);
-  const pIdx = baseUrl.indexOf('/api/projects');
-  if (pIdx > 0) baseUrl = baseUrl.substring(0, pIdx);
-
   const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'api-key': apiKey || '', 'Content-Type': 'application/json' },
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       messages: [
         { role: 'system', content: systemPrompt || 'You are a social media marketing expert. Always respond in valid JSON.' },
         { role: 'user', content: prompt + (jsonSchema ? '\n\nRespond in JSON matching this schema: ' + JSON.stringify(jsonSchema) : '') }
       ],
-      max_tokens: 2000,
+      max_completion_tokens: 2000,
       response_format: { type: "json_object" }
     })
   });
@@ -78,79 +119,50 @@ async function azureLLM(prompt: string, systemPrompt: string, jsonSchema: any) {
   return JSON.parse(data.choices[0].message.content);
 }
 
-async function generateDalleImage(prompt: string) {
-  let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DALLE_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  
-  if (!deployment) {
-    console.warn('[generateDalleImage] No DALLE deployment provided, skipping image generation.');
-    return '';
-  }
-
-  const oIdx = baseUrl.indexOf('/openai/');
-  if (oIdx > 0) baseUrl = baseUrl.substring(0, oIdx);
-  const pIdx = baseUrl.indexOf('/api/projects');
-  if (pIdx > 0) baseUrl = baseUrl.substring(0, pIdx);
-
-  const url = `${baseUrl}/openai/deployments/${deployment}/images/generations?api-version=2024-08-01-preview`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'api-key': apiKey || '', 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      prompt: prompt,
-      n: 1,
-      size: "1024x1024",
-      response_format: "url"
-    })
-  });
-  
-  if (!res.ok) {
-    throw new Error(`DALLE error: ${res.status} ${await res.text()}`);
-  }
-  
-  const data = await res.json();
-  return data?.data?.[0]?.url || '';
-}
-
 export default async function generateSocialContent(c: any) {
+  const req = c.req.raw || c.req;
   try {
-    let clientId: string | null = null;
-    let clientData: any = null;
+    let svc;
+    let clientId;
+    let clientData;
     let isCron = false;
 
-    if (c.req.method === 'GET') {
-      const cronApiKey = c.req.query('api_key');
+    if (req.method === 'GET') {
+      const url = new URL(req.url);
+      const cronApiKey = url.searchParams.get('api_key');
       const expectedCronKey = Deno.env.get('CRON_API_KEY');
       if (!expectedCronKey || cronApiKey !== expectedCronKey) {
         return c.json({ data: { error: 'Forbidden' } }, 403);
       }
       isCron = true;
+      svc = createClient({ appId: Deno.env.get('BASE44_APP_ID'), asServiceRole: true });
     } else {
+      /* const base44 = ... */;
       const user = c.get('jwtPayload');
       if (!user) return c.json({ data: { error: 'Unauthorized' } }, 401);
 
-      const body = await c.req.json().catch(() => ({}));
+      const body = await c.req.json();
       clientId = body.client_id;
+      svc = base44.asServiceRole || base44;
 
       if (!clientId) {
-        const clients = await base44.entities.Client.filter({ user_id: user.id });
+        const clients = await svc.entities.Client.filter({ user_id: user.id });
         if (clients.length === 0) return c.json({ data: { error: 'No client found' } }, 404);
         clientId = clients[0].id;
         clientData = clients[0];
       }
     }
 
-    const results = { posts_created: 0, errors: [] as any[] };
-    const clientsToProcess = [];
+    const results = { posts_created: 0, errors: [] };
 
+    const clientsToProcess = [];
     if (isCron) {
-      const activeClients = await base44.entities.Client.filter({ account_status: 'active' });
-      const trialClients = await base44.entities.Client.filter({ account_status: 'trial' });
+      const activeClients = await svc.entities.Client.filter({ account_status: 'active' });
+      const trialClients = await svc.entities.Client.filter({ account_status: 'trial' });
       clientsToProcess.push(...activeClients, ...trialClients);
     } else {
-      if (!clientData && clientId) clientData = await base44.entities.Client.get(clientId);
-      if (clientData) clientsToProcess.push(clientData);
+      if (!clientData) clientData = await svc.entities.Client.get(clientId);
+      clientsToProcess.push(clientData);
     }
 
     const today = new Date().toISOString().split('T')[0];
@@ -158,20 +170,22 @@ export default async function generateSocialContent(c: any) {
 
     for (const client of clientsToProcess) {
       try {
-        let brand: any = {};
+        // Load brand settings
+        let brand = {};
         try {
-          const brandSettings = await base44.entities.BrandSettings.filter({ client_id: client.id });
+          const brandSettings = await svc.entities.BrandSettings.filter({ client_id: client.id });
           if (brandSettings.length > 0) brand = brandSettings[0];
         } catch (_) {}
 
+        // Check for today's occasion (built-in + custom)
         const enabledOccasions = brand.enabled_occasions || [];
-        const customOccasions = brand.custom_occasions || [];
+        const customOccasions = (brand.custom_occasions || []);
         const allOccasionsList = [...OCCASIONS, ...customOccasions];
         const todayOccasions = allOccasionsList.filter(o => o.date === todayMMDD && enabledOccasions.includes(o.id));
 
         const MAX_DAILY_POSTS = 2;
 
-        const existingPosts = await base44.entities.SocialMediaPost.filter({
+        const existingPosts = await svc.entities.SocialMediaPost.filter({
           client_id: client.id, scheduled_date: today
         });
         if (existingPosts.length >= MAX_DAILY_POSTS) {
@@ -188,6 +202,7 @@ export default async function generateSocialContent(c: any) {
           : ['promotional', 'educational', 'tips', 'engagement', 'behind_the_scenes'];
         const randomType = contentTypes[Math.floor(Math.random() * contentTypes.length)];
 
+        // Build comprehensive brand context
         const ctx = [];
         if (brand.about_brand) ctx.push(`About Brand: ${brand.about_brand}`);
         if (brand.brand_voice) ctx.push(`Brand Voice: ${brand.brand_voice}`);
@@ -195,27 +210,30 @@ export default async function generateSocialContent(c: any) {
         if (brand.tagline) ctx.push(`Tagline: "${brand.tagline}"`);
         if (brand.target_audience) ctx.push(`Target Audience: ${brand.target_audience}`);
         if (brand.language_preference) {
-          const langMap: any = { hinglish: 'Hinglish (Hindi+English mix)', bilingual: 'Bilingual EN+HI', hindi: 'Hindi', english: 'English' };
+          const langMap = { hinglish: 'Hinglish (Hindi+English mix)', bilingual: 'Bilingual EN+HI', hindi: 'Hindi', english: 'English' };
           ctx.push(`Language: ${langMap[brand.language_preference] || brand.language_preference}`);
         }
 
+        // Products & Services
         if (brand.products?.length > 0) {
-          ctx.push(`Products: ${brand.products.map((p: any) => `${p.name}${p.price ? ' ('+p.price+')' : ''}${p.description ? ' - '+p.description : ''}`).join('; ')}`);
+          ctx.push(`Products: ${brand.products.map(p => `${p.name}${p.price ? ' ('+p.price+')' : ''}${p.description ? ' - '+p.description : ''}`).join('; ')}`);
         }
         if (brand.services?.length > 0) {
-          ctx.push(`Services: ${brand.services.map((s: any) => `${s.name}${s.price ? ' ('+s.price+')' : ''}${s.description ? ' - '+s.description : ''}`).join('; ')}`);
+          ctx.push(`Services: ${brand.services.map(s => `${s.name}${s.price ? ' ('+s.price+')' : ''}${s.description ? ' - '+s.description : ''}`).join('; ')}`);
         }
         if (brand.usps?.length > 0) ctx.push(`USPs: ${brand.usps.join(', ')}`);
         if (brand.features?.length > 0) ctx.push(`Key Features: ${brand.features.join(', ')}`);
         if (brand.pricing_info) ctx.push(`Pricing: ${brand.pricing_info}`);
 
+        // Active offers
         if (brand.current_offers?.length > 0) {
-          const activeOffers = brand.current_offers.filter((o: any) => !o.valid_until || o.valid_until >= today);
+          const activeOffers = brand.current_offers.filter(o => !o.valid_until || o.valid_until >= today);
           if (activeOffers.length > 0) {
-            ctx.push(`ACTIVE OFFERS (promote these!): ${activeOffers.map((o: any) => `${o.title}${o.code ? ' (Code: '+o.code+')' : ''}${o.description ? ' - '+o.description : ''}`).join('; ')}`);
+            ctx.push(`ACTIVE OFFERS (promote these!): ${activeOffers.map(o => `${o.title}${o.code ? ' (Code: '+o.code+')' : ''}${o.description ? ' - '+o.description : ''}`).join('; ')}`);
           }
         }
 
+        // Contact & Social
         if (brand.cta_style) ctx.push(`Preferred CTA: ${brand.cta_style}`);
         const contactParts = [];
         if (brand.contact_phone) contactParts.push(`Phone: ${brand.contact_phone}`);
@@ -233,7 +251,7 @@ export default async function generateSocialContent(c: any) {
         if (socialParts.length > 0) ctx.push(`Social Handles (include in posts): ${socialParts.join(', ')}`);
 
         if (brand.addresses?.length > 0) {
-          ctx.push(`Locations: ${brand.addresses.map((a: any) => `${a.label || ''} ${a.address || ''} ${a.city || ''}`).join('; ')}`);
+          ctx.push(`Locations: ${brand.addresses.map(a => `${a.label || ''} ${a.address || ''} ${a.city || ''}`).join('; ')}`);
         }
         if (brand.google_maps_link) ctx.push(`Google Maps: ${brand.google_maps_link}`);
 
@@ -243,6 +261,7 @@ export default async function generateSocialContent(c: any) {
 
         const postsToGenerate = MAX_DAILY_POSTS - existingPosts.length;
 
+        // Build occasion context
         let occasionInstruction = '';
         if (todayOccasions.length > 0) {
           occasionInstruction = `\n\n🎯 TODAY'S SPECIAL OCCASION(S): ${todayOccasions.map(o => o.name).join(', ')}
@@ -301,13 +320,13 @@ Be creative, trendy, and make the brand stand out!`;
           let posterUrl = '';
           try {
             const imagePrompt = `Professional social media poster for ${client.company_name} (${client.industry || 'business'}). ${post.image_prompt}. ${brand.brand_colors ? 'Use brand colors: ' + brand.brand_colors + '.' : ''} ${brand.logo_url ? 'Include company branding.' : ''} Modern, clean design. No text watermarks. Square format 1080x1080.`;
-            posterUrl = await generateDalleImage(imagePrompt);
-          } catch (imgErr: any) {
+            posterUrl = await generatePosterDirect(imagePrompt, client.id);
+          } catch (imgErr) {
             console.error(`[generateSocialContent] Image generation failed: ${imgErr.message}`);
           }
 
           const isOccasionPost = todayOccasions.length > 0 && post.content_type === 'festival';
-          await base44.entities.SocialMediaPost.create({
+          await svc.entities.SocialMediaPost.create({
             client_id: client.id,
             title: post.title || 'Social Media Post',
             caption: post.caption,
@@ -323,15 +342,16 @@ Be creative, trendy, and make the brand stand out!`;
           results.posts_created++;
         }
 
-      } catch (clientErr: any) {
+      } catch (clientErr) {
         console.error(`[generateSocialContent] Error for ${client.company_name}: ${clientErr.message}`);
         results.errors.push({ client_id: client.id, error: clientErr.message });
       }
     }
 
     return c.json({ data: { success: true, ...results } });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[generateSocialContent] Error:', error);
     return c.json({ data: { error: error.message } }, 500);
   }
-}
+
+};

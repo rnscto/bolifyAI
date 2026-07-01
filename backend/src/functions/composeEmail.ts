@@ -1,74 +1,107 @@
-import { Context } from "hono";
-import { base44ORM } from "../db/orm.ts";
-import { sendClientEmailLogic } from "./sendClientEmail.ts";
+import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 
-async function azureLLM(prompt: string, systemPrompt: string, jsonSchema: any) {
+import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
+
+const connStr = `endpoint=${Deno.env.get('AZURE_COMM_ENDPOINT')};accesskey=${Deno.env.get('AZURE_COMM_KEY')}`;
+const emailClient = new EmailClient(connStr);
+
+// Downloads each media-library file and converts it to an ACS base64 attachment.
+async function buildAttachments(attachments) {
+  if (!attachments?.length) return [];
+  const out = [];
+  for (const a of attachments) {
+    if (!a?.file_url) continue;
+    const res = await fetch(a.file_url);
+    if (!res.ok) continue;
+    const buf = new Uint8Array(await res.arrayBuffer());
+    // base64 encode
+    let binary = '';
+    for (let i = 0; i < buf.length; i++) binary += String.fromCharCode(buf[i]);
+    const base64 = btoa(binary);
+    out.push({
+      name: a.file_name || a.name || (a.file_url.split('/').pop() || 'attachment'),
+      contentType: res.headers.get('content-type') || 'application/octet-stream',
+      contentInBase64: base64,
+    });
+  }
+  return out;
+}
+
+async function sendACSEmail({ to, subject, html, displayName, attachments }) {
+  const message = {
+    senderAddress: 'DoNotReply@vaaniai.io',
+    displayName: displayName || 'VaaniAI',
+    content: { subject, html },
+    recipients: { to: [{ address: to }] },
+    ...(attachments?.length ? { attachments } : {})
+  };
+  const poller = await emailClient.beginSend(message);
+  const result = await poller.pollUntilDone();
+  if (result.status !== 'Succeeded') throw new Error(`ACS Email error: ${result.error?.message || result.status}`);
+  return result;
+}
+
+// Azure OpenAI helper
+async function azureLLM(prompt, systemPrompt, jsonSchema) {
   const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
   const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
   const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  
-  if (!baseUrl || !deployment || !apiKey) {
-    throw new Error('Azure OpenAI not configured');
-  }
-
-  let cleanBase = baseUrl;
-  const openaiIdx = cleanBase.indexOf('/openai');
-  if (openaiIdx > 0) cleanBase = cleanBase.substring(0, openaiIdx);
-  const apiProjectIdx = cleanBase.indexOf('/api/projects');
-  if (apiProjectIdx > 0) cleanBase = cleanBase.substring(0, apiProjectIdx);
-  
-  const url = `${cleanBase}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
-  const headers = { 'api-key': apiKey, 'Content-Type': 'application/json' };
-  const bodyObj = {
-    messages: [
-      { role: 'system', content: systemPrompt || 'You are a helpful assistant. Always respond in valid JSON.' },
-      { role: 'user', content: prompt + (jsonSchema ? '\n\nRespond in JSON matching this schema: ' + JSON.stringify(jsonSchema) : '') }
-    ],
-    max_completion_tokens: 2000,
-    response_format: { type: "json_object" }
-  };
-  
-  const res = await fetch(url, { method: 'POST', headers, body: JSON.stringify(bodyObj) });
-  if (!res.ok) {
-    const errText = await res.text();
-    console.error(`[azureLLM] Error ${res.status}: ${errText}`);
-    throw new Error(`Azure OpenAI error: ${res.status} ${errText}`);
-  }
+  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      messages: [
+        { role: 'system', content: systemPrompt || 'You are a helpful assistant. Always respond in valid JSON.' },
+        { role: 'user', content: prompt + (jsonSchema ? '\n\nRespond in JSON matching this schema: ' + JSON.stringify(jsonSchema) : '') }
+      ],
+      max_completion_tokens: 2000,
+      response_format: { type: "json_object" }
+    })
+  });
+  if (!res.ok) throw new Error(`Azure OpenAI error: ${res.status} ${await res.text()}`);
   const data = await res.json();
   return JSON.parse(data.choices[0].message.content);
 }
 
-export default async function (c: Context) {
+export default async function composeEmail(c: any) {
+  const req = c.req.raw || c.req;
   try {
+    /* const base44 = ... */;
+    const user = c.get('jwtPayload');
+    if (!user) return c.json({ data: { error: 'Unauthorized' } }, 401);
+
     const payload = await c.req.json();
     const { action } = payload;
 
     // ── ACTION: generate_template ──
+    // Generates AI email template based on activity context, lead info, and call history
     if (action === 'generate_template') {
       const { lead_id, client_id, activity_id, template_type } = payload;
 
-      let lead: any = null, client: any = null, activity: any = null, callLog: any = null;
-      try { if (lead_id) lead = await base44ORM.entities.Lead.get(lead_id); } catch (e: any) { console.log(`Lead fetch failed: ${e.message}`); }
-      try { if (client_id) client = await base44ORM.entities.Client.get(client_id); } catch (e: any) { console.log(`Client fetch failed: ${e.message}`); }
-      try { if (activity_id) activity = await base44ORM.entities.Activity.get(activity_id); } catch (e: any) { console.log(`Activity fetch failed: ${e.message}`); }
+      let lead = null, client = null, activity = null, callLog = null;
+      if (lead_id) lead = await base44.entities.Lead.get(lead_id);
+      if (client_id) client = await base44.entities.Client.get(client_id);
+      if (activity_id) activity = await base44.entities.Activity.get(activity_id);
 
-      try {
-        if (lead_id) {
-          const calls = await base44ORM.entities.CallLog.filter({ lead_id, status: 'completed' }, '-created_at', 1);
-          if (calls.length > 0) callLog = calls[0];
-        }
-      } catch (e: any) { console.log(`CallLog fetch failed: ${e.message}`); }
+      // Get latest call for this lead
+      if (lead_id) {
+        const calls = await base44.entities.CallLog.filter({ lead_id, status: 'completed' }, '-created_date', 1);
+        if (calls.length > 0) callLog = calls[0];
+      }
 
+      // Get knowledge base content
       let kbContent = '';
       if (callLog?.agent_config_cache?.knowledge_base_content) {
         kbContent = callLog.agent_config_cache.knowledge_base_content;
       } else if (callLog?.agent_id) {
         try {
-          const agent = await base44ORM.entities.Agent.get(callLog.agent_id);
+          const agent = await base44.entities.Agent.get(callLog.agent_id);
           if (agent?.knowledge_base_ids?.length > 0) {
             for (const kbId of agent.knowledge_base_ids) {
               try {
-                const doc = await base44ORM.entities.KnowledgeBase.get(kbId);
+                const doc = await base44.entities.KnowledgeBase.get(kbId);
                 if (doc?.content) kbContent += `[${doc.title}]\n${doc.content}\n\n`;
               } catch (_) {}
             }
@@ -132,15 +165,17 @@ RULES:
     }
 
     // ── ACTION: send_email ──
+    // Sends the composed email via Azure Communication Services
     if (action === 'send_email') {
-      const { to_email, from_name, subject, body_html, lead_id, client_id, activity_id, outreach_type } = payload;
+      const { to_email, from_name, subject, body_html, lead_id, client_id, activity_id, outreach_type, attachments } = payload;
 
       if (!to_email || !subject || !body_html) {
-        return c.json({ data: { success: false, error: 'to_email, subject, and body_html are required' } });
+        return c.json({ data: { error: 'to_email, subject, and body_html are required' } }, 400);
       }
 
+      // Wrap in a nice template
       const brandColor = '#1e3a5f';
-      const companyName = from_name || 'Bolify AI';
+      const companyName = from_name || 'VaaniAI';
       const wrappedHtml = `
 <!DOCTYPE html>
 <html>
@@ -153,60 +188,53 @@ RULES:
       ${body_html}
     </div>
     <div style="background:#1f2937;border-radius:0 0 16px 16px;padding:20px 32px;text-align:center;">
-      <p style="color:#9ca3af;font-size:12px;margin:0;">Sent by <strong style="color:#d1d5db;">${companyName}</strong> • Powered by Bolify AI</p>
+      <p style="color:#9ca3af;font-size:12px;margin:0;">Sent by <strong style="color:#d1d5db;">${companyName}</strong> • Powered by VaaniAI</p>
     </div>
   </div>
 </body>
 </html>`;
 
-      try {
-        await sendClientEmailLogic({
-          client_id,
-          to: to_email,
-          subject,
-          html: wrappedHtml,
-          from_name: companyName
-        });
-      } catch (err: any) {
-        console.error(`[composeEmail] email dispatch failed: ${err.message}`);
-        return c.json({ data: { success: false, error: err.message } });
-      }
+      const acsAttachments = await buildAttachments(attachments);
+      await sendACSEmail({
+        to: to_email,
+        subject,
+        html: wrappedHtml,
+        displayName: companyName,
+        attachments: acsAttachments
+      });
 
       // Log the outreach
       if (lead_id && client_id) {
-        try {
-          await base44ORM.entities.OutreachLog.create({
-            client_id,
-            lead_id,
-            channel: 'email',
-            recipient_email: to_email,
-            subject,
-            body: body_html.substring(0, 2000),
-            outreach_type: outreach_type || 'lead_followup',
-            status: 'sent'
-          });
-        } catch (e: any) { console.error(`[composeEmail] OutreachLog creation failed: ${e.message}`); }
+        await base44.entities.OutreachLog.create({
+          client_id,
+          lead_id,
+          channel: 'email',
+          recipient_email: to_email,
+          subject,
+          body: body_html.substring(0, 2000),
+          outreach_type: outreach_type || 'lead_followup',
+          status: 'sent'
+        });
       }
 
       // Mark activity as completed if provided
       if (activity_id) {
-        try {
-          await base44ORM.entities.Activity.update(activity_id, {
-            status: 'completed',
-            completed_date: new Date().toISOString(),
-            outcome: `Email sent: ${subject}`,
-            notes: (payload.activity_notes || '') + `\n[Manual] Email sent to ${to_email} at ${new Date().toISOString()}`
-          });
-        } catch (e: any) { console.error(`[composeEmail] Activity update failed: ${e.message}`); }
+        await base44.entities.Activity.update(activity_id, {
+          status: 'completed',
+          completed_date: new Date().toISOString(),
+          outcome: `Email sent: ${subject}`,
+          notes: (payload.activity_notes || '') + `\n[Manual] Email sent to ${to_email} at ${new Date().toISOString()}`
+        });
       }
 
       return c.json({ data: { success: true, to: to_email } });
     }
 
-    return c.json({ data: { success: false, error: 'Invalid action. Use generate_template or send_email' } });
+    return c.json({ data: { error: 'Invalid action. Use generate_template or send_email' } }, 400);
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('[composeEmail] Error:', error);
-    return c.json({ data: { success: false, error: error.message } });
+    return c.json({ data: { error: error.message } }, 500);
   }
-}
+
+};

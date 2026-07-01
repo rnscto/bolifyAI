@@ -1,102 +1,92 @@
-import { Context } from "hono";
+import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
+// ═══════════════════════════════════════════════════════════════════
+// azureBlobSignedUrl — Drop-in replacement for Core.CreateFileSignedUrl
+//
+// Generates a time-limited SAS URL for a private blob.
+// Input: { file_uri: "azblob://<container>/<blobName>", expires_in: 300 }
+// Output: { signed_url: "<https-url-with-sas>" }
+// ═══════════════════════════════════════════════════════════════════
 
-function parseConnectionString(cs: string) {
-  const parts: Record<string, string> = {};
-  for (const seg of cs.split(';')) {
-    const idx = seg.indexOf('=');
-    if (idx > 0) parts[seg.slice(0, idx).trim()] = seg.slice(idx + 1).trim();
-  }
+
+import {
+  BlobServiceClient,
+  StorageSharedKeyCredential,
+  generateBlobSASQueryParameters,
+  BlobSASPermissions
+} from 'npm:@azure/storage-blob@12.17.0';
+
+function parseConnectionString(conn) {
+  const parts = Object.fromEntries(
+    conn.split(';').filter(Boolean).map(kv => {
+      const idx = kv.indexOf('=');
+      return [kv.substring(0, idx), kv.substring(idx + 1)];
+    })
+  );
   return {
     accountName: parts.AccountName,
     accountKey: parts.AccountKey,
-    endpoint: parts.BlobEndpoint || `https://${parts.AccountName}.blob.${parts.EndpointSuffix || 'core.windows.net'}`
+    endpointSuffix: parts.EndpointSuffix || 'core.windows.net'
   };
 }
 
-async function hmacSha256(stringToSign: string, accountKey: string) {
-  const keyBytes = Uint8Array.from(atob(accountKey), c => c.charCodeAt(0));
-  const cryptoKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(stringToSign));
-  return btoa(String.fromCharCode(...new Uint8Array(sig)));
-}
-
-// ─── Generate Service-SAS for a blob (read-only) ───
-async function generateBlobSAS({ accountName, accountKey, container, blobName, expirySeconds = 3600 }: any) {
-  const start = new Date(Date.now() - 60 * 1000).toISOString().slice(0, 19) + 'Z'; // 1 min skew
-  const expiry = new Date(Date.now() + expirySeconds * 1000).toISOString().slice(0, 19) + 'Z';
-  const permissions = 'r';
-  const resource = 'b'; // blob
-  const version = '2021-08-06';
-  const canonicalizedResource = `/blob/${accountName}/${container}/${blobName}`;
-
-  // String-to-sign for service-SAS v2021-08-06 (15 fields + empty trailing optionals)
-  const stringToSign = [
-    permissions,
-    start,
-    expiry,
-    canonicalizedResource,
-    '', // identifier
-    '', // ip
-    '', // protocol
-    version,
-    resource,
-    '', // snapshot
-    '', // encryptionScope
-    '', // rscc — Cache-Control
-    '', // rscd — Content-Disposition
-    '', // rsce — Content-Encoding
-    '', // rscl — Content-Language
-    ''  // rsct — Content-Type
-  ].join('\n');
-
-  const signature = await hmacSha256(stringToSign, accountKey);
-  const sas = new URLSearchParams({
-    sp: permissions,
-    st: start,
-    se: expiry,
-    sv: version,
-    sr: resource,
-    sig: signature
-  });
-  return sas.toString();
-}
-
-export default async function (c: Context) {
-  try {
-    let body;
-    try { body = await c.req.json(); } catch { body = {}; }
-    const { file_uri, expires_in } = body;
-    if (!file_uri) return c.json({ data: { success: false, error: 'file_uri required' } });
-
-    const cs = Deno.env.get('AZURE_STORAGE_CONNECTION_STRING');
-    if (!cs) return c.json({ data: { success: false, error: 'Azure storage not configured' } });
-
-    const { accountName, accountKey, endpoint } = parseConnectionString(cs);
-
-    // Parse the URI: e.g. https://acct.blob.core.windows.net/container/path/to/blob
-    let parsed;
-    try { parsed = new URL(file_uri); } catch { return c.json({ data: { success: false, error: 'Invalid file_uri' } }); }
-    const expectedHost = new URL(endpoint).host;
-    if (parsed.host !== expectedHost) {
-      return c.json({ data: { success: false, error: 'file_uri host mismatch' } });
-    }
-    const pathParts = parsed.pathname.replace(/^\/+/, '').split('/');
-    const container = pathParts.shift();
-    const blobName = pathParts.join('/');
-    if (!container || !blobName) return c.json({ data: { success: false, error: 'Invalid blob path' } });
-
-    const ttl = Math.max(60, Math.min(parseInt(expires_in) || 3600, 24 * 3600));
-    const sas = await generateBlobSAS({ accountName, accountKey, container, blobName, expirySeconds: ttl });
-
-    return c.json({
-      data: {
-        success: true,
-        signed_url: `${file_uri}?${sas}`,
-        expires_in: ttl
-      }
-    });
-  } catch (error: any) {
-    console.error('[azureBlobSignedUrl] Error:', error);
-    return c.json({ data: { success: false, error: error.message } });
+export function generateSasUrl(fileUri, expiresInSeconds = 300) {
+  if (!fileUri || !fileUri.startsWith('azblob://')) {
+    throw new Error('Invalid file_uri (expected azblob://<container>/<blob>)');
   }
+  const conn = Deno.env.get('AZURE_STORAGE_CONNECTION_STRING');
+  if (!conn) throw new Error('AZURE_STORAGE_CONNECTION_STRING not configured');
+
+  const path = fileUri.replace('azblob://', '');
+  const slash = path.indexOf('/');
+  const container = path.substring(0, slash);
+  const blobName = path.substring(slash + 1);
+
+  const { accountName, accountKey, endpointSuffix } = parseConnectionString(conn);
+  const cred = new StorageSharedKeyCredential(accountName, accountKey);
+
+  const expiresOn = new Date(Date.now() + expiresInSeconds * 1000);
+  const sas = generateBlobSASQueryParameters({
+    containerName: container,
+    blobName,
+    permissions: BlobSASPermissions.parse('r'),
+    expiresOn,
+    protocol: 'https'
+  }, cred).toString();
+
+  return `https://${accountName}.blob.${endpointSuffix}/${container}/${blobName}?${sas}`;
 }
+
+export default async function azureBlobSignedUrl(c: any) {
+  const req = c.req.raw || c.req;
+  try {
+    /* const base44 = ... */;
+    // Allow service-role / inter-function calls (no end-user). Only enforce
+    // auth when there's neither a service-role context nor an authenticated user.
+    const user = c.get('jwtPayload').catch(() => null);
+    const isServiceRole = !!base44.asServiceRole;
+    if (!user && !isServiceRole) {
+      return c.json({ data: { error: 'Unauthorized' } }, 401);
+    }
+
+    const { file_uri, expires_in } = await c.req.json();
+    if (!file_uri) return c.json({ data: { error: 'file_uri required' } }, 400);
+
+    // Only Azure Blob URIs are supported. Legacy Base44 storage URIs (mp/private/...) are no
+    // longer signable since Core.CreateFileSignedUrl is integration-credit-blocked. Affected
+    // agents must be re-uploaded via uploadKBToStorage.
+    if (!file_uri.startsWith('azblob://')) {
+      return c.json({ data: {
+        error: 'Legacy Base44 storage URI not supported. Re-upload via uploadKBToStorage.',
+        signed_url: ''
+      } }, 400);
+    }
+
+    const signedUrl = generateSasUrl(file_uri, expires_in || 300);
+    return c.json({ data: { signed_url: signedUrl } });
+  } catch (error) {
+    console.error('[azureBlobSignedUrl] error:', error.message);
+    return c.json({ data: { error: error.message } }, 500);
+  }
+
+};

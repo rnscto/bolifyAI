@@ -1,160 +1,127 @@
-import { Context } from "hono";
+import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
+// ═══════════════════════════════════════════════════════════════════
+// azureBlobUpload — Drop-in replacement for Core.UploadFile / UploadPrivateFile
+//
+// Frontend usage (replaces base44.integrations.Core.UploadFile):
+//   const formData = new FormData();
+//   formData.append('file', file);
+//   formData.append('visibility', 'public'); // or 'private'
+//   const res = await base44.functions.invoke('azureBlobUpload', formData);
+//   // res.data.file_url   (public blobs — direct https URL)
+//   // res.data.file_uri   (private blobs — opaque ref, use azureBlobSignedUrl)
+//
+// Backend usage:
+//   const res = await base44.asServiceRole.functions.invoke('azureBlobUpload', { ... })
+//   — but for backend uploads from a Deno function, use uploadBlobFromBuffer() directly.
+// ═══════════════════════════════════════════════════════════════════
 
-// ─── Parse Azure connection string ───
-function parseConnectionString(cs: string) {
-  const parts: Record<string, string> = {};
-  for (const seg of cs.split(';')) {
-    const idx = seg.indexOf('=');
-    if (idx > 0) parts[seg.slice(0, idx).trim()] = seg.slice(idx + 1).trim();
-  }
-  return {
-    accountName: parts.AccountName,
-    accountKey: parts.AccountKey,
-    endpoint: parts.BlobEndpoint || `https://${parts.AccountName}.blob.${parts.EndpointSuffix || 'core.windows.net'}`
-  };
+
+import { BlobServiceClient } from 'npm:@azure/storage-blob@12.17.0';
+
+function getBlobService() {
+  const conn = Deno.env.get('AZURE_STORAGE_CONNECTION_STRING');
+  if (!conn) throw new Error('AZURE_STORAGE_CONNECTION_STRING not configured');
+  return BlobServiceClient.fromConnectionString(conn);
 }
 
-// ─── HMAC-SHA256 sign for Shared Key auth ───
-async function signSharedKey(stringToSign: string, accountKey: string) {
-  const keyBytes = Uint8Array.from(atob(accountKey), c => c.charCodeAt(0));
-  const cryptoKey = await crypto.subtle.importKey(
-    'raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']
-  );
-  const sig = await crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(stringToSign));
-  return btoa(String.fromCharCode(...new Uint8Array(sig)));
+function safeName(name) {
+  return (name || 'file').replace(/[^a-zA-Z0-9._-]/g, '_').substring(0, 120);
 }
 
-// ─── Build Authorization header for PUT Blob ───
-async function buildAuthHeader(method: string, accountName: string, accountKey: string, container: string, blobName: string, contentLength: number, contentType: string, dateStr: string) {
-  const canonicalizedHeaders = `x-ms-blob-type:BlockBlob\nx-ms-date:${dateStr}\nx-ms-version:2021-08-06`;
-  const canonicalizedResource = `/${accountName}/${container}/${blobName}`;
-  const stringToSign = [
-    method,
-    '', // Content-Encoding
-    '', // Content-Language
-    contentLength || '', // Content-Length
-    '', // Content-MD5
-    contentType || '', // Content-Type
-    '', // Date
-    '', // If-Modified-Since
-    '', // If-Match
-    '', // If-None-Match
-    '', // If-Unmodified-Since
-    '', // Range
-    canonicalizedHeaders,
-    canonicalizedResource
-  ].join('\n');
-  const signature = await signSharedKey(stringToSign, accountKey);
-  return `SharedKey ${accountName}:${signature}`;
+// Build the opaque file_uri token for private blobs.
+// Format: "azblob://<container>/<blobName>"
+// Public blobs use the direct HTTPS URL — no token needed.
+function buildPrivateUri(container, blobName) {
+  return `azblob://${container}/${blobName}`;
 }
 
-export default async function (c: Context) {
+export default async function azureBlobUpload(c: any) {
+  const req = c.req.raw || c.req;
   try {
-    let fileBytes: ArrayBuffer;
-    let fileName = 'file';
-    let providedContentType = '';
-    let visibility = 'public';
-    let folder = '';
+    /* const base44 = ... */;
+    const user = c.get('jwtPayload').catch(() => null);
+    if (!user) return c.json({ data: { error: 'Unauthorized' } }, 401);
 
-    const reqContentType = (c.req.header('content-type') || '').toLowerCase();
+    const contentType = req.headers.get('content-type') || '';
 
-    if (reqContentType.includes('multipart/form-data')) {
-      const formData = await c.req.parseBody();
-      const file = formData['file'];
-      visibility = (formData['visibility'] || 'public').toString();
-      folder = (formData['folder'] || '').toString();
-      
-      if (!file || !(file instanceof File)) {
-        return c.json({ data: { success: false, error: 'file required' } });
+    let fileBuffer; // Uint8Array
+    let fileName;
+    let fileType;
+    let visibility;
+    let folder;
+
+    if (contentType.includes('multipart/form-data')) {
+      // Native multipart path
+      const form = await req.formData();
+      const file = form.get('file');
+      visibility = (form.get('visibility') || 'public').toString();
+      folder = (form.get('folder') || '').toString();
+      if (!file || typeof file === 'string') {
+        return c.json({ data: { error: 'file field required' } }, 400);
       }
-      fileBytes = await file.arrayBuffer();
+      fileBuffer = new Uint8Array(await file.arrayBuffer());
       fileName = file.name || 'file';
-      providedContentType = file.type || '';
+      fileType = file.type || 'application/octet-stream';
     } else {
-      let body: any;
-      try { body = await c.req.json(); } catch { body = {}; }
-      const { file_base64, file_name, content_type } = body;
+      // JSON path (used by frontend via base44.functions.invoke which serializes to JSON)
+      // Body: { file_base64, file_name, file_type, visibility, folder }
+      const body = await c.req.json().catch(() => ({}));
+      const { file_base64, file_name, file_type } = body || {};
       visibility = (body.visibility || 'public').toString();
       folder = (body.folder || '').toString();
       if (!file_base64) {
-        return c.json({ data: { success: false, error: 'file required' } });
+        return c.json({ data: { error: 'file_base64 field required' } }, 400);
       }
-      // Accept both raw base64 and data URLs (data:...;base64,XXXX)
-      const b64 = file_base64.includes(',') ? file_base64.split(',').pop() : file_base64;
+      // Strip data URL prefix if present
+      const b64 = file_base64.includes(',') ? file_base64.split(',')[1] : file_base64;
       const binary = atob(b64);
       const bytes = new Uint8Array(binary.length);
       for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-      fileBytes = bytes.buffer;
+      fileBuffer = bytes;
       fileName = file_name || 'file';
-      providedContentType = content_type || '';
+      fileType = file_type || 'application/octet-stream';
     }
 
-    folder = folder.replace(/[^a-zA-Z0-9_\-/]/g, '');
-
-    const cs = Deno.env.get('AZURE_STORAGE_CONNECTION_STRING');
-    const containerPublic = Deno.env.get('AZURE_STORAGE_CONTAINER_PUBLIC');
-    const containerPrivate = Deno.env.get('AZURE_STORAGE_CONTAINER_PRIVATE');
-    if (!cs || !containerPublic || !containerPrivate) {
-      return c.json({ data: { success: false, error: 'Azure storage not configured in .env' } });
+    const containerName = visibility === 'private'
+      ? Deno.env.get('AZURE_STORAGE_CONTAINER_PRIVATE')
+      : Deno.env.get('AZURE_STORAGE_CONTAINER_PUBLIC');
+    if (!containerName) {
+      return c.json({ data: { error: 'Container not configured' } }, 500);
     }
 
-    const { accountName, accountKey, endpoint } = parseConnectionString(cs);
-    const container = visibility === 'private' ? containerPrivate : containerPublic;
-
-    // Build blob name: folder/timestamp-random-safename
-    const safeName = fileName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 80);
     const ts = Date.now();
-    const rand = Math.random().toString(36).slice(2, 10);
-    const blobName = (folder ? `${folder}/` : '') + `${ts}-${rand}-${safeName}`;
+    const rand = Math.random().toString(36).substring(2, 10);
+    const cleanName = safeName(fileName);
+    const blobName = folder
+      ? `${folder.replace(/[^a-zA-Z0-9/_-]/g, '')}/${ts}_${rand}_${cleanName}`
+      : `${ts}_${rand}_${cleanName}`;
 
-    const arrayBuffer = fileBytes;
-    const contentLength = arrayBuffer.byteLength;
-    const contentType = providedContentType || 'application/octet-stream';
-    const dateStr = new Date().toUTCString();
+    const blobService = getBlobService();
+    const container = blobService.getContainerClient(containerName);
+    const blockBlob = container.getBlockBlobClient(blobName);
 
-    const auth = await buildAuthHeader('PUT', accountName, accountKey, container, blobName, contentLength, contentType, dateStr);
-    const url = `${endpoint}/${container}/${blobName}`;
-
-    const putResp = await fetch(url, {
-      method: 'PUT',
-      headers: {
-        'Authorization': auth,
-        'x-ms-blob-type': 'BlockBlob',
-        'x-ms-date': dateStr,
-        'x-ms-version': '2021-08-06',
-        'Content-Type': contentType,
-        'Content-Length': String(contentLength)
-      },
-      body: arrayBuffer
+    await blockBlob.uploadData(fileBuffer, {
+      blobHTTPHeaders: { blobContentType: fileType }
     });
 
-    if (!putResp.ok) {
-      const errText = await putResp.text();
-      console.error(`[azureBlobUpload] PUT failed ${putResp.status}: ${errText.substring(0, 500)}`);
-      return c.json({ data: { success: false, error: `Upload failed: ${putResp.status}` } });
-    }
-
-    // For public: return direct URL. For private: return URI (caller must request signed URL to read).
     if (visibility === 'private') {
       return c.json({ data: {
         success: true,
-        file_uri: url,
-        container,
-        blob_name: blobName,
-        size: contentLength,
-        content_type: contentType
+        file_uri: buildPrivateUri(containerName, blobName),
+        size: fileBuffer.length
       } });
     }
+
+    // Public — return direct HTTPS URL
     return c.json({ data: {
       success: true,
-      file_url: url,
-      container,
-      blob_name: blobName,
-      size: contentLength,
-      content_type: contentType
+      file_url: blockBlob.url,
+      size: fileBuffer.length
     } });
-  } catch (error: any) {
-    console.error('[azureBlobUpload] Error:', error);
-    return c.json({ data: { success: false, error: error.message } });
+  } catch (error) {
+    console.error('[azureBlobUpload] error:', error.message);
+    return c.json({ data: { error: error.message } }, 500);
   }
-}
+
+};

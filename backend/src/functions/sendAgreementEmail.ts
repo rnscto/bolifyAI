@@ -1,38 +1,56 @@
-import { Context } from "hono";
-import { sendClientEmailLogic } from "./sendClientEmail.ts";
+import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 
-export default async function (c: Context) {
+import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
+
+const ACS_ENDPOINT = Deno.env.get('AZURE_COMM_ENDPOINT');
+const ACS_KEY = Deno.env.get('AZURE_COMM_KEY');
+const SENDER = 'DoNotReply@vaaniai.io';
+
+async function sendEmail(to, subject, htmlBody) {
+  const client = new EmailClient(`endpoint=${ACS_ENDPOINT};accesskey=${ACS_KEY}`);
+  const message = {
+    senderAddress: SENDER,
+    content: { subject, html: htmlBody },
+    recipients: { to: [{ address: to }] },
+  };
+  const poller = await client.beginSend(message);
+  return await poller.pollUntilDone();
+}
+
+export default async function sendAgreementEmail(c: any) {
+  const req = c.req.raw || c.req;
   try {
-    const payload = await c.req.json();
-    const { type, data } = payload;
+    /* const base44 = ... */;
+    const user = c.get('jwtPayload');
+    if (!user) return c.json({ data: { error: 'Unauthorized' } }, 401);
+
+    const { type, data } = await c.req.json();
     // type: "client_admin_notify" | "partner_signed" | "partner_admin_notify"
 
-    // Default admin email to receive notifications
-    const ADMIN_EMAIL = Deno.env.get('ADMIN_NOTIFICATION_EMAIL') || 'yadav.nandkishor73@gmail.com';
-
     if (type === 'client_admin_notify') {
+      // Notify admin when a client signs agreement
       const { company_name, email, agreement_number } = data;
-      await sendClientEmailLogic({
-        from_name: 'Bolify AI',
-        to: ADMIN_EMAIL,
-        subject: `[Client Agreement Signed] ${company_name} — ${agreement_number}`,
-        html: `<p>Client <strong>${company_name}</strong> (${email}) signed service agreement <strong>${agreement_number}</strong>.</p>`
-      });
+      await sendEmail(
+        'yadav.nandkishor73@gmail.com',
+        `[Client Agreement Signed] ${company_name} — ${agreement_number}`,
+        `<p>Client <strong>${company_name}</strong> (${email}) signed service agreement <strong>${agreement_number}</strong>.</p>`
+      );
     } else if (type === 'client_gate_admin_notify') {
+      // Notify admin when existing client signs via gate
       const { company_name, email, agreement_number } = data;
-      await sendClientEmailLogic({
-        from_name: 'Bolify AI',
-        to: ADMIN_EMAIL,
-        subject: `[Client Agreement Signed] ${company_name} — ${agreement_number}`,
-        html: `<p>Existing client <strong>${company_name}</strong> (${email}) signed service agreement <strong>${agreement_number}</strong>.</p>`
-      });
+      await sendEmail(
+        'yadav.nandkishor73@gmail.com',
+        `[Client Agreement Signed] ${company_name} — ${agreement_number}`,
+        `<p>Existing client <strong>${company_name}</strong> (${email}) signed service agreement <strong>${agreement_number}</strong>.</p>`
+      );
     } else if (type === 'partner_signed') {
+      // Notify partner that they signed
       const { partner_name, partner_email, agreement_number, signed_timestamp } = data;
-      await sendClientEmailLogic({
-        from_name: 'Bolify AI',
-        to: partner_email,
-        subject: `Partner Agreement Signed — ${agreement_number}`,
-        html: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+      await sendEmail(
+        partner_email,
+        `Partner Agreement Signed — ${agreement_number}`,
+        `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
           <div style="background:linear-gradient(135deg,#1a365d,#2563eb);padding:24px;border-radius:12px 12px 0 0;text-align:center;">
             <h2 style="color:white;margin:0;">Agreement Signed Successfully</h2>
           </div>
@@ -42,25 +60,26 @@ export default async function (c: Context) {
             <p>You can view and download your signed agreement anytime from your Partner Dashboard.</p>
             <p style="color:#666;font-size:13px;margin-top:20px;">This is a legally binding digital agreement under the Information Technology Act, 2000.</p>
             <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />
-            <p style="color:#999;font-size:12px;">TECH BRAINBUCKS INFOSOFT PVT LTD | Bolify AI</p>
+            <p style="color:#999;font-size:12px;">TECH BRAINBUCKS INFOSOFT PVT LTD | VaaniAI.io</p>
           </div>
         </div>`
-      });
+      );
     } else if (type === 'partner_admin_notify') {
+      // Notify admin when partner signs
       const { partner_name, partner_email, partner_company, agreement_number, signed_timestamp } = data;
-      await sendClientEmailLogic({
-        from_name: 'Bolify AI',
-        to: ADMIN_EMAIL,
-        subject: `[Partner Agreement Signed] ${partner_name} — ${agreement_number}`,
-        html: `<p>Partner <strong>${partner_name}</strong> (${partner_email}) has signed agreement <strong>${agreement_number}</strong> on ${signed_timestamp}.</p><p>Company: ${partner_company || 'N/A'}</p>`
-      });
+      await sendEmail(
+        'yadav.nandkishor73@gmail.com',
+        `[Partner Agreement Signed] ${partner_name} — ${agreement_number}`,
+        `<p>Partner <strong>${partner_name}</strong> (${partner_email}) has signed agreement <strong>${agreement_number}</strong> on ${signed_timestamp}.</p><p>Company: ${partner_company || 'N/A'}</p>`
+      );
     } else {
-      return c.json({ data: { success: false, error: 'Unknown email type' } });
+      return c.json({ data: { error: 'Unknown email type' } }, 400);
     }
 
     return c.json({ data: { success: true } });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[sendAgreementEmail] Error:', error);
-    return c.json({ data: { success: false, error: error.message } });
+    return c.json({ data: { error: error.message } }, 500);
   }
-}
+
+};

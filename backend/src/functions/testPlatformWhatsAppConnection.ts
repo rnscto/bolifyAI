@@ -1,58 +1,35 @@
-import { Context } from "hono";
-import { base44ORM } from "../db/orm.ts";
+import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
+// Quick health check for the platform RCS Digital WhatsApp connection.
+// Hits the WABA endpoint; returns connected/error and updates whatsapp_status + whatsapp_last_tested.
 
-export default async function (c: Context) {
+
+
+export default async function testPlatformWhatsAppConnection(c: any) {
+  const req = c.req.raw || c.req;
   try {
-    const payload = await c.req.json();
-    const { provider, api_key, phone_number_id, business_id } = payload;
-    
-    if (!api_key || !phone_number_id) {
-      return c.json({ data: { success: false, error: 'api_key and phone_number_id are required' } });
+    /* const base44 = ... */;
+    const user = c.get('jwtPayload');
+    if (!user || user.role !== 'admin') return c.json({ data: { error: 'Forbidden' } }, 403);
+
+    const cfgList = await base44.asServiceRole.entities.PlatformMessagingConfig.list();
+    const cfg = cfgList[0];
+    if (!cfg || !cfg.whatsapp_api_key || !cfg.whatsapp_business_id) {
+      return c.json({ data: { ok: false, error: 'Missing api_key or business_id' } });
     }
 
-    const baseHost = provider === 'rcs_digital'
-      ? 'https://rcsdigital.in/v23.0'
-      : 'https://graph.facebook.com/v20.0';
+    const url = `https://rcsdigital.in/v23.0/${cfg.whatsapp_business_id}?fields=id,name`;
+    const res = await fetch(url, { headers: { 'Authorization': `Bearer ${cfg.whatsapp_api_key}` } });
+    const data = await res.json().catch(() => ({}));
+    const ok = res.ok && (data?.id || data?.name);
 
-    const fullUrl = `${baseHost}/${phone_number_id}?fields=verified_name,display_phone_number`;
-    const tokenPreview = api_key.length > 12 ? `${api_key.slice(0, 6)}...${api_key.slice(-4)} (len=${api_key.length})` : `(len=${api_key.length})`;
-    console.log(`[testPlatformWhatsAppConnection] GET ${fullUrl}`);
-    console.log(`[testPlatformWhatsAppConnection] Provider: ${provider}, Token: ${tokenPreview}`);
-
-    const res = await fetch(fullUrl, {
-      headers: { 'Authorization': `Bearer ${api_key}` }
-    });
-    
-    const rawText = await res.text();
-    let data: any;
-    try { data = JSON.parse(rawText); } catch (_) { data = { raw: rawText }; }
-
-    console.log(`[testPlatformWhatsAppConnection] HTTP ${res.status}`);
-
-    // Persist status
-    const cfgs = await base44ORM.entities.PlatformMessagingConfig.list('-created_at', 1);
-    const newStatus = res.ok ? 'connected' : 'error';
-    const updates = {
-      whatsapp_provider: provider,
-      whatsapp_api_key: api_key,
-      whatsapp_phone_number_id: phone_number_id,
-      whatsapp_business_id: business_id || '',
-      whatsapp_status: newStatus,
+    await base44.asServiceRole.entities.PlatformMessagingConfig.update(cfg.id, {
+      whatsapp_status: ok ? 'connected' : 'error',
       whatsapp_last_tested: new Date().toISOString()
-    };
-    
-    if (cfgs.length > 0) {
-      await base44ORM.entities.PlatformMessagingConfig.update(cfgs[0].id, updates);
-    } else {
-      await base44ORM.entities.PlatformMessagingConfig.create({ is_singleton: true, ...updates });
-    }
-
-    if (res.ok) {
-      return c.json({ data: { success: true, status: 'connected', message: `Connected to ${provider} — phone ${data.display_phone_number || phone_number_id}`, details: data } });
-    }
-    return c.json({ data: { success: false, status: 'error', error: data.error?.message || JSON.stringify(data) } });
-  } catch (error: any) {
-    console.error('[testPlatformWhatsAppConnection] Error:', error);
-    return c.json({ data: { success: false, error: error.message } });
+    });
+    return c.json({ data: { ok, details: data } });
+  } catch (e) {
+    return c.json({ data: { ok: false, error: e.message } }, 500);
   }
-}
+
+};

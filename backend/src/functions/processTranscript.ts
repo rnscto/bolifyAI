@@ -1,93 +1,98 @@
+import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
-import { postCallActionExtractorCore } from "./postCallActionExtractor.ts";
 
-export async function processTranscriptCore(call_log_id: string, recording_url: string) {
+
+export default async function processTranscript(c: any) {
+  const req = c.req.raw || c.req;
   try {
-    const callLogRes = await (client as any).queryObject('SELECT * FROM calllog WHERE id = $1', [call_log_id]);
-    const callLog = callLogRes.rows[0];
+    // Called from smartfloWebhook (no user session) — use service role
+    const appId = Deno.env.get('BASE44_APP_ID');
+    /* const base44 = ... */;
+
+    const { call_log_id, recording_url } = await c.req.json();
+
+    if (!call_log_id || !recording_url) {
+      return c.json({ data: { error: 'Missing required fields' } }, 400);
+    }
+
+    // Validate recording_url is a proper URL
+    try {
+      new URL(recording_url);
+    } catch (_) {
+      return c.json({ data: { error: 'Invalid recording URL' } }, 400);
+    }
+
+    const callLog = await base44.entities.CallLog.get(call_log_id);
     if (!callLog) {
-      return { success: false, error: 'Call log not found' };
+      return c.json({ data: { error: 'Call log not found' } }, 404);
     }
 
-    let transcript = callLog.transcript || '';
-    
-    if (!transcript && !recording_url) {
-      return { success: false, error: 'Missing recording_url and no existing transcript' };
+    // Download audio file
+    const audioResponse = await fetch(recording_url);
+    if (!audioResponse.ok) {
+      console.error('Recording download failed:', audioResponse.status);
+      return c.json({ data: { error: 'Failed to download recording' } }, 500);
+    }
+    const audioBuffer = await audioResponse.arrayBuffer();
+    console.log(`[processTranscript] Downloaded recording: ${audioBuffer.byteLength} bytes`);
+
+    // Detect file extension from content-type or URL
+    const contentType = audioResponse.headers.get('content-type') || '';
+    let fileName = 'recording.mp3';
+    let mimeType = 'audio/mpeg';
+    if (contentType.includes('wav')) { fileName = 'recording.wav'; mimeType = 'audio/wav'; }
+    else if (contentType.includes('ogg')) { fileName = 'recording.ogg'; mimeType = 'audio/ogg'; }
+    else if (contentType.includes('mp4') || contentType.includes('m4a')) { fileName = 'recording.m4a'; mimeType = 'audio/mp4'; }
+    else if (contentType.includes('webm')) { fileName = 'recording.webm'; mimeType = 'audio/webm'; }
+    console.log(`[processTranscript] Audio content-type: ${contentType}, using: ${fileName}`);
+
+    // Transcribe using Azure OpenAI gpt-4o-transcribe (best Hindi/Hinglish/English accuracy)
+    const azureSttEndpoint = 'https://ai-yadavnand8860531ai976911404567.cognitiveservices.azure.com';
+    const sttDeployment = 'gpt-4o-transcribe';
+    const sttApiVersion = '2025-01-01-preview';
+    const sttUrl = `${azureSttEndpoint}/openai/deployments/${sttDeployment}/audio/transcriptions?api-version=${sttApiVersion}`;
+
+    const formData = new FormData();
+    formData.append('file', new Blob([audioBuffer], { type: mimeType }), fileName);
+    formData.append('language', 'hi');
+    formData.append('response_format', 'text');
+
+    console.log(`[processTranscript] Calling Azure STT: ${sttUrl.substring(0, 80)}...`);
+
+    const sttResponse = await fetch(sttUrl, {
+      method: 'POST',
+      headers: {
+        'api-key': Deno.env.get('AZURE_OPENAI_KEY')
+      },
+      body: formData
+    });
+
+    if (!sttResponse.ok) {
+      const errText = await sttResponse.text();
+      console.error(`Azure gpt-4o-transcribe failed (${sttResponse.status}):`, errText);
+      return c.json({ data: { error: 'Speech to text failed', detail: errText } }, 500);
     }
 
-    if (!transcript && recording_url) {
-      try {
-        new URL(recording_url);
-      } catch (_) {
-        return { success: false, error: 'Invalid recording URL' };
-      }
-    }
+    const transcript = await sttResponse.text();
+    console.log(`[processTranscript] Transcript (${transcript.length} chars): ${transcript.substring(0, 200)}`);
 
-    if (!transcript) {
-      const audioResponse = await fetch(recording_url);
-      if (!audioResponse.ok) {
-        console.error('Recording download failed:', audioResponse.status);
-        return { success: false, error: 'Failed to download recording' };
-      }
-      const audioBuffer = await audioResponse.arrayBuffer();
-      console.log(`[processTranscript] Downloaded recording: ${audioBuffer.byteLength} bytes`);
-
-      const contentType = audioResponse.headers.get('content-type') || '';
-      let fileName = 'recording.mp3';
-      let mimeType = 'audio/mpeg';
-      if (contentType.includes('wav')) { fileName = 'recording.wav'; mimeType = 'audio/wav'; }
-      else if (contentType.includes('ogg')) { fileName = 'recording.ogg'; mimeType = 'audio/ogg'; }
-      else if (contentType.includes('mp4') || contentType.includes('m4a')) { fileName = 'recording.m4a'; mimeType = 'audio/mp4'; }
-      else if (contentType.includes('webm')) { fileName = 'recording.webm'; mimeType = 'audio/webm'; }
-
-      const azureSttEndpoint = 'https://ai-yadavnand8860531ai976911404567.cognitiveservices.azure.com';
-      const sttDeployment = 'gpt-4o-transcribe';
-      const sttApiVersion = '2025-01-01-preview';
-      const sttUrl = `${azureSttEndpoint}/openai/deployments/${sttDeployment}/audio/transcriptions?api-version=${sttApiVersion}`;
-
-      const formData = new FormData();
-      formData.append('file', new Blob([audioBuffer], { type: mimeType }), fileName);
-      formData.append('language', 'hi');
-      formData.append('response_format', 'text');
-
-      const sttResponse = await fetch(sttUrl, {
-        method: 'POST',
-        headers: {
-          'api-key': Deno.env.get('AZURE_OPENAI_KEY') || ''
-        },
-        body: formData
-      });
-
-      if (!sttResponse.ok) {
-        const errText = await sttResponse.text();
-        console.error(`Azure gpt-4o-transcribe failed (${sttResponse.status}):`, errText);
-        return { success: false, error: 'Speech to text failed', detail: errText };
-      }
-
-      transcript = await sttResponse.text();
-      console.log(`[processTranscript] Transcript (${transcript.length} chars): ${transcript.substring(0, 200)}`);
-    } else {
-      console.log(`[processTranscript] Found existing transcript (${transcript.length} chars). Skipping STT.`);
-    }
-
-    let baseUrlRaw = Deno.env.get('AZURE_OPENAI_ENDPOINT') || '';
-    baseUrlRaw = baseUrlRaw.replace(/\/+$/, '');
-    const _oi = baseUrlRaw.indexOf('/openai/');
-    if (_oi > 0) baseUrlRaw = baseUrlRaw.substring(0, _oi);
-
+    // Use Azure OpenAI to analyze conversation + score lead
+    const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
     const analysisResponse = await fetch(
-      `${baseUrlRaw}/openai/v1/responses`,
+      `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`,
       {
         method: 'POST',
         headers: {
-          'api-key': Deno.env.get('AZURE_OPENAI_KEY') || '',
+          'api-key': Deno.env.get('AZURE_OPENAI_KEY'),
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: Deno.env.get('AZURE_OPENAI_DEPLOYMENT'),
-          instructions: `You are an expert sales call analyst AI. Analyze call transcripts to extract:
-1. A concise summary of the conversation
-2. The current lead status
+          messages: [
+            {
+              role: 'system',
+              content: `You are an expert sales call analyst AI. Analyze call transcripts to extract:
+1. A brief summary of the conversation
+2. Lead status classification
 3. Sentiment analysis
 4. Intent signals (buying signals, objections, questions)
 5. A lead score from 0-100 based on conversion likelihood
@@ -98,38 +103,35 @@ SCORING CRITERIA (total 100):
 - Engagement (0-25): short_answers_only=5, asked_questions=15, extended_conversation=20, highly_engaged=25
 - Keywords (0-20): positive keywords like "interested","sign up","let's go","sounds good","when can we start"=+5 each (cap 20); negative keywords like "not interested","too expensive","no need","don't call"=-5 each (min 0)
 
-Respond ONLY in valid JSON with this exact structure.`,
-          input: `Analyze this sales call transcript:\n\n${transcript}\n\nReturn JSON with: summary (string), lead_status (one of: interested, not_interested, callback, converted, contacted), sentiment (one of: very_positive, positive, neutral, negative, very_negative), intent_signals (array of strings like: pricing_inquiry, demo_request, competitor_mention, budget_confirmed, timeline_mentioned, decision_maker, referral, objection_price, objection_timing, objection_need, follow_up_requested), lead_score (number 0-100), score_breakdown (object with: sentiment_score number, intent_score number, engagement_score number, keyword_score number, reasoning string), key_keywords (array of important words/phrases from the conversation)`,
-          max_output_tokens: 800,
-          text: { format: { type: 'json_object' } }
+Respond ONLY in valid JSON with this exact structure.`
+            },
+            {
+              role: 'user',
+              content: `Analyze this sales call transcript:\n\n${transcript}\n\nReturn JSON with: summary (string), lead_status (one of: interested, not_interested, callback, voicemail, converted, contacted; use "voicemail" ONLY when the call clearly hit an answering machine / voicemail with no real human conversation), sentiment (one of: very_positive, positive, neutral, negative, very_negative), intent_signals (array of strings like: pricing_inquiry, demo_request, competitor_mention, budget_confirmed, timeline_mentioned, decision_maker, referral, objection_price, objection_timing, objection_need, follow_up_requested), lead_score (number 0-100), score_breakdown (object with: sentiment_score number, intent_score number, engagement_score number, keyword_score number, reasoning string), key_keywords (array of important words/phrases from the conversation)`
+            }
+          ],
+          max_completion_tokens: 800,
+          response_format: { type: "json_object" }
         })
       }
     );
 
-    let analysisData: any = {};
-    let rawContent = '{}';
+    let analysisData = {};
     if (!analysisResponse.ok) {
-      const errTxt = await analysisResponse.text();
-      console.error("[processTranscript] Azure OpenAI analysis failed:", analysisResponse.status, errTxt);
+      const errBody = await analysisResponse.text();
+      console.error('OpenAI analysis failed:', errBody);
+      analysisData = { choices: [{ message: { content: '{}' } }] };
     } else {
       analysisData = await analysisResponse.json();
-      rawContent = analysisData.output_text || '';
-      if (!rawContent && Array.isArray(analysisData.output)) {
-        for (const item of analysisData.output) {
-          const parts = item?.content || [];
-          for (const p of parts) {
-            if (p.text) rawContent += p.text;
-          }
-        }
-      }
     }
+    const rawContent = analysisData.choices?.[0]?.message?.content || '{}';
     
-    const cleanContent = rawContent.replace(/^```(?:json)?\n?/i, '').replace(/```$/i, '').trim();
     let analysis;
     try {
-      analysis = JSON.parse(cleanContent);
+      analysis = JSON.parse(rawContent);
     } catch (_) {
-      analysis = { summary: cleanContent, lead_status: 'contacted', sentiment: 'neutral', lead_score: 0, intent_signals: [], score_breakdown: {}, key_keywords: [] };
+      console.error('Failed to parse analysis JSON, using fallback');
+      analysis = { summary: rawContent, lead_status: 'contacted', sentiment: 'neutral', lead_score: 0, intent_signals: [], score_breakdown: {}, key_keywords: [] };
     }
 
     const summary = analysis.summary || 'Analysis not available';
@@ -140,16 +142,18 @@ Respond ONLY in valid JSON with this exact structure.`,
     const scoreBreakdown = analysis.score_breakdown || {};
     const keyKeywords = analysis.key_keywords || [];
 
-    await (client as any).queryObject(`
-      UPDATE calllog 
-      SET status = 'completed', 
-          transcript = $2, 
-          conversation_summary = $3, 
-          lead_status_updated = $4,
-          updated_at = NOW()
-      WHERE id = $1
-    `, [call_log_id, transcript, `${summary}\n\n---\nScore: ${leadScore}/100 | Sentiment: ${sentiment} | Signals: ${intentSignals.join(', ')}`, leadStatus]);
+    console.log(`[processTranscript] Lead Score: ${leadScore} | Sentiment: ${sentiment} | Status: ${leadStatus} | Intents: ${intentSignals.join(', ')}`);
 
+    // Update call log with transcript, summary, analysis, and mark as completed
+    // This update triggers the CallLog entity automation → campaignPostCall
+    await base44.entities.CallLog.update(call_log_id, {
+      status: 'completed',
+      transcript,
+      conversation_summary: `${summary}\n\n---\nScore: ${leadScore}/100 | Sentiment: ${sentiment} | Signals: ${intentSignals.join(', ')}`,
+      lead_status_updated: leadStatus
+    });
+
+    // ===== AI-DRIVEN QUALIFICATION TIER =====
     const highIntents = ['demo_request', 'budget_confirmed', 'timeline_mentioned', 'decision_maker']
       .filter(s => intentSignals.includes(s));
     let qualificationTier = 'cold';
@@ -177,49 +181,74 @@ Respond ONLY in valid JSON with this exact structure.`,
     if (leadStatus === 'converted') { qualificationTier = 'hot'; qualificationReason = 'Lead converted'; }
     if (leadStatus === 'do_not_call') { qualificationTier = 'disqualified'; qualificationReason = 'Marked do not call'; }
 
+    // ===== AUTO-CREATE COMPLAINT ON DO_NOT_CALL =====
     if (leadStatus === 'do_not_call' && callLog.caller_id) {
       try {
-        await (client as any).queryObject(`
-          INSERT INTO complaintlog (id, created_at, did_number, client_id, agent_id, complainant_number, complaint_type, complaint_source, description, status, call_log_id)
-          VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7, $8, $9)
-        `, [callLog.caller_id, callLog.client_id, callLog.agent_id, callLog.callee_number, 'unsolicited', 'internal', `Auto-detected: Lead explicitly requested "do not call" during AI conversation. Call ID: ${call_log_id}`, 'open', call_log_id]);
-      } catch (e) {}
+        await base44.entities.ComplaintLog.create({
+          did_number: callLog.caller_id,
+          client_id: callLog.client_id,
+          agent_id: callLog.agent_id,
+          complainant_number: callLog.callee_number,
+          complaint_type: 'unsolicited',
+          complaint_source: 'internal',
+          description: `Auto-detected: Lead explicitly requested "do not call" during AI conversation. Call ID: ${call_log_id}`,
+          status: 'open',
+          call_log_id: call_log_id,
+        });
+        console.log(`[processTranscript] ⚠️ Auto-complaint created for DID ${callLog.caller_id} — do_not_call detected`);
+      } catch (complaintErr) {
+        console.error('[processTranscript] Failed to create auto-complaint:', complaintErr.message);
+      }
     }
 
+    console.log(`[processTranscript] Tier: ${qualificationTier} — ${qualificationReason}`);
+
+    // ===== DETECT NON-ANSWER / VOICEMAIL CALLS (wide scope) =====
+    // Voicemail greetings get transcribed but are NOT real conversations.
+    // We must skip all activity creation, sequence enrollment, and action extraction for these.
     const isNonAnswer = !transcript || transcript.length < 100 || 
       ['no_answer', 'failed'].includes(callLog.status) ||
-      leadStatus === 'no_answer';
+      leadStatus === 'no_answer' || leadStatus === 'voicemail';
+    
+    if (isNonAnswer) {
+      console.log(`[processTranscript] ⚠️ NON-ANSWER/VOICEMAIL detected (transcript: ${(transcript || '').length} chars, status: ${callLog.status}, leadStatus: ${leadStatus}) — skipping all activity creation & post-call triggers`);
+    }
 
+    // Update lead with status, score, sentiment, tier, and intent signals
+    // CRITICAL: Only update score/status if this call had a real conversation.
+    // If call was not answered or had no meaningful transcript, preserve existing lead score & status.
     if (callLog.lead_id) {
-      let existingLead: any = {};
-      try { 
-        const leadRes = await (client as any).queryObject('SELECT * FROM lead WHERE id = $1', [callLog.lead_id]);
-        if (leadRes.rows.length > 0) existingLead = leadRes.rows[0];
-      } catch (_) {}
+      let existingLead = {};
+      try { existingLead = await base44.entities.Lead.get(callLog.lead_id); } catch (_) {}
       
       const updatedEngagement = (existingLead.engagement_count || 0) + 1;
-      const existingTags = typeof existingLead.tags === 'string' ? JSON.parse(existingLead.tags) : (existingLead.tags || []);
+      const existingTags = existingLead.tags || [];
       const mergedTags = [...new Set([...existingTags, ...keyKeywords.slice(0, 10)])];
       
+      // For non-answer calls: only update engagement metadata, NEVER overwrite score/status/tier
       if (isNonAnswer) {
-        await (client as any).queryObject(`
-          UPDATE lead 
-          SET last_call_date = $2, 
-              last_engagement_date = $3, 
-              engagement_count = $4, 
-              tags = $5,
-              updated_at = NOW()
-          WHERE id = $1
-        `, [callLog.lead_id, new Date().toISOString(), new Date().toISOString(), updatedEngagement, JSON.stringify(mergedTags)]);
+        const nonAnswerUpdate = {
+          last_call_date: new Date().toISOString(),
+          last_engagement_date: new Date().toISOString(),
+          engagement_count: updatedEngagement,
+          tags: mergedTags,
+        };
+        await base44.entities.Lead.update(callLog.lead_id, nonAnswerUpdate);
+        console.log(`[processTranscript] Lead ${callLog.lead_id} — non-answer call, preserved existing score (${existingLead.score}) & status (${existingLead.status})`);
       } else {
+        // Real conversation: only upgrade score, never downgrade from a higher previous score
+        // unless the lead explicitly said "not interested" or "do not call"
         const existingScore = existingLead.score || 0;
         const existingStatus = existingLead.status || 'new';
         
+        // Determine if we should downgrade
         const positiveStatuses = ['interested', 'converted', 'callback'];
         const negativeStatuses = ['not_interested', 'do_not_call'];
         const wasPositive = positiveStatuses.includes(existingStatus);
+        const isNowNegative = negativeStatuses.includes(leadStatus);
         const isNowNeutral = ['contacted', 'new'].includes(leadStatus);
         
+        // Only allow downgrade if lead explicitly expressed negativity
         let finalScore = leadScore;
         let finalStatus = leadStatus;
         let finalTier = qualificationTier;
@@ -229,51 +258,55 @@ Respond ONLY in valid JSON with this exact structure.`,
         let finalBreakdown = scoreBreakdown;
         
         if (wasPositive && isNowNeutral && existingScore > leadScore) {
+          // Lead was "interested" before, new call is just "contacted" with lower score
+          // → Preserve the higher previous state
           finalScore = existingScore;
           finalStatus = existingStatus;
           finalTier = existingLead.qualification_tier || qualificationTier;
           finalReason = existingLead.qualification_reason || qualificationReason;
           finalSentiment = existingLead.sentiment || sentiment;
-          finalIntents = typeof existingLead.intent_signals === 'string' ? JSON.parse(existingLead.intent_signals) : (existingLead.intent_signals || intentSignals);
-          finalBreakdown = typeof existingLead.score_breakdown === 'string' ? JSON.parse(existingLead.score_breakdown) : (existingLead.score_breakdown || scoreBreakdown);
+          finalIntents = existingLead.intent_signals || intentSignals;
+          finalBreakdown = existingLead.score_breakdown || scoreBreakdown;
+          console.log(`[processTranscript] Lead ${callLog.lead_id} — preserving higher previous score ${existingScore} (was ${existingStatus}), new call scored ${leadScore} (${leadStatus})`);
+        } else if (wasPositive && isNowNegative) {
+          // Lead explicitly said "not interested" or "do not call" — allow downgrade
+          console.log(`[processTranscript] Lead ${callLog.lead_id} — downgrading: was ${existingStatus}(${existingScore}), now ${leadStatus}(${leadScore}) — explicit negative response`);
         }
 
-        await (client as any).queryObject(`
-          UPDATE lead 
-          SET status = $2, 
-              score = $3, 
-              sentiment = $4, 
-              intent_signals = $5, 
-              score_breakdown = $6, 
-              qualification_tier = $7, 
-              qualification_reason = $8, 
-              tags = $9, 
-              last_call_date = $10, 
-              last_engagement_date = $11, 
-              engagement_count = $12, 
-              notes = $13,
-              updated_at = NOW()
-          WHERE id = $1
-        `, [
-          callLog.lead_id, finalStatus, finalScore, finalSentiment, JSON.stringify(finalIntents), JSON.stringify(finalBreakdown), finalTier, finalReason, JSON.stringify(mergedTags), new Date().toISOString(), new Date().toISOString(), updatedEngagement, `[Score: ${finalScore}/100 | ${finalSentiment} | ${finalTier}] ${summary.substring(0, 300)}`
-        ]);
+        await base44.entities.Lead.update(callLog.lead_id, {
+          status: finalStatus,
+          score: finalScore,
+          sentiment: finalSentiment,
+          intent_signals: finalIntents,
+          score_breakdown: finalBreakdown,
+          qualification_tier: finalTier,
+          qualification_reason: finalReason,
+          tags: mergedTags,
+          last_call_date: new Date().toISOString(),
+          last_engagement_date: new Date().toISOString(),
+          engagement_count: updatedEngagement,
+          notes: `[Score: ${finalScore}/100 | ${finalSentiment} | ${finalTier}] ${summary.substring(0, 300)}`
+        });
+        console.log(`[processTranscript] Lead ${callLog.lead_id} updated — Score: ${finalScore}, Tier: ${finalTier}, Status: ${finalStatus}`);
       }
     }
 
-    function setISTHours(date: Date, hours: number, minutes = 0) {
+    // ===== IST TIMEZONE HELPER =====
+    // Server runs in UTC. IST = UTC + 5:30. To schedule at 10:00 IST, set UTC to 04:30.
+    function setISTHours(date, hours, minutes = 0) {
       const utcHours = hours - 5;
       const utcMinutes = minutes - 30;
       date.setUTCHours(utcHours, utcMinutes, 0, 0);
+      // Handle underflow (negative minutes/hours)
       if (utcMinutes < 0) { date.setUTCHours(utcHours - 1, utcMinutes + 60, 0, 0); }
       return date;
     }
 
-    let leadForActivities: any = null;
+    // ===== CREATE AI-DRIVEN ACTIVITIES BASED ON TIER =====
+    // SKIP entirely for non-answer/voicemail calls
+    let leadForActivities = null;
     if (callLog.lead_id && !isNonAnswer) {
-      try { 
-        const leadRes = await (client as any).queryObject('SELECT * FROM lead WHERE id = $1', [callLog.lead_id]);
-        if (leadRes.rows.length > 0) leadForActivities = leadRes.rows[0];
-      } catch (_) {}
+      try { leadForActivities = await base44.entities.Lead.get(callLog.lead_id); } catch (_) {}
     }
 
     if (callLog.lead_id && qualificationTier && leadStatus !== 'do_not_call' && !isNonAnswer) {
@@ -282,10 +315,14 @@ Respond ONLY in valid JSON with this exact structure.`,
       if (qualificationTier === 'hot') {
         const dueDate = new Date();
         dueDate.setHours(dueDate.getHours() + 4);
-        await (client as any).queryObject(`
-          INSERT INTO activity (id, created_at, client_id, lead_id, call_log_id, type, title, description, scheduled_date, due_date, status, priority, auto_created)
-          VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        `, [callLog.client_id, callLog.lead_id, call_log_id, 'task', `🔥 HOT LEAD: Call ${leadForActivities?.name || callLog.callee_number} immediately`, `AI Score: ${leadScore}/100 | Tier: HOT | ${qualificationReason}\n\nSummary: ${summary}\nSignals: ${intentSignals.join(', ')}`, new Date().toISOString(), dueDate.toISOString(), 'scheduled', 'high', true]);
+        await base44.entities.Activity.create({
+          client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
+          type: 'task',
+          title: `🔥 HOT LEAD: Call ${leadForActivities?.name || callLog.callee_number} immediately`,
+          description: `AI Score: ${leadScore}/100 | Tier: HOT | ${qualificationReason}\n\nSummary: ${summary}\nSignals: ${intentSignals.join(', ')}`,
+          scheduled_date: new Date().toISOString(), due_date: dueDate.toISOString(),
+          status: 'scheduled', priority: 'high', auto_created: true
+        });
         actionsCreated.push('hot_task');
 
         if (intentSignals.includes('demo_request')) {
@@ -293,11 +330,15 @@ Respond ONLY in valid JSON with this exact structure.`,
           demoDate.setDate(demoDate.getDate() + 1);
           if (demoDate.getDay() === 0) demoDate.setDate(demoDate.getDate() + 1);
           if (demoDate.getDay() === 6) demoDate.setDate(demoDate.getDate() + 2);
-          setISTHours(demoDate, 10, 0);
-          await (client as any).queryObject(`
-            INSERT INTO activity (id, created_at, client_id, lead_id, call_log_id, type, title, description, scheduled_date, due_date, status, priority, auto_created)
-            VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-          `, [callLog.client_id, callLog.lead_id, call_log_id, 'demo', `Schedule demo for ${leadForActivities?.name || callLog.callee_number}`, `Lead requested a demo. Score: ${leadScore}/100.`, demoDate.toISOString(), demoDate.toISOString(), 'scheduled', 'high', true]);
+          setISTHours(demoDate, 10, 0); // 10:00 AM IST
+          await base44.entities.Activity.create({
+            client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
+            type: 'demo',
+            title: `Schedule demo for ${leadForActivities?.name || callLog.callee_number}`,
+            description: `Lead requested a demo. Score: ${leadScore}/100.`,
+            scheduled_date: demoDate.toISOString(), due_date: demoDate.toISOString(),
+            status: 'scheduled', priority: 'high', auto_created: true
+          });
           actionsCreated.push('demo_scheduled');
         }
       }
@@ -307,22 +348,30 @@ Respond ONLY in valid JSON with this exact structure.`,
         followupDate.setDate(followupDate.getDate() + 1);
         if (followupDate.getDay() === 0) followupDate.setDate(followupDate.getDate() + 1);
         if (followupDate.getDay() === 6) followupDate.setDate(followupDate.getDate() + 2);
-        setISTHours(followupDate, 11, 0);
-        await (client as any).queryObject(`
-          INSERT INTO activity (id, created_at, client_id, lead_id, call_log_id, type, title, description, scheduled_date, due_date, status, priority, auto_created)
-          VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        `, [callLog.client_id, callLog.lead_id, call_log_id, 'followup', `Follow up with warm lead: ${leadForActivities?.name || callLog.callee_number}`, `AI Score: ${leadScore}/100 | Tier: WARM | ${qualificationReason}\nSummary: ${summary}`, followupDate.toISOString(), followupDate.toISOString(), 'scheduled', 'medium', true]);
+        setISTHours(followupDate, 11, 0); // 11:00 AM IST
+        await base44.entities.Activity.create({
+          client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
+          type: 'followup',
+          title: `Follow up with warm lead: ${leadForActivities?.name || callLog.callee_number}`,
+          description: `AI Score: ${leadScore}/100 | Tier: WARM | ${qualificationReason}\nSummary: ${summary}`,
+          scheduled_date: followupDate.toISOString(), due_date: followupDate.toISOString(),
+          status: 'scheduled', priority: 'medium', auto_created: true
+        });
         actionsCreated.push('warm_followup');
       }
 
       if (qualificationTier === 'nurture') {
         const reengageDate = new Date();
         reengageDate.setDate(reengageDate.getDate() + 5);
-        setISTHours(reengageDate, 11, 0);
-        await (client as any).queryObject(`
-          INSERT INTO activity (id, created_at, client_id, lead_id, call_log_id, type, title, description, scheduled_date, status, priority, auto_created)
-          VALUES (gen_random_uuid(), NOW(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-        `, [callLog.client_id, callLog.lead_id, call_log_id, 'followup', `Nurture lead: ${leadForActivities?.name || callLog.callee_number}`, `AI Score: ${leadScore}/100 | Tier: NURTURE | ${qualificationReason}`, reengageDate.toISOString(), 'scheduled', 'low', true]);
+        setISTHours(reengageDate, 11, 0); // 11:00 AM IST
+        await base44.entities.Activity.create({
+          client_id: callLog.client_id, lead_id: callLog.lead_id, call_log_id: call_log_id,
+          type: 'followup',
+          title: `Nurture lead: ${leadForActivities?.name || callLog.callee_number}`,
+          description: `AI Score: ${leadScore}/100 | Tier: NURTURE | ${qualificationReason}`,
+          scheduled_date: reengageDate.toISOString(),
+          status: 'scheduled', priority: 'low', auto_created: true
+        });
         actionsCreated.push('nurture_followup');
       }
 
@@ -330,24 +379,59 @@ Respond ONLY in valid JSON with this exact structure.`,
         const nextFollowup = qualificationTier === 'hot' ? new Date(Date.now() + 4 * 3600000) :
           qualificationTier === 'warm' ? new Date(Date.now() + 24 * 3600000) :
           new Date(Date.now() + 5 * 86400000);
-        await (client as any).queryObject(`
-          UPDATE lead 
-          SET next_followup_date = $2,
-              updated_at = NOW()
-          WHERE id = $1
-        `, [callLog.lead_id, nextFollowup.toISOString()]);
+        await base44.entities.Lead.update(callLog.lead_id, {
+          next_followup_date: nextFollowup.toISOString()
+        });
+        console.log(`[processTranscript] AI activities created: ${actionsCreated.join(', ')}`);
       }
     }
 
+    // Auto-enroll into AI email sequence based on tier
+    // SKIP for non-answer/voicemail calls
+    if (callLog.lead_id && qualificationTier && !['disqualified'].includes(qualificationTier) && !isNonAnswer) {
+      try {
+        const enrollResult = await base44.functions.invoke('autoEnrollSequence', {
+          lead_id: callLog.lead_id,
+          client_id: callLog.client_id,
+          qualification_tier: qualificationTier,
+          call_outcome: leadStatus,
+          call_summary: summary.substring(0, 500),
+          call_topics: keyKeywords.slice(0, 10),
+          objections: [],
+          intent_signals: intentSignals,
+          ai_score: leadScore
+        });
+        if (enrollResult?.enrolled) {
+          console.log(`[processTranscript] ✉️ Auto-enrolled in sequence: ${enrollResult.sequence_name}`);
+        }
+      } catch (seqErr) {
+        console.error(`[processTranscript] Auto-enroll failed: ${seqErr.message}`);
+      }
+    }
+
+    // Trigger post-call follow-up emails & RCS — SKIP for non-answer/voicemail
     if (!isNonAnswer) {
       try {
-        await postCallActionExtractorCore(call_log_id);
+        await base44.functions.invoke('postCallFollowup', {
+          call_log_id: call_log_id
+        });
+        console.log('[processTranscript] Post-call follow-up triggered');
+      } catch (followupErr) {
+        console.error('[processTranscript] Post-call follow-up error:', followupErr.message);
+      }
+
+      // Trigger post-call action extraction (notes, scheduled activities, emails)
+      try {
+        await base44.functions.invoke('postCallActionExtractor', {
+          call_log_id: call_log_id
+        });
+        console.log('[processTranscript] Post-call action extraction triggered');
       } catch (actionErr) {
-        console.error('[processTranscript] Post-call action extraction error:', actionErr);
+        console.error('[processTranscript] Post-call action extraction error:', actionErr.message);
       }
     }
 
-    return { 
+    return c.json({ data: { 
       success: true,
       transcript,
       summary,
@@ -358,21 +442,11 @@ Respond ONLY in valid JSON with this exact structure.`,
       score_breakdown: scoreBreakdown,
       qualification_tier: qualificationTier,
       qualification_reason: qualificationReason
-    };
+    } });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error processing transcript:', error);
-    return { success: false, error: error.message };
+    return c.json({ data: { error: error.message } }, 500);
   }
-}
 
-export default async function processTranscript(c: any) {
-  try {
-    const payload = await c.req.json();
-    const result = await processTranscriptCore(payload.call_log_id, payload.recording_url);
-    if (!result.success) return c.json({ data: result }, 400);
-    return c.json({ data: result });
-  } catch (e: any) {
-    return c.json({ data: { success: false, error: e.message } }, 500);
-  }
-}
+};

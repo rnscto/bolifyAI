@@ -1,143 +1,168 @@
 import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
+// ═══════════════════════════════════════════════════════════════════
+// uploadKBToStorage
+// Concatenates all KB docs of an agent into one text file, uploads it
+// to private storage, and stores the URI on Agent.kb_file_uri.
+//
+// This keeps agent_config_cache small (just a URI instead of full text)
+// and removes the field-size limit — KBs can now be any size.
+//
+// Call this:
+//   - On demand from initiateCall if Agent.kb_file_uri is missing
+//   - From an entity automation when Agent.knowledge_base_ids changes
+//   - Manually to rebuild (e.g. after editing KB docs)
+// ═══════════════════════════════════════════════════════════════════
 
-function parseConnectionString(cs: string) {
-  const parts: Record<string, string> = {};
-  for (const seg of cs.split(';')) {
-    const idx = seg.indexOf('=');
-    if (idx > 0) parts[seg.slice(0, idx).trim()] = seg.slice(idx + 1).trim();
+
+import { BlobServiceClient } from 'npm:@azure/storage-blob@12.17.0';
+
+// ─── Azure Blob private upload (replaces Core.UploadPrivateFile) ───
+async function uploadPrivateToAzure(buffer, blobName, contentType = 'text/plain') {
+  const conn = Deno.env.get('AZURE_STORAGE_CONNECTION_STRING');
+  const container = Deno.env.get('AZURE_STORAGE_CONTAINER_PRIVATE');
+  if (!conn || !container) throw new Error('Azure Blob not configured');
+  const svc = BlobServiceClient.fromConnectionString(conn);
+  const blob = svc.getContainerClient(container).getBlockBlobClient(blobName);
+  await blob.uploadData(buffer, { blobHTTPHeaders: { blobContentType: contentType } });
+  return `azblob://${container}/${blobName}`;
+}
+
+// Simple content hash (djb2) — lightweight, good enough for change detection
+function djb2Hash(str) {
+  let h = 5381;
+  for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0;
+  return String(h >>> 0);
+}
+
+async function buildKBFile(base44, agentId) {
+  const agent = await base44.asServiceRole.entities.Agent.get(agentId);
+  if (!agent) throw new Error('Agent not found');
+
+  const kbIds = agent.knowledge_base_ids || [];
+  if (kbIds.length === 0) {
+    return { skipped: true, reason: 'no_kb_docs', agent_id: agentId };
   }
+
+  // Fetch all KB docs in parallel
+  const kbDocs = (await Promise.all(
+    kbIds.map(id => base44.asServiceRole.entities.KnowledgeBase.get(id).catch(() => null))
+  )).filter(d => d && d.content);
+
+  if (kbDocs.length === 0) {
+    return { skipped: true, reason: 'no_kb_content', agent_id: agentId };
+  }
+
+  // Concatenate with clear section boundaries (RAG chunker uses "---" as doc delimiter)
+  const concatenated = kbDocs
+    .map(d => `[${d.title || 'Untitled'}]\n${d.content}`)
+    .join('\n\n---\n\n');
+
+  const hash = djb2Hash(concatenated);
+
+  // Short-circuit: if hash matches AND file URI is on Azure Blob, no need to re-upload.
+  // Legacy Base44 URIs (mp/private/...) must be migrated even when content is unchanged.
+  if (agent.kb_file_hash === hash && agent.kb_file_uri && agent.kb_file_uri.startsWith('azblob://')) {
+    return {
+      skipped: true,
+      reason: 'unchanged',
+      agent_id: agentId,
+      kb_file_uri: agent.kb_file_uri,
+      kb_char_count: concatenated.length
+    };
+  }
+
+  // Upload to Azure Blob private container
+  const buffer = new TextEncoder().encode(concatenated);
+  const blobName = `kb/agent_${agentId}_${Date.now()}.txt`;
+  const fileUri = await uploadPrivateToAzure(buffer, blobName, 'text/plain');
+  if (!fileUri) throw new Error('Azure Blob upload did not return file_uri');
+
+  // Persist URI + hash on the agent
+  await base44.asServiceRole.entities.Agent.update(agentId, {
+    kb_file_uri: fileUri,
+    kb_file_hash: hash,
+    kb_last_built_at: new Date().toISOString(),
+    kb_char_count: concatenated.length
+  });
+
+  console.log(`[uploadKBToStorage] agent=${agentId}: uploaded ${concatenated.length} chars from ${kbDocs.length} docs → ${fileUri}`);
+
   return {
-    accountName: parts.AccountName,
-    accountKey: parts.AccountKey,
-    endpoint: parts.BlobEndpoint || `https://${parts.AccountName}.blob.${parts.EndpointSuffix || 'core.windows.net'}`
+    success: true,
+    agent_id: agentId,
+    kb_file_uri: fileUri,
+    kb_char_count: concatenated.length,
+    kb_doc_count: kbDocs.length
   };
 }
 
-async function signSharedKey(stringToSign: string, accountKey: string) {
-  const keyBytes = Uint8Array.from(atob(accountKey), c => c.charCodeAt(0));
-  const cryptoKey = await crypto.subtle.importKey('raw', keyBytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = await crypto.subtle.sign('HMAC', cryptoKey, new TextEncoder().encode(stringToSign));
-  return btoa(String.fromCharCode(...new Uint8Array(sig)));
-}
-
-async function sha256Hex(text: string) {
-  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
-  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
-}
-
-async function putBlob(params: { endpoint: string, accountName: string, accountKey: string, container: string, blobName: string, body: Uint8Array, contentType: string }) {
-  const { endpoint, accountName, accountKey, container, blobName, body, contentType } = params;
-  const dateStr = new Date().toUTCString();
-  const contentLength = body.byteLength;
-  const canonicalizedHeaders = `x-ms-blob-type:BlockBlob\nx-ms-date:${dateStr}\nx-ms-version:2021-08-06`;
-  const canonicalizedResource = `/${accountName}/${container}/${blobName}`;
-  const stringToSign = [
-    'PUT', '', '', contentLength, '', contentType, '', '', '', '', '', '',
-    canonicalizedHeaders, canonicalizedResource
-  ].join('\n');
-  const signature = await signSharedKey(stringToSign, accountKey);
-  const auth = `SharedKey ${accountName}:${signature}`;
-
-  const url = `${endpoint}/${container}/${blobName}`;
-  const resp = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      'Authorization': auth,
-      'x-ms-blob-type': 'BlockBlob',
-      'x-ms-date': dateStr,
-      'x-ms-version': '2021-08-06',
-      'Content-Type': contentType,
-      'Content-Length': String(contentLength)
-    },
-    body: body as any
-  });
-  if (!resp.ok) {
-    throw new Error(`Azure PUT failed ${resp.status}: ${(await resp.text()).substring(0, 300)}`);
-  }
-  return url;
-}
-
 export default async function uploadKBToStorage(c: any) {
+  const req = c.req.raw || c.req;
   try {
+    /* const base44 = ... */;
     const body = await c.req.json().catch(() => ({}));
-    const { agent_id } = body;
-    if (!agent_id) return c.json({ data: { error: 'agent_id required' } }, 400);
 
-    const agent = await base44.entities.Agent.get(agent_id);
-    if (!agent) return c.json({ data: { error: 'Agent not found' } }, 404);
+    // Support 3 invocation modes:
+    //  1) Entity automation payload: { event: {...}, data: {...} } — rebuild if KB changed
+    //  2) Manual: { agent_id } — rebuild one agent
+    //  3) Bulk: { client_id } — rebuild all agents for a client (admin)
+    let agentIds = [];
 
-    const kbIds = agent.knowledge_base_ids || [];
-    if (kbIds.length === 0) {
-      if (agent.kb_file_uri) {
-        await base44.entities.Agent.update(agent_id, { kb_file_uri: '', kb_file_hash: '', kb_char_count: 0 });
+    if (body?.event?.entity_name === 'Agent') {
+      const data = body.data || {};
+      const oldData = body.old_data || {};
+      const kbIdsChanged = JSON.stringify(data.knowledge_base_ids || []) !== JSON.stringify(oldData.knowledge_base_ids || []);
+      // Only rebuild on create, or when KB list changes on update
+      if (body.event.type === 'create' || (body.event.type === 'update' && kbIdsChanged)) {
+        if (body.event.entity_id) agentIds = [body.event.entity_id];
+      } else {
+        return c.json({ data: { skipped: true, reason: 'no_kb_change' } });
       }
-      return c.json({ data: { success: true, message: 'No KB documents', char_count: 0 } });
+    } else if (body?.event?.entity_name === 'KnowledgeBase') {
+      // KB doc content changed → find every agent that uses this doc and rebuild.
+      // Trigger conditions on the automation already pre-filter to only content/title changes,
+      // so we don't re-check changed fields here.
+      const kbId = body.event.entity_id;
+      if (!kbId) return c.json({ data: { skipped: true, reason: 'no_kb_id' } });
+
+      // Find all agents that reference this KB doc
+      const allAgents = await base44.asServiceRole.entities.Agent.list('-created_date', 1000);
+      agentIds = allAgents
+        .filter(a => Array.isArray(a.knowledge_base_ids) && a.knowledge_base_ids.includes(kbId))
+        .map(a => a.id);
+      if (agentIds.length === 0) {
+        return c.json({ data: { skipped: true, reason: 'no_agents_use_this_kb', kb_id: kbId } });
+      }
+      console.log(`[uploadKBToStorage] KB ${kbId} changed → rebuilding ${agentIds.length} agent(s)`);
+    } else if (body?.agent_id) {
+      agentIds = [body.agent_id];
+    } else if (body?.client_id) {
+      const agents = await base44.asServiceRole.entities.Agent.filter({ client_id: body.client_id });
+      agentIds = agents.map(a => a.id);
+    } else if (body?.rebuild_all) {
+      // Admin one-time bulk rebuild: only agents with non-empty KB lists
+      const all = await base44.asServiceRole.entities.Agent.list('-created_date', 500);
+      agentIds = all.filter(a => Array.isArray(a.knowledge_base_ids) && a.knowledge_base_ids.length > 0).map(a => a.id);
+      console.log(`[uploadKBToStorage] rebuild_all: ${agentIds.length} agents have KB docs`);
+    } else {
+      return c.json({ data: { error: 'Provide agent_id, client_id, rebuild_all, or entity automation payload' } }, 400);
     }
 
-    const parts = [];
-    for (const kbId of kbIds) {
+    const results = [];
+    for (const id of agentIds) {
       try {
-        const doc = await base44.entities.KnowledgeBase.get(kbId);
-        if (doc && doc.status === 'ready' && doc.content) {
-          parts.push(`[${doc.title || kbId}]\n${doc.content}\n\n---\n\n`);
-        }
-      } catch (_) {}
-    }
-    const combined = parts.join('');
-    const charCount = combined.length;
-
-    if (charCount === 0) {
-      if (agent.kb_file_uri) {
-        await base44.entities.Agent.update(agent_id, { kb_file_uri: '', kb_file_hash: '', kb_char_count: 0 });
+        results.push(await buildKBFile(base44, id));
+      } catch (e) {
+        console.error(`[uploadKBToStorage] agent=${id} failed: ${e.message}`);
+        results.push({ agent_id: id, error: e.message });
       }
-      return c.json({ data: { success: true, message: 'No ready KB content', char_count: 0 } });
     }
 
-    const hash = await sha256Hex(combined);
-    if (agent.kb_file_hash === hash && agent.kb_file_uri) {
-      console.log(`[uploadKBToStorage] Hash match for agent ${agent_id} — skipping upload`);
-      return c.json({
-        data: {
-          success: true,
-          skipped: 'unchanged',
-          file_uri: agent.kb_file_uri,
-          char_count: charCount,
-          hash
-        }
-      });
-    }
-
-    const cs = Deno.env.get('AZURE_STORAGE_CONNECTION_STRING');
-    const container = Deno.env.get('AZURE_STORAGE_CONTAINER_PRIVATE');
-    if (!cs || !container) return c.json({ data: { error: 'Azure storage not configured' } }, 500);
-
-    const { accountName, accountKey, endpoint } = parseConnectionString(cs);
-    const blobName = `kb/${agent_id}/${Date.now()}-${hash.slice(0, 12)}.txt`;
-    const bytes = new TextEncoder().encode(combined);
-
-    const fileUri = await putBlob({
-      endpoint, accountName, accountKey, container, blobName,
-      body: bytes, contentType: 'text/plain; charset=utf-8'
-    });
-
-    await base44.entities.Agent.update(agent_id, {
-      kb_file_uri: fileUri,
-      kb_file_hash: hash,
-      kb_char_count: charCount
-    });
-
-    console.log(`[uploadKBToStorage] Agent ${agent_id} KB uploaded: ${charCount} chars, hash=${hash.slice(0, 12)}`);
-    return c.json({
-      data: {
-        success: true,
-        file_uri: fileUri,
-        char_count: charCount,
-        hash,
-        docs_combined: parts.length
-      }
-    });
-  } catch (error: any) {
-    console.error('[uploadKBToStorage] Error:', error);
+    return c.json({ data: { results } });
+  } catch (error) {
+    console.error('[uploadKBToStorage] error:', error.message);
     return c.json({ data: { error: error.message } }, 500);
   }
-}
+
+};

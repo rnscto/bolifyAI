@@ -1,8 +1,17 @@
-import { Context } from "hono";
-import { jsPDF } from "jspdf";
+import { base44ORM as base44 } from "../db/orm.ts";
+import { client } from "../db/index.ts";
 
-export default async function (c: Context) {
+import { jsPDF } from 'npm:jspdf@4.0.0';
+
+export default async function generateConceptNote(c: any) {
+  const req = c.req.raw || c.req;
   try {
+    /* const base44 = ... */;
+    const user = c.get('jwtPayload');
+    if (!user) {
+      return c.json({ data: { error: 'Unauthorized' } }, 401);
+    }
+
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWidth = 210;
     const margin = 20;
@@ -16,7 +25,7 @@ export default async function (c: Context) {
       }
     };
 
-    const addTitle = (text: string, size = 18) => {
+    const addTitle = (text, size = 18) => {
       addPageIfNeeded(20);
       doc.setFontSize(size);
       doc.setFont('helvetica', 'bold');
@@ -25,7 +34,7 @@ export default async function (c: Context) {
       y += size * 0.6;
     };
 
-    const addSectionTitle = (text: string) => {
+    const addSectionTitle = (text) => {
       addPageIfNeeded(20);
       y += 4;
       doc.setFillColor(0, 51, 102);
@@ -37,7 +46,7 @@ export default async function (c: Context) {
       y += 10;
     };
 
-    const addParagraph = (text: string) => {
+    const addParagraph = (text) => {
       addPageIfNeeded(15);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
@@ -47,7 +56,7 @@ export default async function (c: Context) {
       y += lines.length * 5 + 3;
     };
 
-    const addBullet = (text: string) => {
+    const addBullet = (text) => {
       addPageIfNeeded(10);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
@@ -58,7 +67,7 @@ export default async function (c: Context) {
       y += lines.length * 5 + 2;
     };
 
-    const addKeyValue = (key: string, value: string) => {
+    const addKeyValue = (key, value) => {
       addPageIfNeeded(10);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
@@ -71,7 +80,7 @@ export default async function (c: Context) {
       y += lines.length * 5 + 2;
     };
 
-    const addTable = (headers: string[], rows: string[][]) => {
+    const addTable = (headers, rows) => {
       addPageIfNeeded(15 + rows.length * 8);
       const colWidth = contentWidth / headers.length;
       // Header
@@ -294,11 +303,15 @@ export default async function (c: Context) {
     // Generate PDF
     const pdfBytes = doc.output('arraybuffer');
 
-    c.header('Content-Type', 'application/pdf');
-    c.header('Content-Disposition', 'attachment; filename=VaaniAI_Concept_Note_Rajasthan_eGovernance.pdf');
-    return c.body(pdfBytes, 200);
-  } catch (error: any) {
-    console.error('[generateConceptNote] Error:', error);
-    return c.json({ data: { success: false, error: error.message } });
+    return new Response(pdfBytes, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': 'attachment; filename=VaaniAI_Concept_Note_Rajasthan_eGovernance.pdf'
+      }
+    });
+  } catch (error) {
+    return c.json({ data: { error: error.message } }, 500);
   }
-}
+
+};
