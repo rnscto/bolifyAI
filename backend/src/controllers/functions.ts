@@ -5,8 +5,15 @@ import { universalAuth } from "../middleware/auth.ts";
 
 export const functionsRouter = new Hono();
 
-// Apply auth to all functions except debug
-functionsRouter.use("/:functionName", universalAuth);
+// Apply auth to all functions except webhooks
+functionsRouter.use("/:functionName", async (c, next) => {
+  const functionName = c.req.param("functionName");
+  const publicFunctions = ["smartfloWebhook", "twilioWebhook"];
+  if (publicFunctions.includes(functionName)) {
+    return next();
+  }
+  return universalAuth(c, next);
+});
 
 functionsRouter.get('/debug_calllog/:id', async (c) => {
   const id = c.req.param('id');

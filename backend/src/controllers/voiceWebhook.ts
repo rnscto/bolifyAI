@@ -1,8 +1,14 @@
 import { Hono } from "hono";
 import { client } from "../db/index.ts";
 import { getSmartfloToken } from "../services/smartflo.ts";
+import { sign } from "hono/jwt";
 
 export const voiceWebhookRouter = new Hono();
+
+const JWT_SECRET = Deno.env.get("JWT_SECRET") || "super_secret_bolifyai_key";
+async function getInternalToken() {
+  return await sign({ role: 'service_role', client_id: 'PLATFORM', id: 'internal' }, JWT_SECRET, "HS256");
+}
 
 const TELEGRAM_BOT_TOKEN = Deno.env.get('TELEGRAM_BOT_TOKEN');
 const getAppBaseUrl = () => Deno.env.get('APP_BASE_URL_INTERNAL') || `http://localhost:${Deno.env.get('PORT') || '8000'}`;
@@ -750,8 +756,9 @@ voiceWebhookRouter.post("/", async (c) => {
                     if (lead?.phone) {
                       const templateRes = await client.queryObject(`SELECT * FROM "whatsapptemplate" WHERE id = $1`, [wa.missed_call_template_id]);
                       const variables = buildMissedCallVariables(templateRes.rows[0], lead, (wa.template_variable_map || {})[wa.missed_call_template_id]);
+                      const internalToken = await getInternalToken();
                       await fetch(`${getAppBaseUrl()}/api/whatsapp/send_template`, {
-                        method: 'POST', headers: { 'Content-Type': 'application/json' },
+                        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${internalToken}` },
                         body: JSON.stringify({
                           client_id: campaign.client_id,
                           template_id: wa.missed_call_template_id,
@@ -778,8 +785,9 @@ voiceWebhookRouter.post("/", async (c) => {
                       if (lead?.phone) {
                         const templateRes = await client.queryObject(`SELECT * FROM "whatsapptemplate" WHERE id = $1`, [wa.answered_call_template_id]);
                         const variables = buildMissedCallVariables(templateRes.rows[0], lead, (wa.template_variable_map || {})[wa.answered_call_template_id]);
+                        const internalToken = await getInternalToken();
                         await fetch(`${getAppBaseUrl()}/api/whatsapp/send_template`, {
-                          method: 'POST', headers: { 'Content-Type': 'application/json' },
+                          method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${internalToken}` },
                           body: JSON.stringify({
                             client_id: campaign.client_id,
                             template_id: wa.answered_call_template_id,
@@ -829,9 +837,10 @@ voiceWebhookRouter.post("/", async (c) => {
     }
 
     if (terminalStatuses.includes(effectiveStatus)) {
+        const internalToken = await getInternalToken();
         fetch(`${getAppBaseUrl()}/api/functions/processTranscript`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${internalToken}` },
             body: JSON.stringify({ call_log_id: callLog.id, recording_url: recording_url || freshCallLog.recording_url })
         }).catch(e => console.error('Error triggering processTranscript:', e));
     }
