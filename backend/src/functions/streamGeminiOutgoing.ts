@@ -1121,19 +1121,30 @@ export default async function streamGeminiOutgoing(c: any) {
           smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: session.streamSid }));
         }
         // ── NOISE-RESUME GUARD ──────────────────────────────────────────────────
-        // If background noise (not a real customer turn) triggered the barge-in,
-        // Gemini will stay silent because the noise transcription is dropped by
-        // isNoiseTranscription() — Gemini has nothing to respond to.
-        // After 2.5s, if the agent is still silent and the customer hasn't spoken,
-        // we send a clientContent turnComplete signal. This tells Gemini "user's
-        // turn is done" → Gemini resumes speaking without any fake text injection.
+        // PROBLEM: clientContent{turnComplete} was used here but it freezes Gemini's
+        // internal state machine — Gemini neither responds NOR processes subsequent
+        // audio for up to 60+ seconds (confirmed in call transcripts).
+        //
+        // NEW STRATEGY:
+        // • Wait 7s (customer typically responds within 2-3s, noise stops in <1s)
+        // • Only fire if no caller audio was forwarded in the last 4s (customer silent)
+        // • Use realtimeInput.text('Continue.') — a safe nudge that works in any
+        //   Gemini state without corrupting the conversation state machine.
         clearTimeout(session._noiseResumeTimer);
         session._noiseResumeTimer = setTimeout(() => {
-          if (!session.isSpeaking && !session._pendingCustomerText && geminiSocket?.readyState === WebSocket.OPEN) {
-            console.log(`[${reqId}] 🔇 Noise-resume: no real speech after interruption — re-engaging agent`);
-            sendToGemini({ clientContent: { turnComplete: true } });
-          }
-        }, 2500);
+          // Guard 1: agent must not already be speaking
+          if (session.isSpeaking) return;
+          // Guard 2: no caller audio forwarded in last 4s means customer isn't speaking
+          const noRecentCallerAudio = !session._lastCallerAudioSentAt ||
+            (Date.now() - session._lastCallerAudioSentAt) > 4000;
+          if (!noRecentCallerAudio) return; // customer is mid-speech, do not interrupt
+          // Guard 3: Gemini WebSocket must be alive
+          if (geminiSocket?.readyState !== WebSocket.OPEN) return;
+          console.log(`[${reqId}] 🔇 Noise-resume: no customer audio in 4s — nudging agent to continue`);
+          // 'Continue.' is safe — the system prompt governs the response.
+          // It does NOT corrupt the state machine unlike clientContent{turnComplete}.
+          sendToGemini({ realtimeInput: { text: 'Continue.' } });
+        }, 7000);
       }
       return;
     }
@@ -1580,6 +1591,9 @@ export default async function streamGeminiOutgoing(c: any) {
         if (agentPlaying || echoTail) return; // echo window — drop this frame
         // ────────────────────────────────────────────────────────────────────────────
         sendToGemini({ realtimeInput: { audio: { data: b64, mimeType: 'audio/pcm;rate=16000' } } });
+        // Track the last time caller audio was forwarded — used by the noise-resume
+        // timer to distinguish "customer is still speaking" from "silent after noise".
+        session._lastCallerAudioSentAt = Date.now();
         return;
       }
 

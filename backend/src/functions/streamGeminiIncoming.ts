@@ -853,14 +853,19 @@ export default async function streamGeminiIncoming(c: any) {
         if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
           smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: session.streamSid }));
         }
-        // ── NOISE-RESUME GUARD: re-engage agent if only noise triggered this barge-in ──
+        // ── NOISE-RESUME GUARD ──────────────────────────────────────────────────
+        // clientContent{turnComplete} freezes Gemini's state machine for 60+ seconds.
+        // Use realtimeInput.text nudge after 7s if no customer audio has been forwarded.
         clearTimeout(session._noiseResumeTimer);
         session._noiseResumeTimer = setTimeout(() => {
-          if (!session.isSpeaking && !session._pendingCustomerText && geminiSocket?.readyState === WebSocket.OPEN) {
-            console.log(`[${reqId}] 🔇 Noise-resume: no real speech after interruption — re-engaging agent`);
-            sendToGemini({ clientContent: { turnComplete: true } });
-          }
-        }, 2500);
+          if (session.isSpeaking) return;
+          const noRecentCallerAudio = !session._lastCallerAudioSentAt ||
+            (Date.now() - session._lastCallerAudioSentAt) > 4000;
+          if (!noRecentCallerAudio) return;
+          if (geminiSocket?.readyState !== WebSocket.OPEN) return;
+          console.log(`[${reqId}] 🔇 Noise-resume: no customer audio in 4s — nudging agent to continue`);
+          sendToGemini({ realtimeInput: { text: 'Continue.' } });
+        }, 7000);
       }
       return;
     }
@@ -1171,6 +1176,7 @@ export default async function streamGeminiIncoming(c: any) {
           (Date.now() - session._lastAgentAudioEndedAt) < ECHO_TAIL_MS;
         if (agentPlaying || echoTail) return;
         sendToGemini({ realtimeInput: { audio: { data: b64, mimeType: 'audio/pcm;rate=16000' } } });
+        session._lastCallerAudioSentAt = Date.now();
         return;
       }
 
