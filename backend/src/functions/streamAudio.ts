@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 // ╔══════════════════════════════════════════════════════════════════════╗
 // ║  ⚠️  DEPRECATED — LEGACY MONOLITHIC STREAM  ⚠️                       ║
 // ║                                                                      ║
@@ -173,10 +174,7 @@ async function saveCallRecord(session, reqId, duration, serviceClient) {
       .join('\n');
 
     const rawEndpoint = Deno.env.get('AZURE_OPENAI_ENDPOINT') || '';
-    const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-    const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-
-    // Normalize Azure endpoint: strip trailing slash and any /openai/... suffix to get just the base
+            // Normalize Azure endpoint: strip trailing slash and any /openai/... suffix to get just the base
     let baseUrl = rawEndpoint.replace(/\/+$/, '');
     // If endpoint already contains /openai/ path (e.g. from Azure AI Foundry), strip it
     const openaiIdx = baseUrl.indexOf('/openai/');
@@ -199,7 +197,7 @@ async function saveCallRecord(session, reqId, duration, serviceClient) {
 
     if (transcript && transcript.trim().length > 30) {
       try {
-        const analysisUrl = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`;
+        const analysisUrl = "__CHAT_COMPLETIONS_MIGRATED__";
         console.log(`[${reqId}] 🧠 AI Analysis URL: ${analysisUrl.substring(0, 100)}...`);
         const analysisRes = await fetch(
           analysisUrl,
@@ -1027,7 +1025,7 @@ export default async function streamAudio(c: any) {
       const oI = bUrl.indexOf('/openai/'); if (oI > 0) bUrl = bUrl.substring(0, oI);
       const pI = bUrl.indexOf('/api/projects'); if (pI > 0) bUrl = bUrl.substring(0, pI);
       const dep = Deno.env.get('AZURE_OPENAI_DEPLOYMENT'), ak = Deno.env.get('AZURE_OPENAI_KEY');
-      const res = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2025-04-01-preview`, {
+      const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
         method: 'POST', headers: { 'api-key': ak, 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [
           { role: 'system', content: 'Classify this live call. Return JSON: {"reason":"label","emoji":"1 emoji","detail":"1 sentence","urgency":"low|medium|high|urgent","caller_name":"name if said"}' },
@@ -1184,8 +1182,7 @@ export default async function streamAudio(c: any) {
     session.chatHistory.push({ role: 'user', content: userText });
     try {
       let bUrl = nanoEndpoint; const oI = bUrl.indexOf('/openai/'); if (oI > 0) bUrl = bUrl.substring(0, oI); const pI = bUrl.indexOf('/api/projects'); if (pI > 0) bUrl = bUrl.substring(0, pI);
-      const url = `${bUrl}/openai/deployments/${nanoDeployment}/chat/completions?api-version=2025-01-01-preview`;
-      const response = await fetch(url, {
+            const response = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
         method: 'POST', headers: { 'api-key': nanoKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [...session.chatHistory.slice(0, 1), { role: 'system', content: 'VOICE CALL RULES: Respond in Hindi (Devanagari). Short (1-2 sentences). No markdown/emojis. Plain text only.' }, ...session.chatHistory.slice(1)], max_completion_tokens: 150, stream: true })
       });

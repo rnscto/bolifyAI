@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 // ═══════════════════════════════════════════════════════════════════════════
 // streamTwilioOutgoing — Bridges Twilio Media Streams ↔ Azure GPT-Realtime GA
 // (gpt-realtime-2). Outbound business calls for US/UK markets.
@@ -68,14 +69,13 @@ async function saveCallRecord(session, reqId, duration) {
     const transcript = session.transcript.map(t => `${t.speaker}: ${t.text}`).join('\n');
     const { createClient } = await getSDK();
     const svc = base44;;
-    let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-    const oi = baseUrl.indexOf('/openai/'); if(oi>0) baseUrl = baseUrl.substring(0, oi);
+        const oi = baseUrl.indexOf('/openai/'); if(oi>0) baseUrl = baseUrl.substring(0, oi);
     const pi = baseUrl.indexOf('/api/projects'); if(pi>0) baseUrl = baseUrl.substring(0, pi);
     const dep = Deno.env.get('AZURE_OPENAI_DEPLOYMENT'), key = Deno.env.get('AZURE_OPENAI_KEY');
     let summary='', leadStatus='contacted', sentiment='neutral', leadScore=0, intentSignals=[], scoreBreakdown={}, keyTopics=[];
     if(transcript.trim().length>30 && baseUrl && dep && key){
       try {
-        const r = await fetch(`${baseUrl}/openai/deployments/${dep}/chat/completions?api-version=2025-04-01-preview`, {
+        const r = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
           method:'POST', headers:{'api-key':key,'Content-Type':'application/json'},
           body: JSON.stringify({
             messages: [

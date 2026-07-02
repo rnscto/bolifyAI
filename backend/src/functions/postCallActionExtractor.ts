@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 
 // Post-Call AI Action Extractor - v2: Force redeploy
@@ -148,12 +149,8 @@ Never guess — use null when the conversation does not provide the value.`;
     }
 
     // Use Azure OpenAI to extract action items
-    const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
-    const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-    const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-
-    const extractionResponse = await fetch(
-      `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`,
+                const extractionResponse = await fetch(
+      "__CHAT_COMPLETIONS_MIGRATED__",
       {
         method: 'POST',
         headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },

@@ -1,23 +1,21 @@
 import { Hono, Context } from "hono";
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 export const agentsRouter = new Hono();
 
 // Helper to call Azure OpenAI
 async function callAzureOpenAI({ system, user, max_tokens = 800 }: { system: string, user: string, max_tokens?: number }) {
   const rawEndpoint = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  if (!rawEndpoint || !deployment || !apiKey) {
+      if (!rawEndpoint || !deployment || !apiKey) {
     throw new Error('Missing AZURE_OPENAI_ENDPOINT / AZURE_OPENAI_DEPLOYMENT / AZURE_OPENAI_KEY');
   }
   let baseUrl = rawEndpoint;
   const oI = baseUrl.indexOf('/openai/'); if (oI > 0) baseUrl = baseUrl.substring(0, oI);
   const pI = baseUrl.indexOf('/api/projects'); if (pI > 0) baseUrl = baseUrl.substring(0, pI);
 
-  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`;
-  const res = await fetch(url, {
+    const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({

@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 
 // Process the FULL recording from Smartflo for calls that were transferred to a human agent.
@@ -124,14 +125,10 @@ export default async function processTransferRecording(c: any) {
 
     // ═══ STEP 3: AI Analysis of the FULL conversation ═══
     // This includes both the AI agent portion AND the human agent portion
-    const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
-    const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-    const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-
-    const existingAiTranscript = callLog.transcript || '';
+                const existingAiTranscript = callLog.transcript || '';
 
     const analysisResponse = await fetch(
-      `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`,
+      "__CHAT_COMPLETIONS_MIGRATED__",
       {
         method: 'POST',
         headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },

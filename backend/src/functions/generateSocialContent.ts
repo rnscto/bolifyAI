@@ -2,6 +2,7 @@ import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
 import { createClient, createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 import { BlobServiceClient } from 'npm:@azure/storage-blob@12.17.0';
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 // ─── Direct Azure Image generation (replaces Core.GenerateImage) ───
 // Mirrors the pattern used in generateOgImage to keep the app credit-independent.
@@ -17,7 +18,7 @@ async function generatePosterDirect(prompt, clientId) {
   }
 
   const url = `${endpoint.replace(/\/$/, '')}/openai/deployments/${deployment}/images/generations?api-version=${apiVersion}`;
-  const r = await fetch(url, {
+  const r = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'api-key': key },
     body: JSON.stringify({ prompt, size: '1024x1024', n: 1, quality: 'high', output_format: 'png' })
@@ -98,11 +99,7 @@ const OCCASIONS = [
 ];
 
 async function azureLLM(prompt, systemPrompt, jsonSchema) {
-  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`;
-  const res = await fetch(url, {
+          const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({

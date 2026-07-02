@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 // ⚠️ DEPRECATED Phase 4 — replaced by streamGeminiPersonal/Outgoing/Incoming. Kept online for backward compat. DO NOT add features here.
 // streamAudioGemini — Gemini 3.1 Flash Live (legacy monolithic stream)
 // ─── Audio Conversion Helpers — Smartflo 8kHz mu-law ↔ Gemini 16k input / 24k output PCM16 ───
@@ -155,18 +156,12 @@ async function saveCallRecord(session, reqId, duration) {
     const appId = Deno.env.get('BASE44_APP_ID');
     const serviceClient = base44;;
 
-    let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-    const _oi = baseUrl.indexOf('/openai/'); if (_oi > 0) baseUrl = baseUrl.substring(0, _oi);
-    const _pi = baseUrl.indexOf('/api/projects'); if (_pi > 0) baseUrl = baseUrl.substring(0, _pi);
-    const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-    const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-
-    let summary = '', leadStatus = 'contacted', sentiment = 'neutral', leadScore = 0, intentSignals = [], scoreBreakdown = {}, keyTopics = [], objections = [];
+                        let summary = '', leadStatus = 'contacted', sentiment = 'neutral', leadScore = 0, intentSignals = [], scoreBreakdown = {}, keyTopics = [], objections = [];
     let summaryHindi = '';
 
     if (transcript && transcript.trim().length > 30 && baseUrl && deployment && apiKey) {
       try {
-        const analysisRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
+        const analysisRes = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
           method: 'POST', headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [
@@ -330,7 +325,7 @@ async function saveCallRecord(session, reqId, duration) {
             // Extract details from transcript if Azure OpenAI is available
             if (baseUrl && deployment && apiKey) {
               try {
-                const extractRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
+                const extractRes = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
                   method: 'POST', headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     messages: [
@@ -384,7 +379,7 @@ async function saveCallRecord(session, reqId, duration) {
           } else {
             // Create new provider
             if (baseUrl && deployment && apiKey) {
-              const extractRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
+              const extractRes = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
                 method: 'POST', headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   messages: [
@@ -1486,7 +1481,7 @@ export default async function streamAudioGemini(c: any) {
     } catch (_) {}
     if (opts?.transcript?.length > 30 && opts.baseUrl && opts.deployment && opts.apiKey) {
       try {
-        const r = await fetch(`${opts.baseUrl}/openai/deployments/${opts.deployment}/chat/completions?api-version=2025-04-01-preview`, { method: 'POST', headers: { 'api-key': opts.apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'system', content: 'Extract the caller\'s own name if they stated it. Return JSON {"name":"<name or empty>"}. Do NOT extract assistant or owner name. No guessing.' }, { role: 'user', content: opts.transcript }], max_completion_tokens: 30, response_format: { type: 'json_object' } }) });
+        const r = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", { method: 'POST', headers: { 'api-key': opts.apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'system', content: 'Extract the caller\'s own name if they stated it. Return JSON {"name":"<name or empty>"}. Do NOT extract assistant or owner name. No guessing.' }, { role: 'user', content: opts.transcript }], max_completion_tokens: 30, response_format: { type: 'json_object' } }) });
         if (r.ok) { const j = JSON.parse((await r.json()).choices?.[0]?.message?.content || '{}'); if (j.name && String(j.name).trim()) return { name: String(j.name).trim(), source: 'Said on call' }; }
       } catch (_) {}
     }
@@ -1714,7 +1709,7 @@ ABSOLUTE RULES:
       if (bUrl && dep && ak) {
         try {
           const convo = session.transcript.map(t => `${t.speaker}: ${t.text}`).join('\n');
-          const res = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2025-04-01-preview`, {
+          const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
             method: 'POST', headers: { 'api-key': ak, 'Content-Type': 'application/json' },
             body: JSON.stringify({ messages: [
               { role: 'system', content: 'Extract the reason for this call in 5-10 words. Return JSON: {"reason":"brief reason"}' },
@@ -1735,7 +1730,7 @@ ABSOLUTE RULES:
     if (!bUrl || !dep || !ak) { session._midCallChecking = false; return; }
     try {
       const convo = session.transcript.map(t => `${t.speaker}: ${t.text}`).join('\n');
-      const res = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2025-04-01-preview`, {
+      const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
         method: 'POST', headers: { 'api-key': ak, 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [
           { role: 'system', content: 'Extract caller name and reason from this live call. Return JSON: {"caller_name":"name if said, else empty","reason":"why calling, else empty","ready":true/false}. ready=true ONLY when BOTH name AND reason are known.' },

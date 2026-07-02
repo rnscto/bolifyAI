@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 
 // Phase 1: retry transient Base44/Cloudflare errors (429/502/503/504/timeouts)
@@ -40,10 +41,7 @@ function interpolate(template, lead) {
 
 // AI email generator using Azure OpenAI (zero Base44 credits)
 async function generateAIEmail({ lead, client, context }) {
-  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  if (!baseUrl || !deployment || !apiKey) {
+        if (!baseUrl || !deployment || !apiKey) {
     return { subject: 'Following up', body: `Hi ${lead?.name || 'there'},\n\nJust following up.\n\n${context || ''}` };
   }
   const prompt = `Write a short (120-180 words) personalized follow-up email in HTML for this lead.
@@ -59,7 +57,7 @@ CAMPAIGN / CONTEXT FROM SENDER (${client?.company_name || 'our company'}):
 ${context || 'A professional follow-up.'}
 
 Return JSON: { "subject": "...", "body_html": "<p>...</p>" }. Address by name. Include one clear CTA.`;
-  const res = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
+  const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -85,7 +83,7 @@ async function sendWhatsApp(config, to, body) {
   // Meta Cloud API
   if (config.whatsapp_provider === 'meta_cloud' && config.whatsapp_phone_number_id) {
     const url = `https://graph.facebook.com/v18.0/${config.whatsapp_phone_number_id}/messages`;
-    const r = await fetch(url, {
+    const r = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${config.whatsapp_api_key}`,

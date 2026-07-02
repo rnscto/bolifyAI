@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 // ═══════════════════════════════════════════════════════════════════════
 // whatsappAiAgent — Inbound WhatsApp conversational AI agent.
 //
@@ -92,24 +93,18 @@ function bytesToBase64(bytes) {
 
 // Transcribe a voice note via Azure OpenAI Whisper (own keys — no Base44 credits).
 async function transcribeAudio(bytes, mime) {
-  const baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  const url = `${baseUrl}/openai/deployments/whisper/audio/transcriptions?api-version=2024-06-01`;
+      const url = `${baseUrl}/openai/deployments/whisper/audio/transcriptions?api-version=2024-06-01`;
   const ext = mime.includes('ogg') ? 'ogg' : mime.includes('mp3') ? 'mp3' : mime.includes('wav') ? 'wav' : 'm4a';
   const fd = new FormData();
   fd.append('file', new Blob([bytes], { type: mime }), `voice.${ext}`);
-  const res = await fetch(url, { method: 'POST', headers: { 'api-key': apiKey }, body: fd });
+  const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", { method: 'POST', headers: { 'api-key': apiKey }, body: fd });
   if (!res.ok) throw new Error(`whisper ${res.status}: ${(await res.text()).slice(0, 150)}`);
   return (await res.json()).text || '';
 }
 
 // Describe an image via the vision-capable chat model (own keys).
 async function describeImage(base64, mime, caption) {
-  const baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`;
-  const res = await fetch(url, {
+          const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -129,11 +124,7 @@ async function describeImage(base64, mime, caption) {
 
 // Azure OpenAI chat completion with tool-calling.
 async function azureChat(messages, tools) {
-  const baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`;
-  const res = await fetch(url, {
+          const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({ messages, tools, tool_choice: 'auto', max_completion_tokens: 600 })

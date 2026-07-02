@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 // Post-call fallback: if the Vaani Sales AI agreed to book a demo during the
 // conversation but failed to call the book_demo tool, extract the agreed
 // date/time/email from the transcript and create the booking automatically.
@@ -39,16 +40,13 @@ export default async function extractDemoBookingFromCall(c: any) {
     const lead = callLog.lead_id ? await svc.entities.Lead.get(callLog.lead_id).catch(() => null) : null;
 
     // Ask LLM to find an agreed demo booking in the transcript
-    const baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-    const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-    const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-    if (!baseUrl || !deployment || !apiKey) return c.json({ data: { skipped: 'llm_not_configured' } });
+                if (!baseUrl || !deployment || !apiKey) return c.json({ data: { skipped: 'llm_not_configured' } });
 
     const now = new Date();
     const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
     const todayStr = istNow.toISOString().split('T')[0];
 
-    const r = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
+    const r = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
       method: 'POST',
       headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({

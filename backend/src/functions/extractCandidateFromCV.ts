@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 
 // Extracts structured candidate info from an uploaded CV/resume.
@@ -12,8 +13,6 @@ import { client } from "../db/index.ts";
 // (pdf via unpdf, docx via JSZip, images via Azure vision OCR), THEN send the text to
 // Azure OpenAI for structured extraction. Azure vision does NOT accept PDFs as image_url.
 
-const AZURE_API_VERSION = '2025-04-01-preview';
-
 const CATEGORIES = [
   'domestic_help','driver','cook','nanny','security','office_staff','software_engineer',
   'sales','marketing','finance','hr','customer_support','operations','design',
@@ -21,11 +20,8 @@ const CATEGORIES = [
 ];
 
 function azureCfg() {
-  const baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  if (!baseUrl || !deployment || !apiKey) throw new Error('Azure OpenAI not configured');
-  return { url: `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=${AZURE_API_VERSION}`, apiKey };
+        if (!baseUrl || !deployment || !apiKey) throw new Error('Azure OpenAI not configured');
+  return { url: "__CHAT_COMPLETIONS_MIGRATED__", apiKey };
 }
 
 function bufferToBase64(buffer) {
@@ -60,7 +56,7 @@ async function extractDocxText(arrayBuf) {
 // Image OCR via Azure vision (images ARE supported as image_url; PDFs are NOT)
 async function ocrImage(b64, mimeType) {
   const { url, apiKey } = azureCfg();
-  const res = await fetch(url, {
+  const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -100,7 +96,7 @@ async function structureFromText(cvText) {
 CV TEXT:
 ${cvText.substring(0, 14000)}`;
 
-  const res = await fetch(url, {
+  const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({

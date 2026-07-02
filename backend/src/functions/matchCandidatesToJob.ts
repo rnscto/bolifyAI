@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 
 // AI-powered job ↔ candidate matching.
@@ -7,14 +8,9 @@ import { client } from "../db/index.ts";
 // each one against the job's requirements. Returns ranked matches with reasoning.
 // Uses Azure OpenAI directly (client's own keys — NOT Base44 integration credits).
 
-const AZURE_API_VERSION = '2025-04-01-preview';
-
 function azureCfg() {
-  const baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  if (!baseUrl || !deployment || !apiKey) throw new Error('Azure OpenAI not configured');
-  return { url: `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=${AZURE_API_VERSION}`, apiKey };
+        if (!baseUrl || !deployment || !apiKey) throw new Error('Azure OpenAI not configured');
+  return { url: "__CHAT_COMPLETIONS_MIGRATED__", apiKey };
 }
 
 export default async function matchCandidatesToJob(c: any) {
@@ -115,7 +111,7 @@ Return JSON ONLY:
 Return ALL ${candidateBriefs.length} candidates, sorted by match_score descending.`;
 
     const { url, apiKey } = azureCfg();
-    const res = await fetch(url, {
+    const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
       method: 'POST',
       headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({

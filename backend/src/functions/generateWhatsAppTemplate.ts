@@ -1,15 +1,11 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 
 // Direct Azure OpenAI call — bypasses Base44 integration credits.
 async function callAzureOpenAI(prompt, { maxTokens = 2000, jsonMode = true } = {}) {
-  let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-  const _oi = baseUrl.indexOf('/openai/'); if (_oi > 0) baseUrl = baseUrl.substring(0, _oi);
-  const _pi = baseUrl.indexOf('/api/projects'); if (_pi > 0) baseUrl = baseUrl.substring(0, _pi);
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  if (!baseUrl || !deployment || !apiKey) throw new Error('Azure OpenAI secrets not configured');
+            if (!baseUrl || !deployment || !apiKey) throw new Error('Azure OpenAI secrets not configured');
 
   const body = {
     messages: [{ role: 'user', content: prompt }],
@@ -17,7 +13,7 @@ async function callAzureOpenAI(prompt, { maxTokens = 2000, jsonMode = true } = {
   };
   if (jsonMode) body.response_format = { type: 'json_object' };
 
-  const r = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
+  const r = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify(body)

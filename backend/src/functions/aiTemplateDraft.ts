@@ -1,4 +1,5 @@
 import { Context } from "hono";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 export default async function (c: Context) {
   try {
@@ -9,17 +10,14 @@ export default async function (c: Context) {
       return c.json({ data: { success: false, error: 'goal is required' } });
     }
 
-    let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-    const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-    const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-    const oIdx = baseUrl.indexOf('/openai/'); 
+                const oIdx = baseUrl.indexOf('/openai/'); 
     if (oIdx > 0) baseUrl = baseUrl.substring(0, oIdx);
 
     if (!baseUrl || !deployment || !apiKey) {
       return c.json({ data: { success: false, error: 'Azure OpenAI not configured' } });
     }
 
-    const res = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
+    const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
       method: 'POST',
       headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({

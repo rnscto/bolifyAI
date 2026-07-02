@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 // dispatchPostCallWhatsApp
 // ────────────────────────────────────────────────────────────────────────────
 // Hybrid post-call WhatsApp dispatcher (Option C from the architecture plan).
@@ -29,15 +30,12 @@ function resolveVariables(mappingValues, lead, campaign) {
 }
 
 async function detectIntents(transcript, availableIntents) {
-  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  if (!baseUrl || !deployment || !apiKey || !transcript || availableIntents.length === 0) {
+        if (!baseUrl || !deployment || !apiKey || !transcript || availableIntents.length === 0) {
     return { send_requested: false, intents: [], phone_override: null };
   }
 
   const intentList = availableIntents.map(i => `- ${i}`).join('\n');
-  const res = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
+  const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({

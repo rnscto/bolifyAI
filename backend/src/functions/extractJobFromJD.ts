@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 
 // Extracts a structured Job + screening questions from a Job Description (JD).
@@ -8,8 +9,6 @@ import { client } from "../db/index.ts";
 // Input: { jd_text } — pasted JD text. OR { jd_url } — public Azure Blob URL (pdf/docx/image).
 // Output: { success, data: { job: {...}, questions: [...] } }
 
-const AZURE_API_VERSION = '2025-04-01-preview';
-
 const CATEGORIES = [
   'domestic_help','driver','cook','nanny','security','office_staff','software_engineer',
   'sales','marketing','finance','hr','customer_support','operations','design',
@@ -17,11 +16,8 @@ const CATEGORIES = [
 ];
 
 function azureCfg() {
-  const baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  if (!baseUrl || !deployment || !apiKey) throw new Error('Azure OpenAI not configured');
-  return { url: `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=${AZURE_API_VERSION}`, apiKey };
+        if (!baseUrl || !deployment || !apiKey) throw new Error('Azure OpenAI not configured');
+  return { url: "__CHAT_COMPLETIONS_MIGRATED__", apiKey };
 }
 
 function bufferToBase64(buffer) {
@@ -55,7 +51,7 @@ async function extractDocxText(arrayBuf) {
 
 async function ocrImage(b64, mimeType) {
   const { url, apiKey } = azureCfg();
-  const res = await fetch(url, {
+  const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -107,7 +103,7 @@ Generate 5-8 relevant, role-specific screening questions that verify the candida
 JOB DESCRIPTION:
 ${jdText.substring(0, 14000)}`;
 
-  const res = await fetch(url, {
+  const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({

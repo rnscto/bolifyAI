@@ -1,6 +1,7 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
 import { createClient, createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 // Processes a completed screening call — extracts structured answers from transcript,
 // scores the candidate, and updates ScreeningCall + ServiceProvider records
@@ -90,15 +91,11 @@ export default async function processScreeningResult(c: any) {
     }
 
     // Use Azure OpenAI for analysis — normalize endpoint
-    let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-    const openaiIdx = baseUrl.indexOf('/openai/');
+        const openaiIdx = baseUrl.indexOf('/openai/');
     if (openaiIdx > 0) baseUrl = baseUrl.substring(0, openaiIdx);
     const apiProjIdx = baseUrl.indexOf('/api/projects');
     if (apiProjIdx > 0) baseUrl = baseUrl.substring(0, apiProjIdx);
-    const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-    const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-
-    if (!baseUrl || !deployment || !apiKey) {
+            if (!baseUrl || !deployment || !apiKey) {
       return c.json({ data: { error: 'Azure OpenAI not configured' } }, 500);
     }
 
@@ -107,7 +104,7 @@ export default async function processScreeningResult(c: any) {
       answer_type: q.answer_type, required: q.required, weight: q.scoring_weight || 1
     }));
 
-    const analysisRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
+    const analysisRes = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
       method: 'POST',
       headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -189,7 +186,7 @@ Respond ONLY in valid JSON. NEVER return an empty object — always fill all fie
     if (!hasAnswers && !hasScore) {
       console.warn(`[processScreeningResult] ⚠️ First attempt empty. Retrying with simpler prompt...`);
       try {
-        const retryRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
+        const retryRes = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
           method: 'POST',
           headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({

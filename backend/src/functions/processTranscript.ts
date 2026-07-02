@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 
 export default async function processTranscript(c: any) {
@@ -76,21 +77,14 @@ export default async function processTranscript(c: any) {
     const transcript = await sttResponse.text();
     console.log(`[processTranscript] Transcript (${transcript.length} chars): ${transcript.substring(0, 200)}`);
 
-    // Use Azure OpenAI to analyze conversation + score lead
-    const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
-    const analysisResponse = await fetch(
-      `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2025-04-01-preview`,
-      {
-        method: 'POST',
-        headers: {
-          'api-key': Deno.env.get('AZURE_OPENAI_KEY'),
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          messages: [
-            {
-              role: 'system',
-              content: `You are an expert sales call analyst AI. Analyze call transcripts to extract:
+    // Use Azure OpenAI Responses API to analyze conversation + score lead
+    let analysisData: { choices: [{ message: { content: string } }] };
+    try {
+      analysisData = await azureChatCompletionsCompat({
+        messages: [
+          {
+            role: 'system',
+            content: `You are an expert sales call analyst AI. Analyze call transcripts to extract:
 1. A brief summary of the conversation
 2. Lead status classification
 3. Sentiment analysis
@@ -104,25 +98,18 @@ SCORING CRITERIA (total 100):
 - Keywords (0-20): positive keywords like "interested","sign up","let's go","sounds good","when can we start"=+5 each (cap 20); negative keywords like "not interested","too expensive","no need","don't call"=-5 each (min 0)
 
 Respond ONLY in valid JSON with this exact structure.`
-            },
-            {
-              role: 'user',
-              content: `Analyze this sales call transcript:\n\n${transcript}\n\nReturn JSON with: summary (string), lead_status (one of: interested, not_interested, callback, voicemail, converted, contacted; use "voicemail" ONLY when the call clearly hit an answering machine / voicemail with no real human conversation), sentiment (one of: very_positive, positive, neutral, negative, very_negative), intent_signals (array of strings like: pricing_inquiry, demo_request, competitor_mention, budget_confirmed, timeline_mentioned, decision_maker, referral, objection_price, objection_timing, objection_need, follow_up_requested), lead_score (number 0-100), score_breakdown (object with: sentiment_score number, intent_score number, engagement_score number, keyword_score number, reasoning string), key_keywords (array of important words/phrases from the conversation)`
-            }
-          ],
-          max_completion_tokens: 800,
-          response_format: { type: "json_object" }
-        })
-      }
-    );
-
-    let analysisData = {};
-    if (!analysisResponse.ok) {
-      const errBody = await analysisResponse.text();
-      console.error('OpenAI analysis failed:', errBody);
+          },
+          {
+            role: 'user',
+            content: `Analyze this sales call transcript:\n\n${transcript}\n\nReturn JSON with: summary (string), lead_status (one of: interested, not_interested, callback, voicemail, converted, contacted; use "voicemail" ONLY when the call clearly hit an answering machine / voicemail with no real human conversation), sentiment (one of: very_positive, positive, neutral, negative, very_negative), intent_signals (array of strings like: pricing_inquiry, demo_request, competitor_mention, budget_confirmed, timeline_mentioned, decision_maker, referral, objection_price, objection_timing, objection_need, follow_up_requested), lead_score (number 0-100), score_breakdown (object with: sentiment_score number, intent_score number, engagement_score number, keyword_score number, reasoning string), key_keywords (array of important words/phrases from the conversation)`
+          }
+        ],
+        max_completion_tokens: 800,
+        response_format: { type: 'json_object' },
+      });
+    } catch (llmErr: any) {
+      console.error('[processTranscript] LLM analysis failed:', llmErr.message);
       analysisData = { choices: [{ message: { content: '{}' } }] };
-    } else {
-      analysisData = await analysisResponse.json();
     }
     const rawContent = analysisData.choices?.[0]?.message?.content || '{}';
     

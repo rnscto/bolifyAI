@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 
 // Generates a structured AI CV/profile for a ServiceProvider candidate.
@@ -9,14 +10,9 @@ import { client } from "../db/index.ts";
 // Input: { provider_id }
 // Output: { success, data: {...cv...} }  (also persisted to provider.screening_answers.ai_cv_data)
 
-const AZURE_API_VERSION = '2025-04-01-preview';
-
 function azureCfg() {
-  const baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  if (!baseUrl || !deployment || !apiKey) throw new Error('Azure OpenAI not configured');
-  return { url: `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=${AZURE_API_VERSION}`, apiKey };
+        if (!baseUrl || !deployment || !apiKey) throw new Error('Azure OpenAI not configured');
+  return { url: "__CHAT_COMPLETIONS_MIGRATED__", apiKey };
 }
 
 export default async function generateCandidateCV(c: any) {
@@ -85,7 +81,7 @@ Return ONLY valid JSON with these fields (fill from available data, use empty st
 }`;
 
     const { url, apiKey } = azureCfg();
-    const res = await fetch(url, {
+    const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
       method: 'POST',
       headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({

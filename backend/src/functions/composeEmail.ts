@@ -2,6 +2,7 @@ import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
 
 import { EmailClient } from 'npm:@azure/communication-email@1.0.0';
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 let _emailClient: any;
 function getEmailClient() {
@@ -52,11 +53,7 @@ async function sendACSEmail({ to, subject, html, displayName, attachments }) {
 
 // Azure OpenAI helper
 async function azureLLM(prompt, systemPrompt, jsonSchema) {
-  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`;
-  const res = await fetch(url, {
+          const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({

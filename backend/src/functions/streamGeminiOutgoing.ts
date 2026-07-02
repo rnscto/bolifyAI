@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 // ═══════════════════════════════════════════════════════════════════════
 // streamGeminiOutgoing — Business OUTBOUND calls only (Gemini Live)
 // ═══════════════════════════════════════════════════════════════════════
@@ -410,17 +411,11 @@ async function saveCallRecord(session, reqId, duration) {
     const { createClient } = await getSDKModule();
     const svc = base44;;
 
-    let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-    const _oi = baseUrl.indexOf('/openai/'); if (_oi > 0) baseUrl = baseUrl.substring(0, _oi);
-    const _pi = baseUrl.indexOf('/api/projects'); if (_pi > 0) baseUrl = baseUrl.substring(0, _pi);
-    const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-    const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-
-    let summary = '', leadStatus = 'contacted', sentiment = 'neutral', leadScore = 0, intentSignals = [], scoreBreakdown = {}, keyTopics = [], summaryHindi = '';
+                        let summary = '', leadStatus = 'contacted', sentiment = 'neutral', leadScore = 0, intentSignals = [], scoreBreakdown = {}, keyTopics = [], summaryHindi = '';
 
     if (transcript.trim().length > 30 && baseUrl && deployment && apiKey) {
       try {
-        const r = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
+        const r = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
           method: 'POST', headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [

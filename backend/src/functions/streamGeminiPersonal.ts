@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 // ═══════════════════════════════════════════════════════════════════════
 // streamGeminiPersonal — Personal AI Assistant flow ONLY (Gemini Live)
 // ═══════════════════════════════════════════════════════════════════════
@@ -223,15 +224,10 @@ async function saveCallRecord(session, reqId, duration) {
     const svc = base44;;
 
     // AI analysis via Azure OpenAI
-    let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-    const _oi = baseUrl.indexOf('/openai/'); if (_oi > 0) baseUrl = baseUrl.substring(0, _oi);
-    const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-    const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-
-    let summary = '', summaryHindi = '', sentiment = 'neutral', category = 'unknown', urgency = 'medium';
+                    let summary = '', summaryHindi = '', sentiment = 'neutral', category = 'unknown', urgency = 'medium';
     if (transcript.trim().length > 30 && baseUrl && deployment && apiKey) {
       try {
-        const r = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
+        const r = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
           method: 'POST', headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [
@@ -996,7 +992,7 @@ NEVER say "ek minute hold kariye" — owner is NOT reachable.`;
         const sysPrompt = session._isTrustedCaller
           ? 'Extract reason for this call in 5-10 words. Return JSON: {"reason":"brief"}'
           : 'Extract caller name and reason from this live call. Return JSON: {"caller_name":"name if said else empty","reason":"why calling else empty"}';
-        const r = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2025-04-01-preview`, {
+        const r = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
           method: 'POST', headers: { 'api-key': ak, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: convo }],

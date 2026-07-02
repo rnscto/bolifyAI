@@ -1,6 +1,7 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
 import { createClient, createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 // Scheduled automation — runs daily at 11 AM IST.
 // No user session available. Uses service role directly.
@@ -210,15 +211,11 @@ export default async function retentionCall(c: any) {
     }
 
     // Normalize Azure endpoint (strip /openai/ and /api/projects/ suffixes)
-    let baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');
-    const openaiIdx = baseUrl.indexOf('/openai/');
+        const openaiIdx = baseUrl.indexOf('/openai/');
     if (openaiIdx > 0) baseUrl = baseUrl.substring(0, openaiIdx);
     const apiProjIdx = baseUrl.indexOf('/api/projects');
     if (apiProjIdx > 0) baseUrl = baseUrl.substring(0, apiProjIdx);
-    const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-    const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-
-    if (!baseUrl || !deployment || !apiKey) {
+            if (!baseUrl || !deployment || !apiKey) {
       return c.json({ data: { success: false, error: 'Missing Azure OpenAI secrets' } }, 500);
     }
 
@@ -277,7 +274,7 @@ export default async function retentionCall(c: any) {
 
         promptParts.push(`\nDefault points to cover:\n1. Greet warmly\n2. Ask about their trial experience\n3. Highlight that their setup is preserved\n4. Mention pricing: ₹9,999/month per channel (quarterly billing)\n5. Be respectful if not interested\n\nKeep it conversational and under 200 words. Indian business context.`);
 
-        const azureUri = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`;
+        const azureUri = "__CHAT_COMPLETIONS_MIGRATED__";
 
         const azureResponse = await fetch(azureUri, {
           method: 'POST',

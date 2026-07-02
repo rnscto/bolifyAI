@@ -1,5 +1,6 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
+import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
 // ═══════════════════════════════════════════════════════════════════
 // extractKBContent — Phase 2 migration
 //
@@ -15,16 +16,10 @@ import { client } from "../db/index.ts";
 
 
 
-const AZURE_API_VERSION = '2025-04-01-preview';
-
 // ─── Azure OpenAI text-only call ───
 async function azureLLMText(prompt) {
-  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  if (!baseUrl || !deployment || !apiKey) throw new Error('Azure OpenAI not configured');
-  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=${AZURE_API_VERSION}`;
-  const res = await fetch(url, {
+        if (!baseUrl || !deployment || !apiKey) throw new Error('Azure OpenAI not configured');
+    const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -39,12 +34,8 @@ async function azureLLMText(prompt) {
 
 // ─── Azure OpenAI multimodal call (image / pdf as base64) ───
 async function azureLLMVision(base64Data, mimeType, instruction) {
-  const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
-  const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
-  const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  if (!baseUrl || !deployment || !apiKey) throw new Error('Azure OpenAI not configured');
-  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=${AZURE_API_VERSION}`;
-  const res = await fetch(url, {
+        if (!baseUrl || !deployment || !apiKey) throw new Error('Azure OpenAI not configured');
+    const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({
