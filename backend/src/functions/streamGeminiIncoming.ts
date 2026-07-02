@@ -834,6 +834,7 @@ export default async function streamGeminiIncoming(c: any) {
         const t = (sc.inputTranscription.text || '').trim();
         if (t && !isNoiseTranscription(t)) {
           session._pendingCustomerText += (session._pendingCustomerText ? ' ' : '') + t;
+          session._lastInputTranscriptionAt = Date.now();
           clearTimeout(session._noiseResumeTimer);
         }
       }
@@ -860,6 +861,15 @@ export default async function streamGeminiIncoming(c: any) {
           session.transcript.push({ speaker: 'AI', text: t });
           session._pendingAiText = '';
         }
+        clearTimeout(session._silenceWatchdog);
+        session._silenceWatchdog = setTimeout(() => {
+          if (session.isSpeaking) return;
+          const noRecentCustomerSpeech = !session._lastInputTranscriptionAt || (Date.now() - session._lastInputTranscriptionAt) > 4000;
+          if (!noRecentCustomerSpeech) return;
+          if (session.geminiWs?.readyState !== WebSocket.OPEN) return;
+          console.log(`[${reqId}] 🔇 Silence watchdog: dead air for 7s — nudging agent`);
+          sendToGemini({ realtimeInput: { text: 'Continue.' } });
+        }, 7000);
       }
       if (sc.interrupted) {
         stopFiller();
@@ -868,7 +878,10 @@ export default async function streamGeminiIncoming(c: any) {
         session._outTail = null;
         if (session._pendingAiText) {
           const t = session._pendingAiText.trim();
-          if (t) session.transcript.push({ speaker: 'AI', text: t });
+          if (t) {
+            console.log(`[${reqId}] 🤖 AI (interrupted): "${t.substring(0, 200)}"`);
+            session.transcript.push({ speaker: 'AI', text: t });
+          }
           session._pendingAiText = '';
         }
         if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
@@ -880,11 +893,11 @@ export default async function streamGeminiIncoming(c: any) {
         clearTimeout(session._noiseResumeTimer);
         session._noiseResumeTimer = setTimeout(() => {
           if (session.isSpeaking) return;
-          const noRecentCallerAudio = !session._lastCallerAudioSentAt ||
-            (Date.now() - session._lastCallerAudioSentAt) > 4000;
-          if (!noRecentCallerAudio) return;
+          const noRecentCustomerSpeech = !session._lastInputTranscriptionAt ||
+            (Date.now() - session._lastInputTranscriptionAt) > 4000;
+          if (!noRecentCustomerSpeech) return;
           if (geminiSocket?.readyState !== WebSocket.OPEN) return;
-          console.log(`[${reqId}] 🔇 Noise-resume: no customer audio in 4s — nudging agent to continue`);
+          console.log(`[${reqId}] 🔇 Noise-resume: no customer speech in 4s — nudging agent to continue`);
           sendToGemini({ realtimeInput: { text: 'Continue.' } });
         }, 7000);
       }
@@ -1195,7 +1208,6 @@ export default async function streamGeminiIncoming(c: any) {
         if (!batched) return;
         const b64 = mulawToBase64PCM16_16k(batched, session);
         sendToGemini({ realtimeInput: { audio: { data: b64, mimeType: 'audio/pcm;rate=16000' } } });
-        session._lastCallerAudioSentAt = Date.now();
         return;
       }
 

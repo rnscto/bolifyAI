@@ -1077,6 +1077,7 @@ export default async function streamGeminiOutgoing(c: any) {
         const t = (sc.inputTranscription.text || '').trim();
         if (t && !isNoiseTranscription(t)) {
           session._pendingCustomerText += (session._pendingCustomerText ? ' ' : '') + t;
+          session._lastInputTranscriptionAt = Date.now(); // TRULY tracks actual customer speech!
           // Real speech arrived — cancel the noise-resume timer so we don't
           // re-engage the agent while the customer is mid-turn.
           clearTimeout(session._noiseResumeTimer);
@@ -1106,6 +1107,15 @@ export default async function streamGeminiOutgoing(c: any) {
           session.transcript.push({ speaker: 'AI', text: t });
           session._pendingAiText = '';
         }
+        clearTimeout(session._silenceWatchdog);
+        session._silenceWatchdog = setTimeout(() => {
+          if (session.isSpeaking) return;
+          const noRecentCustomerSpeech = !session._lastInputTranscriptionAt || (Date.now() - session._lastInputTranscriptionAt) > 4000;
+          if (!noRecentCustomerSpeech) return; // customer actually spoke recently
+          if (session.geminiWs?.readyState !== WebSocket.OPEN) return;
+          console.log(`[${reqId}] 🔇 Silence watchdog: dead air for 7s — nudging agent`);
+          sendToGemini({ realtimeInput: { text: 'Continue.' } });
+        }, 7000);
       }
       if (sc.interrupted) {
         session.isSpeaking = false;
@@ -1114,7 +1124,10 @@ export default async function streamGeminiOutgoing(c: any) {
         session._outTail = null;
         if (session._pendingAiText) {
           const t = session._pendingAiText.trim();
-          if (t) session.transcript.push({ speaker: 'AI', text: t });
+          if (t) {
+            console.log(`[${reqId}] 🤖 AI (interrupted): "${t.substring(0, 200)}"`);
+            session.transcript.push({ speaker: 'AI', text: t });
+          }
           session._pendingAiText = '';
         }
         if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
@@ -1134,13 +1147,13 @@ export default async function streamGeminiOutgoing(c: any) {
         session._noiseResumeTimer = setTimeout(() => {
           // Guard 1: agent must not already be speaking
           if (session.isSpeaking) return;
-          // Guard 2: no caller audio forwarded in last 4s means customer isn't speaking
-          const noRecentCallerAudio = !session._lastCallerAudioSentAt ||
-            (Date.now() - session._lastCallerAudioSentAt) > 4000;
-          if (!noRecentCallerAudio) return; // customer is mid-speech, do not interrupt
+          // Guard 2: no caller speech transcribed in last 4s means customer isn't speaking
+          const noRecentCustomerSpeech = !session._lastInputTranscriptionAt ||
+            (Date.now() - session._lastInputTranscriptionAt) > 4000;
+          if (!noRecentCustomerSpeech) return; // customer is mid-speech, do not interrupt
           // Guard 3: Gemini WebSocket must be alive
-          if (geminiSocket?.readyState !== WebSocket.OPEN) return;
-          console.log(`[${reqId}] 🔇 Noise-resume: no customer audio in 4s — nudging agent to continue`);
+          if (session.geminiWs?.readyState !== WebSocket.OPEN) return;
+          console.log(`[${reqId}] 🔇 Noise-resume: no customer speech in 4s — nudging agent to continue`);
           // 'Continue.' is safe — the system prompt governs the response.
           // It does NOT corrupt the state machine unlike clientContent{turnComplete}.
           sendToGemini({ realtimeInput: { text: 'Continue.' } });
@@ -1584,7 +1597,8 @@ export default async function streamGeminiOutgoing(c: any) {
         if (!batched) return; // still accumulating — wait for ≥120ms
         const b64 = mulawToBase64PCM16_16k(batched, session);
         sendToGemini({ realtimeInput: { audio: { data: b64, mimeType: 'audio/pcm;rate=16000' } } });
-        session._lastCallerAudioSentAt = Date.now();
+        // NOTE: we no longer track _lastCallerAudioSentAt here because continuous streaming
+        // defeated the silence watchdog. We now track _lastInputTranscriptionAt instead.
         return;
       }
 
