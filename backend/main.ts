@@ -120,6 +120,8 @@ setInterval(() => {
   }
 }, 3600 * 1000);
 
+const mode = Deno.env.get("SERVICE_MODE") || "ALL"; // 'API', 'STREAMING', or 'ALL'
+
 // Only serve static assets on API container (streaming container has no dist/)
 if (mode === "API" || mode === "ALL") {
   app.use('/assets/*', serveStatic({ root: './dist' }));
@@ -134,7 +136,6 @@ app.get('/api/realtime', (c) => {
   return c.text("WebSocket upgrade required", 400);
 });
 
-const mode = Deno.env.get("SERVICE_MODE") || "ALL"; // 'API', 'STREAMING', or 'ALL'
 
 if (mode === "API" || mode === "ALL") {
   app.route("/api/auth", authRouter);
