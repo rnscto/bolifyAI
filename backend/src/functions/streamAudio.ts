@@ -199,7 +199,7 @@ async function saveCallRecord(session, reqId, duration, serviceClient) {
 
     if (transcript && transcript.trim().length > 30) {
       try {
-        const analysisUrl = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+        const analysisUrl = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`;
         console.log(`[${reqId}] 🧠 AI Analysis URL: ${analysisUrl.substring(0, 100)}...`);
         const analysisRes = await fetch(
           analysisUrl,
@@ -1027,7 +1027,7 @@ export default async function streamAudio(c: any) {
       const oI = bUrl.indexOf('/openai/'); if (oI > 0) bUrl = bUrl.substring(0, oI);
       const pI = bUrl.indexOf('/api/projects'); if (pI > 0) bUrl = bUrl.substring(0, pI);
       const dep = Deno.env.get('AZURE_OPENAI_DEPLOYMENT'), ak = Deno.env.get('AZURE_OPENAI_KEY');
-      const res = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2024-08-01-preview`, {
+      const res = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2025-04-01-preview`, {
         method: 'POST', headers: { 'api-key': ak, 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [
           { role: 'system', content: 'Classify this live call. Return JSON: {"reason":"label","emoji":"1 emoji","detail":"1 sentence","urgency":"low|medium|high|urgent","caller_name":"name if said"}' },

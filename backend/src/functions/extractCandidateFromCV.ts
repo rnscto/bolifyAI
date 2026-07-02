@@ -12,7 +12,7 @@ import { client } from "../db/index.ts";
 // (pdf via unpdf, docx via JSZip, images via Azure vision OCR), THEN send the text to
 // Azure OpenAI for structured extraction. Azure vision does NOT accept PDFs as image_url.
 
-const AZURE_API_VERSION = '2024-08-01-preview';
+const AZURE_API_VERSION = '2025-04-01-preview';
 
 const CATEGORIES = [
   'domestic_help','driver','cook','nanny','security','office_staff','software_engineer',

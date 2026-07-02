@@ -89,7 +89,7 @@ async function saveCallRecord(session, reqId, duration) {
     let summary='', leadStatus='contacted', sentiment='neutral', leadScore=0, intentSignals=[], scoreBreakdown={}, keyTopics=[];
     if(transcript.trim().length>30 && baseUrl && dep && key){
       try {
-        const r=await fetch(`${baseUrl}/openai/deployments/${dep}/chat/completions?api-version=2024-08-01-preview`, {
+        const r=await fetch(`${baseUrl}/openai/deployments/${dep}/chat/completions?api-version=2025-04-01-preview`, {
           method:'POST', headers:{'api-key':key, 'Content-Type':'application/json'},
           body: JSON.stringify({
             messages:[
@@ -817,7 +817,7 @@ STEP 3: "Theek hai ${honorific}, maine note kar liya hai. Dhanyavaad, namaste." 
         const sysPrompt = session._isTrustedCaller
           ? 'Extract reason for this call in 5-10 words. Return JSON: {"reason":"brief"}'
           : 'Extract caller name and reason from this live call. Return JSON: {"caller_name":"name if said else empty","reason":"why calling else empty"}';
-        const r = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2024-08-01-preview`, {
+        const r = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2025-04-01-preview`, {
           method: 'POST', headers: { 'api-key': ak, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: convo }],

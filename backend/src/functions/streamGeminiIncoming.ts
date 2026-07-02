@@ -283,7 +283,7 @@ async function saveCallRecord(session, reqId, duration) {
     let summary = '', leadStatus = 'contacted', sentiment = 'neutral', leadScore = 0, intentSignals = [], scoreBreakdown = {}, keyTopics = [], summaryHindi = '';
     if (transcript.trim().length > 30 && baseUrl && deployment && apiKey) {
       try {
-        const r = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`, {
+        const r = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
           method: 'POST', headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [

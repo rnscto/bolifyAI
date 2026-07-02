@@ -45,7 +45,7 @@ async function azureLLM(prompt, systemPrompt, jsonSchema) {
   const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
   const deployment = Deno.env.get('AZURE_OPENAI_DEPLOYMENT');
   const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
-  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },

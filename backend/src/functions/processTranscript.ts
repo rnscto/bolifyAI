@@ -79,7 +79,7 @@ export default async function processTranscript(c: any) {
     // Use Azure OpenAI to analyze conversation + score lead
     const baseUrl = Deno.env.get('AZURE_OPENAI_ENDPOINT')?.replace(/\/+$/, '');
     const analysisResponse = await fetch(
-      `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2024-08-01-preview`,
+      `${baseUrl}/openai/deployments/${Deno.env.get('AZURE_OPENAI_DEPLOYMENT')}/chat/completions?api-version=2025-04-01-preview`,
       {
         method: 'POST',
         headers: {

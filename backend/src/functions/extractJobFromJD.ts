@@ -8,7 +8,7 @@ import { client } from "../db/index.ts";
 // Input: { jd_text } — pasted JD text. OR { jd_url } — public Azure Blob URL (pdf/docx/image).
 // Output: { success, data: { job: {...}, questions: [...] } }
 
-const AZURE_API_VERSION = '2024-08-01-preview';
+const AZURE_API_VERSION = '2025-04-01-preview';
 
 const CATEGORIES = [
   'domestic_help','driver','cook','nanny','security','office_staff','software_engineer',

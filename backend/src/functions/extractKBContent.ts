@@ -15,7 +15,7 @@ import { client } from "../db/index.ts";
 
 
 
-const AZURE_API_VERSION = '2024-08-01-preview';
+const AZURE_API_VERSION = '2025-04-01-preview';
 
 // ─── Azure OpenAI text-only call ───
 async function azureLLMText(prompt) {

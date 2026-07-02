@@ -166,7 +166,7 @@ async function saveCallRecord(session, reqId, duration) {
 
     if (transcript && transcript.trim().length > 30 && baseUrl && deployment && apiKey) {
       try {
-        const analysisRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`, {
+        const analysisRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
           method: 'POST', headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [
@@ -330,7 +330,7 @@ async function saveCallRecord(session, reqId, duration) {
             // Extract details from transcript if Azure OpenAI is available
             if (baseUrl && deployment && apiKey) {
               try {
-                const extractRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`, {
+                const extractRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
                   method: 'POST', headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
                   body: JSON.stringify({
                     messages: [
@@ -384,7 +384,7 @@ async function saveCallRecord(session, reqId, duration) {
           } else {
             // Create new provider
             if (baseUrl && deployment && apiKey) {
-              const extractRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`, {
+              const extractRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
                 method: 'POST', headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                   messages: [
@@ -1486,7 +1486,7 @@ export default async function streamAudioGemini(c: any) {
     } catch (_) {}
     if (opts?.transcript?.length > 30 && opts.baseUrl && opts.deployment && opts.apiKey) {
       try {
-        const r = await fetch(`${opts.baseUrl}/openai/deployments/${opts.deployment}/chat/completions?api-version=2024-08-01-preview`, { method: 'POST', headers: { 'api-key': opts.apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'system', content: 'Extract the caller\'s own name if they stated it. Return JSON {"name":"<name or empty>"}. Do NOT extract assistant or owner name. No guessing.' }, { role: 'user', content: opts.transcript }], max_completion_tokens: 30, response_format: { type: 'json_object' } }) });
+        const r = await fetch(`${opts.baseUrl}/openai/deployments/${opts.deployment}/chat/completions?api-version=2025-04-01-preview`, { method: 'POST', headers: { 'api-key': opts.apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: [{ role: 'system', content: 'Extract the caller\'s own name if they stated it. Return JSON {"name":"<name or empty>"}. Do NOT extract assistant or owner name. No guessing.' }, { role: 'user', content: opts.transcript }], max_completion_tokens: 30, response_format: { type: 'json_object' } }) });
         if (r.ok) { const j = JSON.parse((await r.json()).choices?.[0]?.message?.content || '{}'); if (j.name && String(j.name).trim()) return { name: String(j.name).trim(), source: 'Said on call' }; }
       } catch (_) {}
     }
@@ -1714,7 +1714,7 @@ ABSOLUTE RULES:
       if (bUrl && dep && ak) {
         try {
           const convo = session.transcript.map(t => `${t.speaker}: ${t.text}`).join('\n');
-          const res = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2024-08-01-preview`, {
+          const res = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2025-04-01-preview`, {
             method: 'POST', headers: { 'api-key': ak, 'Content-Type': 'application/json' },
             body: JSON.stringify({ messages: [
               { role: 'system', content: 'Extract the reason for this call in 5-10 words. Return JSON: {"reason":"brief reason"}' },
@@ -1735,7 +1735,7 @@ ABSOLUTE RULES:
     if (!bUrl || !dep || !ak) { session._midCallChecking = false; return; }
     try {
       const convo = session.transcript.map(t => `${t.speaker}: ${t.text}`).join('\n');
-      const res = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2024-08-01-preview`, {
+      const res = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2025-04-01-preview`, {
         method: 'POST', headers: { 'api-key': ak, 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: [
           { role: 'system', content: 'Extract caller name and reason from this live call. Return JSON: {"caller_name":"name if said, else empty","reason":"why calling, else empty","ready":true/false}. ready=true ONLY when BOTH name AND reason are known.' },

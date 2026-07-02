@@ -78,7 +78,7 @@ export default async function invokeAzureLLM(c: any) {
     if (response_json_schema) body.response_format = { type: 'json_object' };
 
     const r = await fetch(
-      `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`,
+      `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`,
       { method: 'POST', headers: { 'api-key': apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
     );
     if (!r.ok) {

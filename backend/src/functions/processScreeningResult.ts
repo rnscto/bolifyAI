@@ -107,7 +107,7 @@ export default async function processScreeningResult(c: any) {
       answer_type: q.answer_type, required: q.required, weight: q.scoring_weight || 1
     }));
 
-    const analysisRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`, {
+    const analysisRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
       method: 'POST',
       headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -189,7 +189,7 @@ Respond ONLY in valid JSON. NEVER return an empty object — always fill all fie
     if (!hasAnswers && !hasScore) {
       console.warn(`[processScreeningResult] ⚠️ First attempt empty. Retrying with simpler prompt...`);
       try {
-        const retryRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`, {
+        const retryRes = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
           method: 'POST',
           headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({

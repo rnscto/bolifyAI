@@ -37,7 +37,7 @@ async function detectIntents(transcript, availableIntents) {
   }
 
   const intentList = availableIntents.map(i => `- ${i}`).join('\n');
-  const res = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`, {
+  const res = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({

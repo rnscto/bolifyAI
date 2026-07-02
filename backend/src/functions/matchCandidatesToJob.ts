@@ -7,7 +7,7 @@ import { client } from "../db/index.ts";
 // each one against the job's requirements. Returns ranked matches with reasoning.
 // Uses Azure OpenAI directly (client's own keys — NOT Base44 integration credits).
 
-const AZURE_API_VERSION = '2024-08-01-preview';
+const AZURE_API_VERSION = '2025-04-01-preview';
 
 function azureCfg() {
   const baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');

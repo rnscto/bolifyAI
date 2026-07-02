@@ -231,7 +231,7 @@ async function saveCallRecord(session, reqId, duration) {
     let summary = '', summaryHindi = '', sentiment = 'neutral', category = 'unknown', urgency = 'medium';
     if (transcript.trim().length > 30 && baseUrl && deployment && apiKey) {
       try {
-        const r = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`, {
+        const r = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
           method: 'POST', headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [
@@ -996,7 +996,7 @@ NEVER say "ek minute hold kariye" — owner is NOT reachable.`;
         const sysPrompt = session._isTrustedCaller
           ? 'Extract reason for this call in 5-10 words. Return JSON: {"reason":"brief"}'
           : 'Extract caller name and reason from this live call. Return JSON: {"caller_name":"name if said else empty","reason":"why calling else empty"}';
-        const r = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2024-08-01-preview`, {
+        const r = await fetch(`${bUrl}/openai/deployments/${dep}/chat/completions?api-version=2025-04-01-preview`, {
           method: 'POST', headers: { 'api-key': ak, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: convo }],

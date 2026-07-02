@@ -9,7 +9,7 @@ import { client } from "../db/index.ts";
 // Input: { provider_id }
 // Output: { success, data: {...cv...} }  (also persisted to provider.screening_answers.ai_cv_data)
 
-const AZURE_API_VERSION = '2024-08-01-preview';
+const AZURE_API_VERSION = '2025-04-01-preview';
 
 function azureCfg() {
   const baseUrl = (Deno.env.get('AZURE_OPENAI_ENDPOINT') || '').replace(/\/+$/, '');

@@ -48,7 +48,7 @@ export default async function extractDemoBookingFromCall(c: any) {
     const istNow = new Date(now.getTime() + (5.5 * 60 * 60 * 1000));
     const todayStr = istNow.toISOString().split('T')[0];
 
-    const r = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`, {
+    const r = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
       method: 'POST',
       headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
       body: JSON.stringify({

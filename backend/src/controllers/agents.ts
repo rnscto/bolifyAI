@@ -16,7 +16,7 @@ async function callAzureOpenAI({ system, user, max_tokens = 800 }: { system: str
   const oI = baseUrl.indexOf('/openai/'); if (oI > 0) baseUrl = baseUrl.substring(0, oI);
   const pI = baseUrl.indexOf('/api/projects'); if (pI > 0) baseUrl = baseUrl.substring(0, pI);
 
-  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },

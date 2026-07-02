@@ -131,7 +131,7 @@ export default async function processTransferRecording(c: any) {
     const existingAiTranscript = callLog.transcript || '';
 
     const analysisResponse = await fetch(
-      `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`,
+      `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`,
       {
         method: 'POST',
         headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },

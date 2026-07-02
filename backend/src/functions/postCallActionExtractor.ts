@@ -153,7 +153,7 @@ Never guess — use null when the conversation does not provide the value.`;
     const apiKey = Deno.env.get('AZURE_OPENAI_KEY');
 
     const extractionResponse = await fetch(
-      `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`,
+      `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`,
       {
         method: 'POST',
         headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },

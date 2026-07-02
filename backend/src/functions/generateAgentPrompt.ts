@@ -17,7 +17,7 @@ async function callAzureOpenAI(prompt, { maxTokens = 4000, jsonMode = false } = 
   };
   if (jsonMode) body.response_format = { type: 'json_object' };
 
-  const r = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`, {
+  const r = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify(body)

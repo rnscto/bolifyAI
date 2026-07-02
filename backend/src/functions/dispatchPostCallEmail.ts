@@ -23,7 +23,7 @@ async function detectEmailIntents(transcript, availableIntents) {
     return { send_requested: false, intents: [], email_override: null };
   }
   const intentList = availableIntents.map(i => `- ${i}`).join('\n');
-  const res = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`, {
+  const res = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -81,7 +81,7 @@ async function pickRelevantAttachments({ transcript, intents, availableLibrary }
     description: (a.description || '').substring(0, 300)
   }));
 
-  const res = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`, {
+  const res = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({

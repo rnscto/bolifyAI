@@ -59,7 +59,7 @@ CAMPAIGN / CONTEXT FROM SENDER (${client?.company_name || 'our company'}):
 ${context || 'A professional follow-up.'}
 
 Return JSON: { "subject": "...", "body_html": "<p>...</p>" }. Address by name. Include one clear CTA.`;
-  const res = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`, {
+  const res = await fetch(`${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`, {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
     body: JSON.stringify({

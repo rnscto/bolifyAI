@@ -9,7 +9,7 @@ async function azureLLM(prompt: string, systemPrompt: string, jsonSchema: any) {
     throw new Error('Azure OpenAI credentials missing from .env');
   }
 
-  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2024-08-01-preview`;
+  const url = `${baseUrl}/openai/deployments/${deployment}/chat/completions?api-version=2025-04-01-preview`;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'api-key': apiKey, 'Content-Type': 'application/json' },
