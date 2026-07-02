@@ -918,6 +918,19 @@ export default async function streamAudioGemini(c: any) {
         systemInstruction: {
           parts: [{ text: fullPrompt }]
         },
+        // ── VAD TUNING FOR NOISY PHONE ENVIRONMENTS ────────────────────────────────
+        // START_SENSITIVITY_LOW: requires actual human speech energy to trigger,
+        // not ambient noise (air conditioning, TV, traffic, background voices).
+        // HIGH sensitivity was the root cause of agent silence: any audio triggered
+        // barge-in → agent audio cleared → Gemini waited forever for real input.
+        realtimeInputConfig: {
+          automaticActivityDetection: {
+            startOfSpeechSensitivity: 'START_SENSITIVITY_LOW',
+            endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH',
+            silenceDurationMs: 600,
+            prefixPaddingMs: 120
+          }
+        },
         inputAudioTranscription: {},
         outputAudioTranscription: {}
       }

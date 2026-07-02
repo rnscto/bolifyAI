@@ -130,17 +130,21 @@ async function getFillerAudio() {
 // NOTE: NO module-load pre-warm — wastes integration credits on cold starts.
 
 // ─── Noise + hallucinated-script filter ───
-// Gemini's transcriber hallucinates Korean/Japanese/Chinese/Arabic/Thai/Cyrillic/Hangul
-// phrases on silence or noisy Indian-language audio. Drop those entirely so the
-// AI never reacts to imaginary foreign speech.
+// ─── Noise + hallucinated-script filter (shared with outgoing) ───
+// Also catches common ambient-noise transcription artifacts from TV, radio, traffic.
 function isNoiseTranscription(text) {
   const t = (text || '').trim();
   if (!t) return true;
-  if (t.length <= 4 && /^(uh|um|mhm|hmm|eh|oh|ah)\.?$/i.test(t)) return true;
+  if (t.length <= 4 && /^(uh|um|mhm|hmm|eh|oh|ah|hm|uh-huh)\.?$/i.test(t)) return true;
   if (/[\uAC00-\uD7AF\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\u0600-\u06FF\u0E00-\u0E7F\u0400-\u04FF]/.test(t)) return true;
   if (!/[a-zA-Z\u0900-\u097F]/.test(t)) return true;
   if (/[¿¡]/.test(t)) return true;
   if (t.length < 80 && /[àâäçéèêëîïôöûùüÿñõãáíóú]/i.test(t)) return true;
+  if (/^[\[(].*[\])]$/.test(t)) return true;
+  if (/\[(?:music|applause|laughter|noise|crowd|background|sound|beep|ring|click|static|tone|silence|inaudible)\b/i.test(t)) return true;
+  if (/\((?:music|applause|laughter|noise|crowd|background|sound|beep|ring|static|inaudible)\b/i.test(t)) return true;
+  if (/^[\d\s\+\-\*#]+$/.test(t)) return true;
+  if (/^(yeah|yep|nope|okay|ok|sure|right|alright|fine|yes|no|mhm|ahh|ohh|hmm)[\.!,]?$/i.test(t)) return true;
   return false;
 }
 
@@ -751,10 +755,10 @@ export default async function streamGeminiIncoming(c: any) {
         // VAD to reply faster after the caller stops, instead of the slow default.
         realtimeInputConfig: {
           automaticActivityDetection: {
-            startOfSpeechSensitivity: 'START_SENSITIVITY_HIGH',
+            startOfSpeechSensitivity: 'START_SENSITIVITY_LOW',
             endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH',
-            silenceDurationMs: 400,
-            prefixPaddingMs: 60
+            silenceDurationMs: 600,
+            prefixPaddingMs: 120
           }
         },
         inputAudioTranscription: {}, outputAudioTranscription: {}
@@ -807,7 +811,10 @@ export default async function streamGeminiIncoming(c: any) {
       }
       if (sc.inputTranscription) {
         const t = (sc.inputTranscription.text || '').trim();
-        if (t && !isNoiseTranscription(t)) session._pendingCustomerText += (session._pendingCustomerText ? ' ' : '') + t;
+        if (t && !isNoiseTranscription(t)) {
+          session._pendingCustomerText += (session._pendingCustomerText ? ' ' : '') + t;
+          clearTimeout(session._noiseResumeTimer);
+        }
       }
       if (sc.outputTranscription) {
         const t = (sc.outputTranscription.text || '').trim();
@@ -846,6 +853,14 @@ export default async function streamGeminiIncoming(c: any) {
         if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
           smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: session.streamSid }));
         }
+        // ── NOISE-RESUME GUARD: re-engage agent if only noise triggered this barge-in ──
+        clearTimeout(session._noiseResumeTimer);
+        session._noiseResumeTimer = setTimeout(() => {
+          if (!session.isSpeaking && !session._pendingCustomerText && geminiSocket?.readyState === WebSocket.OPEN) {
+            console.log(`[${reqId}] 🔇 Noise-resume: no real speech after interruption — re-engaging agent`);
+            sendToGemini({ clientContent: { turnComplete: true } });
+          }
+        }, 2500);
       }
       return;
     }

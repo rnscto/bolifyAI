@@ -328,10 +328,13 @@ async function pgFinalizeCallLog(callLogId, update, leadStatus, leadScore) {
 // Gemini's transcriber hallucinates Korean/Japanese/Chinese/Arabic/Thai/Cyrillic/Hangul
 // phrases on silence or noisy Indian-language audio. Drop those entirely so the
 // AI never reacts to imaginary foreign speech.
+// Also catches common ambient-noise transcription artifacts from TV, radio, traffic:
+//   [music], (background noise), pure DTMF digits, ambient single-word responses.
 function isNoiseTranscription(text) {
   const t = (text || '').trim();
   if (!t) return true;
-  if (t.length <= 4 && /^(uh|um|mhm|hmm|eh|oh|ah)\.?$/i.test(t)) return true;
+  // Micro-filler sounds — never real speech turns
+  if (t.length <= 4 && /^(uh|um|mhm|hmm|eh|oh|ah|hm|uh-huh)\.?$/i.test(t)) return true;
   // Forbidden scripts → always drop (Korean, Japanese, CJK, Arabic, Thai, Cyrillic)
   if (/[\uAC00-\uD7AF\u3040-\u309F\u30A0-\u30FF\u4E00-\u9FFF\u0600-\u06FF\u0E00-\u0E7F\u0400-\u04FF]/.test(t)) return true;
   // Must contain at least one Latin or Devanagari character
@@ -340,6 +343,16 @@ function isNoiseTranscription(text) {
   if (/[¿¡]/.test(t)) return true;
   // Drop short diacritic-heavy strings (Spanish/Portuguese/French hallucinations from background noise)
   if (t.length < 80 && /[àâäçéèêëîïôöûùüÿñõãáíóú]/i.test(t)) return true;
+  // TV/radio/ambient pattern: Bracketed or parenthetical sound descriptions
+  //   [music playing], [applause], [background noise], (laughter), (crowd noise)
+  if (/^[\[(].*[\])]$/.test(t)) return true;
+  if (/\[(?:music|applause|laughter|noise|crowd|background|sound|beep|ring|click|static|tone|silence|inaudible)\b/i.test(t)) return true;
+  if (/\((?:music|applause|laughter|noise|crowd|background|sound|beep|ring|static|inaudible)\b/i.test(t)) return true;
+  // Pure DTMF / digits-only (touch-tone artifacts picked up as "speech")
+  if (/^[\d\s\+\-\*#]+$/.test(t)) return true;
+  // Ambient background voice: very short responses typical of background conversations
+  // Only suppress if ≤ 2 words AND they are very common ambient words
+  if (/^(yeah|yep|nope|okay|ok|sure|right|alright|fine|yes|no|mhm|ahh|ohh|hmm)[\.!,]?$/i.test(t)) return true;
   return false;
 }
 
@@ -994,10 +1007,21 @@ export default async function streamGeminiOutgoing(c: any) {
         // caller mid-sentence. This is the documented lever for mid-call response lag.
         realtimeInputConfig: {
           automaticActivityDetection: {
-            startOfSpeechSensitivity: 'START_SENSITIVITY_HIGH',
+            // ── VAD TUNING FOR NOISY PHONE ENVIRONMENTS ──
+            // LOW start-sensitivity = requires actual human speech energy to trigger,
+            // NOT ambient noise (air conditioning, TV, traffic, background voices).
+            // HIGH was the root cause: ANY audio triggered barge-in → agent silenced.
+            startOfSpeechSensitivity: 'START_SENSITIVITY_LOW',
+            // Keep HIGH end-sensitivity — we still want to respond quickly once real
+            // speech finishes, so the agent doesn't feel laggy.
             endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH',
-            silenceDurationMs: 400,
-            prefixPaddingMs: 60
+            // 600ms debounce (was 400ms). A brief noise burst or inter-word pause in
+            // background audio must sustain for 600ms of silence before being counted
+            // as end-of-speech. Phone-quality noise rarely crosses 600ms of true silence.
+            silenceDurationMs: 600,
+            // 120ms onset padding (was 60ms). Buffers the start of the speech window
+            // to avoid clipping word-initial consonants when real speech begins.
+            prefixPaddingMs: 120
           }
         },
         inputAudioTranscription: {}, outputAudioTranscription: {}
@@ -1051,7 +1075,12 @@ export default async function streamGeminiOutgoing(c: any) {
       }
       if (sc.inputTranscription) {
         const t = (sc.inputTranscription.text || '').trim();
-        if (t && !isNoiseTranscription(t)) session._pendingCustomerText += (session._pendingCustomerText ? ' ' : '') + t;
+        if (t && !isNoiseTranscription(t)) {
+          session._pendingCustomerText += (session._pendingCustomerText ? ' ' : '') + t;
+          // Real speech arrived — cancel the noise-resume timer so we don't
+          // re-engage the agent while the customer is mid-turn.
+          clearTimeout(session._noiseResumeTimer);
+        }
       }
       if (sc.outputTranscription) {
         const t = (sc.outputTranscription.text || '').trim();
@@ -1091,6 +1120,20 @@ export default async function streamGeminiOutgoing(c: any) {
         if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
           smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: session.streamSid }));
         }
+        // ── NOISE-RESUME GUARD ──────────────────────────────────────────────────
+        // If background noise (not a real customer turn) triggered the barge-in,
+        // Gemini will stay silent because the noise transcription is dropped by
+        // isNoiseTranscription() — Gemini has nothing to respond to.
+        // After 2.5s, if the agent is still silent and the customer hasn't spoken,
+        // we send a clientContent turnComplete signal. This tells Gemini "user's
+        // turn is done" → Gemini resumes speaking without any fake text injection.
+        clearTimeout(session._noiseResumeTimer);
+        session._noiseResumeTimer = setTimeout(() => {
+          if (!session.isSpeaking && !session._pendingCustomerText && geminiSocket?.readyState === WebSocket.OPEN) {
+            console.log(`[${reqId}] 🔇 Noise-resume: no real speech after interruption — re-engaging agent`);
+            sendToGemini({ clientContent: { turnComplete: true } });
+          }
+        }, 2500);
       }
       return;
     }
