@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { createPageUrl } from './utils';
 import { apiClient } from '@/api/apiClient';
+import { BOLIFYAI_LOGO_DASHBOARD } from '@/lib/assets';
 import {
   LayoutDashboard,
   Users,
@@ -190,7 +191,7 @@ export default function Layout({ children, currentPageName }) {
   // White-label branding: use domain brand first, then client brand, then fallback
   const activeBrand = appPublicSettings?.brand || brand;
   
-  const wlLogoUrl = !isAdmin && (activeBrand?.dashboard_logo_url || activeBrand?.logo_url) ? (activeBrand.dashboard_logo_url || activeBrand.logo_url) : 'https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/a1247aabb_generated_image.png';
+  const wlLogoUrl = !isAdmin && (activeBrand?.dashboard_logo_url || activeBrand?.logo_url) ? (activeBrand.dashboard_logo_url || activeBrand.logo_url) : BOLIFYAI_LOGO_DASHBOARD;
   const wlAppName = !isAdmin && (activeBrand?.dashboard_app_name || activeBrand?.brand_name) ? (activeBrand.dashboard_app_name || activeBrand.brand_name) : 'Bolify AI';
   const wlPrimary = !isAdmin && (activeBrand?.dashboard_primary_color || activeBrand?.theme_colors?.primary) ? (activeBrand.dashboard_primary_color || activeBrand.theme_colors?.primary) : '#1D4ED8';
   const wlFavicon = !isAdmin && (activeBrand?.dashboard_favicon_url || activeBrand?.favicon_url) ? (activeBrand.dashboard_favicon_url || activeBrand.favicon_url) : null;

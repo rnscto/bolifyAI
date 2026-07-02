@@ -339,17 +339,55 @@ export const apiClient = {
         }
         return { file_url: res.data.file_url || res.data.file_uri };
       },
+      /**
+       * InvokeLLM — calls Azure OpenAI via the invokeAzureLLM backend function.
+       * @param {object} args - { prompt, systemPrompt?, responseType?, responseFormat? }
+       */
       InvokeLLM: async (args) => {
-        console.warn("Mocking InvokeLLM", args);
-        return { result: "Mocked LLM Output" };
+        const res = await apiFetch("/functions/invokeAzureLLM", {
+          method: "POST",
+          body: JSON.stringify({
+            prompt: args.prompt,
+            system_prompt: args.systemPrompt || args.system_prompt || "",
+            response_type: args.responseType || args.response_type || "text",
+            response_format: args.responseFormat || args.response_format || null,
+          }),
+        });
+        return res?.data || res;
       },
+
+      /**
+       * ExtractDataFromUploadedFile — extracts structured data from uploaded files
+       * via the extractKBContent backend function.
+       * @param {object} args - { file_url, output_data_structure? }
+       */
       ExtractDataFromUploadedFile: async (args) => {
-        console.warn("Mocking ExtractDataFromUploadedFile");
-        return { data: [] };
+        const res = await apiFetch("/functions/extractKBContent", {
+          method: "POST",
+          body: JSON.stringify({
+            file_url: args.file_url || args.fileUrl,
+            output_data_structure: args.output_data_structure || args.outputDataStructure || null,
+          }),
+        });
+        return res?.data || { data: [] };
       },
+
+      /**
+       * SendEmail — sends an email via the sendPlatformEmail backend function.
+       * Uses the client's configured email provider (Resend / SendGrid / Mailgun).
+       * @param {object} args - { to, subject, body, bodyHtml? }
+       */
       SendEmail: async (args) => {
-        console.warn("Mocking SendEmail");
-        return { success: true };
+        const res = await apiFetch("/functions/sendPlatformEmail", {
+          method: "POST",
+          body: JSON.stringify({
+            to: args.to,
+            subject: args.subject,
+            body: args.body || args.bodyText || "",
+            body_html: args.bodyHtml || args.body_html || args.body || "",
+          }),
+        });
+        return res?.data || { success: true };
       }
     }
   }

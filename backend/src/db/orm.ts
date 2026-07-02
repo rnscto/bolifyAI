@@ -1,5 +1,6 @@
 import { client } from "./index.ts";
 import { broadcastEntityChange } from "../services/realtime.ts";
+import { invokeFunction, invokeFunctionBg } from "../services/dispatcher.ts";
 
 export class DBEntityWrapper {
   private tableName: string;
@@ -126,5 +127,22 @@ export const base44ORM = {
       }
       return target[prop];
     }
-  })
+  }),
+  // ─── Enterprise in-process function dispatch ─────────────────────────────────
+  // Replaces the old Base44 cloud HTTP round-trip with a zero-latency, in-process
+  // call into the local function registry. Works across both containers.
+  functions: {
+    /**
+     * Invoke a named function in-process and await its result.
+     * Includes 30 s circuit-breaker timeout and structured error logging.
+     */
+    invoke: (name: string, args: Record<string, any> = {}, timeoutMs = 30_000) =>
+      invokeFunction(name, args, timeoutMs),
+    /**
+     * Fire-and-forget invocation — errors are logged but never propagate.
+     * Use for non-critical side effects (analytics syncs, audit logs, etc).
+     */
+    invokeBg: (name: string, args: Record<string, any> = {}) =>
+      invokeFunctionBg(name, args),
+  },
 };

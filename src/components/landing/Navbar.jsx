@@ -5,7 +5,9 @@ import { Link } from 'react-router-dom';
 import { apiClient } from '@/api/apiClient';
 import { createPageUrl } from '../../utils';
 
-const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/a1247aabb_generated_image.png";
+import { BOLIFYAI_LOGO } from '@/lib/assets';
+
+const LOGO_URL = BOLIFYAI_LOGO;
 
 export default function Navbar() {
   const [open, setOpen] = useState(false);

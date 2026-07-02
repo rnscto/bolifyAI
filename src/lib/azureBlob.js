@@ -23,10 +23,9 @@ async function invokeUpload({ file, visibility, folder }) {
   if (folder) formData.append('folder', folder);
 
   // Read token fresh from localStorage every time.
-  // KEY: apiClient.js stores the JWT under 'bolifyai_token' (see getToken() in apiClient.js)
+  // KEY: apiClient.js stores the JWT under 'bolifyai_token' (canonical key)
   const token =
     localStorage.getItem('bolifyai_token') ||
-    localStorage.getItem('base44_access_token') ||
     localStorage.getItem('token') ||
     appParams.token ||
     '';

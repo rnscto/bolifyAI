@@ -7,7 +7,9 @@ import { apiClient } from '@/api/apiClient';
 import LeadCaptureForm from './LeadCaptureForm';
 import PreChatForm from './PreChatForm';
 
-const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg";
+import { BOLIFYAI_LOGO } from '@/lib/assets';
+
+const LOGO_URL = BOLIFYAI_LOGO;
 const SAMPLE_RATE = 24000;
 
 const buildSystemPrompt = (visitorInfo) => {

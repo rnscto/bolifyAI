@@ -20,6 +20,8 @@ import { functionsRouter } from "./src/controllers/functions.ts";
 import { marketplaceRouter } from "./src/controllers/marketplace.ts";
 import { analyticsRouter } from "./src/controllers/analytics.ts";
 import { ticketRouter } from "./src/controllers/tickets.ts";
+import { functionRegistry } from "./src/functions/index.ts";
+import { initDispatcher } from "./src/services/dispatcher.ts";
 import { initCampaignPoller } from "./src/cron/campaignPoller.ts";
 import { initCrmPoller } from "./src/cron/crmPoller.ts";
 import { initBillingSweeper } from "./src/cron/billingSweeper.ts";
@@ -33,6 +35,9 @@ import { initStreamSession } from "./src/controllers/voice.ts";
 import { daprRouter } from "./src/controllers/dapr.ts";
 
 const app = new Hono();
+
+// ─── Initialise in-process function dispatcher (must be first, before any handlers run) ───
+initDispatcher(functionRegistry);
 
 // ─── WSS URL Helper ────────────────────────────────────────────────────────────
 const wssUrlHandler = async (c: any) => {
@@ -115,7 +120,10 @@ setInterval(() => {
   }
 }, 3600 * 1000);
 
-app.use('/assets/*', serveStatic({ root: './dist' }));
+// Only serve static assets on API container (streaming container has no dist/)
+if (mode === "API" || mode === "ALL") {
+  app.use('/assets/*', serveStatic({ root: './dist' }));
+}
 
 app.get('/api/health', (c) => {
   return c.text('OK');
@@ -155,13 +163,20 @@ if (mode === "STREAMING" || mode === "ALL") {
 app.route("/api/dapr", daprRouter);
 app.route("/dapr", daprRouter);
 
+// ─── SPA fallback (API container only) / JSON 404 (streaming container) ─────────────
 app.get('*', async (c, next) => {
   if (c.req.path.startsWith('/api/')) {
     return await next();
   }
+
+  // Streaming container: never serve HTML — it has no dist/
+  if (mode === "STREAMING") {
+    return c.json({ error: "Not Found", service: "bolify-streaming" }, 404);
+  }
+
   // Block probing for sensitive files — return 404 regardless of filesystem presence
   const p = c.req.path.toLowerCase();
-  const isSensitive = /(\.(env|git|htaccess|htpasswd|DS_Store|npmrc|yarnrc)|\/\.(git|svn|hg)|backup|\.bak$|\.old$|\.save$|\.prod$|\.staging$|\.local$|config\/\.env|app\/\.env)/.test(p);
+  const isSensitive = /(\.( env|git|htaccess|htpasswd|DS_Store|npmrc|yarnrc)|\/\.(git|svn|hg)|backup|\.bak$|\.old$|\.save$|\.prod$|\.staging$|\.local$|config\/\.env|app\/\.env)/.test(p);
   if (isSensitive) return c.notFound();
 
   try {
@@ -175,8 +190,8 @@ app.get('*', async (c, next) => {
     }
     const content = await Deno.readTextFile('./dist/index.html');
     return c.html(content);
-  } catch (e) {
-    return c.text("BolifyAI API is running. Frontend dist/ not found.");
+  } catch (_e) {
+    return c.json({ error: "Not Found", service: "bolify-api" }, 404);
   }
 });
 

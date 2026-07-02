@@ -1,3 +1,10 @@
+/**
+ * ─── App Parameters ───────────────────────────────────────────────────────────
+ *
+ * Reads startup URL parameters and session values for the BolifyAI portal.
+ * Cleaned up to use `bolifyai_*` localStorage keys (not Base44 legacy keys).
+ */
+
 const isNode = typeof window === 'undefined';
 const windowObj = isNode ? { localStorage: new Map() } : window;
 const storage = windowObj.localStorage;
@@ -6,11 +13,18 @@ const toSnakeCase = (str) => {
 	return str.replace(/([A-Z])/g, '_$1').toLowerCase();
 }
 
+/**
+ * Reads a value from (in priority order):
+ *   1. URL query parameter
+ *   2. Provided defaultValue
+ *   3. localStorage (`bolifyai_<paramName>`)
+ */
 const getAppParamValue = (paramName, { defaultValue = undefined, removeFromUrl = false } = {}) => {
 	if (isNode) {
 		return defaultValue;
 	}
-	const storageKey = `base44_${toSnakeCase(paramName)}`;
+	// Use bolifyai_ prefix (not base44_)
+	const storageKey = `bolifyai_${toSnakeCase(paramName)}`;
 	const urlParams = new URLSearchParams(window.location.search);
 	const searchParam = urlParams.get(paramName);
 	if (removeFromUrl) {
@@ -35,19 +49,20 @@ const getAppParamValue = (paramName, { defaultValue = undefined, removeFromUrl =
 }
 
 const getAppParams = () => {
+	// Clean up legacy base44 session tokens on clear_access_token=true
 	if (getAppParamValue("clear_access_token") === 'true') {
+		storage.removeItem('bolifyai_token');
+		storage.removeItem('bolifyai_access_token');
+		// Also clean any lingering legacy keys from previous Base44 sessions
 		storage.removeItem('base44_access_token');
 		storage.removeItem('token');
 	}
 	return {
-		appId: getAppParamValue("app_id", { defaultValue: import.meta.env.VITE_BASE44_APP_ID }),
+		// Access token passed via URL on login redirect (e.g., SSO)
 		token: getAppParamValue("access_token", { removeFromUrl: true }),
-		fromUrl: getAppParamValue("from_url", { defaultValue: window.location.href }),
-		functionsVersion: getAppParamValue("functions_version", { defaultValue: import.meta.env.VITE_BASE44_FUNCTIONS_VERSION }),
-		appBaseUrl: getAppParamValue("app_base_url", { defaultValue: import.meta.env.VITE_BASE44_APP_BASE_URL }),
+		fromUrl: getAppParamValue("from_url", { defaultValue: typeof window !== 'undefined' ? window.location.href : '' }),
 	}
 }
-
 
 export const appParams = {
 	...getAppParams()

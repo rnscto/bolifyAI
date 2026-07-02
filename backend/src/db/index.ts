@@ -166,7 +166,52 @@ async function ensurePostgresSchema() {
     `ALTER TABLE client ADD COLUMN IF NOT EXISTS gstin TEXT;`,
     `ALTER TABLE client ADD COLUMN IF NOT EXISTS pan_number TEXT;`,
     `CREATE INDEX IF NOT EXISTS idx_campaign_leads_campaign_status ON campaign_leads (campaign_id, status);`,
-    `CREATE INDEX IF NOT EXISTS idx_campaign_leads_campaign_status_followup ON campaign_leads (campaign_id, status, followup_call_date);`
+    `CREATE INDEX IF NOT EXISTS idx_campaign_leads_campaign_status_followup ON campaign_leads (campaign_id, status, followup_call_date);`,
+
+    // ── activity table (root cause of ClientActivities being empty) ───────────
+    // Stores post-call actions, follow-ups, CRM updates, and manual notes.
+    `CREATE TABLE IF NOT EXISTS "activity" (
+      "id"          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "created_at"  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "updated_at"  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "client_id"   TEXT NOT NULL,
+      "lead_id"     TEXT,
+      "call_log_id" TEXT,
+      "agent_id"    TEXT,
+      "type"        TEXT NOT NULL DEFAULT 'note',
+      "title"       TEXT,
+      "description" TEXT,
+      "status"      TEXT DEFAULT 'completed',
+      "due_date"    TIMESTAMPTZ,
+      "metadata"    JSONB DEFAULT '{}'::jsonb
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_activity_client ON "activity" (client_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_activity_lead ON "activity" (lead_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_activity_call_log ON "activity" (call_log_id);`,
+    `CREATE INDEX IF NOT EXISTS idx_activity_created ON "activity" (client_id, created_at DESC);`,
+
+    // ── calendarintegration table ─────────────────────────────────────────────
+    `CREATE TABLE IF NOT EXISTS "calendarintegration" (
+      "id"            TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "created_at"    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "updated_at"    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "client_id"     TEXT NOT NULL,
+      "provider"      TEXT NOT NULL DEFAULT 'google',
+      "access_token"  TEXT,
+      "refresh_token" TEXT,
+      "account_email" TEXT,
+      "status"        TEXT DEFAULT 'active',
+      "expires_at"    TIMESTAMPTZ,
+      UNIQUE(client_id, provider)
+    );`,
+    `CREATE INDEX IF NOT EXISTS idx_calendarintegration_client ON "calendarintegration" (client_id);`,
+
+    // ── call_logs: follow-up tracking columns ─────────────────────────────────
+    `ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS whatsapp_follow_up_sent BOOLEAN DEFAULT false;`,
+    `ALTER TABLE call_logs ADD COLUMN IF NOT EXISTS email_follow_up_sent BOOLEAN DEFAULT false;`,
+
+    // ── campaign_leads: agent tracking ────────────────────────────────────────
+    `ALTER TABLE campaign_leads ADD COLUMN IF NOT EXISTS agent_id TEXT;`
   ];
 
   for (const q of queries) {

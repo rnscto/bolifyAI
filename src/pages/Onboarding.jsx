@@ -3,6 +3,7 @@ import { apiClient } from '@/api/apiClient';
 import { useNavigate } from 'react-router-dom';
 import { createPageUrl } from '../utils';
 import { Loader2 } from 'lucide-react';
+import { BOLIFYAI_LOGO } from '@/lib/assets';
 import { toast } from 'sonner';
 
 import ProfileStep from '../components/onboarding/ProfileStep';
@@ -336,7 +337,7 @@ FOR SPAM/TELEMARKETING:
           <div className="max-w-3xl mx-auto px-4 py-4">
             <div className="flex items-center justify-between mb-3">
               <img
-                src="https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg"
+                src={BOLIFYAI_LOGO}
                 alt="Bolify AI"
                 className="h-10 object-contain"
               />

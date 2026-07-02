@@ -8,7 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { CheckCircle2, Loader2, Users, IndianRupee, TrendingUp, Handshake } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-const LOGO_URL = "https://media.base44.com/images/public/69c78272bd33d5309cbe2b7c/77d0f07f9_WhatsAppImage2026-04-16at102149AM.jpg";
+import { BOLIFYAI_LOGO } from '@/lib/assets';
+
+const LOGO_URL = BOLIFYAI_LOGO;
 
 const BENEFITS = [
   { icon: IndianRupee, title: '20% Revenue Share', desc: 'Earn 20% recurring commission on every client you refer' },
