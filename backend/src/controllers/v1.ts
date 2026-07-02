@@ -412,7 +412,7 @@ v1Router.route("/activities", buildCrudRouter("activity"));
 v1Router.route("/agents", buildCrudRouter("agent"));
 v1Router.route("/clients", buildCrudRouter("client"));
 v1Router.route("/dids", buildCrudRouter("did"));
-v1Router.route("/call-logs", buildCrudRouter("calllog"));
+v1Router.route("/call-logs", buildCrudRouter("call_logs"));
 v1Router.route("/deals", buildCrudRouter("deal"));
 v1Router.route("/crm-config", buildCrudRouter("crmconfig"));
 v1Router.route("/email-sequences", buildCrudRouter("emailsequence"));

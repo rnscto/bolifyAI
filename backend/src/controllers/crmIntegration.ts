@@ -129,8 +129,8 @@ export async function crmFetchDataHandler(c: Context) {
     const { entity, filters, limit, sort } = await c.req.json();
     if (!entity) return c.json({ error: "Missing entity" }, 400);
 
-    const allowedEntities = ['lead', 'contact', 'deal', 'calllog', 'activity'];
-    const tableMap: any = { 'leads': 'lead', 'contacts': 'contact', 'deals': 'deal', 'call_logs': 'calllog', 'activities': 'activity' };
+    const allowedEntities = ['lead', 'contact', 'deal', 'call_logs', 'activity'];
+    const tableMap: any = { 'leads': 'lead', 'contacts': 'contact', 'deals': 'deal', 'call_logs': 'call_logs', 'activities': 'activity' };
     const tableName = tableMap[entity];
 
     if (!tableName || !allowedEntities.includes(tableName)) {

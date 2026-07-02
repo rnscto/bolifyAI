@@ -75,14 +75,14 @@ crmRouter.get("/stats", async (c) => {
     
     if (user.role === 'admin') {
       leadsCountResult = await client.queryObject(`SELECT COUNT(*) as count FROM "lead"`);
-      callsCountResult = await client.queryObject(`SELECT COUNT(*) as count FROM "calllog"`);
+      callsCountResult = await client.queryObject(`SELECT COUNT(*) as count FROM "call_logs"`);
     } else {
       leadsCountResult = await client.queryObject(
         `SELECT COUNT(*) as count FROM "lead" WHERE client_id = $1`,
         [user.client_id]
       );
       callsCountResult = await client.queryObject(
-        `SELECT COUNT(*) as count FROM "calllog" c
+        `SELECT COUNT(*) as count FROM "call_logs" c
          INNER JOIN "lead" l ON c.lead_id = l.id::text
          WHERE l.client_id = $1`,
         [user.client_id]

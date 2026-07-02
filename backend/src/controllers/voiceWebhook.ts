@@ -244,7 +244,7 @@ async function triggerNextCampaignCall(campaignId: string) {
     };
 
     const newCallLogRes = await client.queryObject(
-      `INSERT INTO "calllog" (client_id, agent_id, lead_id, call_sid, caller_id, callee_number, direction, status, call_start_time, agent_config_cache)
+      `INSERT INTO call_logs (client_id, agent_id, lead_id, call_sid, caller_id, callee_number, direction, status, call_start_time, agent_config_cache)
        VALUES ($1, $2, $3, $4, $5, $6, 'outbound', 'initiated', NOW(), $7) RETURNING id`,
       [campaign.client_id, campaign.agent_id, cl.lead_id, callSid, selectedDID, cl.lead_phone, JSON.stringify(agentConfigCache)]
     );
@@ -279,10 +279,10 @@ async function triggerNextCampaignCall(campaignId: string) {
     const smartfloData = await smartfloResp.json();
     if (smartfloResp.ok && smartfloData.success !== false) {
       const newCallSid = smartfloData.call_id || smartfloData.call_sid || smartfloData.ref_id || callSid;
-      await client.queryObject(`UPDATE "calllog" SET call_sid = $1, status = 'ringing' WHERE id = $2`, [newCallSid, newCallLogId]);
+      await client.queryObject(`UPDATE call_logs SET call_sid = $1, status = 'ringing' WHERE id = $2`, [newCallSid, newCallLogId]);
       console.log(`[smartfloWebhook] ✅ Next call initiated: ${cl.lead_name} → ${cleanPhone}`);
     } else {
-      await client.queryObject(`UPDATE "calllog" SET status = 'failed' WHERE id = $1`, [newCallLogId]);
+      await client.queryObject(`UPDATE call_logs SET status = 'failed' WHERE id = $1`, [newCallLogId]);
       await client.queryObject(
         `UPDATE "campaignlead" SET status = 'completed', outcome = 'not_answered', call_status = 'not_answered', conversation_summary = $1 WHERE id = $2`,
         [`Smartflo error: ${smartfloData.message || 'Unknown'}`, cl.id]
@@ -433,7 +433,7 @@ voiceWebhookRouter.post("/", async (c) => {
 
       // PATH A: Lead Callback
       if (resolvedClient && resolvedAgent && matchedLead) {
-        const leadCallLogsRes = await client.queryObject(`SELECT * FROM "calllog" WHERE lead_id = $1 ORDER BY COALESCE(call_start_time, created_at) DESC LIMIT 3`, [matchedLead.id]);
+        const leadCallLogsRes = await client.queryObject(`SELECT * FROM call_logs WHERE lead_id = $1 ORDER BY COALESCE(call_start_time, created_at) DESC LIMIT 3`, [matchedLead.id]);
         const recentLeadCalls = leadCallLogsRes.rows as any[];
         
         const leadContext = [
@@ -470,7 +470,7 @@ voiceWebhookRouter.post("/", async (c) => {
         };
 
         const inboundLogRes = await client.queryObject(
-          `INSERT INTO "calllog" (client_id, agent_id, lead_id, call_sid, caller_id, callee_number, direction, status, call_start_time, agent_config_cache)
+          `INSERT INTO call_logs (client_id, agent_id, lead_id, call_sid, caller_id, callee_number, direction, status, call_start_time, agent_config_cache)
            VALUES ($1, $2, $3, $4, $5, $6, 'inbound', 'ringing', NOW(), $7) RETURNING *`,
           [resolvedClient.id, resolvedAgent.id, matchedLead.id, call_id, incomingNumber, calledDID, JSON.stringify(agentConfigCache)]
         );
@@ -504,7 +504,7 @@ voiceWebhookRouter.post("/", async (c) => {
         };
 
         const inboundLogRes = await client.queryObject(
-          `INSERT INTO "calllog" (client_id, agent_id, call_sid, caller_id, callee_number, direction, status, call_start_time, agent_config_cache)
+          `INSERT INTO call_logs (client_id, agent_id, call_sid, caller_id, callee_number, direction, status, call_start_time, agent_config_cache)
            VALUES ($1, $2, $3, $4, $5, 'inbound', 'ringing', NOW(), $6) RETURNING *`,
           [resolvedClient.id, resolvedAgent.id, call_id, incomingNumber, calledDID, JSON.stringify(agentConfigCache)]
         );
@@ -534,17 +534,17 @@ voiceWebhookRouter.post("/", async (c) => {
     
     if (customIdentifier) {
       try {
-        const res = await client.queryObject(`SELECT * FROM "calllog" WHERE id = $1 LIMIT 1`, [customIdentifier]);
+        const res = await client.queryObject(`SELECT * FROM call_logs WHERE id = $1 LIMIT 1`, [customIdentifier]);
         if (res.rows.length > 0) {
           directLog = res.rows[0] as any;
           callLogs = [directLog];
-          if (directLog.call_sid !== call_id) await client.queryObject(`UPDATE "calllog" SET call_sid = $1 WHERE id = $2`, [call_id, directLog.id]);
+          if (directLog.call_sid !== call_id) await client.queryObject(`UPDATE call_logs SET call_sid = $1 WHERE id = $2`, [call_id, directLog.id]);
         }
       } catch(e) {}
     }
 
     if (callLogs.length === 0) {
-       const logsRes = await client.queryObject(`SELECT * FROM "calllog" WHERE call_sid = $1 LIMIT 1`, [call_id]);
+       const logsRes = await client.queryObject(`SELECT * FROM call_logs WHERE call_sid = $1 LIMIT 1`, [call_id]);
        callLogs = logsRes.rows as any[];
     }
 
@@ -554,7 +554,7 @@ voiceWebhookRouter.post("/", async (c) => {
          try {
             const pgCallee = phoneHints[0].replace(/\D/g, '').slice(-10);
             const phoneRes = await client.queryObject(
-               `SELECT * FROM "calllog"
+               `SELECT * FROM call_logs
                 WHERE status IN ('initiated','ringing','answered')
                   AND created_at > NOW() - INTERVAL '30 minutes'
                   AND RIGHT(REGEXP_REPLACE(callee_number, '\\D', '', 'g'), 10) = $1
@@ -563,7 +563,7 @@ voiceWebhookRouter.post("/", async (c) => {
             );
             if (phoneRes.rows.length === 1) {
                callLogs = phoneRes.rows;
-               await client.queryObject(`UPDATE "calllog" SET call_sid = $1 WHERE id = $2`, [call_id, (callLogs[0] as any).id]);
+               await client.queryObject(`UPDATE call_logs SET call_sid = $1 WHERE id = $2`, [call_id, (callLogs[0] as any).id]);
             }
          } catch(e) {}
       }
@@ -594,7 +594,7 @@ voiceWebhookRouter.post("/", async (c) => {
     }
 
     vals.push(callLog.id);
-    await client.queryObject(`UPDATE "calllog" SET ${setClauses.join(', ')} WHERE id = $${idx}`, vals);
+    await client.queryObject(`UPDATE call_logs SET ${setClauses.join(', ')} WHERE id = $${idx}`, vals);
 
     // ===== FETCH RECORDING IMMEDIATELY IF COMPLETED =====
     if (effectiveStatus === 'completed' && !recording_url) {
@@ -609,7 +609,7 @@ voiceWebhookRouter.post("/", async (c) => {
           const logs = Array.isArray(cdrData) ? cdrData : (cdrData.data || []);
           const record = logs.find((l: any) => l.call_id === call_id);
           if (record && record.recording_url) {
-            await client.queryObject(`UPDATE "calllog" SET recording_url = $1 WHERE id = $2`, [record.recording_url, callLog.id]);
+            await client.queryObject(`UPDATE call_logs SET recording_url = $1 WHERE id = $2`, [record.recording_url, callLog.id]);
             console.log(`[smartfloWebhook] Extracted recording for ${call_id}: ${record.recording_url}`);
           }
         }
@@ -677,7 +677,7 @@ voiceWebhookRouter.post("/", async (c) => {
     }
 
 
-    const freshLogRes = await client.queryObject(`SELECT * FROM "calllog" WHERE id = $1`, [callLog.id]);
+    const freshLogRes = await client.queryObject(`SELECT * FROM call_logs WHERE id = $1`, [callLog.id]);
     const freshCallLog = freshLogRes.rows[0] as any;
 
     try {
@@ -689,7 +689,7 @@ voiceWebhookRouter.post("/", async (c) => {
           await client.queryObject(`UPDATE "campaignlead" SET status = 'processing' WHERE id = $1`, [campaignLead.id]);
           await new Promise(r => setTimeout(r, 2000));
           
-          const latestLogRes = await client.queryObject(`SELECT * FROM "calllog" WHERE id = $1`, [callLog.id]);
+          const latestLogRes = await client.queryObject(`SELECT * FROM call_logs WHERE id = $1`, [callLog.id]);
           const latestCallLog = latestLogRes.rows[0] as any;
 
           let outcome = 'neutral';

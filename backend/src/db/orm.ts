@@ -6,15 +6,27 @@ export class DBEntityWrapper {
   private tableName: string;
 
   constructor(entityName: string) {
-    this.tableName = entityName.toLowerCase();
+    if (entityName.toLowerCase() === "calllog") {
+      this.tableName = "call_logs";
+    } else {
+      this.tableName = entityName.toLowerCase();
+    }
   }
 
   async get(id: string) {
-    const res = await client.queryObject(`SELECT * FROM "${this.tableName}" WHERE id = $1 LIMIT 1`, [id]);
+    const res = await client.queryObject(
+      `SELECT * FROM "${this.tableName}" WHERE id = $1 LIMIT 1`,
+      [id],
+    );
     return res.rows[0] || null;
   }
 
-  async filter(params: Record<string, any>, sortBy: string = "", limit: number = 100, skip: number = 0) {
+  async filter(
+    params: Record<string, any>,
+    sortBy: string = "",
+    limit: number = 100,
+    skip: number = 0,
+  ) {
     let query = `SELECT * FROM "${this.tableName}"`;
     const conditions: string[] = [];
     const args: any[] = [];
@@ -43,7 +55,7 @@ export class DBEntityWrapper {
     query += ` LIMIT $${paramIndex}`;
     args.push(limit);
     paramIndex++;
-    
+
     if (skip > 0) {
       query += ` OFFSET $${paramIndex}`;
       args.push(skip);
@@ -56,15 +68,18 @@ export class DBEntityWrapper {
   async create(data: Record<string, any>) {
     const keys = Object.keys(data);
     if (keys.length === 0) {
-      const res = await client.queryObject(`INSERT INTO "${this.tableName}" DEFAULT VALUES RETURNING *`);
+      const res = await client.queryObject(
+        `INSERT INTO "${this.tableName}" DEFAULT VALUES RETURNING *`,
+      );
       return res.rows[0];
     }
-    const cols = keys.map(k => `"${k}"`).join(", ");
+    const cols = keys.map((k) => `"${k}"`).join(", ");
     const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
-    const vals = Object.values(data).map(v => 
-      (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v
+    const vals = Object.values(data).map((v) =>
+      (typeof v === "object" && v !== null) ? JSON.stringify(v) : v
     );
-    const query = `INSERT INTO "${this.tableName}" (${cols}) VALUES (${placeholders}) RETURNING *`;
+    const query =
+      `INSERT INTO "${this.tableName}" (${cols}) VALUES (${placeholders}) RETURNING *`;
     const res = await client.queryObject(query, vals);
     const record = res.rows[0];
     if (record) broadcastEntityChange(this.tableName, "created", record);
@@ -81,15 +96,26 @@ export class DBEntityWrapper {
     }
 
     const setClauses = keys.map((k, i) => `"${k}" = $${i + 2}`).join(", ");
-    const vals = [id, ...Object.values(data).map(v => 
-      (typeof v === 'object' && v !== null) ? JSON.stringify(v) : v
-    )];
-    const query = `UPDATE "${this.tableName}" SET ${setClauses} WHERE id = $1 RETURNING *`;
+    const vals = [
+      id,
+      ...Object.values(data).map((v) =>
+        (typeof v === "object" && v !== null) ? JSON.stringify(v) : v
+      ),
+    ];
+    const query =
+      `UPDATE "${this.tableName}" SET ${setClauses} WHERE id = $1 RETURNING *`;
     const res = await client.queryObject(query, vals);
     const record = res.rows[0] || null;
 
-    if (record && this.tableName === "client" && data.account_status && previousRecord && previousRecord.account_status !== data.account_status) {
-      const eventType = data.account_status === "active" ? "activated" : (data.account_status === "expired" ? "trial_expired" : data.account_status);
+    if (
+      record && this.tableName === "client" && data.account_status &&
+      previousRecord && previousRecord.account_status !== data.account_status
+    ) {
+      const eventType = data.account_status === "active"
+        ? "activated"
+        : (data.account_status === "expired"
+          ? "trial_expired"
+          : data.account_status);
       try {
         await base44ORM.entities.ClientLifecycleEvent.create({
           client_id: id,
@@ -97,7 +123,7 @@ export class DBEntityWrapper {
           event_type: eventType,
           from_value: previousRecord.account_status,
           to_value: data.account_status,
-          effective_date: new Date().toISOString()
+          effective_date: new Date().toISOString(),
         });
       } catch (e) {
         console.error("Failed to create ClientLifecycleEvent in ORM:", e);
@@ -109,7 +135,10 @@ export class DBEntityWrapper {
   }
 
   async delete(id: string) {
-    const res = await client.queryObject(`DELETE FROM "${this.tableName}" WHERE id = $1 RETURNING *`, [id]);
+    const res = await client.queryObject(
+      `DELETE FROM "${this.tableName}" WHERE id = $1 RETURNING *`,
+      [id],
+    );
     const record = res.rows[0] || null;
     if (record) broadcastEntityChange(this.tableName, "deleted", record);
     return record;
@@ -118,7 +147,9 @@ export class DBEntityWrapper {
 
 // Global base44 proxy for backwards compatibility during migration
 export const base44ORM = {
-  get asServiceRole() { return this; },
+  get asServiceRole() {
+    return this;
+  },
   auth: { me: async () => null },
   entities: new Proxy({} as any, {
     get: (target, prop: string) => {
@@ -126,7 +157,7 @@ export const base44ORM = {
         target[prop] = new DBEntityWrapper(prop);
       }
       return target[prop];
-    }
+    },
   }),
   // ─── Enterprise in-process function dispatch ─────────────────────────────────
   // Replaces the old Base44 cloud HTTP round-trip with a zero-latency, in-process
@@ -136,8 +167,11 @@ export const base44ORM = {
      * Invoke a named function in-process and await its result.
      * Includes 30 s circuit-breaker timeout and structured error logging.
      */
-    invoke: (name: string, args: Record<string, any> = {}, timeoutMs = 30_000) =>
-      invokeFunction(name, args, timeoutMs),
+    invoke: (
+      name: string,
+      args: Record<string, any> = {},
+      timeoutMs = 30_000,
+    ) => invokeFunction(name, args, timeoutMs),
     /**
      * Fire-and-forget invocation — errors are logged but never propagate.
      * Use for non-critical side effects (analytics syncs, audit logs, etc).

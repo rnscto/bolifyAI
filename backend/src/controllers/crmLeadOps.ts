@@ -91,7 +91,7 @@ export async function rescoreLeadHandler(c: Context) {
       const lead = leadRes.rows[0] as any;
       if (user.role !== "admin" && lead.client_id !== user.client_id) return c.json({ error: "Forbidden" }, 403);
 
-      const callsRes = await client.queryObject(`SELECT * FROM calllog WHERE lead_id = $1 ORDER BY created_at DESC LIMIT 10`, [lead.id]);
+      const callsRes = await client.queryObject(`SELECT * FROM call_logs WHERE lead_id = $1 ORDER BY created_at DESC LIMIT 10`, [lead.id]);
       const calls = callsRes.rows as any[];
       const latest = calls.find((c: any) => (c.transcript?.length > 30) || (c.conversation_summary?.length > 20));
       if (!latest) return c.json({ skipped: "no_call_history", lead_id: lead.id });
@@ -128,7 +128,7 @@ export async function buildLeadContextHandler(c: Context) {
     if (leadRes.rows.length === 0) return c.json({ error: "Lead not found" }, 404);
     const lead = leadRes.rows[0] as any;
 
-    const callLogsRes = await client.queryObject(`SELECT * FROM calllog WHERE lead_id = $1 ORDER BY created_at DESC LIMIT 5`, [lead.id]);
+    const callLogsRes = await client.queryObject(`SELECT * FROM call_logs WHERE lead_id = $1 ORDER BY created_at DESC LIMIT 5`, [lead.id]);
     const callLogs = callLogsRes.rows as any[];
 
     const sections = [
