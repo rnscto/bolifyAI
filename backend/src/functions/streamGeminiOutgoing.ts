@@ -1214,6 +1214,11 @@ export default async function streamGeminiOutgoing(c: any) {
         // Queue drained — reset clock so the next burst starts paced from "now".
         session._nextFrameDue = Date.now();
         session._outPumping = false;
+        // Mark when the last agent audio frame left the server. The echo guard
+        // in the media handler uses this to suppress caller audio for 350ms
+        // (echo round-trip decay window) so the agent's own voice doesn't
+        // bounce back through the phone line and trigger a false barge-in.
+        session._lastAgentAudioEndedAt = Date.now();
       }
     };
     pump();
@@ -1545,10 +1550,6 @@ export default async function streamGeminiOutgoing(c: any) {
       }
 
       if (msg.event === 'media' && msg.media?.payload) {
-        // INSTRUMENTATION: the FIRST inbound media packet is the truest signal that
-        // the human actually picked up and Smartflo opened the two-way audio path.
-        // The gap between START and this tells us how long Smartflo took to connect
-        // the audio AFTER sending us the `start` frame — the hidden "ringing→live" lag.
         if (!session._firstInboundMediaTs) {
           session._firstInboundMediaTs = Date.now();
           console.log(`[${reqId}] 🎧 FIRST inbound media (caller audio LIVE): ${session._firstInboundMediaTs - session.startTime}ms after START`);
@@ -1556,17 +1557,28 @@ export default async function streamGeminiOutgoing(c: any) {
         const raw = atob(msg.media.payload);
         const m = new Uint8Array(raw.length);
         for (let i = 0; i < raw.length; i++) m[i] = raw.charCodeAt(i);
-        // SPEC FIX ("not listening clearly"): forward EACH inbound Smartflo frame to
-        // Gemini IMMEDIATELY. The old 120ms re-batching (on top of Smartflo's ~100ms
-        // framing + Gemini's own VAD window) clipped the caller's speech onsets, so
-        // Gemini kept "not hearing" the opening words. Gemini natively resamples 16k,
-        // so low-latency per-frame forwarding gives the cleanest transcription.
         const b64 = mulawToBase64PCM16_16k(m, session);
-        // P0: buffer audio during Gemini handshake instead of dropping it
         if (!session.geminiReady) {
-          if (session._audioBuffer.length < 200) session._audioBuffer.push(b64); // ~handshake cap
+          if (session._audioBuffer.length < 200) session._audioBuffer.push(b64);
           return;
         }
+        // ── ECHO GUARD ──────────────────────────────────────────────────────────────
+        // The agent's audio is played to the caller via Smartflo. The phone line
+        // reflects that audio back to us as "caller media" (sidetone / line echo).
+        // If we forward this echo to Gemini while the agent is still speaking,
+        // Gemini's VAD detects it as the caller interrupting → sc.interrupted fires
+        // → agent audio queue is cleared → agent goes silent mid-sentence.
+        //
+        // Guard: drop caller audio frames while the agent is currently speaking OR
+        // within 350ms of the last agent frame being pumped out (echo tail window).
+        // 350ms covers the round-trip echo latency on Indian phone networks.
+        // After 350ms of agent silence the caller's genuine speech is forwarded normally.
+        const ECHO_TAIL_MS = 350;
+        const agentPlaying = session.isSpeaking || (session._outQueue?.length > 0);
+        const echoTail = session._lastAgentAudioEndedAt &&
+          (Date.now() - session._lastAgentAudioEndedAt) < ECHO_TAIL_MS;
+        if (agentPlaying || echoTail) return; // echo window — drop this frame
+        // ────────────────────────────────────────────────────────────────────────────
         sendToGemini({ realtimeInput: { audio: { data: b64, mimeType: 'audio/pcm;rate=16000' } } });
         return;
       }

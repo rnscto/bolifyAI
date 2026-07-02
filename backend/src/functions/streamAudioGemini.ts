@@ -1037,7 +1037,6 @@ export default async function streamAudioGemini(c: any) {
 
       // Interrupted — flush any partial text before clearing
       if (sc.interrupted) {
-        // User started speaking — stop filler too
         stopFiller();
         session.isSpeaking = false;
         if (session._pendingAiText) {
@@ -1051,6 +1050,14 @@ export default async function streamAudioGemini(c: any) {
         if (smartfloSocket.readyState === WebSocket.OPEN && session.streamSid) {
           smartfloSocket.send(JSON.stringify({ event: 'clear', streamSid: session.streamSid }));
         }
+        // ── NOISE-RESUME GUARD ──
+        clearTimeout(session._noiseResumeTimer);
+        session._noiseResumeTimer = setTimeout(() => {
+          if (!session.isSpeaking && !session._pendingCustomerText && session.geminiWs?.readyState === WebSocket.OPEN) {
+            console.log(`[${reqId}] 🔇 Noise-resume: no real speech after interruption — re-engaging agent`);
+            sendToGemini({ clientContent: { turnComplete: true } });
+          }
+        }, 2500);
       }
       return;
     }
@@ -1128,11 +1135,16 @@ export default async function streamAudioGemini(c: any) {
         const paddedLen = Math.ceil(chunk.length / 160) * 160;
         const padded = new Uint8Array(paddedLen);
         padded.set(chunk);
-        padded.fill(0x7F, chunk.length);  // mu-law silence, not 0xFF
+        padded.fill(0x7F, chunk.length);
         chunk = padded;
       }
       smartfloSocket.send(JSON.stringify({ event: 'media', streamSid: session.streamSid, media: { payload: uint8ToBase64(chunk) } }));
     }
+    // Mark the last time we sent agent audio to Smartflo. Used by the echo guard
+    // in the media handler to suppress caller audio for 350ms after agent speech
+    // (covers the phone line echo round-trip so the agent's own voice doesn't
+    // bounce back and trigger a false sc.interrupted mid-sentence).
+    session._lastAgentAudioSentAt = Date.now();
   }
 
   // ─── Load agent config (optimized for <2s startup) ───
@@ -1953,11 +1965,13 @@ ABSOLUTE RULES:
         const raw = atob(msg.media.payload);
         const mulawBytes = new Uint8Array(raw.length);
         for (let i = 0; i < raw.length; i++) mulawBytes[i] = raw.charCodeAt(i);
-
-        // Convert mu-law 8kHz → PCM16 16kHz base64 for Gemini
-        // Gemini 3.1 Live: realtimeInput.audio with mimeType 'audio/pcm;rate=16000'
-        // Docs: https://ai.google.dev/api/live#realtimeinput — rate must be in mimeType for input audio
         const pcm16Base64 = mulawToBase64PCM16_16k(mulawBytes, session);
+        // ── ECHO GUARD: drop caller audio while agent is playing (prevents sidetone
+        // echo triggering sc.interrupted and silencing the agent mid-sentence) ──
+        const ECHO_TAIL_MS = 350;
+        const echoTail = session._lastAgentAudioSentAt &&
+          (Date.now() - session._lastAgentAudioSentAt) < ECHO_TAIL_MS;
+        if (session.isSpeaking || echoTail) return;
         sendToGemini({
           realtimeInput: {
             audio: { data: pcm16Base64, mimeType: 'audio/pcm;rate=16000' }

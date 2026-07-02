@@ -924,6 +924,8 @@ export default async function streamGeminiIncoming(c: any) {
       } else {
         session._nextFrameDue = Date.now();
         session._outPumping = false;
+        // Mark when last agent frame left server for the echo guard in the media handler.
+        session._lastAgentAudioEndedAt = Date.now();
       }
     };
     pump();
@@ -1157,11 +1159,17 @@ export default async function streamGeminiIncoming(c: any) {
         const m = new Uint8Array(raw.length);
         for (let i = 0; i < raw.length; i++) m[i] = raw.charCodeAt(i);
         const b64 = mulawToBase64PCM16_16k(m, session);
-        // P0: buffer audio during Gemini handshake instead of dropping it
         if (!session.geminiReady) {
-          if (session._audioBuffer.length < 150) session._audioBuffer.push(b64); // ~3s cap
+          if (session._audioBuffer.length < 150) session._audioBuffer.push(b64);
           return;
         }
+        // ── ECHO GUARD: drop caller audio while agent is playing (prevents sidetone
+        // echo triggering sc.interrupted and silencing the agent mid-sentence) ──
+        const ECHO_TAIL_MS = 350;
+        const agentPlaying = session.isSpeaking || (session._outQueue?.length > 0);
+        const echoTail = session._lastAgentAudioEndedAt &&
+          (Date.now() - session._lastAgentAudioEndedAt) < ECHO_TAIL_MS;
+        if (agentPlaying || echoTail) return;
         sendToGemini({ realtimeInput: { audio: { data: b64, mimeType: 'audio/pcm;rate=16000' } } });
         return;
       }
