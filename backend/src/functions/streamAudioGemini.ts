@@ -100,6 +100,23 @@ function uint8ToBase64(bytes) {
   for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
   return btoa(binary);
 }
+// ── 120ms inbound mu-law accumulator (matches reference implementation) ──────────────
+const ACCUM_TARGET_BYTES_AUDIO = 960; // 120ms @ 8kHz mu-law
+function addInboundMulaw(session, bytes) {
+  if (!session._inAccum) { session._inAccum = []; session._inAccumLen = 0; }
+  session._inAccum.push(bytes);
+  session._inAccumLen += bytes.length;
+  if (session._inAccumLen >= ACCUM_TARGET_BYTES_AUDIO) return drainInboundMulaw(session);
+  return null;
+}
+function drainInboundMulaw(session) {
+  if (!session._inAccum || session._inAccumLen === 0) return null;
+  const merged = new Uint8Array(session._inAccumLen);
+  let off = 0;
+  for (const b of session._inAccum) { merged.set(b, off); off += b.length; }
+  session._inAccum = []; session._inAccumLen = 0;
+  return merged;
+}
 
 // ─── Filler audio cache (cold-start hider) ───
 // Single pre-recorded "Hello" mu-law 8kHz clip stored in private storage.
@@ -1145,11 +1162,6 @@ export default async function streamAudioGemini(c: any) {
       }
       smartfloSocket.send(JSON.stringify({ event: 'media', streamSid: session.streamSid, media: { payload: uint8ToBase64(chunk) } }));
     }
-    // Mark the last time we sent agent audio to Smartflo. Used by the echo guard
-    // in the media handler to suppress caller audio for 350ms after agent speech
-    // (covers the phone line echo round-trip so the agent's own voice doesn't
-    // bounce back and trigger a false sc.interrupted mid-sentence).
-    session._lastAgentAudioSentAt = Date.now();
   }
 
   // ─── Load agent config (optimized for <2s startup) ───
@@ -1970,13 +1982,10 @@ ABSOLUTE RULES:
         const raw = atob(msg.media.payload);
         const mulawBytes = new Uint8Array(raw.length);
         for (let i = 0; i < raw.length; i++) mulawBytes[i] = raw.charCodeAt(i);
-        const pcm16Base64 = mulawToBase64PCM16_16k(mulawBytes, session);
-        // ── ECHO GUARD: drop caller audio while agent is playing (prevents sidetone
-        // echo triggering sc.interrupted and silencing the agent mid-sentence) ──
-        const ECHO_TAIL_MS = 350;
-        const echoTail = session._lastAgentAudioSentAt &&
-          (Date.now() - session._lastAgentAudioSentAt) < ECHO_TAIL_MS;
-        if (session.isSpeaking || echoTail) return;
+        // ── 120ms ACCUMULATOR (matches reference implementation) ─────────────────
+        const batched = addInboundMulaw(session, mulawBytes);
+        if (!batched) return;
+        const pcm16Base64 = mulawToBase64PCM16_16k(batched, session);
         sendToGemini({
           realtimeInput: {
             audio: { data: pcm16Base64, mimeType: 'audio/pcm;rate=16000' }

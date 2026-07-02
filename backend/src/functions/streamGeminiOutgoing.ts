@@ -1225,11 +1225,6 @@ export default async function streamGeminiOutgoing(c: any) {
         // Queue drained — reset clock so the next burst starts paced from "now".
         session._nextFrameDue = Date.now();
         session._outPumping = false;
-        // Mark when the last agent audio frame left the server. The echo guard
-        // in the media handler uses this to suppress caller audio for 350ms
-        // (echo round-trip decay window) so the agent's own voice doesn't
-        // bounce back through the phone line and trigger a false barge-in.
-        session._lastAgentAudioEndedAt = Date.now();
       }
     };
     pump();
@@ -1568,31 +1563,27 @@ export default async function streamGeminiOutgoing(c: any) {
         const raw = atob(msg.media.payload);
         const m = new Uint8Array(raw.length);
         for (let i = 0; i < raw.length; i++) m[i] = raw.charCodeAt(i);
-        const b64 = mulawToBase64PCM16_16k(m, session);
+        // ── 120ms ACCUMULATOR (reference implementation) ──────────────────────────
+        // The reference "Agent" container batches raw mu-law bytes into 120ms chunks
+        // (ACCUM_TARGET_BYTES=960 @ 8kHz) before upsampling+sending to Gemini.
+        // This normalises Smartflo's highly variable frame cadence (20–260ms) into
+        // consistent packets, giving Gemini's VAD more audio context per message and
+        // naturally preventing echo from triggering false barge-in events.
+        // The previous per-frame approach + explicit echo guard caused over-blocking:
+        // isSpeaking=true for the entire utterance → real customer speech was silently
+        // dropped → agent appeared "deaf" mid-turn. Accumulator eliminates that issue.
         if (!session.geminiReady) {
-          if (session._audioBuffer.length < 200) session._audioBuffer.push(b64);
+          const preReady = addInboundMulaw(session, m);
+          if (preReady) {
+            const b64pre = mulawToBase64PCM16_16k(preReady, session);
+            if (session._audioBuffer.length < 200) session._audioBuffer.push(b64pre);
+          }
           return;
         }
-        // ── ECHO GUARD ──────────────────────────────────────────────────────────────
-        // The agent's audio is played to the caller via Smartflo. The phone line
-        // reflects that audio back to us as "caller media" (sidetone / line echo).
-        // If we forward this echo to Gemini while the agent is still speaking,
-        // Gemini's VAD detects it as the caller interrupting → sc.interrupted fires
-        // → agent audio queue is cleared → agent goes silent mid-sentence.
-        //
-        // Guard: drop caller audio frames while the agent is currently speaking OR
-        // within 350ms of the last agent frame being pumped out (echo tail window).
-        // 350ms covers the round-trip echo latency on Indian phone networks.
-        // After 350ms of agent silence the caller's genuine speech is forwarded normally.
-        const ECHO_TAIL_MS = 350;
-        const agentPlaying = session.isSpeaking || (session._outQueue?.length > 0);
-        const echoTail = session._lastAgentAudioEndedAt &&
-          (Date.now() - session._lastAgentAudioEndedAt) < ECHO_TAIL_MS;
-        if (agentPlaying || echoTail) return; // echo window — drop this frame
-        // ────────────────────────────────────────────────────────────────────────────
+        const batched = addInboundMulaw(session, m);
+        if (!batched) return; // still accumulating — wait for ≥120ms
+        const b64 = mulawToBase64PCM16_16k(batched, session);
         sendToGemini({ realtimeInput: { audio: { data: b64, mimeType: 'audio/pcm;rate=16000' } } });
-        // Track the last time caller audio was forwarded — used by the noise-resume
-        // timer to distinguish "customer is still speaking" from "silent after noise".
         session._lastCallerAudioSentAt = Date.now();
         return;
       }

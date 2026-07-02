@@ -93,6 +93,27 @@ function uint8ToBase64(bytes) {
   }
   return btoa(bin);
 }
+// ── 120ms inbound mu-law accumulator (matches reference implementation) ──────────────
+// Smartflo delivers 8kHz mu-law frames with HIGHLY VARIABLE cadence (min=20ms,
+// avg=60ms, max=260ms). Batching into 960-byte (=120ms) chunks normalises this
+// before upsampling, giving Gemini's VAD consistent-sized audio packets and
+// naturally preventing echo from triggering false sc.interrupted events.
+const ACCUM_TARGET_BYTES = 960; // 120ms @ 8kHz mu-law
+function addInboundMulaw(session, bytes) {
+  if (!session._inAccum) { session._inAccum = []; session._inAccumLen = 0; }
+  session._inAccum.push(bytes);
+  session._inAccumLen += bytes.length;
+  if (session._inAccumLen >= ACCUM_TARGET_BYTES) return drainInboundMulaw(session);
+  return null;
+}
+function drainInboundMulaw(session) {
+  if (!session._inAccum || session._inAccumLen === 0) return null;
+  const merged = new Uint8Array(session._inAccumLen);
+  let off = 0;
+  for (const b of session._inAccum) { merged.set(b, off); off += b.length; }
+  session._inAccum = []; session._inAccumLen = 0;
+  return merged;
+}
 
 // ─── SDK pre-warm + filler ───
 let _sdkModulePromise = null;
@@ -929,8 +950,6 @@ export default async function streamGeminiIncoming(c: any) {
       } else {
         session._nextFrameDue = Date.now();
         session._outPumping = false;
-        // Mark when last agent frame left server for the echo guard in the media handler.
-        session._lastAgentAudioEndedAt = Date.now();
       }
     };
     pump();
@@ -1163,18 +1182,18 @@ export default async function streamGeminiIncoming(c: any) {
         const raw = atob(msg.media.payload);
         const m = new Uint8Array(raw.length);
         for (let i = 0; i < raw.length; i++) m[i] = raw.charCodeAt(i);
-        const b64 = mulawToBase64PCM16_16k(m, session);
+        // ── 120ms ACCUMULATOR (matches reference implementation) ─────────────────
         if (!session.geminiReady) {
-          if (session._audioBuffer.length < 150) session._audioBuffer.push(b64);
+          const preReady = addInboundMulaw(session, m);
+          if (preReady) {
+            const b64pre = mulawToBase64PCM16_16k(preReady, session);
+            if (session._audioBuffer.length < 150) session._audioBuffer.push(b64pre);
+          }
           return;
         }
-        // ── ECHO GUARD: drop caller audio while agent is playing (prevents sidetone
-        // echo triggering sc.interrupted and silencing the agent mid-sentence) ──
-        const ECHO_TAIL_MS = 350;
-        const agentPlaying = session.isSpeaking || (session._outQueue?.length > 0);
-        const echoTail = session._lastAgentAudioEndedAt &&
-          (Date.now() - session._lastAgentAudioEndedAt) < ECHO_TAIL_MS;
-        if (agentPlaying || echoTail) return;
+        const batched = addInboundMulaw(session, m);
+        if (!batched) return;
+        const b64 = mulawToBase64PCM16_16k(batched, session);
         sendToGemini({ realtimeInput: { audio: { data: b64, mimeType: 'audio/pcm;rate=16000' } } });
         session._lastCallerAudioSentAt = Date.now();
         return;
