@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { client } from "../db/index.ts";
 import { getSmartfloToken } from "../services/smartflo.ts";
 import { sign } from "hono/jwt";
-import { azureChatCompletionsCompat, azureFetchCompat } from "../lib/azureOpenAI.ts";
+import { callAzureLLM, azureFetchCompat } from "../lib/azureOpenAI.ts";
 
 export const voiceWebhookRouter = new Hono();
 
@@ -46,7 +46,7 @@ async function sendTelegramDirect(clientObj: any, { caller_number, caller_name, 
     if (summary) message += `\n💬 ${summary}`;
 
     const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`;
-    const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -63,21 +63,14 @@ async function sendTelegramDirect(clientObj: any, { caller_number, caller_name, 
 }
 
 async function azureLLM(prompt: string, systemPrompt: string, jsonSchema: any) {
-          const res = await azureFetchCompat("__CHAT_COMPLETIONS_MIGRATED__", {
-    method: 'POST',
-    headers: { 'api-key': apiKey || "", 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      messages: [
-        { role: 'system', content: systemPrompt || 'You are a helpful assistant. Always respond in valid JSON.' },
-        { role: 'user', content: prompt + (jsonSchema ? '\n\nRespond in JSON matching this schema: ' + JSON.stringify(jsonSchema) : '') }
-      ],
-      max_completion_tokens: 800,
-      response_format: { type: "json_object" }
-    })
-  });
-  if (!res.ok) throw new Error(`Azure OpenAI error: ${res.status} ${await res.text()}`);
-  const data = await res.json();
-  return JSON.parse(data.choices[0].message.content);
+  // Use the centralized callAzureLLM helper which calls the v1/responses endpoint.
+  // Wraps the response in the same parsed-JSON contract callers expect.
+  const responseText = await callAzureLLM(
+    prompt + (jsonSchema ? '\n\nRespond in JSON matching this schema: ' + JSON.stringify(jsonSchema) : ''),
+    { systemPrompt: systemPrompt || 'You are a helpful assistant. Always respond in valid JSON.', maxTokens: 800 }
+  );
+  try { return JSON.parse(responseText); }
+  catch (e) { throw new Error(`azureLLM: failed to parse JSON response: ${responseText.substring(0, 200)}`); }
 }
 
 function buildMissedCallVariables(template: any, lead: any, slotMap: any) {

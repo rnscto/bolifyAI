@@ -1,75 +1,70 @@
 import { base44ORM as base44 } from "../db/orm.ts";
 import { client } from "../db/index.ts";
-import { Client as PgClient } from "jsr:@db/postgres@0.19.4";
 
 
 
 // ─── PG-PRIMARY CallLog helpers (manual single calls) ───
-// The CallLog for a manual dial lives in Postgres only (read by the stream via
-// custom_identifier), matching the campaign dial paths. No Base44 CallLog write
-// in the hot path → no rate-limit dependency.
-function makePgClient() {
-  return new PgClient({
-    hostname: Deno.env.get('AZURE_PG_HOST'),
-    port: parseInt(Deno.env.get('AZURE_PG_PORT') || '5432', 10),
-    database: Deno.env.get('AZURE_PG_DATABASE'),
-    user: Deno.env.get('AZURE_PG_USER'),
-    password: Deno.env.get('AZURE_PG_PASSWORD'),
-    tls: { enabled: true, enforce: true },
-    connection: { attempts: 1 },
-  });
-}
+// Manual call logs are written directly to the 'calllog' entity table — the same
+// table the webhook and ORM both read from. Using the shared pool (client) avoids
+// per-call connection overhead and ensures all queries see the same transaction.
 function genUuid() {
   try { return crypto.randomUUID(); }
   catch (_) { return 'cl_' + Date.now() + '_' + Math.random().toString(36).slice(2, 12); }
 }
 async function pgInsertCallLog(row) {
-  const pg = makePgClient();
-  try {
-    ; /* pg.connect() not needed */
-    const nowIso = new Date().toISOString();
-    await pg.queryObject`
-      INSERT INTO call_logs
-        (id, client_id, agent_id, lead_id, call_sid, caller_id, callee_number,
-         direction, status, agent_config_cache, conversation_summary, call_start_time, created_date, updated_at)
-      VALUES
-        (${row.id}, ${row.client_id}, ${row.agent_id}, ${row.lead_id || null}, ${row.call_sid},
-         ${row.caller_id}, ${row.callee_number}, 'outbound', ${row.status || 'initiated'},
-         ${JSON.stringify(row.agent_config_cache || {})}::jsonb, ${row.conversation_summary || ''},
-         ${nowIso}::timestamptz, ${nowIso}::timestamptz, ${nowIso}::timestamptz)
-      ON CONFLICT (id) DO NOTHING`;
-  } finally { try { ; /* pg.end() not needed */ } catch (_) {} }
+  const nowIso = new Date().toISOString();
+  await client.queryObject(
+    `INSERT INTO "calllog"
+       (id, client_id, agent_id, lead_id, call_sid, caller_id, callee_number,
+        direction, status, agent_config_cache, conversation_summary, call_start_time)
+     VALUES
+       ($1::uuid, $2, $3, $4, $5, $6, $7, 'outbound', $8, $9::jsonb, $10, $11)
+     ON CONFLICT (id) DO NOTHING`,
+    [
+      row.id, row.client_id, row.agent_id, row.lead_id || null, row.call_sid,
+      row.caller_id, row.callee_number, row.status || 'initiated',
+      JSON.stringify(row.agent_config_cache || {}), row.conversation_summary || '',
+      nowIso
+    ]
+  );
 }
 async function pgUpdateCallLogStatus(id, callSid, status) {
-  const pg = makePgClient();
-  try {
-    ; /* pg.connect() not needed */
-    if (callSid) await pg.queryObject`UPDATE call_logs SET call_sid = ${callSid}, status = ${status}, updated_at = now() WHERE id = ${id}`;
-    else await pg.queryObject`UPDATE call_logs SET status = ${status}, updated_at = now() WHERE id = ${id}`;
-  } finally { try { ; /* pg.end() not needed */ } catch (_) {} }
+  if (callSid) {
+    await client.queryObject(
+      `UPDATE "calllog" SET call_sid = $1, status = $2, updated_at = now() WHERE id = $3`,
+      [callSid, status, id]
+    );
+  } else {
+    await client.queryObject(
+      `UPDATE "calllog" SET status = $1, updated_at = now() WHERE id = $2`,
+      [status, id]
+    );
+  }
 }
 
-// ─── Last finalized call for a lead — reads from POSTGRES (source of truth) ───
-// Finalized calls (campaign + non-campaign) live in Postgres, not Base44. The
-// lead snapshot injected into the live-call prompt must read from here so the
-// agent knows about prior conversations. Returns the most recent call row or null.
+// ─── Last finalized call for a lead — reads from 'calllog' (source of truth) ───
+// Reads the most recent completed/answered call for a lead so the agent
+// knows about prior conversations. Returns the most recent call row or null.
 async function pgGetLastCallForLead(leadId) {
   if (!leadId) return null;
-  const pg = makePgClient();
   try {
-    ; /* pg.connect() not needed */
-    const res = await pg.queryObject`
-      SELECT call_start_time, created_date, conversation_summary, status
-      FROM call_logs
-      WHERE lead_id = ${leadId}
-        AND status IN ('completed','answered')
-      ORDER BY COALESCE(call_start_time, created_date) DESC NULLS LAST
-      LIMIT 1`;
-    return res.rows?.[0] || null;
+    const res = await client.queryObject(
+      `SELECT call_start_time, created_at, conversation_summary, status
+       FROM "calllog"
+       WHERE lead_id = $1
+         AND status IN ('completed','answered')
+       ORDER BY created_at DESC NULLS LAST
+       LIMIT 1`,
+      [leadId]
+    );
+    const row = res.rows?.[0] as any;
+    if (!row) return null;
+    // Normalize field names for callers that use call_start_time or created_date
+    return { ...row, created_date: row.created_at };
   } catch (e) {
     console.error(`[initiateCall] pgGetLastCallForLead failed: ${e.message}`);
     return null;
-  } finally { try { ; /* pg.end() not needed */ } catch (_) {} }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════
